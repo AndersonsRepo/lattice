@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "fs";
 import { join } from "path";
-import { evolveLSystem, evolve1D, evolve2D, render } from "./automata.js";
+import { evolveLSystem, evolve1D, evolve2D, evolveReactionDiffusion, evolveVoronoi, render } from "./automata.js";
 
 const popFile = join(import.meta.dirname, "..", "gallery", "population.json");
 const pop = JSON.parse(readFileSync(popFile, "utf-8"));
@@ -26,6 +26,8 @@ console.log();
 let grid: number[][];
 if (piece.genome.type === "lsystem") grid = evolveLSystem(piece.genome);
 else if (piece.genome.type === "1d") grid = evolve1D(piece.genome);
+else if (piece.genome.type === "reaction-diffusion") grid = evolveReactionDiffusion(piece.genome);
+else if (piece.genome.type === "voronoi") grid = evolveVoronoi(piece.genome);
 else grid = evolve2D(piece.genome);
 
 console.log(render(grid, piece.genome.palette));

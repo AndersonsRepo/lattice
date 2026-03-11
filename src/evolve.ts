@@ -22,6 +22,7 @@ import {
   evolve2D,
   evolveLSystem,
   evolveReactionDiffusion,
+  evolveVoronoi,
   render,
   score,
   computeScore,
@@ -48,7 +49,7 @@ const HALL_OF_FAME_THRESHOLD = 0.55;
 
 // Speciation: minimum slots per genome type
 const MIN_SLOTS_PER_TYPE = 2;
-const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion"];
+const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi"];
 
 interface Population {
   generation: number;
@@ -94,6 +95,9 @@ function generatePiece(genome: Genome, generation: number, populationMetrics?: P
     case "reaction-diffusion":
       grid = evolveReactionDiffusion(genome);
       break;
+    case "voronoi":
+      grid = evolveVoronoi(genome);
+      break;
     default:
       grid = evolve1D(genome);
   }
@@ -132,6 +136,7 @@ function formatPieceForDiscord(piece: Piece): string {
   const typeLabel = piece.genome.type === "1d" ? "1D Automaton"
     : piece.genome.type === "2d" ? "2D Life-like"
     : piece.genome.type === "reaction-diffusion" ? "Reaction-Diffusion"
+    : piece.genome.type === "voronoi" ? "Voronoi"
     : "L-System";
 
   const ruleStr = piece.genome.type === "1d"
@@ -140,6 +145,8 @@ function formatPieceForDiscord(piece: Piece): string {
     ? `B${(piece.genome.rule as any).birth.join("")}/S${(piece.genome.rule as any).survive.join("")} (${(piece.genome.rule as any).states}st)`
     : piece.genome.type === "reaction-diffusion"
     ? `f=${(piece.genome.rule as any).feed.toFixed(3)} k=${(piece.genome.rule as any).kill.toFixed(3)}`
+    : piece.genome.type === "voronoi"
+    ? `${(piece.genome.rule as any).seeds}pts ${(piece.genome.rule as any).mode} ${(piece.genome.rule as any).metric}`
     : `angle=${(piece.genome.rule as any).angle}° iter=${(piece.genome.rule as any).iterations}`;
 
   const hasCrossover = piece.genome.lineage.includes("×");

@@ -44,9 +44,16 @@ export interface ReactionDiffusionRule {
   quantize: number;  // number of output states (3-8)
 }
 
+export interface VoronoiRule {
+  seeds: number;       // number of seed points (5-40)
+  mode: "regions" | "edges" | "gradient" | "dual"; // rendering mode
+  metric: "euclidean" | "manhattan" | "chebyshev"; // distance metric
+  jitter: number;      // seed point randomness (0=grid, 1=fully random)
+}
+
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule;
   width: number;
   height: number;
   palette: string[];
@@ -393,6 +400,102 @@ export function evolveReactionDiffusion(genome: Genome): number[][] {
   return result;
 }
 
+// --- Voronoi Tessellation ---
+export function evolveVoronoi(genome: Genome): number[][] {
+  const rule = genome.rule as VoronoiRule;
+  const rng = mulberry32(genome.seed);
+  const { width, height } = genome;
+  const maxState = Math.max((genome.palette?.length ?? 2) - 1, 1);
+
+  // Generate seed points
+  const points: { x: number; y: number }[] = [];
+  if (rule.jitter < 0.3) {
+    // Grid-based with jitter
+    const cols = Math.ceil(Math.sqrt(rule.seeds * (width / height)));
+    const rows = Math.ceil(rule.seeds / cols);
+    const cellW = width / cols;
+    const cellH = height / rows;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (points.length >= rule.seeds) break;
+        points.push({
+          x: (c + 0.5 + (rng() - 0.5) * rule.jitter) * cellW,
+          y: (r + 0.5 + (rng() - 0.5) * rule.jitter) * cellH,
+        });
+      }
+    }
+  } else {
+    // Fully random placement
+    for (let i = 0; i < rule.seeds; i++) {
+      points.push({ x: rng() * width, y: rng() * height });
+    }
+  }
+
+  // Distance function based on metric
+  const dist = (ax: number, ay: number, bx: number, by: number): number => {
+    const dx = Math.abs(ax - bx);
+    const dy = Math.abs(ay - by);
+    // Wrap-aware distances
+    const wx = Math.min(dx, width - dx);
+    const wy = Math.min(dy, height - dy);
+    switch (rule.metric) {
+      case "manhattan": return wx + wy;
+      case "chebyshev": return Math.max(wx, wy);
+      default: return Math.sqrt(wx * wx + wy * wy);
+    }
+  };
+
+  const grid: number[][] = Array.from({ length: height }, () => new Array(width).fill(0));
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      // Find two nearest seed points
+      let d1 = Infinity, d2 = Infinity;
+      let nearest = 0;
+      for (let i = 0; i < points.length; i++) {
+        const d = dist(x, y, points[i].x, points[i].y);
+        if (d < d1) {
+          d2 = d1; d1 = d; nearest = i;
+        } else if (d < d2) {
+          d2 = d;
+        }
+      }
+
+      switch (rule.mode) {
+        case "regions":
+          // Color by which seed is nearest
+          grid[y][x] = (nearest % maxState) + 1;
+          break;
+        case "edges": {
+          // Edge detection: thin lines where d2 ≈ d1
+          const edgeWidth = Math.max(width, height) * 0.03;
+          grid[y][x] = (d2 - d1) < edgeWidth ? maxState : 0;
+          break;
+        }
+        case "gradient": {
+          // Distance gradient from nearest seed
+          const maxDist = Math.sqrt(width * width + height * height) / (Math.sqrt(rule.seeds) * 1.2);
+          const normalized = Math.min(d1 / maxDist, 1);
+          grid[y][x] = Math.round(normalized * maxState);
+          break;
+        }
+        case "dual": {
+          // Combines regions + edge highlighting
+          const edge = Math.max(width, height) * 0.04;
+          if ((d2 - d1) < edge) {
+            grid[y][x] = maxState; // bright edges
+          } else {
+            grid[y][x] = Math.max(1, (nearest % (maxState - 1)) + 1);
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  return grid;
+}
+
 // --- Rendering ---
 export function render(grid: number[][], palette: string[]): string {
   return grid
@@ -577,7 +680,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
@@ -666,6 +769,24 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     if (rng() < 0.15) {
       rule.quantize = 3 + Math.floor(rng() * 6); // 3-8 states
     }
+  } else if (mutated.type === "voronoi") {
+    const rule = mutated.rule as VoronoiRule;
+    const param = rng();
+    if (param < 0.35) {
+      // Adjust seed count
+      rule.seeds = Math.max(5, Math.min(40, rule.seeds + Math.floor((rng() - 0.5) * 8)));
+    } else if (param < 0.6) {
+      // Change mode
+      const modes: VoronoiRule["mode"][] = ["regions", "edges", "gradient", "dual"];
+      rule.mode = modes[Math.floor(rng() * modes.length)];
+    } else if (param < 0.8) {
+      // Change metric
+      const metrics: VoronoiRule["metric"][] = ["euclidean", "manhattan", "chebyshev"];
+      rule.metric = metrics[Math.floor(rng() * metrics.length)];
+    } else {
+      // Adjust jitter
+      rule.jitter = Math.max(0, Math.min(1, rule.jitter + (rng() - 0.5) * 0.3));
+    }
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -738,6 +859,13 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
     rule.Dv = rng() > 0.5 ? ra.Dv : rb.Dv;
     rule.steps = rng() > 0.5 ? ra.steps : rb.steps;
     rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
+  } else if (child.type === "voronoi") {
+    const ra = a.rule as VoronoiRule, rb = b.rule as VoronoiRule;
+    const rule = child.rule as VoronoiRule;
+    rule.seeds = rng() > 0.5 ? ra.seeds : rb.seeds;
+    rule.mode = rng() > 0.5 ? ra.mode : rb.mode;
+    rule.metric = rng() > 0.5 ? ra.metric : rb.metric;
+    rule.jitter = ra.jitter * rng() + rb.jitter * (1 - rng());
   }
 
   return child;
@@ -774,6 +902,22 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       },
       width: 48 + Math.floor(rng() * 16),
       height: 32 + Math.floor(rng() * 8),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "voronoi") {
+    const modes: VoronoiRule["mode"][] = ["regions", "edges", "gradient", "dual"];
+    const metrics: VoronoiRule["metric"][] = ["euclidean", "manhattan", "chebyshev"];
+    return {
+      type: "voronoi",
+      rule: {
+        seeds: 8 + Math.floor(rng() * 25),
+        mode: modes[Math.floor(rng() * modes.length)],
+        metric: metrics[Math.floor(rng() * metrics.length)],
+        jitter: rng(),
+      },
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
       palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
     };
   }
@@ -1010,6 +1154,37 @@ export const SEED_GENOMES: Genome[] = [
     height: 30,
     palette: BOTANICAL_PALETTE,
     seed: 1618,
+    mutations: 0,
+    lineage: [],
+  },
+  // Voronoi tessellation
+  {
+    type: "voronoi",
+    rule: { seeds: 15, mode: "dual", metric: "euclidean", jitter: 0.8 },
+    width: 52,
+    height: 30,
+    palette: GEOMETRIC_PALETTE,
+    seed: 4444,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "voronoi",
+    rule: { seeds: 25, mode: "edges", metric: "manhattan", jitter: 1.0 },
+    width: 56,
+    height: 32,
+    palette: BRAILLE_PALETTE,
+    seed: 5555,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "voronoi",
+    rule: { seeds: 10, mode: "gradient", metric: "chebyshev", jitter: 0.5 },
+    width: 48,
+    height: 28,
+    palette: SHADE_PALETTE,
+    seed: 6666,
     mutations: 0,
     lineage: [],
   },
