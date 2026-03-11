@@ -84,7 +84,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-// --- 1D Cellular Automaton ---
+// --- 1D Cellular Automaton (binary or totalistic 3-state) ---
 export function evolve1D(genome: Genome): number[][] {
   const rule = genome.rule as Rule1D;
   const rng = mulberry32(genome.seed);
@@ -92,30 +92,57 @@ export function evolve1D(genome: Genome): number[][] {
 
   const grid: number[][] = [];
 
-  // Initialize first row
-  const firstRow = new Array(width).fill(0);
-  // Single center cell or random seed
-  if (rng() > 0.5) {
-    firstRow[Math.floor(width / 2)] = 1;
-  } else {
-    for (let i = 0; i < width; i++) {
-      firstRow[i] = rng() > 0.7 ? 1 : 0;
+  if (rule.states <= 2) {
+    // Classic binary Wolfram rule
+    const firstRow = new Array(width).fill(0);
+    if (rng() > 0.5) {
+      firstRow[Math.floor(width / 2)] = 1;
+    } else {
+      for (let i = 0; i < width; i++) {
+        firstRow[i] = rng() > 0.7 ? 1 : 0;
+      }
     }
-  }
-  grid.push(firstRow);
+    grid.push(firstRow);
 
-  // Evolve
-  for (let y = 1; y < height; y++) {
-    const prev = grid[y - 1];
-    const row = new Array(width).fill(0);
-    for (let x = 0; x < width; x++) {
-      const left = prev[(x - 1 + width) % width];
-      const center = prev[x];
-      const right = prev[(x + 1) % width];
-      const neighborhood = (left << 2) | (center << 1) | right;
-      row[x] = (rule.number >> neighborhood) & 1;
+    for (let y = 1; y < height; y++) {
+      const prev = grid[y - 1];
+      const row = new Array(width).fill(0);
+      for (let x = 0; x < width; x++) {
+        const left = prev[(x - 1 + width) % width];
+        const center = prev[x];
+        const right = prev[(x + 1) % width];
+        const neighborhood = (left << 2) | (center << 1) | right;
+        row[x] = (rule.number >> neighborhood) & 1;
+      }
+      grid.push(row);
     }
-    grid.push(row);
+  } else {
+    // Totalistic 3-state rule: neighborhood sum (0-6) maps to output state (0-2)
+    // rule.number encodes 7 trits (3^7 = 2187 possible rules)
+    const firstRow = new Array(width).fill(0);
+    if (rng() > 0.5) {
+      firstRow[Math.floor(width / 2)] = rule.states - 1;
+    } else {
+      for (let i = 0; i < width; i++) {
+        firstRow[i] = Math.floor(rng() * rule.states);
+      }
+    }
+    grid.push(firstRow);
+
+    for (let y = 1; y < height; y++) {
+      const prev = grid[y - 1];
+      const row = new Array(width).fill(0);
+      for (let x = 0; x < width; x++) {
+        const left = prev[(x - 1 + width) % width];
+        const center = prev[x];
+        const right = prev[(x + 1) % width];
+        const sum = left + center + right; // 0 to 6 for 3-state
+        // Extract trit from rule number for this sum
+        const trit = Math.floor(rule.number / (3 ** sum)) % 3;
+        row[x] = Math.min(trit, rule.states - 1);
+      }
+      grid.push(row);
+    }
   }
 
   return grid;
@@ -179,10 +206,11 @@ function countNeighbors(grid: number[][], x: number, y: number, w: number, h: nu
   return count;
 }
 
-// --- L-System ---
+// --- L-System (thick brush, depth-aware, multi-state) ---
 export function evolveLSystem(genome: Genome): number[][] {
   const rule = genome.rule as LSystemRule;
   const { width, height } = genome;
+  const maxState = Math.max((genome.palette?.length ?? 2) - 1, 1);
 
   // Generate L-system string
   let current = rule.axiom;
@@ -192,30 +220,51 @@ export function evolveLSystem(genome: Genome): number[][] {
       next += rule.rules[ch] ?? ch;
     }
     current = next;
-    if (current.length > 10000) break; // safety limit
+    if (current.length > 15000) break; // safety limit
   }
 
-  // Turtle graphics onto grid
+  // Turtle graphics onto grid with thick brush and depth-based intensity
   const grid: number[][] = Array.from({ length: height }, () => new Array(width).fill(0));
   let x = width / 2, y = height / 2;
-  let angle = 0;
+  let angle = -90; // start pointing up (more natural for tree-like forms)
   const step = 1;
-  const stack: { x: number; y: number; angle: number }[] = [];
+  let depth = 0;
+  const stack: { x: number; y: number; angle: number; depth: number }[] = [];
+
+  // Helper: paint a cell with thickness based on depth
+  const paint = (gx: number, gy: number, intensity: number, radius: number) => {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx * dx + dy * dy > radius * radius + 0.5) continue; // circular brush
+        const px = ((gx + dx) % width + width) % width;
+        const py = ((gy + dy) % height + height) % height;
+        // Closer to center = higher intensity
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const falloff = Math.max(1, Math.round(intensity * (1 - dist / (radius + 1))));
+        grid[py][px] = Math.max(grid[py][px], falloff);
+      }
+    }
+  };
 
   for (const ch of current) {
     switch (ch) {
       case "F":
-      case "G":
+      case "G": {
         const nx = x + step * Math.cos((angle * Math.PI) / 180);
         const ny = y + step * Math.sin((angle * Math.PI) / 180);
-        const gx = Math.round(nx) % width;
-        const gy = Math.round(ny) % height;
+        const gx = Math.round(nx);
+        const gy = Math.round(ny);
+        // Thickness decreases with depth (trunk thick, branches thin)
+        const radius = Math.max(0, 2 - Math.floor(depth / 2));
+        // Intensity varies by depth for multi-state rendering
+        const intensity = Math.max(1, maxState - depth);
         if (gx >= 0 && gx < width && gy >= 0 && gy < height) {
-          grid[gy][gx] = 1;
+          paint(gx, gy, intensity, radius);
         }
         x = nx;
         y = ny;
         break;
+      }
       case "+":
         angle += rule.angle;
         break;
@@ -223,16 +272,40 @@ export function evolveLSystem(genome: Genome): number[][] {
         angle -= rule.angle;
         break;
       case "[":
-        stack.push({ x, y, angle });
+        stack.push({ x, y, angle, depth });
+        depth++;
         break;
-      case "]":
+      case "]": {
         const state = stack.pop();
-        if (state) ({ x, y, angle } = state);
+        if (state) ({ x, y, angle, depth } = state);
         break;
+      }
     }
   }
 
-  return grid;
+  // Post-process: bloom effect — add a soft glow around all drawn cells
+  const bloomed: number[][] = Array.from({ length: height }, () => new Array(width).fill(0));
+  for (let gy = 0; gy < height; gy++) {
+    for (let gx = 0; gx < width; gx++) {
+      bloomed[gy][gx] = grid[gy][gx];
+    }
+  }
+  for (let gy = 0; gy < height; gy++) {
+    for (let gx = 0; gx < width; gx++) {
+      if (grid[gy][gx] > 0) {
+        // Soft glow: neighbors get +1 if they're empty or lower
+        for (const [dy, dx] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]) {
+          const ny = gy + dy, nx = gx + dx;
+          if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+            const glow = Math.max(1, grid[gy][gx] - 1);
+            bloomed[ny][nx] = Math.max(bloomed[ny][nx], glow);
+          }
+        }
+      }
+    }
+  }
+
+  return bloomed;
 }
 
 // --- Rendering ---
@@ -249,7 +322,7 @@ export function score(grid: number[][]): PieceMetrics {
   const height = grid.length;
   const width = grid[0]?.length ?? 0;
   const total = width * height;
-  if (total === 0) return { complexity: 0, symmetry: 0, density: 0, novelty: 0, edgeActivity: 0 };
+  if (total === 0) return { complexity: 0, symmetry: 0, density: 0, novelty: 0, edgeActivity: 0, structuralInterest: 0 };
 
   // Density
   let filled = 0;
@@ -352,21 +425,61 @@ export function computeNovelty(metrics: PieceMetrics, population: PieceMetrics[]
   return Math.min((totalDist / population.length) / 1.5, 1);
 }
 
-export function computeScore(metrics: PieceMetrics): number {
-  // Prefer: moderate density, high complexity, some symmetry, high edge activity, structural interest
+// Epoch system: aesthetic pressure shifts every 10 generations
+// Each epoch emphasizes different qualities, preventing stagnation
+export type Epoch = "emergence" | "order" | "chaos" | "harmony";
+
+export function getEpoch(generation: number): Epoch {
+  const epochs: Epoch[] = ["emergence", "order", "chaos", "harmony"];
+  return epochs[Math.floor(generation / 10) % epochs.length];
+}
+
+export function getEpochDescription(epoch: Epoch): string {
+  switch (epoch) {
+    case "emergence": return "Favoring structural complexity and novel forms";
+    case "order": return "Seeking symmetry, pattern, and balance";
+    case "chaos": return "Rewarding edge activity and high entropy";
+    case "harmony": return "Balancing density, structure, and uniqueness";
+  }
+}
+
+export function computeScore(metrics: PieceMetrics, generation?: number): number {
   const densityScore = 1 - Math.abs(metrics.density - 0.4) * 2; // peak at 40%
   const complexityScore = Math.min(metrics.complexity / 2, 1);
   const symmetryBonus = metrics.symmetry * 0.3;
   const edgeScore = metrics.edgeActivity;
   const structureScore = metrics.structuralInterest ?? 0;
+  const noveltyScore = metrics.novelty;
+
+  // Base weights
+  let w = { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
+
+  // Epoch modifiers — shift emphasis over time
+  if (generation !== undefined) {
+    const epoch = getEpoch(generation);
+    switch (epoch) {
+      case "emergence":
+        w = { density: 0.15, complexity: 0.25, symmetry: 0.05, edge: 0.15, structure: 0.2, novelty: 0.2 };
+        break;
+      case "order":
+        w = { density: 0.2, complexity: 0.15, symmetry: 0.25, edge: 0.1, structure: 0.1, novelty: 0.2 };
+        break;
+      case "chaos":
+        w = { density: 0.15, complexity: 0.25, symmetry: 0.05, edge: 0.25, structure: 0.1, novelty: 0.2 };
+        break;
+      case "harmony":
+        w = { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
+        break;
+    }
+  }
 
   return (
-    densityScore * 0.2 +
-    complexityScore * 0.25 +
-    symmetryBonus * 0.1 +
-    edgeScore * 0.2 +
-    structureScore * 0.1 +
-    metrics.novelty * 0.15 // novelty pressure — reward uniqueness
+    densityScore * w.density +
+    complexityScore * w.complexity +
+    symmetryBonus * w.symmetry +
+    edgeScore * w.edge +
+    structureScore * w.structure +
+    noveltyScore * w.novelty
   );
 }
 
@@ -388,12 +501,26 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   if (mutated.type === "1d") {
     const rule = mutated.rule as Rule1D;
-    // Flip 1-3 bits in the rule number
-    const flips = Math.ceil(rng() * 3);
-    for (let i = 0; i < flips; i++) {
-      rule.number ^= 1 << Math.floor(rng() * 8);
+    if (rule.states <= 2) {
+      // Binary: flip 1-3 bits in the rule number
+      const flips = Math.ceil(rng() * 3);
+      for (let i = 0; i < flips; i++) {
+        rule.number ^= 1 << Math.floor(rng() * 8);
+      }
+      rule.number = rule.number & 0xff;
+      // 10% chance to upgrade to 3-state totalistic
+      if (rng() < 0.1) {
+        rule.states = 3;
+        rule.number = Math.floor(rng() * 2187); // 3^7
+      }
+    } else {
+      // Totalistic: tweak one trit position
+      const pos = Math.floor(rng() * 7);
+      const currentTrit = Math.floor(rule.number / (3 ** pos)) % 3;
+      const newTrit = (currentTrit + 1 + Math.floor(rng() * 2)) % 3;
+      rule.number = rule.number - currentTrit * (3 ** pos) + newTrit * (3 ** pos);
+      rule.number = Math.max(0, Math.min(2186, rule.number));
     }
-    rule.number = rule.number & 0xff;
   } else if (mutated.type === "2d") {
     const rule = mutated.rule as Rule2D;
     // Add or remove a birth/survive condition
@@ -579,6 +706,26 @@ export const SEED_GENOMES: Genome[] = [
     height: 32,
     palette: GEOMETRIC_PALETTE,
     seed: 314,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "1d",
+    rule: { number: 600, states: 3 }, // Totalistic 3-state — produces gradients
+    width: 60,
+    height: 32,
+    palette: SHADE_PALETTE,
+    seed: 1234,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "1d",
+    rule: { number: 1599, states: 3 }, // Another totalistic — known interesting
+    width: 56,
+    height: 28,
+    palette: STAR_PALETTE,
+    seed: 9876,
     mutations: 0,
     lineage: [],
   },

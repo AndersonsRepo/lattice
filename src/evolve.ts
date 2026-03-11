@@ -27,6 +27,8 @@ import {
   computeNovelty,
   mutateGenome,
   crossoverGenomes,
+  getEpoch,
+  getEpochDescription,
 } from "./automata.js";
 
 const PROJECT_DIR = join(import.meta.dirname, "..");
@@ -97,7 +99,7 @@ function generatePiece(genome: Genome, generation: number, populationMetrics?: P
   if (populationMetrics && populationMetrics.length > 0) {
     metrics.novelty = computeNovelty(metrics, populationMetrics);
   }
-  const totalScore = computeScore(metrics);
+  const totalScore = computeScore(metrics, generation);
   const rendered = render(grid, genome.palette);
 
   return {
@@ -157,7 +159,9 @@ function run(): void {
   const gen = pop.generation + 1;
   const rng = () => Math.random(); // use true random for evolution
 
+  const epoch = getEpoch(gen);
   console.log(`\n=== Lattice Generation ${gen} ===`);
+  console.log(`  Epoch: ${epoch} — ${getEpochDescription(epoch)}`);
 
   // If no population, seed it
   if (pop.pieces.length === 0) {
@@ -308,8 +312,10 @@ function run(): void {
     // Every 5 generations, post a status update with the current best
     const fullBest = generatePiece(survivors[0].genome, gen);
     const status = [
-      `**Lattice Status — Generation ${gen}**`,
+      `**Lattice Status — Generation ${gen}** (Epoch: *${epoch}*)`,
+      `${getEpochDescription(epoch)}`,
       `Population: ${survivors.length} | Best: ${(bestScore * 100).toFixed(1)}% | Avg: ${(avgScore * 100).toFixed(1)}%`,
+      `Species: ${Object.entries(typeCounts).map(([t, n]) => `${t}=${n}`).join(", ")}`,
       `Hall of Fame: ${pop.hallOfFame.length} | Total pieces: ${pop.stats.totalPiecesEver}`,
       "",
       "Current best:",
