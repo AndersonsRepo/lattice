@@ -24,7 +24,9 @@ import {
   render,
   score,
   computeScore,
+  computeNovelty,
   mutateGenome,
+  crossoverGenomes,
 } from "./automata.js";
 
 const PROJECT_DIR = join(import.meta.dirname, "..");
@@ -38,8 +40,12 @@ const NOTIFY_FILE = join(
 );
 
 const POPULATION_SIZE = 12;
-const OFFSPRING_PER_RUN = 6;
-const HALL_OF_FAME_THRESHOLD = 0.7;
+const OFFSPRING_PER_RUN = 8; // more offspring = more exploration
+const HALL_OF_FAME_THRESHOLD = 0.55;
+
+// Speciation: minimum slots per genome type
+const MIN_SLOTS_PER_TYPE = 2;
+const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem"];
 
 interface Population {
   generation: number;
@@ -70,7 +76,7 @@ function savePopulation(pop: Population): void {
   renameSync(tmp, POPULATION_FILE);
 }
 
-function generatePiece(genome: Genome, generation: number): Piece {
+function generatePiece(genome: Genome, generation: number, populationMetrics?: PieceMetrics[]): Piece {
   let grid: number[][];
   switch (genome.type) {
     case "1d":
@@ -87,6 +93,10 @@ function generatePiece(genome: Genome, generation: number): Piece {
   }
 
   const metrics = score(grid);
+  // Compute novelty relative to existing population
+  if (populationMetrics && populationMetrics.length > 0) {
+    metrics.novelty = computeNovelty(metrics, populationMetrics);
+  }
   const totalScore = computeScore(metrics);
   const rendered = render(grid, genome.palette);
 
@@ -120,19 +130,23 @@ function formatPieceForDiscord(piece: Piece): string {
   const ruleStr = piece.genome.type === "1d"
     ? `Rule ${(piece.genome.rule as any).number}`
     : piece.genome.type === "2d"
-    ? `B${(piece.genome.rule as any).birth.join("")}/S${(piece.genome.rule as any).survive.join("")}`
-    : `angle=${(piece.genome.rule as any).angle}°`;
+    ? `B${(piece.genome.rule as any).birth.join("")}/S${(piece.genome.rule as any).survive.join("")} (${(piece.genome.rule as any).states}st)`
+    : `angle=${(piece.genome.rule as any).angle}° iter=${(piece.genome.rule as any).iterations}`;
+
+  const hasCrossover = piece.genome.lineage.includes("×");
 
   return [
     `**Lattice Gen ${piece.generation}** — ${typeLabel} (${ruleStr})`,
     `Score: **${(piece.score * 100).toFixed(1)}%** | ` +
-      `Complexity: ${piece.metrics.complexity.toFixed(2)} | ` +
-      `Symmetry: ${(piece.metrics.symmetry * 100).toFixed(0)}% | ` +
+      `Novelty: ${(piece.metrics.novelty * 100).toFixed(0)}% | ` +
+      `Structure: ${((piece.metrics.structuralInterest ?? 0) * 100).toFixed(0)}% | ` +
       `Density: ${(piece.metrics.density * 100).toFixed(0)}%`,
     "```",
     piece.rendered,
     "```",
-    `Mutations: ${piece.genome.mutations} | Lineage depth: ${piece.genome.lineage.length}`,
+    `Mutations: ${piece.genome.mutations}${hasCrossover ? " (crossover)" : ""} | ` +
+      `Canvas: ${piece.genome.width}×${piece.genome.height} | ` +
+      `Palette: ${piece.genome.palette.slice(1, 4).join("")}...`,
   ].join("\n");
 }
 
@@ -155,30 +169,76 @@ function run(): void {
     }
   }
 
-  // Generate offspring from top performers
+  // Collect existing population metrics for novelty scoring
+  const popMetrics = pop.pieces.map((p) => p.metrics);
+
+  // Generate offspring — mix of mutation and crossover
   const sorted = [...pop.pieces].sort((a, b) => b.score - a.score);
   const parents = sorted.slice(0, Math.ceil(sorted.length / 2));
 
   const offspring: Piece[] = [];
   for (let i = 0; i < OFFSPRING_PER_RUN; i++) {
+    let childGenome: Genome;
     const parent = parents[Math.floor(rng() * parents.length)];
-    const childGenome = mutateGenome(parent.genome, rng);
-    const child = generatePiece(childGenome, gen);
+
+    if (rng() < 0.3 && parents.length >= 2) {
+      // 30% chance: crossover between two parents
+      let otherParent = parents[Math.floor(rng() * parents.length)];
+      while (otherParent.id === parent.id && parents.length > 1) {
+        otherParent = parents[Math.floor(rng() * parents.length)];
+      }
+      childGenome = crossoverGenomes(parent.genome, otherParent.genome, rng);
+      console.log(
+        `  Crossover ${parent.genome.type}×${otherParent.genome.type} → ${childGenome.type}`
+      );
+    } else {
+      childGenome = mutateGenome(parent.genome, rng);
+    }
+
+    const child = generatePiece(childGenome, gen, popMetrics);
     offspring.push(child);
     console.log(
       `  Offspring ${child.id}: ${child.genome.type} → score ${(child.score * 100).toFixed(1)}% ` +
-        `(parent: ${parent.id}, score ${(parent.score * 100).toFixed(1)}%)`
+        `(novelty: ${(child.metrics.novelty * 100).toFixed(0)}%)`
     );
   }
 
-  // Combine and select
+  // Speciation-aware selection: guarantee MIN_SLOTS_PER_TYPE for each genome type
   const allPieces = [...pop.pieces, ...offspring].sort((a, b) => b.score - a.score);
-  const survivors = allPieces.slice(0, POPULATION_SIZE);
+  const survivors: Piece[] = [];
+  const reserved = new Set<string>();
+
+  // First pass: reserve top pieces per type
+  for (const type of GENOME_TYPES) {
+    const ofType = allPieces.filter((p) => p.genome.type === type);
+    const toReserve = ofType.slice(0, MIN_SLOTS_PER_TYPE);
+    for (const p of toReserve) {
+      survivors.push(p);
+      reserved.add(p.id);
+    }
+  }
+
+  // Fill remaining slots with best overall (not already reserved)
+  for (const p of allPieces) {
+    if (survivors.length >= POPULATION_SIZE) break;
+    if (!reserved.has(p.id)) {
+      survivors.push(p);
+    }
+  }
+
+  survivors.sort((a, b) => b.score - a.score);
   const culled = allPieces.length - survivors.length;
 
-  // Check for hall of fame entries
+  // Log species diversity
+  const typeCounts: Record<string, number> = {};
+  for (const p of survivors) {
+    typeCounts[p.genome.type] = (typeCounts[p.genome.type] || 0) + 1;
+  }
+  console.log(`  Species: ${Object.entries(typeCounts).map(([t, n]) => `${t}=${n}`).join(", ")}`);
+
+  // Check for hall of fame entries (check all survivors, not just offspring)
   const newHallEntries: Piece[] = [];
-  for (const piece of offspring) {
+  for (const piece of survivors) {
     if (
       piece.score >= HALL_OF_FAME_THRESHOLD &&
       !pop.hallOfFame.some((h) => h.id === piece.id)
