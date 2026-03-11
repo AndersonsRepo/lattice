@@ -913,38 +913,37 @@ export function getEpochDescription(epoch: Epoch): string {
   }
 }
 
-export function computeScore(metrics: PieceMetrics, generation?: number): number {
-  // For grids that are nearly full (voronoi, wfc), reward state diversity instead
-  // For sparser types, peak density at 40% is still optimal
-  const densityScore = metrics.density > 0.85
-    ? Math.min(metrics.complexity / 2, 1) // full grids: reward state variety
-    : 1 - Math.abs(metrics.density - 0.4) * 2; // sparse grids: peak at 40%
+export function computeScore(metrics: PieceMetrics, generation?: number, genomeType?: Genome["type"]): number {
+  // Type-aware density scoring — each type has a different "ideal" density
+  // Previously, the universal 40% peak heavily favored 2D Life-like automata
+  const idealDensity = getIdealDensity(genomeType);
+  const densityScore = idealDensity === null
+    ? Math.min(metrics.complexity / 2, 1) // full-coverage types: reward state variety
+    : 1 - Math.abs(metrics.density - idealDensity) * (2 / Math.max(idealDensity, 1 - idealDensity));
   const complexityScore = Math.min(metrics.complexity / 2, 1);
-  const symmetryBonus = metrics.symmetry * 0.3;
+  // Symmetry scaled per type — naturally symmetric types get less bonus for it
+  const symScale = getSymmetryScale(genomeType);
+  const symmetryBonus = metrics.symmetry * symScale;
   const edgeScore = metrics.edgeActivity;
   const structureScore = metrics.structuralInterest ?? 0;
   const noveltyScore = metrics.novelty;
 
-  // Base weights
-  let w = { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
+  // Base weights — type-aware adjustments blend with epoch modifiers
+  let w = getTypeWeights(genomeType);
 
   // Epoch modifiers — shift emphasis over time
   if (generation !== undefined) {
     const epoch = getEpoch(generation);
-    switch (epoch) {
-      case "emergence":
-        w = { density: 0.15, complexity: 0.25, symmetry: 0.05, edge: 0.15, structure: 0.2, novelty: 0.2 };
-        break;
-      case "order":
-        w = { density: 0.2, complexity: 0.15, symmetry: 0.25, edge: 0.1, structure: 0.1, novelty: 0.2 };
-        break;
-      case "chaos":
-        w = { density: 0.15, complexity: 0.25, symmetry: 0.05, edge: 0.25, structure: 0.1, novelty: 0.2 };
-        break;
-      case "harmony":
-        w = { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
-        break;
-    }
+    const ew = getEpochWeights(epoch);
+    // Blend: 60% type-specific, 40% epoch pressure
+    w = {
+      density: w.density * 0.6 + ew.density * 0.4,
+      complexity: w.complexity * 0.6 + ew.complexity * 0.4,
+      symmetry: w.symmetry * 0.6 + ew.symmetry * 0.4,
+      edge: w.edge * 0.6 + ew.edge * 0.4,
+      structure: w.structure * 0.6 + ew.structure * 0.4,
+      novelty: w.novelty * 0.6 + ew.novelty * 0.4,
+    };
   }
 
   return (
@@ -955,6 +954,74 @@ export function computeScore(metrics: PieceMetrics, generation?: number): number
     structureScore * w.structure +
     noveltyScore * w.novelty
   );
+}
+
+type Weights = { density: number; complexity: number; symmetry: number; edge: number; structure: number; novelty: number };
+
+// Ideal density per type — null means full-coverage (score by state diversity)
+function getIdealDensity(genomeType?: Genome["type"]): number | null {
+  switch (genomeType) {
+    case "1d": return 0.45;              // rows fill from top, moderate fill is good
+    case "2d": return 0.4;               // classic sweet spot for life-like
+    case "lsystem": return 0.2;          // sparse fractal branching is beautiful
+    case "reaction-diffusion": return 0.5; // organic blobs want medium coverage
+    case "voronoi": return null;          // always full — score by variety
+    case "wfc": return null;              // always full — score by variety
+    case "spirograph": return 0.15;       // thin elegant curves
+    default: return 0.4;
+  }
+}
+
+// Symmetry scaling per type — types that are inherently symmetric shouldn't
+// get as much bonus for it (the bonus is already "baked in")
+function getSymmetryScale(genomeType?: Genome["type"]): number {
+  switch (genomeType) {
+    case "spirograph": return 0.15;       // parametric curves are naturally symmetric
+    case "voronoi": return 0.4;           // structured but not inherently symmetric
+    case "wfc": return 0.25;              // symmetry mode already baked into genome
+    case "lsystem": return 0.35;          // partial symmetry from branching
+    default: return 0.3;                  // original scale
+  }
+}
+
+// Type-specific weight profiles — reward what makes each type interesting
+function getTypeWeights(genomeType?: Genome["type"]): Weights {
+  switch (genomeType) {
+    case "1d":
+      // 1D automata: complexity classes (Class 3/4) are most interesting
+      return { density: 0.15, complexity: 0.3, symmetry: 0.05, edge: 0.2, structure: 0.15, novelty: 0.15 };
+    case "lsystem":
+      // L-systems: structural beauty, fractal complexity, moderate density
+      return { density: 0.1, complexity: 0.25, symmetry: 0.15, edge: 0.1, structure: 0.25, novelty: 0.15 };
+    case "reaction-diffusion":
+      // RD: organic textures, edge patterns, complexity of Turing patterns
+      return { density: 0.15, complexity: 0.25, symmetry: 0.05, edge: 0.25, structure: 0.15, novelty: 0.15 };
+    case "voronoi":
+      // Voronoi: edge patterns and structural variety matter most
+      return { density: 0.1, complexity: 0.2, symmetry: 0.1, edge: 0.25, structure: 0.2, novelty: 0.15 };
+    case "wfc":
+      // WFC: constraint-based structure, local patterns, complexity
+      return { density: 0.1, complexity: 0.25, symmetry: 0.15, edge: 0.2, structure: 0.15, novelty: 0.15 };
+    case "spirograph":
+      // Spirographs: symmetry and complexity of overlapping curves
+      return { density: 0.1, complexity: 0.25, symmetry: 0.2, edge: 0.15, structure: 0.15, novelty: 0.15 };
+    case "2d":
+    default:
+      return { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
+  }
+}
+
+function getEpochWeights(epoch: Epoch): Weights {
+  switch (epoch) {
+    case "emergence":
+      return { density: 0.15, complexity: 0.25, symmetry: 0.05, edge: 0.15, structure: 0.2, novelty: 0.2 };
+    case "order":
+      return { density: 0.2, complexity: 0.15, symmetry: 0.25, edge: 0.1, structure: 0.1, novelty: 0.2 };
+    case "chaos":
+      return { density: 0.15, complexity: 0.25, symmetry: 0.05, edge: 0.25, structure: 0.1, novelty: 0.2 };
+    case "harmony":
+      return { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
+  }
 }
 
 // --- Mutation ---

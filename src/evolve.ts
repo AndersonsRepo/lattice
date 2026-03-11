@@ -115,7 +115,7 @@ function generatePiece(genome: Genome, generation: number, populationMetrics?: P
   if (populationMetrics && populationMetrics.length > 0) {
     metrics.novelty = computeNovelty(metrics, populationMetrics);
   }
-  const totalScore = computeScore(metrics, generation);
+  const totalScore = computeScore(metrics, generation, genome.type);
   const rendered = render(grid, genome.palette);
 
   return {
