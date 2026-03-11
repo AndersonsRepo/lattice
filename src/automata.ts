@@ -35,9 +35,18 @@ export interface Rule2D {
   states: number;     // number of cell states (2+ for generations)
 }
 
+export interface ReactionDiffusionRule {
+  feed: number;      // feed rate for chemical U (0.01-0.1)
+  kill: number;      // kill rate for chemical V (0.04-0.08)
+  Du: number;        // diffusion rate of U (0.1-0.3)
+  Dv: number;        // diffusion rate of V (0.03-0.1)
+  steps: number;     // simulation steps (500-3000)
+  quantize: number;  // number of output states (3-8)
+}
+
 export interface Genome {
-  type: "1d" | "2d" | "lsystem";
-  rule: Rule1D | Rule2D | LSystemRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule;
   width: number;
   height: number;
   palette: string[];
@@ -308,6 +317,82 @@ export function evolveLSystem(genome: Genome): number[][] {
   return bloomed;
 }
 
+// --- Reaction-Diffusion (Gray-Scott model) ---
+export function evolveReactionDiffusion(genome: Genome): number[][] {
+  const rule = genome.rule as ReactionDiffusionRule;
+  const rng = mulberry32(genome.seed);
+  const { width, height } = genome;
+  const { feed, kill, Du, Dv, steps, quantize } = rule;
+
+  // Two chemical grids: U (substrate) and V (catalyst)
+  let U = Array.from({ length: height }, () => new Float64Array(width).fill(1.0));
+  let V = Array.from({ length: height }, () => new Float64Array(width).fill(0.0));
+
+  // Seed V with random patches
+  const numSeeds = 3 + Math.floor(rng() * 5);
+  for (let s = 0; s < numSeeds; s++) {
+    const cx = Math.floor(rng() * width);
+    const cy = Math.floor(rng() * height);
+    const r = 2 + Math.floor(rng() * 3);
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy <= r * r) {
+          const x = ((cx + dx) % width + width) % width;
+          const y = ((cy + dy) % height + height) % height;
+          U[y][x] = 0.5 + rng() * 0.1;
+          V[y][x] = 0.25 + rng() * 0.1;
+        }
+      }
+    }
+  }
+
+  // Laplacian with wrapping boundaries
+  const laplacian = (grid: Float64Array[], x: number, y: number): number => {
+    const xm = (x - 1 + width) % width;
+    const xp = (x + 1) % width;
+    const ym = (y - 1 + height) % height;
+    const yp = (y + 1) % height;
+    return (
+      grid[ym][x] + grid[yp][x] + grid[y][xm] + grid[y][xp]
+      - 4 * grid[y][x]
+    );
+  };
+
+  // Simulate
+  const dt = 1.0;
+  for (let step = 0; step < steps; step++) {
+    const newU = Array.from({ length: height }, () => new Float64Array(width));
+    const newV = Array.from({ length: height }, () => new Float64Array(width));
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const u = U[y][x];
+        const v = V[y][x];
+        const uvv = u * v * v;
+        const lapU = laplacian(U, x, y);
+        const lapV = laplacian(V, x, y);
+
+        newU[y][x] = Math.max(0, Math.min(1, u + dt * (Du * lapU - uvv + feed * (1 - u))));
+        newV[y][x] = Math.max(0, Math.min(1, v + dt * (Dv * lapV + uvv - (feed + kill) * v)));
+      }
+    }
+
+    U = newU;
+    V = newV;
+  }
+
+  // Quantize V chemical into discrete states for rendering
+  const maxState = quantize - 1;
+  const result: number[][] = Array.from({ length: height }, () => new Array(width).fill(0));
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      result[y][x] = Math.min(maxState, Math.floor(V[y][x] * quantize * 2.5));
+    }
+  }
+
+  return result;
+}
+
 // --- Rendering ---
 export function render(grid: number[][], palette: string[]): string {
   return grid
@@ -492,8 +577,9 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion"];
     return randomGenomeOfType(
-      ["1d", "2d", "lsystem"][Math.floor(rng() * 3)] as Genome["type"],
+      types[Math.floor(rng() * types.length)],
       rng,
       mutated.lineage
     );
@@ -562,6 +648,24 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     if (rng() < 0.1) {
       rule.iterations = Math.min(rule.iterations + 1, 6);
     }
+  } else if (mutated.type === "reaction-diffusion") {
+    const rule = mutated.rule as ReactionDiffusionRule;
+    // Perturb feed/kill rates slightly — these are very sensitive
+    const param = rng();
+    if (param < 0.3) {
+      rule.feed = Math.max(0.01, Math.min(0.1, rule.feed + (rng() - 0.5) * 0.01));
+    } else if (param < 0.6) {
+      rule.kill = Math.max(0.04, Math.min(0.08, rule.kill + (rng() - 0.5) * 0.005));
+    } else if (param < 0.8) {
+      rule.Du = Math.max(0.1, Math.min(0.3, rule.Du + (rng() - 0.5) * 0.02));
+      rule.Dv = Math.max(0.03, Math.min(0.1, rule.Dv + (rng() - 0.5) * 0.01));
+    } else {
+      rule.steps = Math.max(500, Math.min(3000, rule.steps + Math.floor((rng() - 0.5) * 400)));
+    }
+    // Occasionally change quantization
+    if (rng() < 0.15) {
+      rule.quantize = 3 + Math.floor(rng() * 6); // 3-8 states
+    }
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -623,6 +727,17 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
       result |= ((rng() > 0.5 ? ra.number : rb.number) >> i & 1) << i;
     }
     (child.rule as Rule1D).number = result;
+  } else if (child.type === "reaction-diffusion") {
+    const ra = a.rule as ReactionDiffusionRule, rb = b.rule as ReactionDiffusionRule;
+    const rule = child.rule as ReactionDiffusionRule;
+    // Interpolate parameters between parents
+    const t = rng();
+    rule.feed = ra.feed * t + rb.feed * (1 - t);
+    rule.kill = ra.kill * t + rb.kill * (1 - t);
+    rule.Du = rng() > 0.5 ? ra.Du : rb.Du;
+    rule.Dv = rng() > 0.5 ? ra.Dv : rb.Dv;
+    rule.steps = rng() > 0.5 ? ra.steps : rb.steps;
+    rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
   }
 
   return child;
@@ -659,6 +774,31 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       },
       width: 48 + Math.floor(rng() * 16),
       height: 32 + Math.floor(rng() * 8),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "reaction-diffusion") {
+    // Known interesting parameter regions in Gray-Scott space
+    const presets = [
+      { feed: 0.037, kill: 0.06 },   // spots
+      { feed: 0.03, kill: 0.062 },    // stripes/worms
+      { feed: 0.025, kill: 0.06 },    // labyrinth
+      { feed: 0.04, kill: 0.065 },    // mitosis (splitting dots)
+      { feed: 0.055, kill: 0.062 },   // coral
+    ];
+    const preset = presets[Math.floor(rng() * presets.length)];
+    return {
+      type: "reaction-diffusion",
+      rule: {
+        feed: preset.feed + (rng() - 0.5) * 0.005,
+        kill: preset.kill + (rng() - 0.5) * 0.003,
+        Du: 0.16 + (rng() - 0.5) * 0.06,
+        Dv: 0.08 + (rng() - 0.5) * 0.03,
+        steps: 1000 + Math.floor(rng() * 1500),
+        quantize: 4 + Math.floor(rng() * 4),
+      },
+      width: 40 + Math.floor(rng() * 16),
+      height: 24 + Math.floor(rng() * 12),
       palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
     };
   }
@@ -839,6 +979,37 @@ export const SEED_GENOMES: Genome[] = [
     height: 30,
     palette: WAVE_PALETTE,
     seed: 2025,
+    mutations: 0,
+    lineage: [],
+  },
+  // Reaction-Diffusion (Gray-Scott)
+  {
+    type: "reaction-diffusion",
+    rule: { feed: 0.037, kill: 0.06, Du: 0.16, Dv: 0.08, steps: 2000, quantize: 5 },
+    width: 48,
+    height: 28,
+    palette: SHADE_PALETTE,
+    seed: 3141,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "reaction-diffusion",
+    rule: { feed: 0.03, kill: 0.062, Du: 0.16, Dv: 0.08, steps: 2500, quantize: 6 },
+    width: 44,
+    height: 26,
+    palette: WAVE_PALETTE,
+    seed: 2718,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "reaction-diffusion",
+    rule: { feed: 0.025, kill: 0.06, Du: 0.18, Dv: 0.06, steps: 1500, quantize: 4 },
+    width: 50,
+    height: 30,
+    palette: BOTANICAL_PALETTE,
+    seed: 1618,
     mutations: 0,
     lineage: [],
   },

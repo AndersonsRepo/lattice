@@ -21,6 +21,7 @@ import {
   evolve1D,
   evolve2D,
   evolveLSystem,
+  evolveReactionDiffusion,
   render,
   score,
   computeScore,
@@ -47,7 +48,7 @@ const HALL_OF_FAME_THRESHOLD = 0.55;
 
 // Speciation: minimum slots per genome type
 const MIN_SLOTS_PER_TYPE = 2;
-const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem"];
+const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion"];
 
 interface Population {
   generation: number;
@@ -90,6 +91,9 @@ function generatePiece(genome: Genome, generation: number, populationMetrics?: P
     case "lsystem":
       grid = evolveLSystem(genome);
       break;
+    case "reaction-diffusion":
+      grid = evolveReactionDiffusion(genome);
+      break;
     default:
       grid = evolve1D(genome);
   }
@@ -127,12 +131,15 @@ function notify(summary: string): void {
 function formatPieceForDiscord(piece: Piece): string {
   const typeLabel = piece.genome.type === "1d" ? "1D Automaton"
     : piece.genome.type === "2d" ? "2D Life-like"
+    : piece.genome.type === "reaction-diffusion" ? "Reaction-Diffusion"
     : "L-System";
 
   const ruleStr = piece.genome.type === "1d"
     ? `Rule ${(piece.genome.rule as any).number}`
     : piece.genome.type === "2d"
     ? `B${(piece.genome.rule as any).birth.join("")}/S${(piece.genome.rule as any).survive.join("")} (${(piece.genome.rule as any).states}st)`
+    : piece.genome.type === "reaction-diffusion"
+    ? `f=${(piece.genome.rule as any).feed.toFixed(3)} k=${(piece.genome.rule as any).kill.toFixed(3)}`
     : `angle=${(piece.genome.rule as any).angle}° iter=${(piece.genome.rule as any).iterations}`;
 
   const hasCrossover = piece.genome.lineage.includes("×");
@@ -170,6 +177,20 @@ function run(): void {
       const piece = generatePiece(genome, gen);
       pop.pieces.push(piece);
       console.log(`  ${piece.id}: ${piece.genome.type} → score ${(piece.score * 100).toFixed(1)}%`);
+    }
+  }
+
+  // Diversity injection: if a genome type has zero representatives, inject a seed
+  const existingTypes = new Set(pop.pieces.map((p) => p.genome.type));
+  for (const type of GENOME_TYPES) {
+    if (!existingTypes.has(type)) {
+      const seeds = SEED_GENOMES.filter((g) => g.type === type);
+      if (seeds.length > 0) {
+        const seed = seeds[Math.floor(rng() * seeds.length)];
+        const piece = generatePiece({ ...seed, seed: Math.floor(rng() * 2 ** 32) }, gen);
+        pop.pieces.push(piece);
+        console.log(`  Injected missing type ${type}: ${piece.id} → score ${(piece.score * 100).toFixed(1)}%`);
+      }
     }
   }
 
