@@ -55,6 +55,16 @@ const HALL_OF_FAME_THRESHOLD = 0.55;
 const MIN_SLOTS_PER_TYPE = 1;
 const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia"];
 
+interface GenerationRecord {
+  generation: number;
+  bestScore: number;
+  avgScore: number;
+  epoch: string;
+  speciesCounts: Record<string, number>;
+  hallOfFameSize: number;
+  timestamp: string;
+}
+
 interface Population {
   generation: number;
   pieces: Piece[];
@@ -336,12 +346,29 @@ function run(): void {
 
   savePopulation(pop);
 
+  // Track generation history for the timeline chart
+  let history: GenerationRecord[] = [];
+  if (existsSync(HISTORY_FILE)) {
+    try { history = JSON.parse(readFileSync(HISTORY_FILE, "utf-8")); } catch {}
+  }
+  history.push({
+    generation: gen,
+    bestScore: bestScore,
+    avgScore: avgScore,
+    epoch,
+    speciesCounts: typeCounts,
+    hallOfFameSize: pop.hallOfFame.length,
+    timestamp: new Date().toISOString(),
+  });
+  writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+
   // Export gallery.json for GitHub Pages site
   const DOCS_DIR = join(PROJECT_DIR, "docs");
   mkdirSync(DOCS_DIR, { recursive: true });
   const galleryExport = {
     generation: gen,
     stats: pop.stats,
+    history,
     hallOfFame: pop.hallOfFame.map((p) => {
       const full = generatePiece(p.genome, p.generation);
       return { ...p, rendered: full.rendered };

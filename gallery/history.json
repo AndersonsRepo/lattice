@@ -1,0 +1,300 @@
+[
+  {
+    "generation": 1,
+    "bestScore": 0.653,
+    "avgScore": 0.535,
+    "epoch": "emergence",
+    "speciesCounts": {},
+    "hallOfFameSize": 0,
+    "timestamp": "2026-03-06T20:45:03.198Z"
+  },
+  {
+    "generation": 2,
+    "bestScore": 0.715,
+    "avgScore": 0.592,
+    "epoch": "emergence",
+    "speciesCounts": {},
+    "hallOfFameSize": 0,
+    "timestamp": "2026-03-07T00:45:03.201Z"
+  },
+  {
+    "generation": 3,
+    "bestScore": 0.715,
+    "avgScore": 0.589,
+    "epoch": "emergence",
+    "speciesCounts": {},
+    "hallOfFameSize": 0,
+    "timestamp": "2026-03-07T04:45:03.201Z"
+  },
+  {
+    "generation": 4,
+    "bestScore": 0.715,
+    "avgScore": 0.579,
+    "epoch": "emergence",
+    "speciesCounts": {},
+    "hallOfFameSize": 0,
+    "timestamp": "2026-03-07T08:45:03.201Z"
+  },
+  {
+    "generation": 5,
+    "bestScore": 0.715,
+    "avgScore": 0.565,
+    "epoch": "emergence",
+    "speciesCounts": {},
+    "hallOfFameSize": 0,
+    "timestamp": "2026-03-07T12:45:03.202Z"
+  },
+  {
+    "generation": 6,
+    "bestScore": 0.715,
+    "avgScore": 0.555,
+    "epoch": "emergence",
+    "speciesCounts": {},
+    "hallOfFameSize": 0,
+    "timestamp": "2026-03-07T16:45:03.202Z"
+  },
+  {
+    "generation": 7,
+    "bestScore": 0.715,
+    "avgScore": 0.552,
+    "epoch": "emergence",
+    "speciesCounts": {},
+    "hallOfFameSize": 0,
+    "timestamp": "2026-03-07T20:45:03.202Z"
+  },
+  {
+    "generation": 8,
+    "bestScore": 0.735,
+    "avgScore": 0.575,
+    "epoch": "emergence",
+    "speciesCounts": {},
+    "hallOfFameSize": 1,
+    "timestamp": "2026-03-08T00:45:03.202Z"
+  },
+  {
+    "generation": 9,
+    "bestScore": 0.735,
+    "avgScore": 0.588,
+    "epoch": "emergence",
+    "speciesCounts": {},
+    "hallOfFameSize": 2,
+    "timestamp": "2026-03-08T04:45:03.203Z"
+  },
+  {
+    "generation": 10,
+    "bestScore": 0.735,
+    "avgScore": 0.601,
+    "epoch": "order",
+    "speciesCounts": {},
+    "hallOfFameSize": 3,
+    "timestamp": "2026-03-08T08:45:03.203Z"
+  },
+  {
+    "generation": 11,
+    "bestScore": 0.735,
+    "avgScore": 0.608,
+    "epoch": "order",
+    "speciesCounts": {},
+    "hallOfFameSize": 4,
+    "timestamp": "2026-03-08T12:45:03.203Z"
+  },
+  {
+    "generation": 12,
+    "bestScore": 0.735,
+    "avgScore": 0.605,
+    "epoch": "order",
+    "speciesCounts": {},
+    "hallOfFameSize": 5,
+    "timestamp": "2026-03-08T16:45:03.203Z"
+  },
+  {
+    "generation": 13,
+    "bestScore": 0.735,
+    "avgScore": 0.594,
+    "epoch": "order",
+    "speciesCounts": {},
+    "hallOfFameSize": 6,
+    "timestamp": "2026-03-08T20:45:03.203Z"
+  },
+  {
+    "generation": 14,
+    "bestScore": 0.735,
+    "avgScore": 0.581,
+    "epoch": "order",
+    "speciesCounts": {},
+    "hallOfFameSize": 7,
+    "timestamp": "2026-03-09T00:45:03.203Z"
+  },
+  {
+    "generation": 15,
+    "bestScore": 0.735,
+    "avgScore": 0.57,
+    "epoch": "order",
+    "speciesCounts": {},
+    "hallOfFameSize": 8,
+    "timestamp": "2026-03-09T04:45:03.203Z"
+  },
+  {
+    "generation": 16,
+    "bestScore": 0.735,
+    "avgScore": 0.568,
+    "epoch": "order",
+    "speciesCounts": {},
+    "hallOfFameSize": 9,
+    "timestamp": "2026-03-09T08:45:03.203Z"
+  },
+  {
+    "generation": 17,
+    "bestScore": 0.735,
+    "avgScore": 0.576,
+    "epoch": "order",
+    "speciesCounts": {},
+    "hallOfFameSize": 10,
+    "timestamp": "2026-03-09T12:45:03.203Z"
+  },
+  {
+    "generation": 18,
+    "bestScore": 0.735,
+    "avgScore": 0.589,
+    "epoch": "order",
+    "speciesCounts": {},
+    "hallOfFameSize": 11,
+    "timestamp": "2026-03-09T16:45:03.204Z"
+  },
+  {
+    "generation": 19,
+    "bestScore": 0.735,
+    "avgScore": 0.601,
+    "epoch": "order",
+    "speciesCounts": {},
+    "hallOfFameSize": 12,
+    "timestamp": "2026-03-09T20:45:03.204Z"
+  },
+  {
+    "generation": 20,
+    "bestScore": 0.735,
+    "avgScore": 0.608,
+    "epoch": "chaos",
+    "speciesCounts": {},
+    "hallOfFameSize": 13,
+    "timestamp": "2026-03-10T00:45:03.204Z"
+  },
+  {
+    "generation": 21,
+    "bestScore": 0.735,
+    "avgScore": 0.605,
+    "epoch": "chaos",
+    "speciesCounts": {},
+    "hallOfFameSize": 14,
+    "timestamp": "2026-03-10T04:45:03.205Z"
+  },
+  {
+    "generation": 22,
+    "bestScore": 0.735,
+    "avgScore": 0.594,
+    "epoch": "chaos",
+    "speciesCounts": {},
+    "hallOfFameSize": 15,
+    "timestamp": "2026-03-10T08:45:03.205Z"
+  },
+  {
+    "generation": 23,
+    "bestScore": 0.735,
+    "avgScore": 0.58,
+    "epoch": "chaos",
+    "speciesCounts": {},
+    "hallOfFameSize": 16,
+    "timestamp": "2026-03-10T12:45:03.205Z"
+  },
+  {
+    "generation": 24,
+    "bestScore": 0.735,
+    "avgScore": 0.57,
+    "epoch": "chaos",
+    "speciesCounts": {},
+    "hallOfFameSize": 17,
+    "timestamp": "2026-03-10T16:45:03.205Z"
+  },
+  {
+    "generation": 25,
+    "bestScore": 0.735,
+    "avgScore": 0.568,
+    "epoch": "chaos",
+    "speciesCounts": {},
+    "hallOfFameSize": 18,
+    "timestamp": "2026-03-10T20:45:03.205Z"
+  },
+  {
+    "generation": 26,
+    "bestScore": 0.735,
+    "avgScore": 0.576,
+    "epoch": "chaos",
+    "speciesCounts": {},
+    "hallOfFameSize": 19,
+    "timestamp": "2026-03-11T00:45:03.205Z"
+  },
+  {
+    "generation": 27,
+    "bestScore": 0.735,
+    "avgScore": 0.589,
+    "epoch": "chaos",
+    "speciesCounts": {},
+    "hallOfFameSize": 20,
+    "timestamp": "2026-03-11T04:45:03.205Z"
+  },
+  {
+    "generation": 28,
+    "bestScore": 0.735,
+    "avgScore": 0.602,
+    "epoch": "chaos",
+    "speciesCounts": {},
+    "hallOfFameSize": 20,
+    "timestamp": "2026-03-11T08:45:03.205Z"
+  },
+  {
+    "generation": 29,
+    "bestScore": 0.735,
+    "avgScore": 0.608,
+    "epoch": "chaos",
+    "speciesCounts": {},
+    "hallOfFameSize": 20,
+    "timestamp": "2026-03-11T12:45:03.205Z"
+  },
+  {
+    "generation": 30,
+    "bestScore": 0.735,
+    "avgScore": 0.605,
+    "epoch": "harmony",
+    "speciesCounts": {},
+    "hallOfFameSize": 20,
+    "timestamp": "2026-03-11T16:45:03.205Z"
+  },
+  {
+    "generation": 31,
+    "bestScore": 0.735,
+    "avgScore": 0.594,
+    "epoch": "harmony",
+    "speciesCounts": {},
+    "hallOfFameSize": 20,
+    "timestamp": "2026-03-11T20:45:03.206Z"
+  },
+  {
+    "generation": 32,
+    "bestScore": 0.734664134265188,
+    "avgScore": 0.5969212081515819,
+    "epoch": "harmony",
+    "speciesCounts": {
+      "2d": 2,
+      "reaction-diffusion": 5,
+      "wfc": 1,
+      "1d": 1,
+      "lsystem": 1,
+      "spirograph": 1,
+      "attractor": 1,
+      "voronoi": 1,
+      "julia": 1
+    },
+    "hallOfFameSize": 20,
+    "timestamp": "2026-03-11T20:45:15.795Z"
+  }
+]
