@@ -394,13 +394,14 @@
     </div>
 
     <div class="timeline" id="timeline" style="display:none"></div>
+    <div class="timeline" id="species-chart" style="display:none"></div>
     <div class="filter-bar" id="filter-bar"></div>
     <div id="gallery"></div>
 
     <footer>
       <p><span class="live-dot"></span>Evolving autonomously every hour</p>
       <p style="margin-top: 0.75rem;">
-        Cellular automata &bull; L-systems &bull; Reaction-diffusion &bull; Voronoi &bull; WFC &bull; Spirographs &bull; Strange attractors<br>
+        Cellular automata &bull; L-systems &bull; Reaction-diffusion &bull; Voronoi &bull; WFC &bull; Spirographs &bull; Strange attractors &bull; Julia sets &bull; Fractal noise<br>
         <a href="https://github.com/AndersonsRepo/lattice">Source</a> &bull; Part of <a href="https://github.com/AndersonsRepo">AI Harness</a>
       </p>
     </footer>
@@ -418,6 +419,7 @@
       'spirograph':          { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a2d0a', '#3b6b0d', '#6ba816', '#a8db22', '#d4f54a', '#eeff88', '#ffffcc'] },
       'attractor':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a1a', '#6b2d2d', '#a84a3b', '#db6b4a', '#f59d6b', '#ffc8a0', '#ffe8d8'] },
       'julia':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a2d2d', '#0d6b5b', '#16a88a', '#22dbb5', '#4af5d4', '#88ffe8', '#ccfff4'] },
+      'noise':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a0a', '#3b3b0d', '#6b6b16', '#a8a822', '#d4d44a', '#eeff88', '#ffffcc'] },
     };
 
     // Map each Unicode palette character to an intensity level (0-7)
@@ -489,6 +491,7 @@
         const data = await res.json();
         renderStats(data);
         renderTimeline(data.history);
+        renderSpeciesChart(data.history);
         renderPieces(data);
       } catch (e) {
         document.getElementById('gallery').innerHTML =
@@ -580,6 +583,103 @@
       container.innerHTML = `<div class="timeline-header">Evolution Timeline</div>${svg}`;
     }
 
+    // Species colors matching TYPE_COLORS (use the [5] intensity for each)
+    const SPECIES_COLORS = {
+      '1d': '#c8abff', '2d': '#4ade80', 'lsystem': '#f5b84a',
+      'reaction-diffusion': '#d44af5', 'voronoi': '#4ad4f5', 'wfc': '#f54a9d',
+      'spirograph': '#d4f54a', 'attractor': '#f59d6b', 'julia': '#4af5d4', 'noise': '#d4d44a',
+    };
+
+    function renderSpeciesChart(history) {
+      if (!history || history.length < 3) return;
+      // Only use entries with species data
+      const entries = history.filter(h => h.speciesCounts && Object.keys(h.speciesCounts).length > 0);
+      if (entries.length < 3) return;
+
+      const container = document.getElementById('species-chart');
+      container.style.display = 'block';
+
+      const W = 880, H = 140;
+      const pad = { top: 15, right: 15, bottom: 22, left: 35 };
+      const cw = W - pad.left - pad.right;
+      const ch = H - pad.top - pad.bottom;
+
+      // Collect all species across all generations
+      const allTypes = new Set();
+      entries.forEach(h => Object.keys(h.speciesCounts).forEach(t => allTypes.add(t)));
+      const typeOrder = ['1d', '2d', 'lsystem', 'reaction-diffusion', 'voronoi', 'wfc', 'spirograph', 'attractor', 'julia', 'noise'].filter(t => allTypes.has(t));
+
+      const gens = entries.map(h => h.generation);
+      const minGen = Math.min(...gens), maxGen = Math.max(...gens);
+      const genRange = Math.max(maxGen - minGen, 1);
+
+      // Find max total for y-axis
+      const maxTotal = Math.max(...entries.map(h => Object.values(h.speciesCounts).reduce((a, b) => a + b, 0)));
+
+      function x(gen) { return pad.left + ((gen - minGen) / genRange) * cw; }
+      function y(val) { return pad.top + (1 - val / maxTotal) * ch; }
+
+      let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
+
+      // Grid lines
+      for (let i = 0; i <= 4; i++) {
+        const val = (maxTotal * i) / 4;
+        const yy = y(val);
+        svg += `<line class="grid-line" x1="${pad.left}" y1="${yy}" x2="${W - pad.right}" y2="${yy}"/>`;
+        svg += `<text class="grid-label" x="${pad.left - 4}" y="${yy + 3}" text-anchor="end">${Math.round(val)}</text>`;
+      }
+
+      // Gen labels
+      const labelInterval = Math.max(1, Math.ceil(genRange / 15));
+      for (const h of entries) {
+        if (h.generation % labelInterval === 0 || h.generation === maxGen) {
+          svg += `<text class="grid-label" x="${x(h.generation)}" y="${H - 4}" text-anchor="middle">${h.generation}</text>`;
+        }
+      }
+
+      // Stacked area — build from bottom up
+      for (let ti = typeOrder.length - 1; ti >= 0; ti--) {
+        const type = typeOrder[ti];
+        const color = SPECIES_COLORS[type] || '#888';
+
+        // For each entry, compute cumulative stack position
+        const topPoints = entries.map(h => {
+          let cumulative = 0;
+          for (let j = 0; j <= ti; j++) {
+            cumulative += (h.speciesCounts[typeOrder[j]] || 0);
+          }
+          return { x: x(h.generation), y: y(cumulative) };
+        });
+
+        const bottomPoints = entries.map(h => {
+          let cumulative = 0;
+          for (let j = 0; j < ti; j++) {
+            cumulative += (h.speciesCounts[typeOrder[j]] || 0);
+          }
+          return { x: x(h.generation), y: y(cumulative) };
+        });
+
+        // Build path: top forward, bottom backward
+        const topPath = topPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('');
+        const bottomPath = bottomPoints.slice().reverse().map((p, i) => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('');
+        svg += `<path d="${topPath}${bottomPath}Z" fill="${color}" opacity="0.6"><title>${typeLabel(type)}</title></path>`;
+      }
+
+      // Legend
+      const legendY = pad.top + 4;
+      let legendX = pad.left + 4;
+      typeOrder.forEach(type => {
+        const color = SPECIES_COLORS[type] || '#888';
+        const label = typeLabel(type);
+        svg += `<rect x="${legendX}" y="${legendY}" width="8" height="8" fill="${color}" opacity="0.8" rx="1"/>`;
+        svg += `<text class="grid-label" x="${legendX + 11}" y="${legendY + 7}">${label}</text>`;
+        legendX += label.length * 6.5 + 18;
+      });
+
+      svg += '</svg>';
+      container.innerHTML = `<div class="timeline-header">Species Distribution</div>${svg}`;
+    }
+
     function renderStats(data) {
       document.getElementById('generation').textContent = data.generation;
       document.getElementById('best-score').textContent = (data.stats.bestScoreEver * 100).toFixed(1) + '%';
@@ -603,6 +703,7 @@
         'spirograph': 'Spirograph',
         'attractor': 'Strange Attractor',
         'julia': 'Julia Set',
+        'noise': 'Fractal Noise',
       }[type] || type;
     }
 
@@ -616,6 +717,7 @@
       if (genome.type === 'spirograph') return `${genome.rule.layers.length} layers, ${genome.rule.steps} steps`;
       if (genome.type === 'attractor') return `${genome.rule.variant} a=${genome.rule.a.toFixed(1)} b=${genome.rule.b.toFixed(1)}`;
       if (genome.type === 'julia') return `c=${genome.rule.cReal.toFixed(3)}+${genome.rule.cImag.toFixed(3)}i`;
+      if (genome.type === 'noise') return `scale=${genome.rule.scale.toFixed(2)} oct=${genome.rule.octaves} warp=${genome.rule.warp.toFixed(1)}`;
       return '';
     }
 
@@ -692,7 +794,7 @@
         counts[t] = (counts[t] || 0) + 1;
       });
 
-      const types = ['all', '1d', '2d', 'lsystem', 'reaction-diffusion', 'voronoi', 'wfc', 'spirograph', 'attractor', 'julia'];
+      const types = ['all', '1d', '2d', 'lsystem', 'reaction-diffusion', 'voronoi', 'wfc', 'spirograph', 'attractor', 'julia', 'noise'];
       bar.innerHTML = types.map(t => {
         const label = t === 'all' ? 'All' : typeLabel(t);
         const count = t === 'all' ? allPieces.length : (counts[t] || 0);
