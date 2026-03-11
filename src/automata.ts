@@ -229,7 +229,7 @@ function countNeighbors(grid: number[][], x: number, y: number, w: number, h: nu
   return count;
 }
 
-// --- L-System (thick brush, depth-aware, multi-state) ---
+// --- L-System (thick brush, depth-aware, auto-centered) ---
 export function evolveLSystem(genome: Genome): number[][] {
   const rule = genome.rule as LSystemRule;
   const { width, height } = genome;
@@ -246,22 +246,72 @@ export function evolveLSystem(genome: Genome): number[][] {
     if (current.length > 15000) break; // safety limit
   }
 
-  // Turtle graphics onto grid with thick brush and depth-based intensity
+  // Phase 1: Trace turtle path on unbounded canvas to find bounding box
+  const points: { x: number; y: number; depth: number }[] = [];
+  let tx = 0, ty = 0;
+  let tAngle = -90;
+  const tStep = 1;
+  let tDepth = 0;
+  const tStack: { x: number; y: number; angle: number; depth: number }[] = [];
+
+  for (const ch of current) {
+    switch (ch) {
+      case "F":
+      case "G": {
+        const nx = tx + tStep * Math.cos((tAngle * Math.PI) / 180);
+        const ny = ty + tStep * Math.sin((tAngle * Math.PI) / 180);
+        points.push({ x: nx, y: ny, depth: tDepth });
+        tx = nx;
+        ty = ny;
+        break;
+      }
+      case "+": tAngle += rule.angle; break;
+      case "-": tAngle -= rule.angle; break;
+      case "[":
+        tStack.push({ x: tx, y: ty, angle: tAngle, depth: tDepth });
+        tDepth++;
+        break;
+      case "]": {
+        const state = tStack.pop();
+        if (state) ({ x: tx, y: ty, angle: tAngle, depth: tDepth } = state);
+        break;
+      }
+    }
+  }
+
+  if (points.length === 0) {
+    return Array.from({ length: height }, () => new Array(width).fill(0));
+  }
+
+  // Find bounding box of all drawn points
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+
+  // Phase 2: Scale and center onto grid with margin
+  const margin = 2;
+  const drawW = width - margin * 2;
+  const drawH = height - margin * 2;
+  const bboxW = maxX - minX || 1;
+  const bboxH = maxY - minY || 1;
+  const scale = Math.min(drawW / bboxW, drawH / bboxH);
+  const offsetX = margin + (drawW - bboxW * scale) / 2 - minX * scale;
+  const offsetY = margin + (drawH - bboxH * scale) / 2 - minY * scale;
+
   const grid: number[][] = Array.from({ length: height }, () => new Array(width).fill(0));
-  let x = width / 2, y = height / 2;
-  let angle = -90; // start pointing up (more natural for tree-like forms)
-  const step = 1;
-  let depth = 0;
-  const stack: { x: number; y: number; angle: number; depth: number }[] = [];
 
   // Helper: paint a cell with thickness based on depth
   const paint = (gx: number, gy: number, intensity: number, radius: number) => {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
-        if (dx * dx + dy * dy > radius * radius + 0.5) continue; // circular brush
-        const px = ((gx + dx) % width + width) % width;
-        const py = ((gy + dy) % height + height) % height;
-        // Closer to center = higher intensity
+        if (dx * dx + dy * dy > radius * radius + 0.5) continue;
+        const px = gx + dx;
+        const py = gy + dy;
+        if (px < 0 || px >= width || py < 0 || py >= height) continue;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const falloff = Math.max(1, Math.round(intensity * (1 - dist / (radius + 1))));
         grid[py][px] = Math.max(grid[py][px], falloff);
@@ -269,40 +319,14 @@ export function evolveLSystem(genome: Genome): number[][] {
     }
   };
 
-  for (const ch of current) {
-    switch (ch) {
-      case "F":
-      case "G": {
-        const nx = x + step * Math.cos((angle * Math.PI) / 180);
-        const ny = y + step * Math.sin((angle * Math.PI) / 180);
-        const gx = Math.round(nx);
-        const gy = Math.round(ny);
-        // Thickness decreases with depth (trunk thick, branches thin)
-        const radius = Math.max(0, 2 - Math.floor(depth / 2));
-        // Intensity varies by depth for multi-state rendering
-        const intensity = Math.max(1, maxState - depth);
-        if (gx >= 0 && gx < width && gy >= 0 && gy < height) {
-          paint(gx, gy, intensity, radius);
-        }
-        x = nx;
-        y = ny;
-        break;
-      }
-      case "+":
-        angle += rule.angle;
-        break;
-      case "-":
-        angle -= rule.angle;
-        break;
-      case "[":
-        stack.push({ x, y, angle, depth });
-        depth++;
-        break;
-      case "]": {
-        const state = stack.pop();
-        if (state) ({ x, y, angle, depth } = state);
-        break;
-      }
+  // Phase 3: Paint scaled points onto grid
+  for (const p of points) {
+    const gx = Math.round(p.x * scale + offsetX);
+    const gy = Math.round(p.y * scale + offsetY);
+    const radius = Math.max(0, 2 - Math.floor(p.depth / 2));
+    const intensity = Math.max(1, maxState - p.depth);
+    if (gx >= 0 && gx < width && gy >= 0 && gy < height) {
+      paint(gx, gy, intensity, radius);
     }
   }
 
@@ -774,7 +798,11 @@ export function getEpochDescription(epoch: Epoch): string {
 }
 
 export function computeScore(metrics: PieceMetrics, generation?: number): number {
-  const densityScore = 1 - Math.abs(metrics.density - 0.4) * 2; // peak at 40%
+  // For grids that are nearly full (voronoi, wfc), reward state diversity instead
+  // For sparser types, peak density at 40% is still optimal
+  const densityScore = metrics.density > 0.85
+    ? Math.min(metrics.complexity / 2, 1) // full grids: reward state variety
+    : 1 - Math.abs(metrics.density - 0.4) * 2; // sparse grids: peak at 40%
   const complexityScore = Math.min(metrics.complexity / 2, 1);
   const symmetryBonus = metrics.symmetry * 0.3;
   const edgeScore = metrics.edgeActivity;
