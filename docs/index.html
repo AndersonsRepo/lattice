@@ -157,6 +157,24 @@
       border-radius: 4px;
     }
 
+    .piece-art .art-line {
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    .piece-art.animating .art-line {
+      opacity: 0;
+    }
+
+    .piece-art .art-line.revealed {
+      opacity: 1;
+    }
+
+    .piece-art.done .art-line {
+      opacity: 1;
+      transition: none;
+    }
+
     .piece-meta {
       display: flex;
       justify-content: space-between;
@@ -372,21 +390,20 @@
 
     function colorizeArt(rendered, genomeType) {
       const theme = TYPE_COLORS[genomeType] || TYPE_COLORS['2d'];
-      let html = '';
-      for (const ch of rendered) {
-        if (ch === '\n') {
-          html += '\n';
-          continue;
+      const lines = rendered.split('\n');
+      return lines.map((line, i) => {
+        let lineHtml = '';
+        for (const ch of line) {
+          const intensity = charIntensity(ch);
+          if (intensity === 0) {
+            lineHtml += ' ';
+          } else {
+            const color = theme.colors[Math.min(intensity, theme.colors.length - 1)];
+            lineHtml += `<span style="color:${color}">${escapeChar(ch)}</span>`;
+          }
         }
-        const intensity = charIntensity(ch);
-        if (intensity === 0) {
-          html += ' ';
-        } else {
-          const color = theme.colors[Math.min(intensity, theme.colors.length - 1)];
-          html += `<span style="color:${color}">${escapeChar(ch)}</span>`;
-        }
-      }
-      return html;
+        return `<span class="art-line" data-line="${i}">${lineHtml}</span>`;
+      }).join('\n');
     }
 
     function escapeChar(ch) {
@@ -589,12 +606,29 @@
 
       gallery.innerHTML = html;
 
-      // Scroll-reveal with IntersectionObserver
+      // Scroll-reveal with IntersectionObserver + typewriter animation
       const observer = new IntersectionObserver((entries) => {
         entries.forEach((entry, i) => {
           if (entry.isIntersecting) {
-            setTimeout(() => entry.target.classList.add('visible'), i * 60);
-            observer.unobserve(entry.target);
+            const card = entry.target;
+            setTimeout(() => {
+              card.classList.add('visible');
+              // Trigger typewriter effect on the art
+              const art = card.querySelector('.piece-art');
+              if (art) {
+                art.classList.add('animating');
+                const lines = art.querySelectorAll('.art-line');
+                lines.forEach((line, j) => {
+                  setTimeout(() => line.classList.add('revealed'), j * 25);
+                });
+                // Mark done after all lines revealed
+                setTimeout(() => {
+                  art.classList.remove('animating');
+                  art.classList.add('done');
+                }, lines.length * 25 + 200);
+              }
+            }, i * 60);
+            observer.unobserve(card);
           }
         });
       }, { threshold: 0.1 });

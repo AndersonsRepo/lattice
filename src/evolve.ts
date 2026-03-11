@@ -151,6 +151,7 @@ function formatPieceForDiscord(piece: Piece): string {
     : piece.genome.type === "voronoi" ? "Voronoi"
     : piece.genome.type === "wfc" ? "Wave Function Collapse"
     : piece.genome.type === "spirograph" ? "Spirograph"
+    : piece.genome.type === "attractor" ? "Strange Attractor"
     : "L-System";
 
   const ruleStr = piece.genome.type === "1d"
@@ -165,6 +166,8 @@ function formatPieceForDiscord(piece: Piece): string {
     ? `${(piece.genome.rule as any).tileCount}tiles ${(piece.genome.rule as any).symmetry}`
     : piece.genome.type === "spirograph"
     ? `${(piece.genome.rule as any).layers.length}layers ${(piece.genome.rule as any).layers[0]?.mode}`
+    : piece.genome.type === "attractor"
+    ? `${(piece.genome.rule as any).variant} a=${(piece.genome.rule as any).a.toFixed(1)} b=${(piece.genome.rule as any).b.toFixed(1)}`
     : `angle=${(piece.genome.rule as any).angle}° iter=${(piece.genome.rule as any).iterations}`;
 
   const hasCrossover = piece.genome.lineage.includes("×");
