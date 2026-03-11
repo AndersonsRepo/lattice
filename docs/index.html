@@ -100,7 +100,6 @@
       border-radius: 8px;
       margin-bottom: 1.5rem;
       overflow: hidden;
-      transition: border-color 0.3s;
     }
 
     .piece-card:hover {
@@ -223,6 +222,75 @@
       animation: pulse 2s ease-in-out infinite;
       margin-right: 0.5rem;
     }
+
+    /* Type filter tabs */
+    .filter-bar {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 1rem 0 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-tab {
+      padding: 0.35rem 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.25s;
+    }
+
+    .filter-tab:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .filter-tab.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .filter-tab .count {
+      opacity: 0.6;
+      margin-left: 0.3rem;
+    }
+
+    /* Scroll reveal */
+    .piece-card {
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.4s ease, transform 0.4s ease, border-color 0.3s;
+    }
+
+    .piece-card.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .piece-card.hidden-filter {
+      display: none;
+    }
+
+    /* Section headers */
+    .section-header {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      padding: 1.5rem 0 0.75rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+
+    .section-header.hidden-filter {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -256,6 +324,7 @@
       </div>
     </div>
 
+    <div class="filter-bar" id="filter-bar"></div>
     <div id="gallery"></div>
 
     <footer>
@@ -393,30 +462,93 @@
       return '#7c6fe0';
     }
 
+    let currentFilter = 'all';
+
+    function renderFilterBar(allPieces) {
+      const bar = document.getElementById('filter-bar');
+      const counts = {};
+      allPieces.forEach(p => {
+        const t = p.genome.type;
+        counts[t] = (counts[t] || 0) + 1;
+      });
+
+      const types = ['all', '1d', '2d', 'lsystem', 'reaction-diffusion', 'voronoi', 'wfc'];
+      bar.innerHTML = types.map(t => {
+        const label = t === 'all' ? 'All' : typeLabel(t);
+        const count = t === 'all' ? allPieces.length : (counts[t] || 0);
+        if (t !== 'all' && !counts[t]) return '';
+        return `<button class="filter-tab ${t === 'all' ? 'active' : ''}" data-type="${t}">
+          ${label}<span class="count">${count}</span>
+        </button>`;
+      }).join('');
+
+      bar.addEventListener('click', e => {
+        const tab = e.target.closest('.filter-tab');
+        if (!tab) return;
+        currentFilter = tab.dataset.type;
+        bar.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        applyFilter();
+      });
+    }
+
+    function applyFilter() {
+      document.querySelectorAll('.piece-card[data-type]').forEach(card => {
+        const match = currentFilter === 'all' || card.dataset.type === currentFilter;
+        card.classList.toggle('hidden-filter', !match);
+        if (match && !card.classList.contains('visible')) {
+          requestAnimationFrame(() => card.classList.add('visible'));
+        }
+      });
+      document.querySelectorAll('.section-header').forEach(h => {
+        if (currentFilter === 'all') {
+          h.classList.remove('hidden-filter');
+        } else {
+          // Show section if it has visible children after it
+          const next = h.nextElementSibling;
+          const hasVisible = next && !next.classList.contains('hidden-filter');
+          h.classList.toggle('hidden-filter', !hasVisible);
+        }
+      });
+    }
+
     function renderPieces(data) {
       const gallery = document.getElementById('gallery');
 
-      const allPieces = [
-        ...data.hallOfFame.map(p => ({ ...p, isHallOfFame: true })),
-        ...data.pieces.filter(p => !data.hallOfFame.some(h => h.id === p.id)),
-      ].sort((a, b) => b.score - a.score);
+      const hofPieces = data.hallOfFame.map(p => ({ ...p, isHallOfFame: true }));
+      const currentPieces = data.pieces
+        .filter(p => !data.hallOfFame.some(h => h.id === p.id))
+        .sort((a, b) => b.score - a.score);
+      const allPieces = [...hofPieces, ...currentPieces].sort((a, b) => b.score - a.score);
+
+      renderFilterBar(allPieces);
 
       if (allPieces.length === 0) {
         gallery.innerHTML = '<div class="empty-state">No pieces yet. Evolution is just getting started.</div>';
         return;
       }
 
-      gallery.innerHTML = allPieces.map((piece, i) => {
-        const featured = i === 0 || piece.isHallOfFame;
+      const hofIds = new Set(data.hallOfFame.map(p => p.id));
+      const hasHof = hofPieces.length > 0;
+      const hasCurrent = currentPieces.length > 0;
+
+      let html = '';
+      if (hasHof) html += '<div class="section-header">Hall of Fame</div>';
+
+      allPieces.forEach((piece) => {
+        if (hasCurrent && hasHof && !hofIds.has(piece.id) && !html.includes('Current Population')) {
+          html += '<div class="section-header">Current Population</div>';
+        }
+        const featured = hofIds.has(piece.id);
         const art = piece.rendered || '';
         const m = piece.metrics || {};
         const colorizedArt = art ? colorizeArt(art, piece.genome.type) : '';
 
-        return `
-          <div class="piece-card ${featured ? 'featured' : ''}">
+        html += `
+          <div class="piece-card ${featured ? 'featured' : ''}" data-type="${piece.genome.type}">
             <div class="piece-header">
               <span class="piece-type">
-                ${piece.isHallOfFame ? '\u2605 ' : ''}${typeLabel(piece.genome.type)} &mdash; ${ruleStr(piece.genome)}
+                ${featured ? '\u2605 ' : ''}${typeLabel(piece.genome.type)} &mdash; ${ruleStr(piece.genome)}
               </span>
               <span class="piece-score">
                 ${(piece.score * 100).toFixed(1)}%
@@ -447,13 +579,21 @@
             </div>
           </div>
         `;
-      }).join('');
-    }
+      });
 
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
+      gallery.innerHTML = html;
+
+      // Scroll-reveal with IntersectionObserver
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry, i) => {
+          if (entry.isIntersecting) {
+            setTimeout(() => entry.target.classList.add('visible'), i * 60);
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1 });
+
+      gallery.querySelectorAll('.piece-card').forEach(card => observer.observe(card));
     }
 
     loadGallery();
