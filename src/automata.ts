@@ -58,9 +58,23 @@ export interface WFCRule {
   symmetry: "none" | "horizontal" | "vertical" | "quad"; // post-collapse symmetry
 }
 
+export interface SpirographLayer {
+  R: number;    // fixed circle radius (1-10)
+  r: number;    // rolling circle radius (0.1-8)
+  d: number;    // pen distance from rolling center (0.1-8)
+  mode: "hypo" | "epi";  // hypotrochoid or epitrochoid
+}
+
+export interface SpirographRule {
+  layers: SpirographLayer[];  // 1-4 overlaid curves
+  steps: number;              // resolution per curve (500-3000)
+  thickness: number;          // brush thickness (0-2)
+  rotationOffset: number;     // degrees rotation between layers (0-360)
+}
+
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule;
   width: number;
   height: number;
   palette: string[];
@@ -662,6 +676,108 @@ export function evolveWFC(genome: Genome): number[][] {
   return collapsed;
 }
 
+// --- Spirograph (Hypotrochoid / Epitrochoid curves) ---
+export function evolveSpirograph(genome: Genome): number[][] {
+  const rule = genome.rule as SpirographRule;
+  const { width, height } = genome;
+  const maxState = Math.max((genome.palette?.length ?? 2) - 1, 1);
+
+  // Trace all layers on unbounded canvas first
+  const allPoints: { x: number; y: number; layer: number }[] = [];
+
+  for (let li = 0; li < rule.layers.length; li++) {
+    const layer = rule.layers[li];
+    const { R, r, d, mode } = layer;
+    const rotRad = (rule.rotationOffset * li * Math.PI) / 180;
+
+    // Number of full rotations needed for the pattern to close
+    // LCM(R, r) / r rotations, capped for performance
+    const gcd = (a: number, b: number): number => {
+      a = Math.abs(Math.round(a * 100));
+      b = Math.abs(Math.round(b * 100));
+      while (b) { [a, b] = [b, a % b]; }
+      return a / 100;
+    };
+    const g = gcd(R, r);
+    const fullRotations = Math.min(R / g, 20); // cap rotations
+    const totalAngle = fullRotations * 2 * Math.PI;
+
+    for (let i = 0; i <= rule.steps; i++) {
+      const t = (i / rule.steps) * totalAngle;
+      let x: number, y: number;
+
+      if (mode === "hypo") {
+        // Hypotrochoid: rolling circle inside fixed circle
+        x = (R - r) * Math.cos(t) + d * Math.cos(((R - r) / r) * t);
+        y = (R - r) * Math.sin(t) + d * Math.sin(((R - r) / r) * t);
+      } else {
+        // Epitrochoid: rolling circle outside fixed circle
+        x = (R + r) * Math.cos(t) - d * Math.cos(((R + r) / r) * t);
+        y = (R + r) * Math.sin(t) - d * Math.sin(((R + r) / r) * t);
+      }
+
+      // Apply per-layer rotation
+      if (rotRad !== 0) {
+        const rx = x * Math.cos(rotRad) - y * Math.sin(rotRad);
+        const ry = x * Math.sin(rotRad) + y * Math.cos(rotRad);
+        x = rx;
+        y = ry;
+      }
+
+      allPoints.push({ x, y, layer: li });
+    }
+  }
+
+  if (allPoints.length === 0) {
+    return Array.from({ length: height }, () => new Array(width).fill(0));
+  }
+
+  // Find bounding box
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of allPoints) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+
+  // Scale and center onto grid with margin
+  const margin = 1;
+  const drawW = width - margin * 2;
+  const drawH = height - margin * 2;
+  const bboxW = maxX - minX || 1;
+  const bboxH = maxY - minY || 1;
+  const scale = Math.min(drawW / bboxW, drawH / bboxH);
+  const offsetX = margin + (drawW - bboxW * scale) / 2 - minX * scale;
+  const offsetY = margin + (drawH - bboxH * scale) / 2 - minY * scale;
+
+  const grid: number[][] = Array.from({ length: height }, () => new Array(width).fill(0));
+
+  for (const p of allPoints) {
+    const gx = Math.round(p.x * scale + offsetX);
+    const gy = Math.round(p.y * scale + offsetY);
+    if (gx < 0 || gx >= width || gy < 0 || gy >= height) continue;
+
+    // Layer-aware intensity: each layer gets a distinct state
+    const intensity = Math.max(1, Math.min(maxState, maxState - p.layer));
+
+    // Paint with thickness
+    const radius = rule.thickness;
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx * dx + dy * dy > radius * radius + 0.5) continue;
+        const px = gx + dx;
+        const py = gy + dy;
+        if (px >= 0 && px < width && py >= 0 && py < height) {
+          grid[py][px] = Math.max(grid[py][px], intensity);
+        }
+      }
+    }
+  }
+
+  return grid;
+}
+
 // --- Rendering ---
 export function render(grid: number[][], palette: string[]): string {
   return grid
@@ -850,7 +966,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
@@ -1005,6 +1121,44 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
         }
       }
     }
+  } else if (mutated.type === "spirograph") {
+    const rule = mutated.rule as SpirographRule;
+    const param = rng();
+    if (param < 0.4) {
+      // Perturb a layer's parameters
+      const li = Math.floor(rng() * rule.layers.length);
+      const layer = rule.layers[li];
+      const which = rng();
+      if (which < 0.3) {
+        layer.R = Math.max(1, Math.min(10, layer.R + (rng() - 0.5) * 2));
+      } else if (which < 0.6) {
+        layer.r = Math.max(0.1, Math.min(8, layer.r + (rng() - 0.5) * 1.5));
+      } else {
+        layer.d = Math.max(0.1, Math.min(8, layer.d + (rng() - 0.5) * 1.5));
+      }
+    } else if (param < 0.55) {
+      // Flip a layer's mode
+      const li = Math.floor(rng() * rule.layers.length);
+      rule.layers[li].mode = rule.layers[li].mode === "hypo" ? "epi" : "hypo";
+    } else if (param < 0.7) {
+      // Add or remove a layer (1-4 range)
+      if (rng() > 0.5 && rule.layers.length < 4) {
+        rule.layers.push({
+          R: 2 + rng() * 6,
+          r: 0.5 + rng() * 4,
+          d: 0.5 + rng() * 4,
+          mode: rng() > 0.5 ? "hypo" : "epi",
+        });
+      } else if (rule.layers.length > 1) {
+        rule.layers.splice(Math.floor(rng() * rule.layers.length), 1);
+      }
+    } else if (param < 0.85) {
+      // Adjust rotation offset
+      rule.rotationOffset = (rule.rotationOffset + (rng() - 0.5) * 60 + 360) % 360;
+    } else {
+      // Adjust thickness
+      rule.thickness = Math.max(0, Math.min(2, Math.round(rule.thickness + (rng() > 0.5 ? 1 : -1))));
+    }
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -1103,6 +1257,21 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
       rule.weights.push(rng() > 0.5 ? (ra.weights[i] ?? 1) : (rb.weights[i] ?? 1));
     }
     rule.symmetry = rng() > 0.5 ? ra.symmetry : rb.symmetry;
+  } else if (child.type === "spirograph") {
+    const ra = a.rule as SpirographRule, rb = b.rule as SpirographRule;
+    const rule = child.rule as SpirographRule;
+    // Mix layers from both parents
+    const allLayers = [...ra.layers, ...rb.layers];
+    rule.layers = [];
+    for (const layer of allLayers) {
+      if (rng() > 0.4 && rule.layers.length < 4) {
+        rule.layers.push({ ...layer });
+      }
+    }
+    if (rule.layers.length === 0) rule.layers.push({ ...ra.layers[0] });
+    rule.thickness = rng() > 0.5 ? ra.thickness : rb.thickness;
+    rule.rotationOffset = ra.rotationOffset * rng() + rb.rotationOffset * (1 - rng());
+    rule.steps = rng() > 0.5 ? ra.steps : rb.steps;
   }
 
   return child;
@@ -1193,6 +1362,30 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
   }
   if (type === "wfc") {
     return randomWFCGenome(rng, palette, seed, lineage);
+  }
+  if (type === "spirograph") {
+    const numLayers = 1 + Math.floor(rng() * 3); // 1-3 layers
+    const layers: SpirographLayer[] = [];
+    for (let i = 0; i < numLayers; i++) {
+      layers.push({
+        R: 2 + rng() * 6,
+        r: 0.5 + rng() * 4,
+        d: 0.5 + rng() * 4,
+        mode: rng() > 0.5 ? "hypo" : "epi",
+      });
+    }
+    return {
+      type: "spirograph",
+      rule: {
+        layers,
+        steps: 1000 + Math.floor(rng() * 1500),
+        thickness: Math.floor(rng() * 2),
+        rotationOffset: rng() * 360,
+      },
+      width: 48 + Math.floor(rng() * 16),
+      height: 32 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
   }
   if (type === "reaction-diffusion") {
     // Known interesting parameter regions in Gray-Scott space
@@ -1504,6 +1697,61 @@ export const SEED_GENOMES: Genome[] = [
     height: 30,
     palette: STAR_PALETTE,
     seed: 9090,
+    mutations: 0,
+    lineage: [],
+  },
+  // Spirograph (parametric curves)
+  {
+    type: "spirograph",
+    rule: {
+      layers: [
+        { R: 5, r: 3, d: 2.5, mode: "hypo" as const },
+      ],
+      steps: 2000,
+      thickness: 1,
+      rotationOffset: 0,
+    },
+    width: 52,
+    height: 34,
+    palette: GEOMETRIC_PALETTE,
+    seed: 1111,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "spirograph",
+    rule: {
+      layers: [
+        { R: 7, r: 2, d: 3, mode: "epi" as const },
+        { R: 5, r: 3, d: 1.5, mode: "hypo" as const },
+      ],
+      steps: 1500,
+      thickness: 0,
+      rotationOffset: 45,
+    },
+    width: 56,
+    height: 36,
+    palette: STAR_PALETTE,
+    seed: 2222,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "spirograph",
+    rule: {
+      layers: [
+        { R: 8, r: 5, d: 4, mode: "hypo" as const },
+        { R: 6, r: 1, d: 5, mode: "epi" as const },
+        { R: 4, r: 3, d: 2, mode: "hypo" as const },
+      ],
+      steps: 2500,
+      thickness: 1,
+      rotationOffset: 30,
+    },
+    width: 60,
+    height: 38,
+    palette: WAVE_PALETTE,
+    seed: 3333,
     mutations: 0,
     lineage: [],
   },

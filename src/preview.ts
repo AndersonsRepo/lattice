@@ -1,11 +1,11 @@
 #!/usr/bin/env npx tsx
 /**
  * Preview a specific genome type from the current population
- * Usage: npx tsx src/preview.ts [1d|2d|lsystem]
+ * Usage: npx tsx src/preview.ts [1d|2d|lsystem|reaction-diffusion|voronoi|wfc|spirograph]
  */
 import { readFileSync } from "fs";
 import { join } from "path";
-import { evolveLSystem, evolve1D, evolve2D, evolveReactionDiffusion, evolveVoronoi, render } from "./automata.js";
+import { evolveLSystem, evolve1D, evolve2D, evolveReactionDiffusion, evolveVoronoi, evolveWFC, evolveSpirograph, render } from "./automata.js";
 
 const popFile = join(import.meta.dirname, "..", "gallery", "population.json");
 const pop = JSON.parse(readFileSync(popFile, "utf-8"));
@@ -24,10 +24,15 @@ console.log(`Canvas: ${piece.genome.width}×${piece.genome.height}`);
 console.log();
 
 let grid: number[][];
-if (piece.genome.type === "lsystem") grid = evolveLSystem(piece.genome);
-else if (piece.genome.type === "1d") grid = evolve1D(piece.genome);
-else if (piece.genome.type === "reaction-diffusion") grid = evolveReactionDiffusion(piece.genome);
-else if (piece.genome.type === "voronoi") grid = evolveVoronoi(piece.genome);
-else grid = evolve2D(piece.genome);
+switch (piece.genome.type) {
+  case "1d": grid = evolve1D(piece.genome); break;
+  case "2d": grid = evolve2D(piece.genome); break;
+  case "lsystem": grid = evolveLSystem(piece.genome); break;
+  case "reaction-diffusion": grid = evolveReactionDiffusion(piece.genome); break;
+  case "voronoi": grid = evolveVoronoi(piece.genome); break;
+  case "wfc": grid = evolveWFC(piece.genome); break;
+  case "spirograph": grid = evolveSpirograph(piece.genome); break;
+  default: grid = evolve1D(piece.genome);
+}
 
 console.log(render(grid, piece.genome.palette));
