@@ -72,9 +72,19 @@ export interface SpirographRule {
   rotationOffset: number;     // degrees rotation between layers (0-360)
 }
 
+export interface AttractorRule {
+  variant: "clifford" | "dejong";  // attractor formula
+  a: number;   // parameter a (-3 to 3)
+  b: number;   // parameter b (-3 to 3)
+  c: number;   // parameter c (-3 to 3)
+  d: number;   // parameter d (-3 to 3)
+  iterations: number;  // number of points to plot (50000-500000)
+  quantize: number;    // number of output states (3-8)
+}
+
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule;
   width: number;
   height: number;
   palette: string[];
@@ -778,6 +788,81 @@ export function evolveSpirograph(genome: Genome): number[][] {
   return grid;
 }
 
+// --- Strange Attractor (Clifford / De Jong) ---
+export function evolveAttractor(genome: Genome): number[][] {
+  const rule = genome.rule as AttractorRule;
+  const { width, height } = genome;
+  const { a, b, c, d, iterations, quantize } = rule;
+
+  // Accumulate hit counts in a density map
+  const density: number[][] = Array.from({ length: height }, () => new Array(width).fill(0));
+
+  let x = 0.1, y = 0.1;
+  // First pass: find bounding box by sampling
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const samplePoints: { x: number; y: number }[] = [];
+
+  for (let i = 0; i < iterations; i++) {
+    let nx: number, ny: number;
+    if (rule.variant === "clifford") {
+      // Clifford attractor: x' = sin(a*y) + c*cos(a*x), y' = sin(b*x) + d*cos(b*y)
+      nx = Math.sin(a * y) + c * Math.cos(a * x);
+      ny = Math.sin(b * x) + d * Math.cos(b * y);
+    } else {
+      // De Jong attractor: x' = sin(a*y) - cos(b*x), y' = sin(c*x) - cos(d*y)
+      nx = Math.sin(a * y) - Math.cos(b * x);
+      ny = Math.sin(c * x) - Math.cos(d * y);
+    }
+    x = nx;
+    y = ny;
+
+    if (!isFinite(x) || !isFinite(y)) { x = 0.1; y = 0.1; continue; }
+
+    samplePoints.push({ x, y });
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+
+  if (maxX === minX || maxY === minY || samplePoints.length === 0) {
+    return density; // degenerate attractor
+  }
+
+  // Map points to grid and accumulate density
+  const bboxW = maxX - minX;
+  const bboxH = maxY - minY;
+  const margin = 1;
+  const drawW = width - margin * 2;
+  const drawH = height - margin * 2;
+  let maxDensity = 0;
+
+  for (const p of samplePoints) {
+    const gx = Math.floor(margin + ((p.x - minX) / bboxW) * drawW);
+    const gy = Math.floor(margin + ((p.y - minY) / bboxH) * drawH);
+    if (gx >= 0 && gx < width && gy >= 0 && gy < height) {
+      density[gy][gx]++;
+      if (density[gy][gx] > maxDensity) maxDensity = density[gy][gx];
+    }
+  }
+
+  if (maxDensity === 0) return density;
+
+  // Quantize density to output states using log scale (better dynamic range)
+  const logMax = Math.log(maxDensity + 1);
+  const maxState = Math.max(quantize - 1, 1);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (density[y][x] > 0) {
+        const logVal = Math.log(density[y][x] + 1) / logMax;
+        density[y][x] = Math.max(1, Math.round(logVal * maxState));
+      }
+    }
+  }
+
+  return density;
+}
+
 // --- Rendering ---
 export function render(grid: number[][], palette: string[]): string {
   return grid
@@ -968,6 +1053,7 @@ function getIdealDensity(genomeType?: Genome["type"]): number | null {
     case "voronoi": return null;          // always full — score by variety
     case "wfc": return null;              // always full — score by variety
     case "spirograph": return 0.15;       // thin elegant curves
+    case "attractor": return 0.25;        // organic density clusters
     default: return 0.4;
   }
 }
@@ -977,6 +1063,7 @@ function getIdealDensity(genomeType?: Genome["type"]): number | null {
 function getSymmetryScale(genomeType?: Genome["type"]): number {
   switch (genomeType) {
     case "spirograph": return 0.15;       // parametric curves are naturally symmetric
+    case "attractor": return 0.35;        // attractors can have emergent symmetry
     case "voronoi": return 0.4;           // structured but not inherently symmetric
     case "wfc": return 0.25;              // symmetry mode already baked into genome
     case "lsystem": return 0.35;          // partial symmetry from branching
@@ -1005,6 +1092,9 @@ function getTypeWeights(genomeType?: Genome["type"]): Weights {
     case "spirograph":
       // Spirographs: symmetry and complexity of overlapping curves
       return { density: 0.1, complexity: 0.25, symmetry: 0.2, edge: 0.15, structure: 0.15, novelty: 0.15 };
+    case "attractor":
+      // Attractors: complex organic structure, density variation, novelty
+      return { density: 0.15, complexity: 0.25, symmetry: 0.1, edge: 0.15, structure: 0.2, novelty: 0.15 };
     case "2d":
     default:
       return { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
@@ -1033,7 +1123,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
@@ -1226,6 +1316,24 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
       // Adjust thickness
       rule.thickness = Math.max(0, Math.min(2, Math.round(rule.thickness + (rng() > 0.5 ? 1 : -1))));
     }
+  } else if (mutated.type === "attractor") {
+    const rule = mutated.rule as AttractorRule;
+    const param = rng();
+    if (param < 0.5) {
+      // Perturb one of the 4 parameters
+      const which = Math.floor(rng() * 4);
+      const keys: (keyof Pick<AttractorRule, "a" | "b" | "c" | "d">)[] = ["a", "b", "c", "d"];
+      rule[keys[which]] = Math.max(-3, Math.min(3, rule[keys[which]] + (rng() - 0.5) * 0.4));
+    } else if (param < 0.7) {
+      // Switch variant
+      rule.variant = rule.variant === "clifford" ? "dejong" : "clifford";
+    } else if (param < 0.85) {
+      // Adjust iterations
+      rule.iterations = Math.max(50000, Math.min(500000, rule.iterations + Math.floor((rng() - 0.5) * 100000)));
+    } else {
+      // Adjust quantization
+      rule.quantize = 3 + Math.floor(rng() * 6); // 3-8
+    }
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -1339,6 +1447,17 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
     rule.thickness = rng() > 0.5 ? ra.thickness : rb.thickness;
     rule.rotationOffset = ra.rotationOffset * rng() + rb.rotationOffset * (1 - rng());
     rule.steps = rng() > 0.5 ? ra.steps : rb.steps;
+  } else if (child.type === "attractor") {
+    const ra = a.rule as AttractorRule, rb = b.rule as AttractorRule;
+    const rule = child.rule as AttractorRule;
+    const t = rng();
+    rule.a = ra.a * t + rb.a * (1 - t);
+    rule.b = ra.b * t + rb.b * (1 - t);
+    rule.c = rng() > 0.5 ? ra.c : rb.c;
+    rule.d = rng() > 0.5 ? ra.d : rb.d;
+    rule.variant = rng() > 0.5 ? ra.variant : rb.variant;
+    rule.iterations = rng() > 0.5 ? ra.iterations : rb.iterations;
+    rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
   }
 
   return child;
@@ -1476,6 +1595,32 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       },
       width: 40 + Math.floor(rng() * 16),
       height: 24 + Math.floor(rng() * 12),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "attractor") {
+    // Known interesting parameter ranges for beautiful attractors
+    const presets = [
+      { variant: "clifford" as const, a: -1.4, b: 1.6, c: 1.0, d: 0.7 },    // classic swirls
+      { variant: "clifford" as const, a: 1.7, b: 1.7, c: 0.6, d: 1.2 },     // butterfly
+      { variant: "dejong" as const, a: -2.0, b: -2.0, c: -1.2, d: 2.0 },     // organic loops
+      { variant: "dejong" as const, a: 1.4, b: -2.3, c: 2.4, d: -2.1 },      // dense filigree
+      { variant: "clifford" as const, a: -1.7, b: 1.3, c: -0.1, d: -1.2 },   // vortex
+    ];
+    const preset = presets[Math.floor(rng() * presets.length)];
+    return {
+      type: "attractor",
+      rule: {
+        variant: preset.variant,
+        a: preset.a + (rng() - 0.5) * 0.2,
+        b: preset.b + (rng() - 0.5) * 0.2,
+        c: preset.c + (rng() - 0.5) * 0.2,
+        d: preset.d + (rng() - 0.5) * 0.2,
+        iterations: 100000 + Math.floor(rng() * 200000),
+        quantize: 4 + Math.floor(rng() * 4),
+      },
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
       palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
     };
   }
@@ -1819,6 +1964,37 @@ export const SEED_GENOMES: Genome[] = [
     height: 38,
     palette: WAVE_PALETTE,
     seed: 3333,
+    mutations: 0,
+    lineage: [],
+  },
+  // Strange Attractors (Clifford / De Jong)
+  {
+    type: "attractor",
+    rule: { variant: "clifford", a: -1.4, b: 1.6, c: 1.0, d: 0.7, iterations: 200000, quantize: 6 },
+    width: 52,
+    height: 32,
+    palette: SHADE_PALETTE,
+    seed: 10101,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "attractor",
+    rule: { variant: "dejong", a: -2.0, b: -2.0, c: -1.2, d: 2.0, iterations: 150000, quantize: 5 },
+    width: 48,
+    height: 30,
+    palette: BRAILLE_PALETTE,
+    seed: 20202,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "attractor",
+    rule: { variant: "clifford", a: 1.7, b: 1.7, c: 0.6, d: 1.2, iterations: 250000, quantize: 7 },
+    width: 56,
+    height: 34,
+    palette: STAR_PALETTE,
+    seed: 30303,
     mutations: 0,
     lineage: [],
   },

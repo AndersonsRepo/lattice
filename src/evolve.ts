@@ -25,6 +25,7 @@ import {
   evolveVoronoi,
   evolveWFC,
   evolveSpirograph,
+  evolveAttractor,
   render,
   score,
   computeScore,
@@ -51,7 +52,7 @@ const HALL_OF_FAME_THRESHOLD = 0.55;
 
 // Speciation: minimum slots per genome type
 const MIN_SLOTS_PER_TYPE = 2;
-const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph"];
+const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor"];
 
 interface Population {
   generation: number;
@@ -105,6 +106,9 @@ function generatePiece(genome: Genome, generation: number, populationMetrics?: P
       break;
     case "spirograph":
       grid = evolveSpirograph(genome);
+      break;
+    case "attractor":
+      grid = evolveAttractor(genome);
       break;
     default:
       grid = evolve1D(genome);
