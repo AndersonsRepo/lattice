@@ -296,5 +296,141 @@
     },
     "hallOfFameSize": 20,
     "timestamp": "2026-03-11T20:45:15.795Z"
+  },
+  {
+    "generation": 33,
+    "bestScore": 0.734664134265188,
+    "avgScore": 0.6131376759049226,
+    "epoch": "harmony",
+    "speciesCounts": {
+      "2d": 2,
+      "reaction-diffusion": 5,
+      "wfc": 1,
+      "1d": 1,
+      "lsystem": 1,
+      "spirograph": 1,
+      "julia": 1,
+      "attractor": 1,
+      "voronoi": 1
+    },
+    "hallOfFameSize": 20,
+    "timestamp": "2026-03-11T20:52:58.546Z",
+    "bestPiece": {
+      "id": "gen8-mmlm9vya",
+      "genome": {
+        "type": "2d",
+        "rule": {
+          "birth": [
+            3,
+            5
+          ],
+          "survive": [
+            1,
+            2,
+            8,
+            7
+          ],
+          "states": 6
+        },
+        "width": 44,
+        "height": 30,
+        "palette": [
+          " ",
+          "△",
+          "▽",
+          "◇",
+          "◈",
+          "⬡",
+          "⬢"
+        ],
+        "seed": 3892955443,
+        "mutations": 5,
+        "lineage": [
+          "×",
+          "daf438f1",
+          "30858c96",
+          "21ed9659",
+          "×",
+          "32dd4ad3"
+        ]
+      },
+      "score": 0.734664134265188,
+      "metrics": {
+        "complexity": 2.4650899733134146,
+        "symmetry": 0.2,
+        "density": 0.6674242424242425,
+        "novelty": 0.4955945204957363,
+        "edgeActivity": 0.7720187061574435,
+        "structuralInterest": 0.9848484848484848
+      }
+    }
+  },
+  {
+    "generation": 34,
+    "bestScore": 0.734664134265188,
+    "avgScore": 0.6131376759049226,
+    "epoch": "harmony",
+    "speciesCounts": {
+      "2d": 2,
+      "reaction-diffusion": 5,
+      "wfc": 1,
+      "1d": 1,
+      "lsystem": 1,
+      "spirograph": 1,
+      "julia": 1,
+      "attractor": 1,
+      "voronoi": 1
+    },
+    "hallOfFameSize": 20,
+    "timestamp": "2026-03-11T20:53:51.834Z",
+    "bestPiece": {
+      "id": "gen8-mmlm9vya",
+      "genome": {
+        "type": "2d",
+        "rule": {
+          "birth": [
+            3,
+            5
+          ],
+          "survive": [
+            1,
+            2,
+            8,
+            7
+          ],
+          "states": 6
+        },
+        "width": 44,
+        "height": 30,
+        "palette": [
+          " ",
+          "△",
+          "▽",
+          "◇",
+          "◈",
+          "⬡",
+          "⬢"
+        ],
+        "seed": 3892955443,
+        "mutations": 5,
+        "lineage": [
+          "×",
+          "daf438f1",
+          "30858c96",
+          "21ed9659",
+          "×",
+          "32dd4ad3"
+        ]
+      },
+      "score": 0.734664134265188,
+      "metrics": {
+        "complexity": 2.4650899733134146,
+        "symmetry": 0.2,
+        "density": 0.6674242424242425,
+        "novelty": 0.4955945204957363,
+        "edgeActivity": 0.7720187061574435,
+        "structuralInterest": 0.9848484848484848
+      }
+    }
   }
 ]

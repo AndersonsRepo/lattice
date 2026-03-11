@@ -398,7 +398,7 @@
     <div id="gallery"></div>
 
     <footer>
-      <p><span class="live-dot"></span>Evolving autonomously every 4 hours</p>
+      <p><span class="live-dot"></span>Evolving autonomously every hour</p>
       <p style="margin-top: 0.75rem;">
         Cellular automata &bull; L-systems &bull; Reaction-diffusion &bull; Voronoi &bull; WFC &bull; Spirographs &bull; Strange attractors<br>
         <a href="https://github.com/AndersonsRepo/lattice">Source</a> &bull; Part of <a href="https://github.com/AndersonsRepo">AI Harness</a>
@@ -732,6 +732,61 @@
       });
     }
 
+    function renderPieceCard(piece, featured = false) {
+      const art = piece.rendered || '';
+      const m = piece.metrics || {};
+      const colorizedArt = art ? colorizeArt(art, piece.genome.type) : '';
+
+      return `
+        <div class="piece-card ${featured ? 'featured' : ''}" data-type="${piece.genome.type}">
+          <div class="piece-header">
+            <span class="piece-type">
+              ${featured ? '\u2605 ' : ''}${typeLabel(piece.genome.type)} &mdash; ${ruleStr(piece.genome)}
+            </span>
+            <span class="piece-score">
+              ${(piece.score * 100).toFixed(1)}%
+              <span class="score-bar"><span class="score-fill" style="width: ${piece.score * 100}%"></span></span>
+            </span>
+          </div>
+          ${colorizedArt ? `<pre class="piece-art">${colorizedArt}</pre>` : ''}
+          <div class="piece-meta">
+            ${renderRadar(m, piece.genome.type)}
+            <div class="metrics-text">
+              <div class="metrics-row">
+                <span class="metric">
+                  <span class="metric-dot" style="background: ${metricColor(m.complexity || 0, 'complexity')}"></span>
+                  cx ${(m.complexity || 0).toFixed(2)}
+                </span>
+                <span class="metric">
+                  <span class="metric-dot" style="background: ${metricColor(m.symmetry || 0, 'symmetry')}"></span>
+                  sym ${((m.symmetry || 0) * 100).toFixed(0)}%
+                </span>
+                <span class="metric">
+                  <span class="metric-dot" style="background: var(--accent)"></span>
+                  den ${((m.density || 0) * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div class="metrics-row">
+                <span class="metric">
+                  <span class="metric-dot" style="background: var(--amber)"></span>
+                  nov ${((m.novelty || 0) * 100).toFixed(0)}%
+                </span>
+                <span class="metric">
+                  <span class="metric-dot" style="background: var(--green)"></span>
+                  edge ${((m.edgeActivity || 0) * 100).toFixed(0)}%
+                </span>
+                <span class="metric">
+                  <span class="metric-dot" style="background: #c084fc"></span>
+                  struct ${((m.structuralInterest || 0) * 100).toFixed(0)}%
+                </span>
+              </div>
+              <span style="margin-top: 0.1rem">gen ${piece.generation} &bull; ${piece.genome.mutations}mut${piece.epoch ? ` &bull; ${piece.epoch}` : ''}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     function renderPieces(data) {
       const gallery = document.getElementById('gallery');
 
@@ -739,11 +794,14 @@
       const currentPieces = data.pieces
         .filter(p => !data.hallOfFame.some(h => h.id === p.id))
         .sort((a, b) => b.score - a.score);
-      const allPieces = [...hofPieces, ...currentPieces].sort((a, b) => b.score - a.score);
+      const archivePieces = (data.archive || [])
+        .filter(p => !data.hallOfFame.some(h => h.id === p.id))
+        .sort((a, b) => b.generation - a.generation); // newest first
 
-      renderFilterBar(allPieces);
+      const allDisplayPieces = [...hofPieces, ...currentPieces];
+      renderFilterBar([...allDisplayPieces, ...archivePieces]);
 
-      if (allPieces.length === 0) {
+      if (allDisplayPieces.length === 0 && archivePieces.length === 0) {
         gallery.innerHTML = '<div class="empty-state">No pieces yet. Evolution is just getting started.</div>';
         return;
       }
@@ -755,64 +813,20 @@
       let html = '';
       if (hasHof) html += '<div class="section-header">Hall of Fame</div>';
 
-      allPieces.forEach((piece) => {
+      allDisplayPieces.sort((a, b) => b.score - a.score).forEach((piece) => {
         if (hasCurrent && hasHof && !hofIds.has(piece.id) && !html.includes('Current Population')) {
           html += '<div class="section-header">Current Population</div>';
         }
-        const featured = hofIds.has(piece.id);
-        const art = piece.rendered || '';
-        const m = piece.metrics || {};
-        const colorizedArt = art ? colorizeArt(art, piece.genome.type) : '';
-
-        html += `
-          <div class="piece-card ${featured ? 'featured' : ''}" data-type="${piece.genome.type}">
-            <div class="piece-header">
-              <span class="piece-type">
-                ${featured ? '\u2605 ' : ''}${typeLabel(piece.genome.type)} &mdash; ${ruleStr(piece.genome)}
-              </span>
-              <span class="piece-score">
-                ${(piece.score * 100).toFixed(1)}%
-                <span class="score-bar"><span class="score-fill" style="width: ${piece.score * 100}%"></span></span>
-              </span>
-            </div>
-            ${colorizedArt ? `<pre class="piece-art">${colorizedArt}</pre>` : ''}
-            <div class="piece-meta">
-              ${renderRadar(m, piece.genome.type)}
-              <div class="metrics-text">
-                <div class="metrics-row">
-                  <span class="metric">
-                    <span class="metric-dot" style="background: ${metricColor(m.complexity || 0, 'complexity')}"></span>
-                    cx ${(m.complexity || 0).toFixed(2)}
-                  </span>
-                  <span class="metric">
-                    <span class="metric-dot" style="background: ${metricColor(m.symmetry || 0, 'symmetry')}"></span>
-                    sym ${((m.symmetry || 0) * 100).toFixed(0)}%
-                  </span>
-                  <span class="metric">
-                    <span class="metric-dot" style="background: var(--accent)"></span>
-                    den ${((m.density || 0) * 100).toFixed(0)}%
-                  </span>
-                </div>
-                <div class="metrics-row">
-                  <span class="metric">
-                    <span class="metric-dot" style="background: var(--amber)"></span>
-                    nov ${((m.novelty || 0) * 100).toFixed(0)}%
-                  </span>
-                  <span class="metric">
-                    <span class="metric-dot" style="background: var(--green)"></span>
-                    edge ${((m.edgeActivity || 0) * 100).toFixed(0)}%
-                  </span>
-                  <span class="metric">
-                    <span class="metric-dot" style="background: #c084fc"></span>
-                    struct ${((m.structuralInterest || 0) * 100).toFixed(0)}%
-                  </span>
-                </div>
-                <span style="margin-top: 0.1rem">gen ${piece.generation} &bull; ${piece.genome.mutations}mut</span>
-              </div>
-            </div>
-          </div>
-        `;
+        html += renderPieceCard(piece, hofIds.has(piece.id));
       });
+
+      // Generation Archive — every generation's best piece, newest first
+      if (archivePieces.length > 0) {
+        html += '<div class="section-header">Generation Archive &mdash; Best of Each Generation</div>';
+        archivePieces.forEach((piece) => {
+          html += renderPieceCard(piece, false);
+        });
+      }
 
       gallery.innerHTML = html;
 

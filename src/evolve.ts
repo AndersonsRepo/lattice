@@ -63,6 +63,13 @@ interface GenerationRecord {
   speciesCounts: Record<string, number>;
   hallOfFameSize: number;
   timestamp: string;
+  // Best piece archive — genome stored so it can be re-rendered on the site
+  bestPiece?: {
+    id: string;
+    genome: Genome;
+    score: number;
+    metrics: PieceMetrics;
+  };
 }
 
 interface Population {
@@ -359,16 +366,62 @@ function run(): void {
     speciesCounts: typeCounts,
     hallOfFameSize: pop.hallOfFame.length,
     timestamp: new Date().toISOString(),
+    bestPiece: survivors[0] ? {
+      id: survivors[0].id,
+      genome: survivors[0].genome,
+      score: survivors[0].score,
+      metrics: survivors[0].metrics,
+    } : undefined,
   });
   writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
 
   // Export gallery.json for GitHub Pages site
   const DOCS_DIR = join(PROJECT_DIR, "docs");
   mkdirSync(DOCS_DIR, { recursive: true });
+  // Build archive from history — re-render each generation's best piece
+  const archive = history
+    .filter((h) => h.bestPiece)
+    .map((h) => {
+      const bp = h.bestPiece!;
+      const full = generatePiece(bp.genome, h.generation);
+      return {
+        generation: h.generation,
+        epoch: h.epoch,
+        timestamp: h.timestamp,
+        id: bp.id,
+        genome: bp.genome,
+        score: bp.score,
+        metrics: bp.metrics,
+        rendered: full.rendered,
+      };
+    });
+
+  // Supplement archive with hall of fame pieces from generations not covered
+  const archiveGens = new Set(archive.map((a) => a.generation));
+  for (const hofPiece of pop.hallOfFame) {
+    if (!archiveGens.has(hofPiece.generation)) {
+      const full = generatePiece(hofPiece.genome, hofPiece.generation);
+      const histEntry = history.find((h) => h.generation === hofPiece.generation);
+      archive.push({
+        generation: hofPiece.generation,
+        epoch: histEntry?.epoch ?? getEpoch(hofPiece.generation),
+        timestamp: hofPiece.createdAt,
+        id: hofPiece.id,
+        genome: hofPiece.genome,
+        score: hofPiece.score,
+        metrics: hofPiece.metrics,
+        rendered: full.rendered,
+      });
+      archiveGens.add(hofPiece.generation);
+    }
+  }
+  archive.sort((a, b) => b.generation - a.generation);
+
   const galleryExport = {
     generation: gen,
     stats: pop.stats,
     history,
+    archive,
     hallOfFame: pop.hallOfFame.map((p) => {
       const full = generatePiece(p.genome, p.generation);
       return { ...p, rendered: full.rendered };
