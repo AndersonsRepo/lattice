@@ -93,9 +93,20 @@ export interface JuliaRule {
   escape: number;     // escape radius (2-10)
 }
 
+export interface NoiseRule {
+  scale: number;        // base frequency (0.02-0.2)
+  octaves: number;      // detail layers (1-6)
+  persistence: number;  // amplitude decay per octave (0.3-0.8)
+  lacunarity: number;   // frequency multiplier per octave (1.5-3.0)
+  quantize: number;     // output states (3-8)
+  offsetX: number;      // horizontal offset (-100 to 100)
+  offsetY: number;      // vertical offset (-100 to 100)
+  warp: number;         // domain warping strength (0-2)
+}
+
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule;
   width: number;
   height: number;
   palette: string[];
@@ -916,6 +927,106 @@ export function evolveJulia(genome: Genome): number[][] {
   return grid;
 }
 
+// --- Fractal Noise (value noise with octave stacking + domain warping) ---
+export function evolveNoise(genome: Genome): number[][] {
+  const rule = genome.rule as NoiseRule;
+  const { width, height } = genome;
+  const rng = mulberry32(genome.seed);
+  const { scale, octaves, persistence, lacunarity, quantize, offsetX, offsetY, warp } = rule;
+  const maxState = Math.max(quantize - 1, 1);
+
+  // Build a permutation table for value noise (seeded)
+  const PERM_SIZE = 256;
+  const perm = new Array(PERM_SIZE);
+  for (let i = 0; i < PERM_SIZE; i++) perm[i] = i;
+  for (let i = PERM_SIZE - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [perm[i], perm[j]] = [perm[j], perm[i]];
+  }
+  // Double the table to avoid modular wrapping
+  const p = [...perm, ...perm];
+
+  // Random gradient vectors for each hash
+  const gradX = new Array(PERM_SIZE);
+  const gradY = new Array(PERM_SIZE);
+  for (let i = 0; i < PERM_SIZE; i++) {
+    const angle = rng() * Math.PI * 2;
+    gradX[i] = Math.cos(angle);
+    gradY[i] = Math.sin(angle);
+  }
+
+  function fade(t: number): number {
+    return t * t * t * (t * (t * 6 - 15) + 10); // smootherstep
+  }
+
+  function lerp(a: number, b: number, t: number): number {
+    return a + t * (b - a);
+  }
+
+  function gradientNoise(x: number, y: number): number {
+    const xi = Math.floor(x) & 255;
+    const yi = Math.floor(y) & 255;
+    const xf = x - Math.floor(x);
+    const yf = y - Math.floor(y);
+
+    const u = fade(xf);
+    const v = fade(yf);
+
+    const aa = p[p[xi] + yi];
+    const ab = p[p[xi] + yi + 1];
+    const ba = p[p[xi + 1] + yi];
+    const bb = p[p[xi + 1] + yi + 1];
+
+    const dot = (hash: number, fx: number, fy: number) =>
+      gradX[hash % PERM_SIZE] * fx + gradY[hash % PERM_SIZE] * fy;
+
+    const x1 = lerp(dot(aa, xf, yf), dot(ba, xf - 1, yf), u);
+    const x2 = lerp(dot(ab, xf, yf - 1), dot(bb, xf - 1, yf - 1), u);
+    return lerp(x1, x2, v);
+  }
+
+  // Fractal Brownian Motion: stack octaves of noise
+  function fbm(x: number, y: number): number {
+    let value = 0;
+    let amplitude = 1;
+    let frequency = 1;
+    let maxAmp = 0;
+
+    for (let o = 0; o < octaves; o++) {
+      value += gradientNoise(x * frequency, y * frequency) * amplitude;
+      maxAmp += amplitude;
+      amplitude *= persistence;
+      frequency *= lacunarity;
+    }
+    return value / maxAmp; // normalize to roughly [-1, 1]
+  }
+
+  const grid: number[][] = [];
+  for (let py = 0; py < height; py++) {
+    const row = new Array(width).fill(0);
+    for (let px = 0; px < width; px++) {
+      let nx = (px + offsetX) * scale;
+      let ny = (py + offsetY) * scale;
+
+      // Domain warping: distort coordinates using noise itself
+      if (warp > 0) {
+        const wx = fbm(nx + 5.2, ny + 1.3) * warp;
+        const wy = fbm(nx + 1.7, ny + 9.2) * warp;
+        nx += wx * 10;
+        ny += wy * 10;
+      }
+
+      const n = fbm(nx, ny);
+      // Map from [-1,1] to [0, maxState]
+      const t = Math.max(0, Math.min(1, (n + 1) / 2));
+      row[px] = Math.round(t * maxState);
+    }
+    grid.push(row);
+  }
+
+  return grid;
+}
+
 // --- Rendering ---
 export function render(grid: number[][], palette: string[]): string {
   return grid
@@ -1108,6 +1219,7 @@ function getIdealDensity(genomeType?: Genome["type"]): number | null {
     case "spirograph": return 0.15;       // thin elegant curves
     case "attractor": return 0.25;        // organic density clusters
     case "julia": return null;             // full coverage — score by state variety
+    case "noise": return null;              // full coverage — score by state variety
     default: return 0.4;
   }
 }
@@ -1122,6 +1234,7 @@ function getSymmetryScale(genomeType?: Genome["type"]): number {
     case "wfc": return 0.25;              // symmetry mode already baked into genome
     case "lsystem": return 0.35;          // partial symmetry from branching
     case "julia": return 0.2;             // Julia sets have inherent symmetry
+    case "noise": return 0.4;              // noise can have emergent symmetry from warping
     default: return 0.3;                  // original scale
   }
 }
@@ -1153,6 +1266,9 @@ function getTypeWeights(genomeType?: Genome["type"]): Weights {
     case "julia":
       // Julia sets: complexity of boundary detail, edge activity, structural variety
       return { density: 0.1, complexity: 0.25, symmetry: 0.1, edge: 0.2, structure: 0.2, novelty: 0.15 };
+    case "noise":
+      // Noise: organic textures, structural interest from domain warping, complexity
+      return { density: 0.1, complexity: 0.25, symmetry: 0.1, edge: 0.15, structure: 0.25, novelty: 0.15 };
     case "2d":
     default:
       return { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
@@ -1181,7 +1297,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
@@ -1416,6 +1532,32 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
       // Adjust escape radius
       rule.escape = Math.max(2, Math.min(10, rule.escape + (rng() - 0.5) * 2));
     }
+  } else if (mutated.type === "noise") {
+    const rule = mutated.rule as NoiseRule;
+    const param = rng();
+    if (param < 0.3) {
+      // Perturb scale
+      rule.scale = Math.max(0.02, Math.min(0.2, rule.scale + (rng() - 0.5) * 0.03));
+    } else if (param < 0.5) {
+      // Adjust octaves
+      rule.octaves = Math.max(1, Math.min(6, rule.octaves + (rng() > 0.5 ? 1 : -1)));
+    } else if (param < 0.65) {
+      // Perturb persistence
+      rule.persistence = Math.max(0.3, Math.min(0.8, rule.persistence + (rng() - 0.5) * 0.1));
+    } else if (param < 0.8) {
+      // Perturb lacunarity
+      rule.lacunarity = Math.max(1.5, Math.min(3.0, rule.lacunarity + (rng() - 0.5) * 0.3));
+    } else if (param < 0.9) {
+      // Shift offset (explore different regions of noise space)
+      rule.offsetX += (rng() - 0.5) * 20;
+      rule.offsetY += (rng() - 0.5) * 20;
+    } else {
+      // Adjust domain warping
+      rule.warp = Math.max(0, Math.min(2, rule.warp + (rng() - 0.5) * 0.4));
+    }
+    if (rng() < 0.15) {
+      rule.quantize = 3 + Math.floor(rng() * 6); // 3-8 states
+    }
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -1552,6 +1694,18 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
     rule.maxIter = rng() > 0.5 ? ra.maxIter : rb.maxIter;
     rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
     rule.escape = rng() > 0.5 ? ra.escape : rb.escape;
+  } else if (child.type === "noise") {
+    const ra = a.rule as NoiseRule, rb = b.rule as NoiseRule;
+    const rule = child.rule as NoiseRule;
+    const t = rng();
+    rule.scale = ra.scale * t + rb.scale * (1 - t);
+    rule.octaves = rng() > 0.5 ? ra.octaves : rb.octaves;
+    rule.persistence = ra.persistence * t + rb.persistence * (1 - t);
+    rule.lacunarity = ra.lacunarity * t + rb.lacunarity * (1 - t);
+    rule.warp = ra.warp * t + rb.warp * (1 - t);
+    rule.offsetX = rng() > 0.5 ? ra.offsetX : rb.offsetX;
+    rule.offsetY = rng() > 0.5 ? ra.offsetY : rb.offsetY;
+    rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
   }
 
   return child;
@@ -1742,6 +1896,24 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
         centerY: (rng() - 0.5) * 0.3,
         quantize: 4 + Math.floor(rng() * 4),
         escape: 2 + rng() * 3,
+      },
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "noise") {
+    return {
+      type: "noise",
+      rule: {
+        scale: 0.04 + rng() * 0.12,
+        octaves: 2 + Math.floor(rng() * 4),
+        persistence: 0.35 + rng() * 0.4,
+        lacunarity: 1.6 + rng() * 1.2,
+        quantize: 4 + Math.floor(rng() * 4),
+        offsetX: rng() * 100,
+        offsetY: rng() * 100,
+        warp: rng() * 1.5,
       },
       width: 48 + Math.floor(rng() * 16),
       height: 28 + Math.floor(rng() * 10),
@@ -2150,6 +2322,37 @@ export const SEED_GENOMES: Genome[] = [
     height: 28,
     palette: WAVE_PALETTE,
     seed: 60606,
+    mutations: 0,
+    lineage: [],
+  },
+  // Fractal Noise (value noise + domain warping)
+  {
+    type: "noise",
+    rule: { scale: 0.06, octaves: 4, persistence: 0.5, lacunarity: 2.0, quantize: 6, offsetX: 0, offsetY: 0, warp: 0.5 },
+    width: 52,
+    height: 30,
+    palette: SHADE_PALETTE,
+    seed: 70707,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "noise",
+    rule: { scale: 0.1, octaves: 3, persistence: 0.65, lacunarity: 2.5, quantize: 5, offsetX: 42, offsetY: 17, warp: 1.2 },
+    width: 56,
+    height: 32,
+    palette: WAVE_PALETTE,
+    seed: 80808,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "noise",
+    rule: { scale: 0.04, octaves: 5, persistence: 0.45, lacunarity: 1.8, quantize: 7, offsetX: -30, offsetY: 55, warp: 0 },
+    width: 48,
+    height: 28,
+    palette: BRAILLE_PALETTE,
+    seed: 90909,
     mutations: 0,
     lineage: [],
   },
