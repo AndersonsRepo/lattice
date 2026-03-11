@@ -330,7 +330,7 @@
     <footer>
       <p><span class="live-dot"></span>Evolving autonomously every 4 hours</p>
       <p style="margin-top: 0.75rem;">
-        Cellular automata &bull; L-systems &bull; Reaction-diffusion &bull; Voronoi &bull; WFC<br>
+        Cellular automata &bull; L-systems &bull; Reaction-diffusion &bull; Voronoi &bull; WFC &bull; Spirographs &bull; Strange attractors<br>
         <a href="https://github.com/AndersonsRepo/lattice">Source</a> &bull; Part of <a href="https://github.com/AndersonsRepo">AI Harness</a>
       </p>
     </footer>
@@ -345,6 +345,8 @@
       'reaction-diffusion':  { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0a2d', '#3b0d6b', '#6b16a8', '#a822db', '#d44af5', '#f088ff', '#ffccff'] },
       'voronoi':             { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a2d', '#0d3b6b', '#166ba8', '#22a8db', '#4ad4f5', '#88eeff', '#ccf8ff'] },
       'wfc':                 { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d0a0a', '#6b0d1a', '#a8163b', '#db226b', '#f54a9d', '#ff88c8', '#ffccee'] },
+      'spirograph':          { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a2d0a', '#3b6b0d', '#6ba816', '#a8db22', '#d4f54a', '#eeff88', '#ffffcc'] },
+      'attractor':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a1a', '#6b2d2d', '#a84a3b', '#db6b4a', '#f59d6b', '#ffc8a0', '#ffe8d8'] },
     };
 
     // Map each Unicode palette character to an intensity level (0-7)
@@ -443,6 +445,8 @@
         'reaction-diffusion': 'Reaction-Diffusion',
         'voronoi': 'Voronoi',
         'wfc': 'Wave Function Collapse',
+        'spirograph': 'Spirograph',
+        'attractor': 'Strange Attractor',
       }[type] || type;
     }
 
@@ -453,6 +457,8 @@
       if (genome.type === 'reaction-diffusion') return `f=${genome.rule.feed.toFixed(3)} k=${genome.rule.kill.toFixed(3)}`;
       if (genome.type === 'voronoi') return `${genome.rule.seeds}pts ${genome.rule.mode} ${genome.rule.metric}`;
       if (genome.type === 'wfc') return `${genome.rule.tileCount}tiles ${genome.rule.symmetry}`;
+      if (genome.type === 'spirograph') return `${genome.rule.layers.length} layers, ${genome.rule.steps} steps`;
+      if (genome.type === 'attractor') return `${genome.rule.variant} a=${genome.rule.a.toFixed(1)} b=${genome.rule.b.toFixed(1)}`;
       return '';
     }
 
@@ -472,7 +478,7 @@
         counts[t] = (counts[t] || 0) + 1;
       });
 
-      const types = ['all', '1d', '2d', 'lsystem', 'reaction-diffusion', 'voronoi', 'wfc'];
+      const types = ['all', '1d', '2d', 'lsystem', 'reaction-diffusion', 'voronoi', 'wfc', 'spirograph', 'attractor'];
       bar.innerHTML = types.map(t => {
         const label = t === 'all' ? 'All' : typeLabel(t);
         const count = t === 'all' ? allPieces.length : (counts[t] || 0);
