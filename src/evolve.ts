@@ -205,6 +205,23 @@ function run(): void {
 
   savePopulation(pop);
 
+  // Export gallery.json for GitHub Pages site
+  const DOCS_DIR = join(PROJECT_DIR, "docs");
+  mkdirSync(DOCS_DIR, { recursive: true });
+  const galleryExport = {
+    generation: gen,
+    stats: pop.stats,
+    hallOfFame: pop.hallOfFame.map((p) => {
+      const full = generatePiece(p.genome, p.generation);
+      return { ...p, rendered: full.rendered };
+    }),
+    pieces: survivors.slice(0, 8).map((p) => {
+      const full = generatePiece(p.genome, gen);
+      return { ...p, rendered: full.rendered };
+    }),
+  };
+  writeFileSync(join(DOCS_DIR, "gallery.json"), JSON.stringify(galleryExport, null, 2));
+
   // Save best piece rendering
   const best = allPieces[0];
   if (best) {

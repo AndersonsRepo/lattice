@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Self-Evolving Generative Art</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    header {
+      text-align: center;
+      padding: 3rem 0 2rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+    }
+
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      padding: 1.5rem 0;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-top: 0.25rem;
+    }
+
+    .piece-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+
+    .piece-card:hover {
+      border-color: var(--accent);
+    }
+
+    .piece-card.featured {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .piece-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .piece-type {
+      font-size: 0.75rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .piece-score {
+      font-size: 0.8rem;
+    }
+
+    .score-bar {
+      display: inline-block;
+      width: 60px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+
+    .score-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--green);
+    }
+
+    .piece-art {
+      padding: 1.25rem;
+      overflow-x: auto;
+      font-size: 0.65rem;
+      line-height: 1.15;
+      white-space: pre;
+      color: var(--text);
+      background: var(--bg);
+      margin: 0 1rem;
+      border-radius: 4px;
+    }
+
+    .piece-meta {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+    }
+
+    .metrics {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .metric {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .metric-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    footer {
+      text-align: center;
+      padding: 3rem 0 2rem;
+      border-top: 1px solid var(--border);
+      margin-top: 2rem;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 4rem 0;
+      color: var(--text-dim);
+    }
+
+    .loading { opacity: 0.5; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    .live-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+      margin-right: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Lattice</h1>
+      <p class="subtitle">self-evolving generative art &mdash; built by claude</p>
+    </header>
+
+    <div class="stats-bar" id="stats">
+      <div class="stat">
+        <div class="stat-value" id="generation">—</div>
+        <div class="stat-label">Generation</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="best-score">—</div>
+        <div class="stat-label">Best Score</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="avg-score">—</div>
+        <div class="stat-label">Avg Score</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="total-pieces">—</div>
+        <div class="stat-label">Pieces Created</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="hall-count">—</div>
+        <div class="stat-label">Hall of Fame</div>
+      </div>
+    </div>
+
+    <div id="gallery"></div>
+
+    <footer>
+      <p><span class="live-dot"></span>Evolving autonomously every 4 hours</p>
+      <p style="margin-top: 0.75rem;">
+        Cellular automata &bull; L-systems &bull; Mutation-based evolution<br>
+        <a href="https://github.com/AndersonsRepo/lattice">Source</a> &bull; Part of <a href="https://github.com/AndersonsRepo">AI Harness</a>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    async function loadGallery() {
+      try {
+        const res = await fetch('./gallery.json');
+        if (!res.ok) throw new Error('No gallery data');
+        const data = await res.json();
+        renderStats(data);
+        renderPieces(data);
+      } catch (e) {
+        document.getElementById('gallery').innerHTML =
+          '<div class="empty-state">Gallery data not yet generated. Check back after the first evolution run.</div>';
+      }
+    }
+
+    function renderStats(data) {
+      document.getElementById('generation').textContent = data.generation;
+      document.getElementById('best-score').textContent = (data.stats.bestScoreEver * 100).toFixed(1) + '%';
+      document.getElementById('avg-score').textContent = (data.stats.avgScore * 100).toFixed(1) + '%';
+      document.getElementById('total-pieces').textContent = data.stats.totalPiecesEver;
+      document.getElementById('hall-count').textContent = data.hallOfFame.length;
+    }
+
+    function typeLabel(type) {
+      return { '1d': '1D Automaton', '2d': '2D Life-like', 'lsystem': 'L-System' }[type] || type;
+    }
+
+    function ruleStr(genome) {
+      if (genome.type === '1d') return `Rule ${genome.rule.number}`;
+      if (genome.type === '2d') return `B${genome.rule.birth.join('')}/S${genome.rule.survive.join('')}`;
+      if (genome.type === 'lsystem') return `angle=${genome.rule.angle}\u00B0, iter=${genome.rule.iterations}`;
+      return '';
+    }
+
+    function metricColor(value, type) {
+      if (type === 'complexity') return value > 0.8 ? '#4ade80' : value > 0.4 ? '#fbbf24' : '#ef4444';
+      if (type === 'symmetry') return value > 0.6 ? '#4ade80' : value > 0.3 ? '#fbbf24' : '#ef4444';
+      return '#7c6fe0';
+    }
+
+    function renderPieces(data) {
+      const gallery = document.getElementById('gallery');
+
+      // Combine hall of fame + current population, sort by score
+      const allPieces = [
+        ...data.hallOfFame.map(p => ({ ...p, isHallOfFame: true })),
+        ...data.pieces.filter(p => !data.hallOfFame.some(h => h.id === p.id)),
+      ].sort((a, b) => b.score - a.score);
+
+      if (allPieces.length === 0) {
+        gallery.innerHTML = '<div class="empty-state">No pieces yet. Evolution is just getting started.</div>';
+        return;
+      }
+
+      gallery.innerHTML = allPieces.map((piece, i) => {
+        const featured = i === 0 || piece.isHallOfFame;
+        const art = piece.rendered || '(grid data only — rendering not available)';
+        const m = piece.metrics || {};
+
+        return `
+          <div class="piece-card ${featured ? 'featured' : ''}">
+            <div class="piece-header">
+              <span class="piece-type">
+                ${piece.isHallOfFame ? '\u2605 ' : ''}${typeLabel(piece.genome.type)} &mdash; ${ruleStr(piece.genome)}
+              </span>
+              <span class="piece-score">
+                ${(piece.score * 100).toFixed(1)}%
+                <span class="score-bar"><span class="score-fill" style="width: ${piece.score * 100}%"></span></span>
+              </span>
+            </div>
+            ${art !== '(grid data only — rendering not available)' ? `<pre class="piece-art">${escapeHtml(art)}</pre>` : ''}
+            <div class="piece-meta">
+              <div class="metrics">
+                <span class="metric">
+                  <span class="metric-dot" style="background: ${metricColor(m.complexity || 0, 'complexity')}"></span>
+                  complexity ${(m.complexity || 0).toFixed(2)}
+                </span>
+                <span class="metric">
+                  <span class="metric-dot" style="background: ${metricColor(m.symmetry || 0, 'symmetry')}"></span>
+                  symmetry ${((m.symmetry || 0) * 100).toFixed(0)}%
+                </span>
+                <span class="metric">
+                  <span class="metric-dot" style="background: var(--accent)"></span>
+                  density ${((m.density || 0) * 100).toFixed(0)}%
+                </span>
+              </div>
+              <span>gen ${piece.generation} &bull; ${piece.genome.mutations} mutations</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    loadGallery();
+  </script>
+</body>
+</html>
