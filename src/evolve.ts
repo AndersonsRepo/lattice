@@ -26,6 +26,7 @@ import {
   evolveWFC,
   evolveSpirograph,
   evolveAttractor,
+  evolveJulia,
   render,
   score,
   computeScore,
@@ -46,13 +47,13 @@ const NOTIFY_FILE = join(
   "pending-notifications.jsonl"
 );
 
-const POPULATION_SIZE = 12;
+const POPULATION_SIZE = 14;
 const OFFSPRING_PER_RUN = 8; // more offspring = more exploration
 const HALL_OF_FAME_THRESHOLD = 0.55;
 
-// Speciation: minimum slots per genome type
-const MIN_SLOTS_PER_TYPE = 2;
-const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor"];
+// Speciation: minimum slots per genome type (1 per type with 9 types)
+const MIN_SLOTS_PER_TYPE = 1;
+const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia"];
 
 interface Population {
   generation: number;
@@ -110,6 +111,9 @@ function generatePiece(genome: Genome, generation: number, populationMetrics?: P
     case "attractor":
       grid = evolveAttractor(genome);
       break;
+    case "julia":
+      grid = evolveJulia(genome);
+      break;
     default:
       grid = evolve1D(genome);
   }
@@ -152,6 +156,7 @@ function formatPieceForDiscord(piece: Piece): string {
     : piece.genome.type === "wfc" ? "Wave Function Collapse"
     : piece.genome.type === "spirograph" ? "Spirograph"
     : piece.genome.type === "attractor" ? "Strange Attractor"
+    : piece.genome.type === "julia" ? "Julia Set"
     : "L-System";
 
   const ruleStr = piece.genome.type === "1d"
@@ -168,6 +173,8 @@ function formatPieceForDiscord(piece: Piece): string {
     ? `${(piece.genome.rule as any).layers.length}layers ${(piece.genome.rule as any).layers[0]?.mode}`
     : piece.genome.type === "attractor"
     ? `${(piece.genome.rule as any).variant} a=${(piece.genome.rule as any).a.toFixed(1)} b=${(piece.genome.rule as any).b.toFixed(1)}`
+    : piece.genome.type === "julia"
+    ? `c=${(piece.genome.rule as any).cReal.toFixed(3)}+${(piece.genome.rule as any).cImag.toFixed(3)}i z=${(piece.genome.rule as any).zoom.toFixed(1)}x`
     : `angle=${(piece.genome.rule as any).angle}° iter=${(piece.genome.rule as any).iterations}`;
 
   const hasCrossover = piece.genome.lineage.includes("×");

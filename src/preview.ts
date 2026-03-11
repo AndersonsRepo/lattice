@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "fs";
 import { join } from "path";
-import { evolveLSystem, evolve1D, evolve2D, evolveReactionDiffusion, evolveVoronoi, evolveWFC, evolveSpirograph, evolveAttractor, render } from "./automata.js";
+import { evolveLSystem, evolve1D, evolve2D, evolveReactionDiffusion, evolveVoronoi, evolveWFC, evolveSpirograph, evolveAttractor, evolveJulia, render } from "./automata.js";
 
 const popFile = join(import.meta.dirname, "..", "gallery", "population.json");
 const pop = JSON.parse(readFileSync(popFile, "utf-8"));
@@ -33,6 +33,7 @@ switch (piece.genome.type) {
   case "wfc": grid = evolveWFC(piece.genome); break;
   case "spirograph": grid = evolveSpirograph(piece.genome); break;
   case "attractor": grid = evolveAttractor(piece.genome); break;
+  case "julia": grid = evolveJulia(piece.genome); break;
   default: grid = evolve1D(piece.genome);
 }
 

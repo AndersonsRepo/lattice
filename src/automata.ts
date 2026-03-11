@@ -82,9 +82,20 @@ export interface AttractorRule {
   quantize: number;    // number of output states (3-8)
 }
 
+export interface JuliaRule {
+  cReal: number;      // real part of c constant (-2 to 2)
+  cImag: number;      // imaginary part of c constant (-2 to 2)
+  maxIter: number;    // max iterations per pixel (50-500)
+  zoom: number;       // zoom level (0.5-4)
+  centerX: number;    // view center X (-2 to 2)
+  centerY: number;    // view center Y (-2 to 2)
+  quantize: number;   // output states (3-8)
+  escape: number;     // escape radius (2-10)
+}
+
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule;
   width: number;
   height: number;
   palette: string[];
@@ -863,6 +874,48 @@ export function evolveAttractor(genome: Genome): number[][] {
   return density;
 }
 
+// --- Julia Set Fractal ---
+export function evolveJulia(genome: Genome): number[][] {
+  const rule = genome.rule as JuliaRule;
+  const { width, height } = genome;
+  const { cReal, cImag, maxIter, zoom, centerX, centerY, quantize, escape } = rule;
+  const escSq = escape * escape;
+  const maxState = Math.max(quantize - 1, 1);
+
+  const grid: number[][] = [];
+  const aspect = width / height / 2; // /2 because chars are ~2x tall as wide
+
+  for (let py = 0; py < height; py++) {
+    const row = new Array(width).fill(0);
+    for (let px = 0; px < width; px++) {
+      // Map pixel to complex plane
+      let zr = centerX + (px / width - 0.5) * (4 / zoom) * aspect;
+      let zi = centerY + (py / height - 0.5) * (4 / zoom);
+
+      let iter = 0;
+      while (iter < maxIter && zr * zr + zi * zi < escSq) {
+        const tmp = zr * zr - zi * zi + cReal;
+        zi = 2 * zr * zi + cImag;
+        zr = tmp;
+        iter++;
+      }
+
+      if (iter === maxIter) {
+        // Inside the set
+        row[px] = maxState;
+      } else {
+        // Smooth coloring using log escape
+        const smooth = iter + 1 - Math.log(Math.log(Math.sqrt(zr * zr + zi * zi))) / Math.log(2);
+        const t = Math.max(0, Math.min(1, smooth / maxIter));
+        row[px] = Math.round(t * maxState);
+      }
+    }
+    grid.push(row);
+  }
+
+  return grid;
+}
+
 // --- Rendering ---
 export function render(grid: number[][], palette: string[]): string {
   return grid
@@ -1054,6 +1107,7 @@ function getIdealDensity(genomeType?: Genome["type"]): number | null {
     case "wfc": return null;              // always full — score by variety
     case "spirograph": return 0.15;       // thin elegant curves
     case "attractor": return 0.25;        // organic density clusters
+    case "julia": return null;             // full coverage — score by state variety
     default: return 0.4;
   }
 }
@@ -1067,6 +1121,7 @@ function getSymmetryScale(genomeType?: Genome["type"]): number {
     case "voronoi": return 0.4;           // structured but not inherently symmetric
     case "wfc": return 0.25;              // symmetry mode already baked into genome
     case "lsystem": return 0.35;          // partial symmetry from branching
+    case "julia": return 0.2;             // Julia sets have inherent symmetry
     default: return 0.3;                  // original scale
   }
 }
@@ -1095,6 +1150,9 @@ function getTypeWeights(genomeType?: Genome["type"]): Weights {
     case "attractor":
       // Attractors: complex organic structure, density variation, novelty
       return { density: 0.15, complexity: 0.25, symmetry: 0.1, edge: 0.15, structure: 0.2, novelty: 0.15 };
+    case "julia":
+      // Julia sets: complexity of boundary detail, edge activity, structural variety
+      return { density: 0.1, complexity: 0.25, symmetry: 0.1, edge: 0.2, structure: 0.2, novelty: 0.15 };
     case "2d":
     default:
       return { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
@@ -1123,7 +1181,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
@@ -1334,6 +1392,30 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
       // Adjust quantization
       rule.quantize = 3 + Math.floor(rng() * 6); // 3-8
     }
+  } else if (mutated.type === "julia") {
+    const rule = mutated.rule as JuliaRule;
+    const param = rng();
+    if (param < 0.4) {
+      // Perturb c constant — small changes produce dramatic visual shifts
+      const which = rng() > 0.5 ? "cReal" : "cImag";
+      rule[which] = Math.max(-2, Math.min(2, rule[which] + (rng() - 0.5) * 0.15));
+    } else if (param < 0.6) {
+      // Adjust zoom
+      rule.zoom = Math.max(0.5, Math.min(4, rule.zoom * (0.7 + rng() * 0.6)));
+    } else if (param < 0.75) {
+      // Shift view center
+      rule.centerX = Math.max(-2, Math.min(2, rule.centerX + (rng() - 0.5) * 0.3));
+      rule.centerY = Math.max(-2, Math.min(2, rule.centerY + (rng() - 0.5) * 0.3));
+    } else if (param < 0.85) {
+      // Adjust max iterations
+      rule.maxIter = Math.max(50, Math.min(500, rule.maxIter + Math.floor((rng() - 0.5) * 80)));
+    } else if (param < 0.93) {
+      // Change quantization
+      rule.quantize = 3 + Math.floor(rng() * 6); // 3-8
+    } else {
+      // Adjust escape radius
+      rule.escape = Math.max(2, Math.min(10, rule.escape + (rng() - 0.5) * 2));
+    }
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -1458,6 +1540,18 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
     rule.variant = rng() > 0.5 ? ra.variant : rb.variant;
     rule.iterations = rng() > 0.5 ? ra.iterations : rb.iterations;
     rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
+  } else if (child.type === "julia") {
+    const ra = a.rule as JuliaRule, rb = b.rule as JuliaRule;
+    const rule = child.rule as JuliaRule;
+    const t = rng();
+    rule.cReal = ra.cReal * t + rb.cReal * (1 - t);
+    rule.cImag = ra.cImag * t + rb.cImag * (1 - t);
+    rule.zoom = rng() > 0.5 ? ra.zoom : rb.zoom;
+    rule.centerX = (ra.centerX + rb.centerX) / 2;
+    rule.centerY = (ra.centerY + rb.centerY) / 2;
+    rule.maxIter = rng() > 0.5 ? ra.maxIter : rb.maxIter;
+    rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
+    rule.escape = rng() > 0.5 ? ra.escape : rb.escape;
   }
 
   return child;
@@ -1618,6 +1712,36 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
         d: preset.d + (rng() - 0.5) * 0.2,
         iterations: 100000 + Math.floor(rng() * 200000),
         quantize: 4 + Math.floor(rng() * 4),
+      },
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "julia") {
+    // Known beautiful Julia set c values
+    const presets = [
+      { cReal: -0.7, cImag: 0.27015 },    // classic dendrite
+      { cReal: -0.8, cImag: 0.156 },       // spiral galaxies
+      { cReal: 0.285, cImag: 0.01 },       // filigree
+      { cReal: -0.4, cImag: 0.6 },         // rabbit ears
+      { cReal: 0.355, cImag: 0.355 },      // seahorse valley
+      { cReal: -0.1, cImag: 0.651 },       // dendrite tendrils
+      { cReal: -1.0, cImag: 0.0 },         // basilica
+      { cReal: -0.75, cImag: 0.0 },        // double spiral
+    ];
+    const preset = presets[Math.floor(rng() * presets.length)];
+    return {
+      type: "julia",
+      rule: {
+        cReal: preset.cReal + (rng() - 0.5) * 0.05,
+        cImag: preset.cImag + (rng() - 0.5) * 0.05,
+        maxIter: 100 + Math.floor(rng() * 200),
+        zoom: 1 + rng() * 1.5,
+        centerX: (rng() - 0.5) * 0.3,
+        centerY: (rng() - 0.5) * 0.3,
+        quantize: 4 + Math.floor(rng() * 4),
+        escape: 2 + rng() * 3,
       },
       width: 48 + Math.floor(rng() * 16),
       height: 28 + Math.floor(rng() * 10),
@@ -1995,6 +2119,37 @@ export const SEED_GENOMES: Genome[] = [
     height: 34,
     palette: STAR_PALETTE,
     seed: 30303,
+    mutations: 0,
+    lineage: [],
+  },
+  // Julia Set Fractals
+  {
+    type: "julia",
+    rule: { cReal: -0.7, cImag: 0.27015, maxIter: 150, zoom: 1.2, centerX: 0, centerY: 0, quantize: 6, escape: 4 },
+    width: 52,
+    height: 30,
+    palette: SHADE_PALETTE,
+    seed: 40404,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "julia",
+    rule: { cReal: -0.8, cImag: 0.156, maxIter: 200, zoom: 1.5, centerX: 0, centerY: 0, quantize: 7, escape: 3 },
+    width: 56,
+    height: 32,
+    palette: STAR_PALETTE,
+    seed: 50505,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "julia",
+    rule: { cReal: 0.285, cImag: 0.01, maxIter: 250, zoom: 1.0, centerX: 0, centerY: 0, quantize: 5, escape: 4 },
+    width: 48,
+    height: 28,
+    palette: WAVE_PALETTE,
+    seed: 60606,
     mutations: 0,
     lineage: [],
   },
