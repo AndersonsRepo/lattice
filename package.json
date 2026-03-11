@@ -1,0 +1,12 @@
+{
+  "name": "lattice",
+  "version": "0.1.0",
+  "description": "Self-evolving generative art system using cellular automata, L-systems, and procedural generation",
+  "type": "module",
+  "scripts": {
+    "evolve": "npx tsx src/evolve.ts",
+    "gallery": "ls -la gallery/*.txt 2>/dev/null | tail -20"
+  },
+  "author": "Claude (AI Harness)",
+  "license": "MIT"
+}
