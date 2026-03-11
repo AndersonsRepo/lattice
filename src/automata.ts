@@ -51,9 +51,16 @@ export interface VoronoiRule {
   jitter: number;      // seed point randomness (0=grid, 1=fully random)
 }
 
+export interface WFCRule {
+  tileCount: number;        // number of distinct tile types (3-8)
+  adjacency: number[][];    // adjacency[tile] = list of tiles allowed as neighbors
+  weights: number[];        // probability weight for each tile when collapsing
+  symmetry: "none" | "horizontal" | "vertical" | "quad"; // post-collapse symmetry
+}
+
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule;
   width: number;
   height: number;
   palette: string[];
@@ -496,6 +503,141 @@ export function evolveVoronoi(genome: Genome): number[][] {
   return grid;
 }
 
+// --- Wave Function Collapse ---
+export function evolveWFC(genome: Genome): number[][] {
+  const rule = genome.rule as WFCRule;
+  const rng = mulberry32(genome.seed);
+  const { width, height } = genome;
+  const { tileCount, adjacency, weights } = rule;
+
+  // Each cell starts as a superposition of all possible tiles
+  // We represent this as a Set of possible tile indices
+  const possible: Set<number>[][] = Array.from({ length: height }, () =>
+    Array.from({ length: width }, () => new Set(Array.from({ length: tileCount }, (_, i) => i)))
+  );
+  const collapsed: number[][] = Array.from({ length: height }, () => new Array(width).fill(-1));
+
+  // Weighted random choice from a set of tiles
+  const weightedPick = (tiles: Set<number>): number => {
+    let total = 0;
+    for (const t of tiles) total += weights[t] ?? 1;
+    let r = rng() * total;
+    for (const t of tiles) {
+      r -= weights[t] ?? 1;
+      if (r <= 0) return t;
+    }
+    return [...tiles][tiles.size - 1]; // fallback
+  };
+
+  // Shannon entropy of a cell's possibilities
+  const entropy = (tiles: Set<number>): number => {
+    if (tiles.size <= 1) return 0;
+    let total = 0;
+    for (const t of tiles) total += weights[t] ?? 1;
+    let e = 0;
+    for (const t of tiles) {
+      const p = (weights[t] ?? 1) / total;
+      if (p > 0) e -= p * Math.log2(p);
+    }
+    // Add small noise to break ties
+    return e + rng() * 0.001;
+  };
+
+  // Propagate constraints from a collapsed cell
+  const propagate = (startY: number, startX: number): void => {
+    const stack: [number, number][] = [[startY, startX]];
+    while (stack.length > 0) {
+      const [cy, cx] = stack.pop()!;
+      const allowed = possible[cy][cx];
+      // Build set of tiles that can neighbor this cell
+      const neighborAllowed = new Set<number>();
+      for (const tile of allowed) {
+        const adj = adjacency[tile];
+        if (adj) for (const a of adj) neighborAllowed.add(a);
+      }
+
+      for (const [dy, dx] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const ny = cy + dy, nx = cx + dx;
+        if (ny < 0 || ny >= height || nx < 0 || nx >= width) continue;
+        if (collapsed[ny][nx] >= 0) continue; // already collapsed
+
+        const before = possible[ny][nx].size;
+        // Remove tiles that aren't in neighborAllowed
+        for (const t of [...possible[ny][nx]]) {
+          if (!neighborAllowed.has(t)) possible[ny][nx].delete(t);
+        }
+        // If we reduced possibilities, propagate further
+        if (possible[ny][nx].size < before && possible[ny][nx].size > 0) {
+          stack.push([ny, nx]);
+        }
+      }
+    }
+  };
+
+  // Main WFC loop
+  let iterations = 0;
+  const maxIterations = width * height;
+  while (iterations < maxIterations) {
+    // Find uncollapsed cell with minimum entropy
+    let minEntropy = Infinity;
+    let minY = -1, minX = -1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (collapsed[y][x] >= 0) continue;
+        if (possible[y][x].size === 0) {
+          // Contradiction — fill with random tile
+          collapsed[y][x] = Math.floor(rng() * tileCount);
+          continue;
+        }
+        const e = entropy(possible[y][x]);
+        if (e < minEntropy) {
+          minEntropy = e;
+          minY = y;
+          minX = x;
+        }
+      }
+    }
+
+    if (minY < 0) break; // all cells collapsed
+
+    // Collapse the chosen cell
+    const tile = weightedPick(possible[minY][minX]);
+    collapsed[minY][minX] = tile;
+    possible[minY][minX] = new Set([tile]);
+    propagate(minY, minX);
+    iterations++;
+  }
+
+  // Fill any remaining uncollapsed cells
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (collapsed[y][x] < 0) {
+        collapsed[y][x] = possible[y][x].size > 0
+          ? weightedPick(possible[y][x])
+          : Math.floor(rng() * tileCount);
+      }
+    }
+  }
+
+  // Apply symmetry
+  if (rule.symmetry === "horizontal" || rule.symmetry === "quad") {
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < Math.floor(width / 2); x++) {
+        collapsed[y][width - 1 - x] = collapsed[y][x];
+      }
+    }
+  }
+  if (rule.symmetry === "vertical" || rule.symmetry === "quad") {
+    for (let y = 0; y < Math.floor(height / 2); y++) {
+      for (let x = 0; x < width; x++) {
+        collapsed[height - 1 - y][x] = collapsed[y][x];
+      }
+    }
+  }
+
+  return collapsed;
+}
+
 // --- Rendering ---
 export function render(grid: number[][], palette: string[]): string {
   return grid
@@ -680,7 +822,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
@@ -787,6 +929,54 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
       // Adjust jitter
       rule.jitter = Math.max(0, Math.min(1, rule.jitter + (rng() - 0.5) * 0.3));
     }
+  } else if (mutated.type === "wfc") {
+    const rule = mutated.rule as WFCRule;
+    const param = rng();
+    if (param < 0.25) {
+      // Flip one adjacency connection
+      const tile = Math.floor(rng() * rule.tileCount);
+      const neighbor = Math.floor(rng() * rule.tileCount);
+      const idx = rule.adjacency[tile].indexOf(neighbor);
+      if (idx >= 0) {
+        rule.adjacency[tile].splice(idx, 1);
+        if (rule.adjacency[tile].length === 0) rule.adjacency[tile] = [tile]; // self-connection fallback
+      } else {
+        rule.adjacency[tile].push(neighbor);
+      }
+    } else if (param < 0.5) {
+      // Perturb weights
+      const tile = Math.floor(rng() * rule.tileCount);
+      rule.weights[tile] = Math.max(0.1, rule.weights[tile] + (rng() - 0.5) * 0.5);
+    } else if (param < 0.7) {
+      // Change symmetry
+      const syms: WFCRule["symmetry"][] = ["none", "horizontal", "vertical", "quad"];
+      rule.symmetry = syms[Math.floor(rng() * syms.length)];
+    } else {
+      // Add or remove a tile (within 3-8 range)
+      if (rng() > 0.5 && rule.tileCount < 8) {
+        rule.tileCount++;
+        // New tile connects to 2-4 random existing tiles
+        const connections = Array.from({ length: 2 + Math.floor(rng() * 3) }, () =>
+          Math.floor(rng() * rule.tileCount)
+        );
+        rule.adjacency.push([...new Set(connections)]);
+        rule.weights.push(0.5 + rng());
+        // Let some existing tiles connect back
+        for (let i = 0; i < rule.tileCount - 1; i++) {
+          if (rng() < 0.4) rule.adjacency[i].push(rule.tileCount - 1);
+        }
+      } else if (rule.tileCount > 3) {
+        const removed = rule.tileCount - 1;
+        rule.tileCount--;
+        rule.adjacency.pop();
+        rule.weights.pop();
+        // Clean up references to removed tile
+        for (let i = 0; i < rule.tileCount; i++) {
+          rule.adjacency[i] = rule.adjacency[i].filter(t => t < rule.tileCount);
+          if (rule.adjacency[i].length === 0) rule.adjacency[i] = [i];
+        }
+      }
+    }
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -866,9 +1056,61 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
     rule.mode = rng() > 0.5 ? ra.mode : rb.mode;
     rule.metric = rng() > 0.5 ? ra.metric : rb.metric;
     rule.jitter = ra.jitter * rng() + rb.jitter * (1 - rng());
+  } else if (child.type === "wfc") {
+    const ra = a.rule as WFCRule, rb = b.rule as WFCRule;
+    const rule = child.rule as WFCRule;
+    // Use the smaller tile count and merge adjacency
+    rule.tileCount = Math.min(ra.tileCount, rb.tileCount);
+    rule.adjacency = [];
+    rule.weights = [];
+    for (let i = 0; i < rule.tileCount; i++) {
+      // Union adjacency from both parents, filtered to valid range
+      const combined = new Set([
+        ...(ra.adjacency[i] || []),
+        ...(rb.adjacency[i] || []),
+      ].filter(t => t < rule.tileCount));
+      if (combined.size === 0) combined.add(i);
+      rule.adjacency.push([...combined].filter(() => rng() > 0.2)); // random drop
+      if (rule.adjacency[i].length === 0) rule.adjacency[i] = [i];
+      rule.weights.push(rng() > 0.5 ? (ra.weights[i] ?? 1) : (rb.weights[i] ?? 1));
+    }
+    rule.symmetry = rng() > 0.5 ? ra.symmetry : rb.symmetry;
   }
 
   return child;
+}
+
+// Generate a random WFC genome with interesting constraint patterns
+function randomWFCGenome(rng: () => number, palette: string[], seed: number, lineage: string[]): Genome {
+  const tileCount = 3 + Math.floor(rng() * 5); // 3-7 tiles
+  const adjacency: number[][] = [];
+  const weights: number[] = [];
+
+  // Generate adjacency with interesting structure (not fully connected, not too sparse)
+  for (let i = 0; i < tileCount; i++) {
+    const numAdj = 1 + Math.floor(rng() * Math.min(tileCount, 4)); // 1-4 neighbors
+    const adj = new Set<number>();
+    adj.add(i); // self-connection ensures tile can appear next to itself
+    for (let j = 0; j < numAdj; j++) {
+      adj.add(Math.floor(rng() * tileCount));
+    }
+    adjacency.push([...adj]);
+    weights.push(0.3 + rng() * 1.5);
+  }
+
+  const syms: WFCRule["symmetry"][] = ["none", "horizontal", "vertical", "quad"];
+  return {
+    type: "wfc",
+    rule: {
+      tileCount,
+      adjacency,
+      weights,
+      symmetry: syms[Math.floor(rng() * syms.length)],
+    },
+    width: 40 + Math.floor(rng() * 20),
+    height: 24 + Math.floor(rng() * 12),
+    palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+  };
 }
 
 // Generate a random genome of a given type (for type-swap mutations and re-seeding)
@@ -920,6 +1162,9 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       height: 28 + Math.floor(rng() * 10),
       palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
     };
+  }
+  if (type === "wfc") {
+    return randomWFCGenome(rng, palette, seed, lineage);
   }
   if (type === "reaction-diffusion") {
     // Known interesting parameter regions in Gray-Scott space
@@ -1185,6 +1430,52 @@ export const SEED_GENOMES: Genome[] = [
     height: 28,
     palette: SHADE_PALETTE,
     seed: 6666,
+    mutations: 0,
+    lineage: [],
+  },
+  // Wave Function Collapse
+  {
+    type: "wfc",
+    rule: {
+      tileCount: 5,
+      adjacency: [[0,1],[0,1,2],[1,2,3],[2,3,4],[3,4]], // gradient chain
+      weights: [1, 1.2, 1, 1.2, 1],
+      symmetry: "horizontal",
+    },
+    width: 48,
+    height: 28,
+    palette: SHADE_PALETTE,
+    seed: 7777,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "wfc",
+    rule: {
+      tileCount: 4,
+      adjacency: [[0,1,3],[0,1,2],[1,2,3],[0,2,3]], // fully connected minus diagonals
+      weights: [0.5, 1.5, 1.5, 0.5],
+      symmetry: "quad",
+    },
+    width: 44,
+    height: 28,
+    palette: GEOMETRIC_PALETTE,
+    seed: 8080,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "wfc",
+    rule: {
+      tileCount: 6,
+      adjacency: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0]], // ring topology
+      weights: [1, 0.8, 1.2, 0.8, 1.0, 1.1],
+      symmetry: "none",
+    },
+    width: 52,
+    height: 30,
+    palette: STAR_PALETTE,
+    seed: 9090,
     mutations: 0,
     lineage: [],
   },
