@@ -211,20 +211,31 @@ function run(): void {
   // Collect existing population metrics for novelty scoring
   const popMetrics = pop.pieces.map((p) => p.metrics);
 
-  // Generate offspring — mix of mutation and crossover
-  const sorted = [...pop.pieces].sort((a, b) => b.score - a.score);
-  const parents = sorted.slice(0, Math.ceil(sorted.length / 2));
+  // Tournament selection: pick k random candidates, return the best
+  // Gives lower-ranked pieces a chance while strongly favoring high scorers
+  const TOURNAMENT_SIZE = 3;
+  function tournamentSelect(pool: Piece[]): Piece {
+    let best = pool[Math.floor(rng() * pool.length)];
+    for (let i = 1; i < TOURNAMENT_SIZE; i++) {
+      const candidate = pool[Math.floor(rng() * pool.length)];
+      if (candidate.score > best.score) best = candidate;
+    }
+    return best;
+  }
 
+  // Generate offspring — mix of mutation and crossover
   const offspring: Piece[] = [];
   for (let i = 0; i < OFFSPRING_PER_RUN; i++) {
     let childGenome: Genome;
-    const parent = parents[Math.floor(rng() * parents.length)];
+    const parent = tournamentSelect(pop.pieces);
 
-    if (rng() < 0.3 && parents.length >= 2) {
-      // 30% chance: crossover between two parents
-      let otherParent = parents[Math.floor(rng() * parents.length)];
-      while (otherParent.id === parent.id && parents.length > 1) {
-        otherParent = parents[Math.floor(rng() * parents.length)];
+    if (rng() < 0.3 && pop.pieces.length >= 2) {
+      // 30% chance: crossover between two tournament-selected parents
+      let otherParent = tournamentSelect(pop.pieces);
+      let attempts = 0;
+      while (otherParent.id === parent.id && attempts < 5) {
+        otherParent = tournamentSelect(pop.pieces);
+        attempts++;
       }
       childGenome = crossoverGenomes(parent.genome, otherParent.genome, rng);
       console.log(
