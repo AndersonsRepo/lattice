@@ -177,18 +177,35 @@
 
     .piece-meta {
       display: flex;
-      justify-content: space-between;
+      align-items: center;
       padding: 0.75rem 1.25rem;
       font-size: 0.7rem;
       color: var(--text-dim);
       border-top: 1px solid var(--border);
-      flex-wrap: wrap;
-      gap: 0.5rem;
+      gap: 1rem;
     }
 
-    .metrics {
+    .radar-chart {
+      flex-shrink: 0;
+    }
+
+    .radar-chart .radar-grid { stroke: var(--border); fill: none; stroke-width: 0.5; }
+    .radar-chart .radar-axis { stroke: var(--border); stroke-width: 0.3; }
+    .radar-chart .radar-shape { stroke-width: 1.5; fill-opacity: 0.15; }
+    .radar-chart .radar-label { font-size: 3.5px; fill: var(--text-dim); }
+    .radar-chart .radar-dot { r: 1.5; }
+
+    .metrics-text {
       display: flex;
-      gap: 1rem;
+      flex-direction: column;
+      gap: 0.15rem;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .metrics-row {
+      display: flex;
+      gap: 0.75rem;
       flex-wrap: wrap;
     }
 
@@ -485,6 +502,63 @@
       return '#7c6fe0';
     }
 
+    // Radar chart — SVG spider chart for 6 fitness dimensions
+    function renderRadar(metrics, genomeType, size = 56) {
+      const dims = [
+        { key: 'complexity', label: 'CX', max: 3.5 },
+        { key: 'edgeActivity', label: 'EA', max: 1 },
+        { key: 'structuralInterest', label: 'SI', max: 1 },
+        { key: 'novelty', label: 'NV', max: 1 },
+        { key: 'symmetry', label: 'SY', max: 1 },
+        { key: 'density', label: 'DN', max: 1 },
+      ];
+      const cx = size / 2, cy = size / 2, r = size / 2 - 10;
+      const n = dims.length;
+      const angleStep = (2 * Math.PI) / n;
+      const startAngle = -Math.PI / 2; // top
+
+      function polar(i, radius) {
+        const a = startAngle + i * angleStep;
+        return [cx + radius * Math.cos(a), cy + radius * Math.sin(a)];
+      }
+
+      // Grid rings at 33%, 66%, 100%
+      let svg = `<svg class="radar-chart" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
+      for (const pct of [0.33, 0.66, 1]) {
+        const pts = dims.map((_, i) => polar(i, r * pct).join(',')).join(' ');
+        svg += `<polygon class="radar-grid" points="${pts}"/>`;
+      }
+
+      // Axes
+      for (let i = 0; i < n; i++) {
+        const [x, y] = polar(i, r);
+        svg += `<line class="radar-axis" x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"/>`;
+      }
+
+      // Data shape
+      const theme = TYPE_COLORS[genomeType] || TYPE_COLORS['2d'];
+      const color = theme.colors[5] || '#7c6fe0';
+      const values = dims.map(d => Math.min((metrics[d.key] || 0) / d.max, 1));
+      const dataPts = values.map((v, i) => polar(i, r * v).join(',')).join(' ');
+      svg += `<polygon class="radar-shape" points="${dataPts}" stroke="${color}" fill="${color}"/>`;
+
+      // Dots at vertices
+      values.forEach((v, i) => {
+        const [x, y] = polar(i, r * v);
+        svg += `<circle class="radar-dot" cx="${x}" cy="${y}" fill="${color}"/>`;
+      });
+
+      // Labels
+      dims.forEach((d, i) => {
+        const [x, y] = polar(i, r + 7);
+        const anchor = x < cx - 2 ? 'end' : x > cx + 2 ? 'start' : 'middle';
+        svg += `<text class="radar-label" x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="central">${d.label}</text>`;
+      });
+
+      svg += '</svg>';
+      return svg;
+    }
+
     let currentFilter = 'all';
 
     function renderFilterBar(allPieces) {
@@ -580,25 +654,38 @@
             </div>
             ${colorizedArt ? `<pre class="piece-art">${colorizedArt}</pre>` : ''}
             <div class="piece-meta">
-              <div class="metrics">
-                <span class="metric">
-                  <span class="metric-dot" style="background: ${metricColor(m.complexity || 0, 'complexity')}"></span>
-                  complexity ${(m.complexity || 0).toFixed(2)}
-                </span>
-                <span class="metric">
-                  <span class="metric-dot" style="background: ${metricColor(m.symmetry || 0, 'symmetry')}"></span>
-                  symmetry ${((m.symmetry || 0) * 100).toFixed(0)}%
-                </span>
-                <span class="metric">
-                  <span class="metric-dot" style="background: var(--accent)"></span>
-                  density ${((m.density || 0) * 100).toFixed(0)}%
-                </span>
-                <span class="metric">
-                  <span class="metric-dot" style="background: var(--amber)"></span>
-                  novelty ${((m.novelty || 0) * 100).toFixed(0)}%
-                </span>
+              ${renderRadar(m, piece.genome.type)}
+              <div class="metrics-text">
+                <div class="metrics-row">
+                  <span class="metric">
+                    <span class="metric-dot" style="background: ${metricColor(m.complexity || 0, 'complexity')}"></span>
+                    cx ${(m.complexity || 0).toFixed(2)}
+                  </span>
+                  <span class="metric">
+                    <span class="metric-dot" style="background: ${metricColor(m.symmetry || 0, 'symmetry')}"></span>
+                    sym ${((m.symmetry || 0) * 100).toFixed(0)}%
+                  </span>
+                  <span class="metric">
+                    <span class="metric-dot" style="background: var(--accent)"></span>
+                    den ${((m.density || 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div class="metrics-row">
+                  <span class="metric">
+                    <span class="metric-dot" style="background: var(--amber)"></span>
+                    nov ${((m.novelty || 0) * 100).toFixed(0)}%
+                  </span>
+                  <span class="metric">
+                    <span class="metric-dot" style="background: var(--green)"></span>
+                    edge ${((m.edgeActivity || 0) * 100).toFixed(0)}%
+                  </span>
+                  <span class="metric">
+                    <span class="metric-dot" style="background: #c084fc"></span>
+                    struct ${((m.structuralInterest || 0) * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <span style="margin-top: 0.1rem">gen ${piece.generation} &bull; ${piece.genome.mutations}mut</span>
               </div>
-              <span>gen ${piece.generation} &bull; ${piece.genome.mutations}mut</span>
             </div>
           </div>
         `;
