@@ -420,6 +420,7 @@
       'attractor':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a1a', '#6b2d2d', '#a84a3b', '#db6b4a', '#f59d6b', '#ffc8a0', '#ffe8d8'] },
       'julia':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a2d2d', '#0d6b5b', '#16a88a', '#22dbb5', '#4af5d4', '#88ffe8', '#ccfff4'] },
       'noise':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a0a', '#3b3b0d', '#6b6b16', '#a8a822', '#d4d44a', '#eeff88', '#ffffcc'] },
+      'flowfield':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a1a', '#0d3b3b', '#166b6b', '#22a8a8', '#4ad4d4', '#88eeff', '#ccffff'] },
     };
 
     // Map each Unicode palette character to an intensity level (0-7)
@@ -588,6 +589,7 @@
       '1d': '#c8abff', '2d': '#4ade80', 'lsystem': '#f5b84a',
       'reaction-diffusion': '#d44af5', 'voronoi': '#4ad4f5', 'wfc': '#f54a9d',
       'spirograph': '#d4f54a', 'attractor': '#f59d6b', 'julia': '#4af5d4', 'noise': '#d4d44a',
+      'flowfield': '#4ad4d4',
     };
 
     function renderSpeciesChart(history) {
@@ -732,7 +734,9 @@
       const dims = [
         { key: 'complexity', label: 'CX', max: 3.5 },
         { key: 'edgeActivity', label: 'EA', max: 1 },
+        { key: 'fractalDimension', label: 'FD', max: 2 },
         { key: 'structuralInterest', label: 'SI', max: 1 },
+        { key: 'informationDensity', label: 'ID', max: 1 },
         { key: 'novelty', label: 'NV', max: 1 },
         { key: 'symmetry', label: 'SY', max: 1 },
         { key: 'density', label: 'DN', max: 1 },
@@ -794,7 +798,7 @@
         counts[t] = (counts[t] || 0) + 1;
       });
 
-      const types = ['all', '1d', '2d', 'lsystem', 'reaction-diffusion', 'voronoi', 'wfc', 'spirograph', 'attractor', 'julia', 'noise'];
+      const types = ['all', '1d', '2d', 'lsystem', 'reaction-diffusion', 'voronoi', 'wfc', 'spirograph', 'attractor', 'julia', 'noise', 'flowfield'];
       bar.innerHTML = types.map(t => {
         const label = t === 'all' ? 'All' : typeLabel(t);
         const count = t === 'all' ? allPieces.length : (counts[t] || 0);
@@ -880,6 +884,14 @@
                 <span class="metric">
                   <span class="metric-dot" style="background: #c084fc"></span>
                   struct ${((m.structuralInterest || 0) * 100).toFixed(0)}%
+                </span>
+                <span class="metric">
+                  <span class="metric-dot" style="background: #f472b6"></span>
+                  fractal ${((m.fractalDimension || 0)).toFixed(2)}
+                </span>
+                <span class="metric">
+                  <span class="metric-dot" style="background: #38bdf8"></span>
+                  info ${((m.informationDensity || 0) * 100).toFixed(0)}%
                 </span>
               </div>
               <span style="margin-top: 0.1rem">gen ${piece.generation} &bull; ${piece.genome.mutations}mut${piece.epoch ? ` &bull; ${piece.epoch}` : ''}</span>

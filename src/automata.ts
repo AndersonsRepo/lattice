@@ -153,6 +153,8 @@ export interface PieceMetrics {
   novelty: number;             // distance from population (rewards uniqueness)
   edgeActivity: number;        // activity at boundaries
   structuralInterest: number;  // clustered regions vs uniform noise
+  fractalDimension: number;    // box-counting fractal dimension (0-2, higher = more complex boundary)
+  informationDensity: number;  // bits per cell normalized — how efficiently the visual space encodes info
 }
 
 // --- Pseudorandom number generator (deterministic from seed) ---
@@ -1193,7 +1195,7 @@ export function score(grid: number[][]): PieceMetrics {
   const height = grid.length;
   const width = grid[0]?.length ?? 0;
   const total = width * height;
-  if (total === 0) return { complexity: 0, symmetry: 0, density: 0, novelty: 0, edgeActivity: 0, structuralInterest: 0 };
+  if (total === 0) return { complexity: 0, symmetry: 0, density: 0, novelty: 0, edgeActivity: 0, structuralInterest: 0, fractalDimension: 0, informationDensity: 0 };
 
   // Density
   let filled = 0;
@@ -1277,18 +1279,73 @@ export function score(grid: number[][]): PieceMetrics {
   const regionNorm = total > 0 ? Math.min(regionCount / (total * 0.02), 1) : 0;
   const structuralInterest = 1 - Math.abs(regionNorm - 0.5) * 2; // peak at moderate region count
 
-  return { complexity, symmetry, density, novelty: 0, edgeActivity, structuralInterest };
+  // Fractal dimension (box-counting method)
+  // Count how many boxes of size s contain a non-empty cell, for several scales
+  // The slope of log(count) vs log(1/s) approximates the fractal dimension
+  const fractalDimension = computeBoxCountingDimension(grid, width, height);
+
+  // Information density: Shannon entropy normalized by grid area
+  // Measures how efficiently the visual space encodes information
+  // High = every cell contributes unique information; Low = redundant/uniform
+  const maxEntropy = Math.log2(Math.max(Object.keys(counts).length, 2));
+  const informationDensity = maxEntropy > 0 ? (entropy / maxEntropy) * density : 0;
+
+  return { complexity, symmetry, density, novelty: 0, edgeActivity, structuralInterest, fractalDimension, informationDensity };
+}
+
+function computeBoxCountingDimension(grid: number[][], width: number, height: number): number {
+  const side = Math.min(width, height);
+  if (side < 4) return 0;
+
+  // Use box sizes that are powers of 2, from 2 up to side/2
+  const sizes: number[] = [];
+  for (let s = 2; s <= side / 2; s *= 2) {
+    sizes.push(s);
+  }
+  if (sizes.length < 2) return 0;
+
+  const points: [number, number][] = []; // [log(1/s), log(count)]
+  for (const s of sizes) {
+    let boxCount = 0;
+    for (let by = 0; by + s <= height; by += s) {
+      for (let bx = 0; bx + s <= width; bx += s) {
+        let hasContent = false;
+        outer: for (let y = by; y < by + s; y++) {
+          for (let x = bx; x < bx + s; x++) {
+            if (grid[y][x] > 0) { hasContent = true; break outer; }
+          }
+        }
+        if (hasContent) boxCount++;
+      }
+    }
+    if (boxCount > 0) {
+      points.push([Math.log(1 / s), Math.log(boxCount)]);
+    }
+  }
+
+  if (points.length < 2) return 0;
+
+  // Linear regression for slope (fractal dimension estimate)
+  const n = points.length;
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  for (const [x, y] of points) {
+    sumX += x; sumY += y; sumXY += x * y; sumXX += x * x;
+  }
+  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+
+  // Clamp to [0, 2] — theoretical range for 2D patterns
+  return Math.max(0, Math.min(slope, 2));
 }
 
 // Compute novelty: how different is this piece's fingerprint from a set of others?
 export function computeNovelty(metrics: PieceMetrics, population: PieceMetrics[]): number {
   if (population.length === 0) return 1;
-  const keys: (keyof PieceMetrics)[] = ["complexity", "symmetry", "density", "edgeActivity", "structuralInterest"];
+  const keys: (keyof PieceMetrics)[] = ["complexity", "symmetry", "density", "edgeActivity", "structuralInterest", "fractalDimension", "informationDensity"];
   let totalDist = 0;
   for (const other of population) {
     let dist = 0;
     for (const k of keys) {
-      dist += (metrics[k] - other[k]) ** 2;
+      dist += ((metrics[k] ?? 0) - (other[k] ?? 0)) ** 2;
     }
     totalDist += Math.sqrt(dist);
   }
@@ -1328,6 +1385,8 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
   const edgeScore = metrics.edgeActivity;
   const structureScore = metrics.structuralInterest ?? 0;
   const noveltyScore = metrics.novelty;
+  const fractalScore = Math.min((metrics.fractalDimension ?? 0) / 2, 1); // normalize 0-2 → 0-1
+  const infoDensityScore = metrics.informationDensity ?? 0;
 
   // Base weights — type-aware adjustments blend with epoch modifiers
   let w = getTypeWeights(genomeType);
@@ -1344,6 +1403,8 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
       edge: w.edge * 0.6 + ew.edge * 0.4,
       structure: w.structure * 0.6 + ew.structure * 0.4,
       novelty: w.novelty * 0.6 + ew.novelty * 0.4,
+      fractal: w.fractal * 0.6 + ew.fractal * 0.4,
+      infoDensity: w.infoDensity * 0.6 + ew.infoDensity * 0.4,
     };
   }
 
@@ -1353,11 +1414,13 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
     symmetryBonus * w.symmetry +
     edgeScore * w.edge +
     structureScore * w.structure +
-    noveltyScore * w.novelty
+    noveltyScore * w.novelty +
+    fractalScore * w.fractal +
+    infoDensityScore * w.infoDensity
   );
 }
 
-type Weights = { density: number; complexity: number; symmetry: number; edge: number; structure: number; novelty: number };
+type Weights = { density: number; complexity: number; symmetry: number; edge: number; structure: number; novelty: number; fractal: number; infoDensity: number };
 
 // Ideal density per type — null means full-coverage (score by state diversity)
 function getIdealDensity(genomeType?: Genome["type"]): number | null {
@@ -1395,53 +1458,58 @@ function getSymmetryScale(genomeType?: Genome["type"]): number {
 
 // Type-specific weight profiles — reward what makes each type interesting
 function getTypeWeights(genomeType?: Genome["type"]): Weights {
+  // Weights sum to ~1.0. fractal + infoDensity take ~10% from existing dimensions.
   switch (genomeType) {
     case "1d":
       // 1D automata: complexity classes (Class 3/4) are most interesting
-      return { density: 0.15, complexity: 0.3, symmetry: 0.05, edge: 0.2, structure: 0.15, novelty: 0.15 };
+      return { density: 0.12, complexity: 0.25, symmetry: 0.05, edge: 0.18, structure: 0.12, novelty: 0.13, fractal: 0.08, infoDensity: 0.07 };
     case "lsystem":
-      // L-systems: structural beauty, fractal complexity, moderate density
-      return { density: 0.1, complexity: 0.25, symmetry: 0.15, edge: 0.1, structure: 0.25, novelty: 0.15 };
+      // L-systems: fractal dimension is very meaningful here — branching creates self-similarity
+      return { density: 0.08, complexity: 0.2, symmetry: 0.12, edge: 0.08, structure: 0.2, novelty: 0.12, fractal: 0.12, infoDensity: 0.08 };
     case "reaction-diffusion":
-      // RD: organic textures, edge patterns, complexity of Turing patterns
-      return { density: 0.15, complexity: 0.25, symmetry: 0.05, edge: 0.25, structure: 0.15, novelty: 0.15 };
+      // RD: organic textures, info density captures Turing pattern richness
+      return { density: 0.12, complexity: 0.2, symmetry: 0.05, edge: 0.2, structure: 0.12, novelty: 0.12, fractal: 0.09, infoDensity: 0.10 };
     case "voronoi":
       // Voronoi: edge patterns and structural variety matter most
-      return { density: 0.1, complexity: 0.2, symmetry: 0.1, edge: 0.25, structure: 0.2, novelty: 0.15 };
+      return { density: 0.08, complexity: 0.17, symmetry: 0.08, edge: 0.22, structure: 0.17, novelty: 0.12, fractal: 0.08, infoDensity: 0.08 };
     case "wfc":
-      // WFC: constraint-based structure, local patterns, complexity
-      return { density: 0.1, complexity: 0.25, symmetry: 0.15, edge: 0.2, structure: 0.15, novelty: 0.15 };
+      // WFC: constraint-based structure, info density rewards complex tile patterns
+      return { density: 0.08, complexity: 0.2, symmetry: 0.12, edge: 0.17, structure: 0.12, novelty: 0.12, fractal: 0.08, infoDensity: 0.11 };
     case "spirograph":
-      // Spirographs: symmetry and complexity of overlapping curves
-      return { density: 0.1, complexity: 0.25, symmetry: 0.2, edge: 0.15, structure: 0.15, novelty: 0.15 };
+      // Spirographs: fractal dimension captures curve complexity well
+      return { density: 0.08, complexity: 0.2, symmetry: 0.17, edge: 0.12, structure: 0.12, novelty: 0.12, fractal: 0.11, infoDensity: 0.08 };
     case "attractor":
-      // Attractors: complex organic structure, density variation, novelty
-      return { density: 0.15, complexity: 0.25, symmetry: 0.1, edge: 0.15, structure: 0.2, novelty: 0.15 };
+      // Attractors: fractal dimension is core to strange attractor aesthetics
+      return { density: 0.12, complexity: 0.2, symmetry: 0.08, edge: 0.12, structure: 0.15, novelty: 0.12, fractal: 0.13, infoDensity: 0.08 };
     case "julia":
-      // Julia sets: complexity of boundary detail, edge activity, structural variety
-      return { density: 0.1, complexity: 0.25, symmetry: 0.1, edge: 0.2, structure: 0.2, novelty: 0.15 };
+      // Julia sets: fractal dimension IS the defining quality
+      return { density: 0.08, complexity: 0.2, symmetry: 0.08, edge: 0.15, structure: 0.15, novelty: 0.12, fractal: 0.14, infoDensity: 0.08 };
     case "noise":
-      // Noise: organic textures, structural interest from domain warping, complexity
-      return { density: 0.1, complexity: 0.25, symmetry: 0.1, edge: 0.15, structure: 0.25, novelty: 0.15 };
+      // Noise: info density captures how much visual variety the warping produces
+      return { density: 0.08, complexity: 0.2, symmetry: 0.08, edge: 0.12, structure: 0.2, novelty: 0.12, fractal: 0.08, infoDensity: 0.12 };
     case "flowfield":
-      // Flow fields: streaming structure, edge activity from trails, complexity of flow patterns
-      return { density: 0.15, complexity: 0.2, symmetry: 0.1, edge: 0.2, structure: 0.2, novelty: 0.15 };
+      // Flow fields: fractal from trail complexity, info density from flow variety
+      return { density: 0.12, complexity: 0.17, symmetry: 0.08, edge: 0.17, structure: 0.17, novelty: 0.12, fractal: 0.09, infoDensity: 0.08 };
     case "2d":
     default:
-      return { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
+      return { density: 0.17, complexity: 0.17, symmetry: 0.08, edge: 0.12, structure: 0.12, novelty: 0.17, fractal: 0.08, infoDensity: 0.09 };
   }
 }
 
 function getEpochWeights(epoch: Epoch): Weights {
   switch (epoch) {
     case "emergence":
-      return { density: 0.15, complexity: 0.25, symmetry: 0.05, edge: 0.15, structure: 0.2, novelty: 0.2 };
+      // Emergence favors fractal complexity and novel forms
+      return { density: 0.12, complexity: 0.2, symmetry: 0.05, edge: 0.12, structure: 0.17, novelty: 0.17, fractal: 0.10, infoDensity: 0.07 };
     case "order":
-      return { density: 0.2, complexity: 0.15, symmetry: 0.25, edge: 0.1, structure: 0.1, novelty: 0.2 };
+      // Order favors symmetry, structure, info density (efficient patterns)
+      return { density: 0.17, complexity: 0.12, symmetry: 0.2, edge: 0.08, structure: 0.08, novelty: 0.17, fractal: 0.06, infoDensity: 0.12 };
     case "chaos":
-      return { density: 0.15, complexity: 0.25, symmetry: 0.05, edge: 0.25, structure: 0.1, novelty: 0.2 };
+      // Chaos favors fractal dimension, edge activity, complexity
+      return { density: 0.12, complexity: 0.2, symmetry: 0.05, edge: 0.2, structure: 0.08, novelty: 0.17, fractal: 0.12, infoDensity: 0.06 };
     case "harmony":
-      return { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
+      // Harmony: balanced across all dimensions
+      return { density: 0.15, complexity: 0.15, symmetry: 0.08, edge: 0.12, structure: 0.12, novelty: 0.15, fractal: 0.11, infoDensity: 0.12 };
   }
 }
 

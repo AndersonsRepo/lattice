@@ -214,7 +214,8 @@ function formatPieceForDiscord(piece: Piece): string {
     `**Lattice Gen ${piece.generation}** — ${typeLabel} (${ruleStr})`,
     `Score: **${(piece.score * 100).toFixed(1)}%** | ` +
       `Novelty: ${(piece.metrics.novelty * 100).toFixed(0)}% | ` +
-      `Structure: ${((piece.metrics.structuralInterest ?? 0) * 100).toFixed(0)}% | ` +
+      `Fractal: ${(piece.metrics.fractalDimension ?? 0).toFixed(2)} | ` +
+      `Info: ${((piece.metrics.informationDensity ?? 0) * 100).toFixed(0)}% | ` +
       `Density: ${(piece.metrics.density * 100).toFixed(0)}%`,
     "```",
     piece.rendered,
