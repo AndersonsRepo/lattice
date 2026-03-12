@@ -28,6 +28,7 @@ import {
   evolveAttractor,
   evolveJulia,
   evolveNoise,
+  evolveFlowField,
   render,
   score,
   computeScore,
@@ -54,7 +55,7 @@ const HALL_OF_FAME_THRESHOLD = 0.55;
 
 // Speciation: minimum slots per genome type (1 per type with 9 types)
 const MIN_SLOTS_PER_TYPE = 1;
-const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise"];
+const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield"];
 
 interface GenerationRecord {
   generation: number;
@@ -135,6 +136,9 @@ function generatePiece(genome: Genome, generation: number, populationMetrics?: P
     case "noise":
       grid = evolveNoise(genome);
       break;
+    case "flowfield":
+      grid = evolveFlowField(genome);
+      break;
     default:
       grid = evolve1D(genome);
   }
@@ -179,6 +183,7 @@ function formatPieceForDiscord(piece: Piece): string {
     : piece.genome.type === "attractor" ? "Strange Attractor"
     : piece.genome.type === "julia" ? "Julia Set"
     : piece.genome.type === "noise" ? "Fractal Noise"
+    : piece.genome.type === "flowfield" ? "Flow Field"
     : "L-System";
 
   const ruleStr = piece.genome.type === "1d"
@@ -199,6 +204,8 @@ function formatPieceForDiscord(piece: Piece): string {
     ? `c=${(piece.genome.rule as any).cReal.toFixed(3)}+${(piece.genome.rule as any).cImag.toFixed(3)}i z=${(piece.genome.rule as any).zoom.toFixed(1)}x`
     : piece.genome.type === "noise"
     ? `${(piece.genome.rule as any).octaves}oct s=${(piece.genome.rule as any).scale.toFixed(3)} w=${(piece.genome.rule as any).warp.toFixed(1)}`
+    : piece.genome.type === "flowfield"
+    ? `${(piece.genome.rule as any).particles}p curl=${(piece.genome.rule as any).curl.toFixed(1)} s=${(piece.genome.rule as any).fieldScale.toFixed(3)}`
     : `angle=${(piece.genome.rule as any).angle}° iter=${(piece.genome.rule as any).iterations}`;
 
   const hasCrossover = piece.genome.lineage.includes("×");

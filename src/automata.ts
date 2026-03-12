@@ -104,9 +104,22 @@ export interface NoiseRule {
   warp: number;         // domain warping strength (0-2)
 }
 
+export interface FlowFieldRule {
+  fieldScale: number;      // noise frequency for vector field (0.02-0.15)
+  particles: number;       // number of particles to release (200-2000)
+  stepLength: number;      // distance per step (0.3-1.5)
+  steps: number;           // max steps per particle (30-200)
+  quantize: number;        // output states (3-8)
+  turbulence: number;      // noise octaves for field (1-4)
+  curl: number;            // curl noise mixing (0-1, 0=gradient, 1=pure curl)
+  offsetX: number;         // field offset X (-100 to 100)
+  offsetY: number;         // field offset Y (-100 to 100)
+  decay: number;           // trail brightness decay (0.5-1.0, 1=no decay)
+}
+
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule;
   width: number;
   height: number;
   palette: string[];
@@ -1027,6 +1040,145 @@ export function evolveNoise(genome: Genome): number[][] {
   return grid;
 }
 
+// --- Flow Field (particles trace noise-based vector fields) ---
+export function evolveFlowField(genome: Genome): number[][] {
+  const rule = genome.rule as FlowFieldRule;
+  const { width, height } = genome;
+  const rng = mulberry32(genome.seed);
+  const { fieldScale, particles, stepLength, steps, quantize, turbulence, curl, offsetX, offsetY, decay } = rule;
+  const maxState = Math.max(quantize - 1, 1);
+
+  // Build a permutation table for noise (same approach as evolveNoise)
+  const PERM_SIZE = 256;
+  const perm = new Array(PERM_SIZE);
+  for (let i = 0; i < PERM_SIZE; i++) perm[i] = i;
+  for (let i = PERM_SIZE - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [perm[i], perm[j]] = [perm[j], perm[i]];
+  }
+  const p = [...perm, ...perm];
+
+  const gradXTab = new Array(PERM_SIZE);
+  const gradYTab = new Array(PERM_SIZE);
+  for (let i = 0; i < PERM_SIZE; i++) {
+    const angle = rng() * Math.PI * 2;
+    gradXTab[i] = Math.cos(angle);
+    gradYTab[i] = Math.sin(angle);
+  }
+
+  function fade(t: number): number {
+    return t * t * t * (t * (t * 6 - 15) + 10);
+  }
+
+  function lerp(a: number, b: number, t: number): number {
+    return a + t * (b - a);
+  }
+
+  function gradientNoise(x: number, y: number): number {
+    const xi = Math.floor(x) & 255;
+    const yi = Math.floor(y) & 255;
+    const xf = x - Math.floor(x);
+    const yf = y - Math.floor(y);
+    const u = fade(xf);
+    const v = fade(yf);
+    const aa = p[p[xi] + yi];
+    const ab = p[p[xi] + yi + 1];
+    const ba = p[p[xi + 1] + yi];
+    const bb = p[p[xi + 1] + yi + 1];
+    const dot = (hash: number, fx: number, fy: number) =>
+      gradXTab[hash % PERM_SIZE] * fx + gradYTab[hash % PERM_SIZE] * fy;
+    const x1 = lerp(dot(aa, xf, yf), dot(ba, xf - 1, yf), u);
+    const x2 = lerp(dot(ab, xf, yf - 1), dot(bb, xf - 1, yf - 1), u);
+    return lerp(x1, x2, v);
+  }
+
+  // Fractal noise with turbulence octaves
+  function fbm(x: number, y: number): number {
+    let value = 0, amplitude = 1, frequency = 1, maxAmp = 0;
+    for (let o = 0; o < turbulence; o++) {
+      value += gradientNoise(x * frequency, y * frequency) * amplitude;
+      maxAmp += amplitude;
+      amplitude *= 0.5;
+      frequency *= 2.0;
+    }
+    return value / maxAmp;
+  }
+
+  // Get flow direction at a point using curl noise for divergence-free flow
+  function getFlowAngle(x: number, y: number): number {
+    const nx = (x + offsetX) * fieldScale;
+    const ny = (y + offsetY) * fieldScale;
+
+    if (curl > 0) {
+      // Curl noise: take partial derivatives of noise to get a divergence-free field
+      const eps = 0.01;
+      const dndx = (fbm(nx + eps, ny) - fbm(nx - eps, ny)) / (2 * eps);
+      const dndy = (fbm(nx, ny + eps) - fbm(nx, ny - eps)) / (2 * eps);
+      // Curl: rotate gradient 90 degrees → (-dndy, dndx)
+      const curlAngle = Math.atan2(dndx, -dndy);
+      const gradAngle = fbm(nx, ny) * Math.PI * 2;
+      // Blend between gradient-based and curl-based flow
+      return gradAngle * (1 - curl) + curlAngle * curl;
+    }
+
+    return fbm(nx, ny) * Math.PI * 2;
+  }
+
+  // Accumulator grid (float values for trail density)
+  const accum = Array.from({ length: height }, () => new Float64Array(width));
+
+  // Release particles and trace them through the field
+  for (let i = 0; i < particles; i++) {
+    let px = rng() * width;
+    let py = rng() * height;
+    let brightness = 1.0;
+
+    for (let s = 0; s < steps; s++) {
+      const ix = Math.floor(px);
+      const iy = Math.floor(py);
+
+      if (ix < 0 || ix >= width || iy < 0 || iy >= height) break;
+
+      accum[iy][ix] += brightness;
+      brightness *= decay;
+
+      const angle = getFlowAngle(px, py);
+      px += Math.cos(angle) * stepLength;
+      py += Math.sin(angle) * stepLength;
+
+      // Wrap around edges for continuous flow
+      if (px < 0) px += width;
+      if (px >= width) px -= width;
+      if (py < 0) py += height;
+      if (py >= height) py -= height;
+    }
+  }
+
+  // Find max accumulation for normalization
+  let maxAccum = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (accum[y][x] > maxAccum) maxAccum = accum[y][x];
+    }
+  }
+
+  // Quantize accumulated trails to grid states
+  const grid: number[][] = [];
+  for (let y = 0; y < height; y++) {
+    const row = new Array(width).fill(0);
+    for (let x = 0; x < width; x++) {
+      if (maxAccum > 0) {
+        // Use sqrt for perceptual brightness mapping
+        const t = Math.sqrt(accum[y][x] / maxAccum);
+        row[x] = Math.round(t * maxState);
+      }
+    }
+    grid.push(row);
+  }
+
+  return grid;
+}
+
 // --- Rendering ---
 export function render(grid: number[][], palette: string[]): string {
   return grid
@@ -1220,6 +1372,7 @@ function getIdealDensity(genomeType?: Genome["type"]): number | null {
     case "attractor": return 0.25;        // organic density clusters
     case "julia": return null;             // full coverage — score by state variety
     case "noise": return null;              // full coverage — score by state variety
+    case "flowfield": return 0.3;           // streaming trails — moderate coverage with clear paths
     default: return 0.4;
   }
 }
@@ -1235,6 +1388,7 @@ function getSymmetryScale(genomeType?: Genome["type"]): number {
     case "lsystem": return 0.35;          // partial symmetry from branching
     case "julia": return 0.2;             // Julia sets have inherent symmetry
     case "noise": return 0.4;              // noise can have emergent symmetry from warping
+    case "flowfield": return 0.35;        // flow fields can have emergent swirl symmetry
     default: return 0.3;                  // original scale
   }
 }
@@ -1269,6 +1423,9 @@ function getTypeWeights(genomeType?: Genome["type"]): Weights {
     case "noise":
       // Noise: organic textures, structural interest from domain warping, complexity
       return { density: 0.1, complexity: 0.25, symmetry: 0.1, edge: 0.15, structure: 0.25, novelty: 0.15 };
+    case "flowfield":
+      // Flow fields: streaming structure, edge activity from trails, complexity of flow patterns
+      return { density: 0.15, complexity: 0.2, symmetry: 0.1, edge: 0.2, structure: 0.2, novelty: 0.15 };
     case "2d":
     default:
       return { density: 0.2, complexity: 0.2, symmetry: 0.1, edge: 0.15, structure: 0.15, novelty: 0.2 };
@@ -1297,7 +1454,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
@@ -1558,6 +1715,38 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     if (rng() < 0.15) {
       rule.quantize = 3 + Math.floor(rng() * 6); // 3-8 states
     }
+  } else if (mutated.type === "flowfield") {
+    const rule = mutated.rule as FlowFieldRule;
+    const param = rng();
+    if (param < 0.25) {
+      // Perturb field scale
+      rule.fieldScale = Math.max(0.02, Math.min(0.15, rule.fieldScale + (rng() - 0.5) * 0.02));
+    } else if (param < 0.4) {
+      // Adjust particle count
+      rule.particles = Math.max(200, Math.min(2000, rule.particles + Math.floor((rng() - 0.5) * 400)));
+    } else if (param < 0.55) {
+      // Adjust step length
+      rule.stepLength = Math.max(0.3, Math.min(1.5, rule.stepLength + (rng() - 0.5) * 0.3));
+    } else if (param < 0.7) {
+      // Adjust max steps
+      rule.steps = Math.max(30, Math.min(200, rule.steps + Math.floor((rng() - 0.5) * 40)));
+    } else if (param < 0.8) {
+      // Adjust curl mixing
+      rule.curl = Math.max(0, Math.min(1, rule.curl + (rng() - 0.5) * 0.3));
+    } else if (param < 0.9) {
+      // Shift field offset (explore different flow regions)
+      rule.offsetX += (rng() - 0.5) * 20;
+      rule.offsetY += (rng() - 0.5) * 20;
+    } else {
+      // Adjust decay
+      rule.decay = Math.max(0.5, Math.min(1.0, rule.decay + (rng() - 0.5) * 0.1));
+    }
+    if (rng() < 0.15) {
+      rule.quantize = 3 + Math.floor(rng() * 6);
+    }
+    if (rng() < 0.1) {
+      rule.turbulence = Math.max(1, Math.min(4, rule.turbulence + (rng() > 0.5 ? 1 : -1)));
+    }
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -1703,6 +1892,20 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
     rule.persistence = ra.persistence * t + rb.persistence * (1 - t);
     rule.lacunarity = ra.lacunarity * t + rb.lacunarity * (1 - t);
     rule.warp = ra.warp * t + rb.warp * (1 - t);
+    rule.offsetX = rng() > 0.5 ? ra.offsetX : rb.offsetX;
+    rule.offsetY = rng() > 0.5 ? ra.offsetY : rb.offsetY;
+    rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
+  } else if (child.type === "flowfield") {
+    const ra = a.rule as FlowFieldRule, rb = b.rule as FlowFieldRule;
+    const rule = child.rule as FlowFieldRule;
+    const t = rng();
+    rule.fieldScale = ra.fieldScale * t + rb.fieldScale * (1 - t);
+    rule.particles = Math.round(ra.particles * t + rb.particles * (1 - t));
+    rule.stepLength = ra.stepLength * t + rb.stepLength * (1 - t);
+    rule.steps = rng() > 0.5 ? ra.steps : rb.steps;
+    rule.curl = ra.curl * t + rb.curl * (1 - t);
+    rule.turbulence = rng() > 0.5 ? ra.turbulence : rb.turbulence;
+    rule.decay = ra.decay * t + rb.decay * (1 - t);
     rule.offsetX = rng() > 0.5 ? ra.offsetX : rb.offsetX;
     rule.offsetY = rng() > 0.5 ? ra.offsetY : rb.offsetY;
     rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
@@ -1914,6 +2117,26 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
         offsetX: rng() * 100,
         offsetY: rng() * 100,
         warp: rng() * 1.5,
+      },
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "flowfield") {
+    return {
+      type: "flowfield",
+      rule: {
+        fieldScale: 0.03 + rng() * 0.08,
+        particles: 400 + Math.floor(rng() * 1200),
+        stepLength: 0.5 + rng() * 0.8,
+        steps: 50 + Math.floor(rng() * 120),
+        quantize: 4 + Math.floor(rng() * 4),
+        turbulence: 1 + Math.floor(rng() * 3),
+        curl: rng(),
+        offsetX: rng() * 100,
+        offsetY: rng() * 100,
+        decay: 0.8 + rng() * 0.2,
       },
       width: 48 + Math.floor(rng() * 16),
       height: 28 + Math.floor(rng() * 10),
@@ -2353,6 +2576,27 @@ export const SEED_GENOMES: Genome[] = [
     height: 28,
     palette: BRAILLE_PALETTE,
     seed: 90909,
+    mutations: 0,
+    lineage: [],
+  },
+  // Flow field
+  {
+    type: "flowfield",
+    rule: { fieldScale: 0.06, particles: 800, stepLength: 0.8, steps: 100, quantize: 6, turbulence: 2, curl: 0.7, offsetX: 0, offsetY: 0, decay: 0.95 },
+    width: 52,
+    height: 30,
+    palette: SHADE_PALETTE,
+    seed: 31415,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "flowfield",
+    rule: { fieldScale: 0.04, particles: 1200, stepLength: 0.6, steps: 150, quantize: 7, turbulence: 3, curl: 1.0, offsetX: 42, offsetY: 17, decay: 0.9 },
+    width: 56,
+    height: 32,
+    palette: WAVE_PALETTE,
+    seed: 27182,
     mutations: 0,
     lineage: [],
   },
