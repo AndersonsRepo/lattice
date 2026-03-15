@@ -77,25 +77,119 @@
     }
     #pause-icon.visible { opacity: 0.6; }
 
-    .back-link {
+    /* --- Top-left menu pill --- */
+    .menu-pill {
       position: fixed;
-      top: 1.5rem;
-      left: 1.5rem;
-      color: #6e6e82;
-      text-decoration: none;
-      font-size: 0.7rem;
-      letter-spacing: 0.1em;
-      opacity: 0;
-      transition: opacity 0.5s ease;
-      z-index: 10;
+      top: 1.25rem;
+      left: 1.25rem;
+      z-index: 30;
       pointer-events: auto;
     }
-    body.show-cursor .back-link { opacity: 0.6; }
-    .back-link:hover { color: #7c6fe0; opacity: 1; }
+
+    .menu-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 20px;
+      background: rgba(18, 18, 26, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(124, 111, 224, 0.15);
+      color: #6e6e82;
+      font-family: inherit;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: opacity 0.5s ease, background 0.3s ease, border-color 0.3s ease;
+      opacity: 0;
+      text-decoration: none;
+    }
+    body.show-cursor .menu-toggle { opacity: 0.7; }
+    .menu-toggle:hover {
+      opacity: 1;
+      background: rgba(18, 18, 26, 0.85);
+      border-color: rgba(124, 111, 224, 0.3);
+      color: #c8c8d4;
+    }
+    .menu-toggle .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #7c6fe0;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .menu-dropdown {
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      left: 0;
+      min-width: 180px;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(124, 111, 224, 0.15);
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .menu-pill.open .menu-dropdown {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .menu-dropdown a {
+      display: block;
+      color: #c8c8d4;
+      text-decoration: none;
+      font-size: 0.7rem;
+      padding: 0.35rem 0;
+      letter-spacing: 0.05em;
+      transition: color 0.2s;
+    }
+    .menu-dropdown a:hover { color: #7c6fe0; }
+
+    .menu-dropdown .divider {
+      height: 1px;
+      background: rgba(124, 111, 224, 0.12);
+      margin: 0.5rem 0;
+    }
+
+    .menu-dropdown .controls {
+      font-size: 0.6rem;
+      color: #6e6e82;
+      line-height: 1.8;
+    }
+    .menu-dropdown .controls kbd {
+      display: inline-block;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      background: rgba(124, 111, 224, 0.1);
+      border: 1px solid rgba(124, 111, 224, 0.2);
+      font-family: inherit;
+      font-size: 0.55rem;
+      color: #c8c8d4;
+      margin-right: 0.3rem;
+    }
   </style>
 </head>
 <body>
-  <a class="back-link" href="index.html">&larr; Gallery</a>
+  <div class="menu-pill" id="menu-pill">
+    <div class="menu-toggle" id="menu-toggle"><span class="dot"></span>LATTICE LIVE</div>
+    <div class="menu-dropdown" id="menu-dropdown">
+      <a href="index.html">&larr; Back to Gallery</a>
+      <div class="divider"></div>
+      <div class="controls">
+        <kbd>Space</kbd> Pause / Resume<br>
+        <kbd>&larr;</kbd> <kbd>&rarr;</kbd> Navigate pieces<br>
+        <kbd>F</kbd> Fullscreen<br>
+        <kbd>Click</kbd> Next piece
+      </div>
+    </div>
+  </div>
   <canvas id="canvas"></canvas>
   <div id="overlay">
     <div class="type" id="info-type"></div>
@@ -104,9 +198,7 @@
   </div>
   <div id="progress"></div>
   <div id="hint">
-    space &mdash; pause<br>
-    &larr; &rarr; &mdash; navigate<br>
-    click to begin
+    click anywhere to begin
   </div>
   <div id="pause-icon">&#10073;&#10073;</div>
 
@@ -1126,6 +1218,17 @@ function showCursor() {
 
 document.addEventListener('mousemove', showCursor);
 
+// Menu pill toggle
+const menuPill = document.getElementById('menu-pill');
+const menuToggle = document.getElementById('menu-toggle');
+menuToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  menuPill.classList.toggle('open');
+});
+document.addEventListener('click', (e) => {
+  if (!menuPill.contains(e.target)) menuPill.classList.remove('open');
+});
+
 document.addEventListener('keydown', (e) => {
   if (!started) { start(); return; }
   switch (e.key) {
@@ -1143,7 +1246,9 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-canvas.addEventListener('click', () => {
+canvas.addEventListener('click', (e) => {
+  // Don't trigger if clicking the menu area
+  if (menuPill.contains(e.target)) return;
   if (!started) start();
   else nextPiece();
 });
