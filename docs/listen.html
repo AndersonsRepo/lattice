@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Listen</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Ambient background glow */
+    .bg-glow {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 600px; height: 600px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.3;
+      pointer-events: none;
+      transition: opacity 2s ease;
+      z-index: 0;
+    }
+
+    .content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+      max-width: 90vw;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 1.5rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+    }
+
+    .header .sub {
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      margin-top: 0.4rem;
+    }
+
+    /* Piece canvas — the visual grid */
+    .piece-display {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: border-color 1s ease;
+    }
+
+    .piece-display.playing {
+      border-color: var(--accent);
+      box-shadow: 0 0 30px var(--accent-glow);
+    }
+
+    .grid-canvas {
+      display: block;
+    }
+
+    /* Scan line overlay */
+    .scan-line {
+      position: absolute;
+      top: 0;
+      width: 2px;
+      height: 100%;
+      background: var(--green);
+      box-shadow: 0 0 12px var(--green), 0 0 24px rgba(74, 222, 128, 0.3);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .piece-display.playing .scan-line {
+      opacity: 1;
+    }
+
+    /* Piece info */
+    .piece-info {
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      min-height: 2.5em;
+    }
+
+    .piece-info .type {
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .piece-info .score {
+      color: var(--green);
+    }
+
+    /* Waveform visualizer */
+    .waveform {
+      width: 100%;
+      max-width: 600px;
+      height: 60px;
+      border-radius: 4px;
+      opacity: 0.8;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+      padding: 0.8rem 1.5rem;
+      background: rgba(18, 18, 26, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+    }
+
+    .ctrl-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 0.3rem;
+      font-size: 1.1rem;
+      transition: color 0.2s, transform 0.15s;
+      font-family: inherit;
+      line-height: 1;
+    }
+
+    .ctrl-btn:hover { color: var(--text); transform: scale(1.1); }
+    .ctrl-btn.active { color: var(--green); }
+
+    .ctrl-btn.play-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      color: var(--accent);
+    }
+
+    .ctrl-btn.play-btn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .volume-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 80px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .speed-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      user-select: none;
+    }
+
+    /* Piece selector */
+    .selector {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 600px;
+    }
+
+    .sel-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.3s;
+      padding: 0;
+    }
+
+    .sel-dot:hover {
+      border-color: var(--accent);
+      transform: scale(1.3);
+    }
+
+    .sel-dot.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    /* Back link */
+    .back-link {
+      position: fixed;
+      top: 1.5rem;
+      left: 1.5rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      z-index: 10;
+      transition: color 0.2s;
+    }
+
+    .back-link:hover { color: var(--accent); }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.6s ease;
+    }
+
+    .start-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .start-text {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      animation: breathe 3s ease-in-out infinite;
+    }
+
+    .start-icon {
+      font-size: 3rem;
+      color: var(--accent);
+      margin-bottom: 1.5rem;
+      text-shadow: 0 0 40px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* Frequency spectrum bars */
+    .spectrum {
+      display: flex;
+      align-items: flex-end;
+      gap: 1px;
+      height: 40px;
+      min-width: 200px;
+    }
+
+    .spectrum-bar {
+      flex: 1;
+      background: var(--accent);
+      border-radius: 1px 1px 0 0;
+      min-height: 1px;
+      transition: height 0.08s ease;
+      opacity: 0.7;
+    }
+
+    /* Mode toggle */
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .mode-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.3rem 0.7rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-btn:hover { color: var(--text); }
+    .mode-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow" id="bgGlow"></div>
+  <a href="index.html" class="back-link">&larr; Gallery</a>
+
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">&#9835;</div>
+    <div class="start-text">Click anywhere to begin</div>
+  </div>
+
+  <div class="content" id="mainContent" style="opacity: 0; transition: opacity 1s ease;">
+    <div class="header">
+      <h1>Listen</h1>
+      <div class="sub">each piece becomes a soundscape</div>
+    </div>
+
+    <div class="piece-display" id="pieceDisplay">
+      <canvas class="grid-canvas" id="gridCanvas" width="600" height="360"></canvas>
+      <div class="scan-line" id="scanLine"></div>
+    </div>
+
+    <div class="piece-info" id="pieceInfo"></div>
+
+    <canvas class="waveform" id="waveformCanvas" width="600" height="60"></canvas>
+
+    <div class="controls">
+      <button class="ctrl-btn" id="prevBtn" title="Previous piece">&#9664;</button>
+      <button class="ctrl-btn play-btn" id="playBtn" title="Play / Pause">&#9654;</button>
+      <button class="ctrl-btn" id="nextBtn" title="Next piece">&#9654;</button>
+
+      <div style="width: 1px; height: 20px; background: var(--border);"></div>
+
+      <div class="mode-toggle">
+        <button class="mode-btn active" data-mode="scan" title="Scan left-to-right">Scan</button>
+        <button class="mode-btn" data-mode="drone" title="Full-piece ambient drone">Drone</button>
+      </div>
+
+      <div style="width: 1px; height: 20px; background: var(--border);"></div>
+
+      <span class="speed-label" id="speedLabel">1×</span>
+      <button class="ctrl-btn" id="speedBtn" title="Cycle speed">&#8635;</button>
+
+      <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50" title="Volume">
+    </div>
+
+    <div class="selector" id="selector"></div>
+  </div>
+
+  <script>
+    // ==================== Audio Engine ====================
+
+    const TYPE_COLORS = {
+      '1d':                  { h: 260, s: 70, base: '#6b4edb' },
+      '2d':                  { h: 145, s: 70, base: '#4ade80' },
+      'lsystem':             { h: 35,  s: 80, base: '#f5b84a' },
+      'reaction-diffusion':  { h: 290, s: 70, base: '#d44af5' },
+      'voronoi':             { h: 195, s: 70, base: '#4ad4f5' },
+      'wfc':                 { h: 330, s: 70, base: '#f54a9d' },
+      'spirograph':           { h: 75,  s: 70, base: '#d4f54a' },
+      'attractor':           { h: 20,  s: 70, base: '#f59d6b' },
+      'julia':               { h: 165, s: 70, base: '#4af5d4' },
+      'noise':               { h: 55,  s: 50, base: '#d4d44a' },
+      'flowfield':           { h: 185, s: 60, base: '#4ad4d4' },
+    };
+
+    // Character intensity (0-7) — same logic as index.html
+    function charIntensity(ch) {
+      if (ch === ' ') return 0;
+      const light = '\u00B7.:~\u2801';
+      const med1  = '\u2591\u2022\u2248\u2803\u25B3\u25BD\u2726';
+      const med2  = '\u2592\u25CB\u223F\u2807\u25C7\u2727\u2766';
+      const med3  = '\u2593\u25CF\u224B\u280F\u25C8\u2605\u273F';
+      const heavy = '\u2588\u25C6\u2307\u281F\u2B21\u2736\u2740\u2741';
+      const max   = '\u2573\u25D0\u25D1\u25D2\u25D3\u2301\u283F\u28FF\u2B22\u2739\u273A';
+      if (light.includes(ch)) return 1;
+      if (med1.includes(ch))  return 2;
+      if (med2.includes(ch))  return 3;
+      if (med3.includes(ch))  return 4;
+      if (heavy.includes(ch)) return 5;
+      if (max.includes(ch))   return 6;
+      return 3;
+    }
+
+    // Parse rendered text into a 2D intensity grid
+    function parseGrid(rendered) {
+      if (!rendered) return [];
+      const lines = rendered.split('\n').filter(l => l.length > 0);
+      return lines.map(line => [...line].map(ch => charIntensity(ch) / 6));
+    }
+
+    // Musical scale frequencies — pentatonic minor (ambient-friendly)
+    function buildScale(baseFreq, numNotes) {
+      // Pentatonic intervals in semitones: 0, 3, 5, 7, 10, 12, 15, 17...
+      const pentatonic = [0, 3, 5, 7, 10];
+      const freqs = [];
+      for (let i = 0; i < numNotes; i++) {
+        const octave = Math.floor(i / pentatonic.length);
+        const degree = pentatonic[i % pentatonic.length];
+        const semitones = degree + octave * 12;
+        freqs.push(baseFreq * Math.pow(2, semitones / 12));
+      }
+      return freqs;
+    }
+
+    class SonificationEngine {
+      constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.reverbGain = null;
+        this.analyser = null;
+        this.oscillators = [];
+        this.gains = [];
+        this.grid = [];
+        this.playing = false;
+        this.mode = 'scan'; // 'scan' or 'drone'
+        this.scanPos = 0;
+        this.scanSpeed = 1;
+        this.volume = 0.5;
+        this.animFrame = null;
+        this.lastTime = 0;
+        this.scanAccum = 0;
+      }
+
+      init() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Create reverb via convolver (simple algorithmic reverb)
+        this.convolver = this.ctx.createConvolver();
+        this.convolver.buffer = this.createReverbIR(3.0, 2.5);
+
+        // Master gain
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = 0;
+
+        // Reverb send
+        this.reverbGain = this.ctx.createGain();
+        this.reverbGain.gain.value = 0.4;
+
+        // Analyser for waveform
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 256;
+
+        // Routing: oscillators → masterGain → analyser → destination
+        //                       → reverbGain → convolver → destination
+        this.masterGain.connect(this.analyser);
+        this.analyser.connect(this.ctx.destination);
+        this.masterGain.connect(this.reverbGain);
+        this.reverbGain.connect(this.convolver);
+        this.convolver.connect(this.ctx.destination);
+      }
+
+      createReverbIR(duration, decay) {
+        const rate = this.ctx.sampleRate;
+        const length = rate * duration;
+        const ir = this.ctx.createBuffer(2, length, rate);
+        for (let ch = 0; ch < 2; ch++) {
+          const data = ir.getChannelData(ch);
+          for (let i = 0; i < length; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+          }
+        }
+        return ir;
+      }
+
+      loadPiece(piece) {
+        this.stop();
+        this.grid = parseGrid(piece.rendered);
+        if (this.grid.length === 0) return;
+
+        this.scanPos = 0;
+        this.scanAccum = 0;
+
+        // Tear down old oscillators
+        this.oscillators.forEach(o => { try { o.stop(); } catch(e) {} });
+        this.oscillators = [];
+        this.gains = [];
+
+        const numRows = this.grid.length;
+        const freqs = buildScale(65, numRows); // Start at C2
+
+        // Create one oscillator per row
+        for (let i = 0; i < numRows; i++) {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          // Alternate wave types for richness
+          const waveTypes = ['sine', 'triangle', 'sine', 'triangle'];
+          osc.type = waveTypes[i % waveTypes.length];
+          osc.frequency.value = freqs[i];
+
+          // Slight detune for warmth
+          osc.detune.value = (Math.random() - 0.5) * 8;
+
+          gain.gain.value = 0;
+
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start();
+
+          this.oscillators.push(osc);
+          this.gains.push(gain);
+        }
+      }
+
+      play() {
+        if (!this.ctx) this.init();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        if (this.grid.length === 0) return;
+
+        this.playing = true;
+
+        // Fade in master
+        this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+        this.masterGain.gain.setTargetAtTime(this.volume * 0.15, this.ctx.currentTime, 0.5);
+
+        this.lastTime = performance.now();
+        this.tick();
+      }
+
+      pause() {
+        this.playing = false;
+        if (this.masterGain) {
+          this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+          this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.3);
+        }
+        if (this.animFrame) {
+          cancelAnimationFrame(this.animFrame);
+          this.animFrame = null;
+        }
+      }
+
+      stop() {
+        this.pause();
+        this.scanPos = 0;
+        this.scanAccum = 0;
+      }
+
+      setVolume(v) {
+        this.volume = v;
+        if (this.playing && this.masterGain) {
+          this.masterGain.gain.setTargetAtTime(v * 0.15, this.ctx.currentTime, 0.1);
+        }
+      }
+
+      tick() {
+        if (!this.playing) return;
+        this.animFrame = requestAnimationFrame(() => this.tick());
+
+        const now = performance.now();
+        const dt = (now - this.lastTime) / 1000;
+        this.lastTime = now;
+
+        if (this.grid.length === 0 || this.grid[0].length === 0) return;
+
+        const cols = this.grid[0].length;
+        const rows = this.grid.length;
+
+        if (this.mode === 'scan') {
+          // Advance scan position
+          // Base rate: traverse entire piece in ~8 seconds at 1×
+          const rate = (cols / 8) * this.scanSpeed;
+          this.scanAccum += dt * rate;
+
+          if (this.scanAccum >= 1) {
+            const steps = Math.floor(this.scanAccum);
+            this.scanAccum -= steps;
+            this.scanPos = (this.scanPos + steps) % cols;
+          }
+
+          // Update gains based on current column (with 3-col blur for smoothness)
+          const col = this.scanPos;
+          for (let r = 0; r < rows; r++) {
+            if (r >= this.gains.length) break;
+            // Sample current col + neighbors for smoothness
+            let val = 0;
+            for (let dc = -1; dc <= 1; dc++) {
+              const c = (col + dc + cols) % cols;
+              val += this.grid[r][c] || 0;
+            }
+            val /= 3;
+
+            // Apply with smoothing
+            const target = val * val; // Square for more dynamic range
+            this.gains[r].gain.setTargetAtTime(target, this.ctx.currentTime, 0.06);
+          }
+        } else {
+          // Drone mode: average each row's intensity, slow modulation
+          const time = this.ctx.currentTime;
+          for (let r = 0; r < rows; r++) {
+            if (r >= this.gains.length) break;
+            const avg = this.grid[r].reduce((a, b) => a + b, 0) / cols;
+            // Slow LFO modulation
+            const lfo = 0.5 + 0.5 * Math.sin(time * 0.3 + r * 0.7);
+            const target = avg * avg * lfo;
+            this.gains[r].gain.setTargetAtTime(target, time, 0.15);
+          }
+        }
+      }
+
+      getFrequencyData() {
+        if (!this.analyser) return new Uint8Array(0);
+        const data = new Uint8Array(this.analyser.frequencyBinCount);
+        this.analyser.getByteFrequencyData(data);
+        return data;
+      }
+
+      getScanProgress() {
+        if (this.grid.length === 0 || this.grid[0].length === 0) return 0;
+        return this.scanPos / this.grid[0].length;
+      }
+    }
+
+    // ==================== Visual Renderer ====================
+
+    class GridRenderer {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx2d = canvas.getContext('2d');
+        this.grid = [];
+        this.typeColor = { h: 260, s: 70, base: '#7c6fe0' };
+        this.scanPos = 0;
+      }
+
+      loadGrid(grid, genomeType) {
+        this.grid = grid;
+        this.typeColor = TYPE_COLORS[genomeType] || TYPE_COLORS['2d'];
+
+        // Resize canvas to fit grid with nice cell size
+        const rows = grid.length;
+        const cols = grid[0]?.length || 0;
+        if (rows === 0 || cols === 0) return;
+
+        const maxW = Math.min(600, window.innerWidth * 0.85);
+        const cellSize = Math.max(2, Math.min(8, Math.floor(maxW / cols)));
+        this.canvas.width = cols * cellSize;
+        this.canvas.height = rows * cellSize;
+        this.canvas.style.width = this.canvas.width + 'px';
+        this.canvas.style.height = this.canvas.height + 'px';
+        this.cellSize = cellSize;
+      }
+
+      render(scanProgress, playing) {
+        const { ctx2d: ctx, grid, canvas, cellSize } = this;
+        if (grid.length === 0) return;
+
+        const rows = grid.length;
+        const cols = grid[0].length;
+        const { h, s } = this.typeColor;
+
+        ctx.fillStyle = '#0a0a0f';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const scanCol = Math.floor(scanProgress * cols);
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const val = grid[r][c];
+            if (val === 0) continue;
+
+            const x = c * cellSize;
+            const y = r * cellSize;
+
+            // Brightness based on intensity
+            let lightness = 10 + val * 55;
+
+            // Glow near scan line when playing
+            if (playing) {
+              const dist = Math.abs(c - scanCol);
+              const glow = Math.max(0, 1 - dist / 4);
+              lightness += glow * 25;
+            }
+
+            ctx.fillStyle = `hsl(${h}, ${s}%, ${Math.min(lightness, 90)}%)`;
+            ctx.fillRect(x, y, cellSize - (cellSize > 3 ? 1 : 0), cellSize - (cellSize > 3 ? 1 : 0));
+          }
+        }
+
+        // Draw scan line glow
+        if (playing && cols > 0) {
+          const sx = scanCol * cellSize;
+          const gradient = ctx.createLinearGradient(sx - 15, 0, sx + 15, 0);
+          gradient.addColorStop(0, 'rgba(74, 222, 128, 0)');
+          gradient.addColorStop(0.5, 'rgba(74, 222, 128, 0.15)');
+          gradient.addColorStop(1, 'rgba(74, 222, 128, 0)');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(sx - 15, 0, 30, canvas.height);
+        }
+      }
+    }
+
+    // ==================== Waveform Visualizer ====================
+
+    class WaveformVis {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx2d = canvas.getContext('2d');
+      }
+
+      render(freqData, typeColor) {
+        const { ctx2d: ctx, canvas } = this;
+        const { h, s } = typeColor || { h: 260, s: 70 };
+
+        ctx.fillStyle = '#0a0a0f';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (!freqData || freqData.length === 0) return;
+
+        // Draw frequency bars
+        const barCount = Math.min(64, freqData.length);
+        const barW = canvas.width / barCount;
+
+        for (let i = 0; i < barCount; i++) {
+          const val = freqData[i] / 255;
+          const barH = val * canvas.height * 0.9;
+
+          const lightness = 20 + val * 50;
+          ctx.fillStyle = `hsl(${h}, ${s}%, ${lightness}%)`;
+          ctx.fillRect(
+            i * barW + 0.5,
+            canvas.height - barH,
+            barW - 1,
+            barH
+          );
+        }
+
+        // Subtle reflection
+        ctx.globalAlpha = 0.15;
+        for (let i = 0; i < barCount; i++) {
+          const val = freqData[i] / 255;
+          const barH = val * canvas.height * 0.3;
+          const lightness = 20 + val * 40;
+          ctx.fillStyle = `hsl(${h}, ${s}%, ${lightness}%)`;
+          ctx.fillRect(
+            i * barW + 0.5,
+            canvas.height,
+            barW - 1,
+            -barH * 0.3
+          );
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // ==================== Main App ====================
+
+    let engine = null;
+    let gridRenderer = null;
+    let waveformVis = null;
+    let pieces = [];
+    let currentIndex = 0;
+    let isPlaying = false;
+    let renderLoop = null;
+
+    const startOverlay = document.getElementById('startOverlay');
+    const mainContent = document.getElementById('mainContent');
+    const gridCanvas = document.getElementById('gridCanvas');
+    const waveformCanvas = document.getElementById('waveformCanvas');
+    const scanLine = document.getElementById('scanLine');
+    const pieceDisplay = document.getElementById('pieceDisplay');
+    const pieceInfo = document.getElementById('pieceInfo');
+    const playBtn = document.getElementById('playBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const speedBtn = document.getElementById('speedBtn');
+    const speedLabel = document.getElementById('speedLabel');
+    const selector = document.getElementById('selector');
+    const bgGlow = document.getElementById('bgGlow');
+
+    const speeds = [0.5, 1, 1.5, 2];
+    let speedIndex = 1;
+
+    async function loadPieces() {
+      try {
+        const res = await fetch('./gallery.json');
+        const data = await res.json();
+        // Combine hall of fame + current pieces, prefer hall of fame first
+        const hofIds = new Set(data.hallOfFame.map(p => p.id));
+        const hof = data.hallOfFame.sort((a, b) => b.score - a.score);
+        const current = data.pieces
+          .filter(p => !hofIds.has(p.id))
+          .sort((a, b) => b.score - a.score);
+        pieces = [...hof, ...current].filter(p => p.rendered);
+
+        if (pieces.length === 0) {
+          pieceInfo.textContent = 'No pieces with rendered data found.';
+          return;
+        }
+
+        buildSelector();
+        selectPiece(0);
+      } catch (e) {
+        pieceInfo.textContent = 'Could not load gallery data.';
+      }
+    }
+
+    function buildSelector() {
+      selector.innerHTML = pieces.map((p, i) => {
+        const tc = TYPE_COLORS[p.genome.type] || TYPE_COLORS['2d'];
+        return `<button class="sel-dot ${i === 0 ? 'active' : ''}" data-index="${i}" title="${typeLabel(p.genome.type)} — ${(p.score * 100).toFixed(1)}%" style="border-color: ${tc.base}"></button>`;
+      }).join('');
+
+      selector.addEventListener('click', e => {
+        const dot = e.target.closest('.sel-dot');
+        if (!dot) return;
+        selectPiece(parseInt(dot.dataset.index));
+      });
+    }
+
+    function typeLabel(type) {
+      return {
+        '1d': '1D Automaton', '2d': '2D Life-like', 'lsystem': 'L-System',
+        'reaction-diffusion': 'Reaction-Diffusion', 'voronoi': 'Voronoi',
+        'wfc': 'Wave Function Collapse', 'spirograph': 'Spirograph',
+        'attractor': 'Strange Attractor', 'julia': 'Julia Set',
+        'noise': 'Fractal Noise', 'flowfield': 'Flow Field',
+      }[type] || type;
+    }
+
+    function selectPiece(index) {
+      currentIndex = index;
+      const piece = pieces[index];
+      const grid = parseGrid(piece.rendered);
+      const tc = TYPE_COLORS[piece.genome.type] || TYPE_COLORS['2d'];
+
+      // Update info
+      pieceInfo.innerHTML = `<span class="type">${typeLabel(piece.genome.type)}</span> &mdash; <span class="score">${(piece.score * 100).toFixed(1)}%</span> &mdash; gen ${piece.generation}`;
+
+      // Update background glow color
+      bgGlow.style.background = `radial-gradient(circle, ${tc.base}20 0%, transparent 70%)`;
+
+      // Update selector dots
+      selector.querySelectorAll('.sel-dot').forEach((d, i) => {
+        d.classList.toggle('active', i === index);
+      });
+
+      // Render grid
+      gridRenderer.loadGrid(grid, piece.genome.type);
+      gridRenderer.render(0, false);
+
+      // Load into audio engine
+      if (engine.ctx) {
+        const wasPlaying = isPlaying;
+        engine.loadPiece(piece);
+        if (wasPlaying) {
+          engine.play();
+        }
+      }
+
+      // Update scan line position
+      updateScanLine(0);
+    }
+
+    function updateScanLine(progress) {
+      const w = gridCanvas.getBoundingClientRect().width;
+      scanLine.style.left = (progress * w) + 'px';
+    }
+
+    function togglePlay() {
+      if (!engine.ctx) {
+        engine.init();
+        engine.loadPiece(pieces[currentIndex]);
+      }
+
+      if (isPlaying) {
+        engine.pause();
+        isPlaying = false;
+        playBtn.innerHTML = '&#9654;';
+        pieceDisplay.classList.remove('playing');
+      } else {
+        engine.play();
+        isPlaying = true;
+        playBtn.innerHTML = '&#10074;&#10074;';
+        pieceDisplay.classList.add('playing');
+      }
+    }
+
+    function renderFrame() {
+      renderLoop = requestAnimationFrame(renderFrame);
+
+      const progress = engine.getScanProgress();
+      const tc = TYPE_COLORS[pieces[currentIndex]?.genome.type] || TYPE_COLORS['2d'];
+
+      gridRenderer.render(progress, isPlaying && engine.mode === 'scan');
+      updateScanLine(progress);
+
+      const freqData = engine.getFrequencyData();
+      waveformVis.render(freqData, tc);
+    }
+
+    // Event listeners
+    startOverlay.addEventListener('click', () => {
+      startOverlay.classList.add('hidden');
+      mainContent.style.opacity = '1';
+
+      engine = new SonificationEngine();
+      gridRenderer = new GridRenderer(gridCanvas);
+      waveformVis = new WaveformVis(waveformCanvas);
+
+      loadPieces().then(() => {
+        renderFrame();
+      });
+    });
+
+    playBtn.addEventListener('click', togglePlay);
+
+    prevBtn.addEventListener('click', () => {
+      const idx = (currentIndex - 1 + pieces.length) % pieces.length;
+      selectPiece(idx);
+    });
+
+    nextBtn.addEventListener('click', () => {
+      const idx = (currentIndex + 1) % pieces.length;
+      selectPiece(idx);
+    });
+
+    volumeSlider.addEventListener('input', () => {
+      const v = volumeSlider.value / 100;
+      if (engine) engine.setVolume(v);
+    });
+
+    speedBtn.addEventListener('click', () => {
+      speedIndex = (speedIndex + 1) % speeds.length;
+      const s = speeds[speedIndex];
+      speedLabel.textContent = s + '×';
+      if (engine) engine.scanSpeed = s;
+    });
+
+    // Mode toggle
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const mode = btn.dataset.mode;
+        if (engine) engine.mode = mode;
+
+        // Show/hide scan line based on mode
+        scanLine.style.display = mode === 'scan' ? '' : 'none';
+      });
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+      if (e.code === 'ArrowLeft') { prevBtn.click(); }
+      if (e.code === 'ArrowRight') { nextBtn.click(); }
+      if (e.code === 'ArrowUp') { volumeSlider.value = Math.min(100, +volumeSlider.value + 10); volumeSlider.dispatchEvent(new Event('input')); }
+      if (e.code === 'ArrowDown') { volumeSlider.value = Math.max(0, +volumeSlider.value - 10); volumeSlider.dispatchEvent(new Event('input')); }
+    });
+  </script>
+</body>
+</html>

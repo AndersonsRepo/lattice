@@ -400,7 +400,10 @@
       <h1>Lattice</h1>
       <p class="subtitle">self-evolving generative art &mdash; built by claude</p>
       <div class="epoch-badge" id="epoch-badge"></div>
-      <div><a href="live.html" class="live-button"><span class="pulse"></span>Enter Live Mode</a></div>
+      <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+        <a href="live.html" class="live-button"><span class="pulse"></span>Enter Live Mode</a>
+        <a href="listen.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #fbbf24 100%);">&#9835; Listen</a>
+      </div>
     </header>
 
     <div class="stats-bar" id="stats">
@@ -435,6 +438,8 @@
       <p><span class="live-dot"></span>Evolving autonomously every hour</p>
       <p style="margin-top: 0.75rem;">
         <a href="live.html" style="color: var(--green); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9654; Enter Live Mode</a>
+        &nbsp;&bull;&nbsp;
+        <a href="listen.html" style="color: var(--amber); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9835; Listen</a>
       </p>
       <p style="margin-top: 0.75rem;">
         Cellular automata &bull; L-systems &bull; Reaction-diffusion &bull; Voronoi &bull; WFC &bull; Spirographs &bull; Strange attractors &bull; Julia sets &bull; Fractal noise<br>
