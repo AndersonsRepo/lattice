@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Create</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* --- Canvas area --- */
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+    }
+
+    canvas {
+      display: block;
+      border-radius: 4px;
+    }
+
+    .canvas-info {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+    .canvas-info .type-name { color: var(--accent); text-transform: uppercase; letter-spacing: 0.12em; }
+    .canvas-info .fps { color: var(--text-dim); }
+
+    /* --- Sidebar --- */
+    .sidebar {
+      width: 320px;
+      min-width: 320px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 1.25rem 1.25rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-header h1 {
+      font-size: 1rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+    }
+
+    .sidebar-header .back-link {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .sidebar-header .back-link:hover { color: var(--accent); }
+
+    /* Type selector */
+    .type-selector {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .type-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.5rem;
+    }
+
+    .type-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem;
+    }
+
+    .type-btn {
+      padding: 0.4rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .type-btn:hover { border-color: var(--accent); color: var(--text); }
+    .type-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* Controls scroll area */
+    .controls {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 1.25rem;
+    }
+
+    .controls::-webkit-scrollbar { width: 4px; }
+    .controls::-webkit-scrollbar-track { background: transparent; }
+    .controls::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .control-group {
+      margin-bottom: 1rem;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      margin-bottom: 0.35rem;
+      letter-spacing: 0.03em;
+    }
+
+    .control-value {
+      color: var(--green);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      transition: transform 0.15s;
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.3);
+      background: var(--green);
+    }
+
+    /* Action buttons */
+    .actions {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .action-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .btn:hover { border-color: var(--accent); color: #fff; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      border-color: transparent;
+      color: #fff;
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 20px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    .btn-danger {
+      border-color: #ef444440;
+      color: #ef4444;
+    }
+    .btn-danger:hover {
+      border-color: #ef4444;
+      background: #ef444415;
+    }
+
+    /* Keyboard hints */
+    .shortcuts {
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+    }
+    .shortcuts kbd {
+      display: inline-block;
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+      background: rgba(124, 111, 224, 0.1);
+      border: 1px solid rgba(124, 111, 224, 0.2);
+      font-family: inherit;
+      font-size: 0.5rem;
+      color: var(--text);
+      margin-right: 0.2rem;
+    }
+
+    /* Seed display */
+    .seed-display {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 0.35rem;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .seed-display:hover { color: var(--accent); }
+
+    /* Responsive: collapse sidebar on mobile */
+    @media (max-width: 700px) {
+      body { flex-direction: column-reverse; }
+      .sidebar {
+        width: 100%;
+        min-width: unset;
+        max-height: 50vh;
+        border-left: none;
+        border-top: 1px solid var(--border);
+      }
+      .canvas-area { min-height: 50vh; }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas-area">
+    <canvas id="canvas"></canvas>
+    <div class="canvas-info">
+      <span class="type-name" id="info-type"></span><br>
+      <span class="fps" id="info-fps"></span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Create</h1>
+      <a href="index.html" class="back-link">&larr; back to gallery</a>
+    </div>
+
+    <div class="type-selector">
+      <div class="type-label">Engine</div>
+      <div class="type-grid" id="type-grid"></div>
+    </div>
+
+    <div class="controls" id="controls"></div>
+
+    <div class="seed-display" id="seed-display" title="Click to copy seed"></div>
+
+    <div class="actions">
+      <div class="action-row">
+        <button class="btn btn-primary" id="btn-randomize">Randomize</button>
+        <button class="btn" id="btn-mutate">Mutate</button>
+      </div>
+      <div class="action-row">
+        <button class="btn" id="btn-download">Download PNG</button>
+        <button class="btn btn-danger" id="btn-reset">Reset</button>
+      </div>
+    </div>
+
+    <div class="shortcuts">
+      <kbd>R</kbd> Randomize
+      <kbd>M</kbd> Mutate
+      <kbd>S</kbd> Save PNG
+      <kbd>Space</kbd> Pause
+      <kbd>1</kbd>-<kbd>8</kbd> Switch type
+    </div>
+  </div>
+
+<script>
+// ============================================================
+//  Lattice Create — Interactive Genome Playground
+// ============================================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// --- Deterministic PRNG (Mulberry32) ---
+function mulberry32(seed) {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// --- Color LUTs ---
+const TYPE_GRADIENTS = {
+  'julia':              ['#0a0a0f', '#0a2d2d', '#0d6b5b', '#16a88a', '#22dbb5', '#4af5d4', '#88ffe8', '#ccfff4'],
+  'reaction-diffusion': ['#0a0a0f', '#1a0a2d', '#3b0d6b', '#6b16a8', '#a822db', '#d44af5', '#f088ff', '#ffccff'],
+  'spirograph':         ['#0a0a0f', '#1a2d0a', '#3b6b0d', '#6ba816', '#a8db22', '#d4f54a', '#eeff88', '#ffffcc'],
+  'attractor':          ['#0a0a0f', '#2d1a1a', '#6b2d2d', '#a84a3b', '#db6b4a', '#f59d6b', '#ffc8a0', '#ffe8d8'],
+  'noise':              ['#0a0a0f', '#1a1a0a', '#3b3b0d', '#6b6b16', '#a8a822', '#d4d44a', '#eeff88', '#ffffcc'],
+  'flowfield':          ['#0a0a0f', '#0a1a1a', '#0d3b3b', '#166b6b', '#22a8a8', '#4ad4d4', '#88eeff', '#ccffff'],
+  '2d':                 ['#0a0a0f', '#0d2818', '#166b3a', '#22a95c', '#4ade80', '#7af5a8', '#b8ffd4', '#e8fff0'],
+  '1d':                 ['#0a0a0f', '#1a1a3e', '#3b2d8b', '#6b4edb', '#9d7af5', '#c8abff', '#e8d8ff', '#ffffff'],
+};
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function buildLUT(type) {
+  const stops = (TYPE_GRADIENTS[type] || TYPE_GRADIENTS['julia']).map(hexToRgb);
+  const lut = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255 * (stops.length - 1);
+    const idx = Math.floor(t);
+    const frac = t - idx;
+    const a = stops[Math.min(idx, stops.length - 1)];
+    const b = stops[Math.min(idx + 1, stops.length - 1)];
+    lut[i * 3]     = Math.round(a[0] + (b[0] - a[0]) * frac);
+    lut[i * 3 + 1] = Math.round(a[1] + (b[1] - a[1]) * frac);
+    lut[i * 3 + 2] = Math.round(a[2] + (b[2] - a[2]) * frac);
+  }
+  return lut;
+}
+
+// ============================================================
+//  Simulation Engines
+// ============================================================
+
+class JuliaLive {
+  constructor(genome) {
+    this.w = genome.width; this.h = genome.height;
+    this.rule = genome.rule;
+    this.baseCReal = this.rule.cReal;
+    this.baseCImag = this.rule.cImag;
+    this.time = 0;
+  }
+  step() { this.time += 0.003; }
+  getValues() {
+    const { w, h, rule, time, baseCReal, baseCImag } = this;
+    const { maxIter, zoom, centerX, centerY, escape } = rule;
+    const escSq = escape * escape;
+    const cReal = baseCReal + Math.sin(time) * 0.015;
+    const cImag = baseCImag + Math.cos(time * 0.7) * 0.015;
+    const aspect = w / h;
+    const vals = new Float32Array(w * h);
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        let zr = centerX + (px / w - 0.5) * (4 / zoom) * aspect;
+        let zi = centerY + (py / h - 0.5) * (4 / zoom);
+        let iter = 0;
+        while (iter < maxIter && zr * zr + zi * zi < escSq) {
+          const tmp = zr * zr - zi * zi + cReal;
+          zi = 2 * zr * zi + cImag;
+          zr = tmp;
+          iter++;
+        }
+        if (iter === maxIter) {
+          vals[py * w + px] = 1;
+        } else {
+          const smooth = iter + 1 - Math.log(Math.log(Math.sqrt(zr * zr + zi * zi))) / Math.log(2);
+          vals[py * w + px] = Math.max(0, Math.min(1, smooth / maxIter));
+        }
+      }
+    }
+    return vals;
+  }
+}
+
+class ReactionDiffusion {
+  constructor(genome) {
+    this.w = genome.width; this.h = genome.height;
+    this.rule = genome.rule;
+    const rng = mulberry32(genome.seed);
+    const { width: w, height: h } = genome;
+    this.U = Array.from({ length: h }, () => new Float64Array(w).fill(1.0));
+    this.V = Array.from({ length: h }, () => new Float64Array(w).fill(0.0));
+    const numSeeds = 3 + Math.floor(rng() * 5);
+    for (let s = 0; s < numSeeds; s++) {
+      const cx = Math.floor(rng() * w), cy = Math.floor(rng() * h);
+      const r = 2 + Math.floor(rng() * 3);
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (dx * dx + dy * dy <= r * r) {
+            const x = ((cx + dx) % w + w) % w;
+            const y = ((cy + dy) % h + h) % h;
+            this.U[y][x] = 0.5 + rng() * 0.1;
+            this.V[y][x] = 0.25 + rng() * 0.1;
+          }
+        }
+      }
+    }
+    this.warmup = 0;
+  }
+  step() {
+    const { w, h, rule, U, V } = this;
+    const { feed, kill, Du, Dv } = rule;
+    const substeps = this.warmup < 200 ? 20 : 8;
+    for (let sub = 0; sub < substeps; sub++) {
+      const newU = Array.from({ length: h }, () => new Float64Array(w));
+      const newV = Array.from({ length: h }, () => new Float64Array(w));
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const u = U[y][x], v = V[y][x];
+          const xm = (x - 1 + w) % w, xp = (x + 1) % w;
+          const ym = (y - 1 + h) % h, yp = (y + 1) % h;
+          const lapU = U[ym][x] + U[yp][x] + U[y][xm] + U[y][xp] - 4 * u;
+          const lapV = V[ym][x] + V[yp][x] + V[y][xm] + V[y][xp] - 4 * v;
+          const uvv = u * v * v;
+          newU[y][x] = Math.max(0, Math.min(1, u + Du * lapU - uvv + feed * (1 - u)));
+          newV[y][x] = Math.max(0, Math.min(1, v + Dv * lapV + uvv - (feed + kill) * v));
+        }
+      }
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) { U[y][x] = newU[y][x]; V[y][x] = newV[y][x]; }
+      }
+    }
+    this.warmup += substeps;
+  }
+  getValues() {
+    const { w, h, V } = this;
+    const vals = new Float32Array(w * h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++)
+        vals[y * w + x] = Math.min(1, V[y][x] * 2.5);
+    return vals;
+  }
+}
+
+class SpirographLive {
+  constructor(genome) {
+    this.w = genome.width; this.h = genome.height;
+    this.rule = genome.rule;
+    this.grid = new Float32Array(this.w * this.h);
+    this.t = 0;
+    this.totalSteps = this.rule.steps || 2000;
+  }
+  step() {
+    const { w, h, rule, grid } = this;
+    const batchSize = Math.max(4, Math.ceil(this.totalSteps / 400));
+    for (let i = 0; i < batchSize; i++) {
+      this.t++;
+      const theta = (this.t / this.totalSteps) * Math.PI * 2 * 10;
+      for (const layer of rule.layers) {
+        const { R, r, d, mode } = layer;
+        let x, y;
+        if (mode === 'epi') {
+          x = (R + r) * Math.cos(theta) - d * Math.cos((R + r) / r * theta);
+          y = (R + r) * Math.sin(theta) - d * Math.sin((R + r) / r * theta);
+        } else {
+          x = (R - r) * Math.cos(theta) + d * Math.cos((R - r) / r * theta);
+          y = (R - r) * Math.sin(theta) - d * Math.sin((R - r) / r * theta);
+        }
+        const maxR = 20;
+        const gx = Math.round((x / maxR + 0.5) * (w - 1));
+        const gy = Math.round((y / maxR + 0.5) * (h - 1));
+        if (gx >= 0 && gx < w && gy >= 0 && gy < h) {
+          const idx = gy * w + gx;
+          grid[idx] = Math.min(1, grid[idx] + 0.15);
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = gx + dx, ny = gy + dy;
+              if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                grid[ny * w + nx] = Math.min(1, grid[ny * w + nx] + 0.04);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  getValues() { return this.grid; }
+}
+
+class AttractorLive {
+  constructor(genome) {
+    this.w = genome.width; this.h = genome.height;
+    this.rule = genome.rule;
+    this.accum = new Float64Array(this.w * this.h);
+    this.px = 0.1; this.py = 0.1;
+  }
+  step() {
+    const { w, h, rule, accum } = this;
+    const { variant, a, b, c, d } = rule;
+    for (let i = 0; i < 2000; i++) {
+      let nx, ny;
+      if (variant === 'dejong') {
+        nx = Math.sin(a * this.py) - Math.cos(b * this.px);
+        ny = Math.sin(c * this.px) - Math.cos(d * this.py);
+      } else {
+        nx = Math.sin(a * this.py) + c * Math.cos(a * this.px);
+        ny = Math.sin(b * this.px) + d * Math.cos(b * this.py);
+      }
+      this.px = nx; this.py = ny;
+      const gx = Math.floor((nx + 3) / 6 * w);
+      const gy = Math.floor((ny + 3) / 6 * h);
+      if (gx >= 0 && gx < w && gy >= 0 && gy < h) accum[gy * w + gx] += 1;
+    }
+    for (let i = 0; i < accum.length; i++) accum[i] *= 0.999;
+  }
+  getValues() {
+    const { accum } = this;
+    let maxVal = 0;
+    for (let i = 0; i < accum.length; i++) if (accum[i] > maxVal) maxVal = accum[i];
+    const s = maxVal > 0 ? 1 / Math.sqrt(maxVal) : 1;
+    const vals = new Float32Array(accum.length);
+    for (let i = 0; i < vals.length; i++) vals[i] = Math.min(1, Math.sqrt(accum[i]) * s);
+    return vals;
+  }
+}
+
+// Perlin noise shared by Noise and FlowField
+class NoiseField {
+  constructor(seed) {
+    const rng = mulberry32(seed);
+    const PERM_SIZE = 256;
+    const perm = new Array(PERM_SIZE);
+    for (let i = 0; i < PERM_SIZE; i++) perm[i] = i;
+    for (let i = PERM_SIZE - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [perm[i], perm[j]] = [perm[j], perm[i]];
+    }
+    this.p = [...perm, ...perm];
+    this.gradX = new Array(PERM_SIZE);
+    this.gradY = new Array(PERM_SIZE);
+    for (let i = 0; i < PERM_SIZE; i++) {
+      const angle = rng() * Math.PI * 2;
+      this.gradX[i] = Math.cos(angle);
+      this.gradY[i] = Math.sin(angle);
+    }
+    this.PERM_SIZE = PERM_SIZE;
+  }
+  noise(x, y) {
+    const { p, gradX, gradY, PERM_SIZE } = this;
+    const xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
+    const xf = x - Math.floor(x), yf = y - Math.floor(y);
+    const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10);
+    const v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
+    const aa = p[p[xi] + yi], ab = p[p[xi] + yi + 1];
+    const ba = p[p[xi + 1] + yi], bb = p[p[xi + 1] + yi + 1];
+    const dot = (h, fx, fy) => gradX[h % PERM_SIZE] * fx + gradY[h % PERM_SIZE] * fy;
+    const lerp = (a, b, t) => a + t * (b - a);
+    const x1 = lerp(dot(aa, xf, yf), dot(ba, xf - 1, yf), u);
+    const x2 = lerp(dot(ab, xf, yf - 1), dot(bb, xf - 1, yf - 1), u);
+    return lerp(x1, x2, v);
+  }
+  fbm(x, y, octaves, persistence, lacunarity) {
+    let value = 0, amplitude = 1, frequency = 1, maxAmp = 0;
+    for (let o = 0; o < octaves; o++) {
+      value += this.noise(x * frequency, y * frequency) * amplitude;
+      maxAmp += amplitude;
+      amplitude *= persistence;
+      frequency *= lacunarity;
+    }
+    return value / maxAmp;
+  }
+}
+
+class NoiseLive {
+  constructor(genome) {
+    this.w = genome.width; this.h = genome.height;
+    this.rule = genome.rule;
+    this.field = new NoiseField(genome.seed);
+    this.time = 0;
+  }
+  step() { this.time += 0.02; }
+  getValues() {
+    const { w, h, rule, field, time } = this;
+    const { scale, octaves, persistence, lacunarity, offsetX, offsetY, warp } = rule;
+    const vals = new Float32Array(w * h);
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        let nx = (px + offsetX) * scale + time * 0.3;
+        let ny = (py + offsetY) * scale + time * 0.15;
+        if (warp > 0) {
+          const wx = field.fbm(nx + 5.2, ny + 1.3, octaves, persistence, lacunarity) * warp;
+          const wy = field.fbm(nx + 1.7, ny + 9.2, octaves, persistence, lacunarity) * warp;
+          nx += wx * 10;
+          ny += wy * 10;
+        }
+        const n = field.fbm(nx, ny, octaves, persistence, lacunarity);
+        vals[py * w + px] = Math.max(0, Math.min(1, (n + 1) / 2));
+      }
+    }
+    return vals;
+  }
+}
+
+class FlowFieldLive {
+  constructor(genome) {
+    this.w = genome.width; this.h = genome.height;
+    this.rule = genome.rule;
+    this.field = new NoiseField(genome.seed);
+    const rng = mulberry32(genome.seed);
+    this.accum = new Float64Array(this.w * this.h);
+    this.particles = [];
+    const count = Math.min(genome.rule.particles || 500, 800);
+    for (let i = 0; i < count; i++) {
+      this.particles.push({ x: rng() * this.w, y: rng() * this.h, life: Math.floor(rng() * genome.rule.steps) });
+    }
+    this.rng = rng;
+  }
+  step() {
+    const { w, h, rule, field, accum, particles, rng } = this;
+    const { fieldScale, stepLength, steps, curl: curlAmt, offsetX, offsetY } = rule;
+    for (let i = 0; i < accum.length; i++) accum[i] *= 0.995;
+    for (const p of particles) {
+      if (p.life <= 0 || p.x < 0 || p.x >= w || p.y < 0 || p.y >= h) {
+        p.x = rng() * w; p.y = rng() * h; p.life = steps;
+      }
+      const ix = Math.floor(p.x), iy = Math.floor(p.y);
+      if (ix >= 0 && ix < w && iy >= 0 && iy < h) accum[iy * w + ix] += 0.3;
+      const nx = (p.x + offsetX) * fieldScale;
+      const ny = (p.y + offsetY) * fieldScale;
+      let angle;
+      if (curlAmt > 0) {
+        const eps = 0.01;
+        const dndx = (field.fbm(nx + eps, ny, 3, 0.5, 2) - field.fbm(nx - eps, ny, 3, 0.5, 2)) / (2 * eps);
+        const dndy = (field.fbm(nx, ny + eps, 3, 0.5, 2) - field.fbm(nx, ny - eps, 3, 0.5, 2)) / (2 * eps);
+        const curlAngle = Math.atan2(dndx, -dndy);
+        const gradAngle = field.fbm(nx, ny, 3, 0.5, 2) * Math.PI * 2;
+        angle = gradAngle * (1 - curlAmt) + curlAngle * curlAmt;
+      } else {
+        angle = field.fbm(nx, ny, 3, 0.5, 2) * Math.PI * 2;
+      }
+      p.x += Math.cos(angle) * stepLength;
+      p.y += Math.sin(angle) * stepLength;
+      p.life--;
+    }
+  }
+  getValues() {
+    const { accum } = this;
+    let maxVal = 0;
+    for (let i = 0; i < accum.length; i++) if (accum[i] > maxVal) maxVal = accum[i];
+    const s = maxVal > 0 ? 1 / maxVal : 1;
+    const vals = new Float32Array(accum.length);
+    for (let i = 0; i < vals.length; i++) vals[i] = Math.min(1, accum[i] * s);
+    return vals;
+  }
+}
+
+class Life2D {
+  constructor(genome) {
+    this.w = genome.width; this.h = genome.height;
+    this.rule = genome.rule;
+    this.maxState = Math.max(this.rule.states - 1, 1);
+    const rng = mulberry32(genome.seed);
+    this.grid = [];
+    for (let y = 0; y < this.h; y++) {
+      const row = new Float32Array(this.w);
+      for (let x = 0; x < this.w; x++) row[x] = rng() > 0.6 ? this.maxState : 0;
+      this.grid.push(row);
+    }
+  }
+  step() {
+    const { w, h, maxState, rule, grid } = this;
+    const next = [];
+    for (let y = 0; y < h; y++) {
+      const row = new Float32Array(w);
+      for (let x = 0; x < w; x++) {
+        let neighbors = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            if (grid[(y + dy + h) % h][(x + dx + w) % w] > 0) neighbors++;
+          }
+        }
+        const cell = grid[y][x];
+        if (cell === maxState) {
+          row[x] = rule.survive.includes(neighbors) ? maxState : Math.max(maxState - 1, 0);
+        } else if (cell === 0) {
+          row[x] = rule.birth.includes(neighbors) ? maxState : 0;
+        } else {
+          row[x] = cell - 1;
+        }
+      }
+      next.push(row);
+    }
+    this.grid = next;
+  }
+  getValues() {
+    const { w, h, maxState, grid } = this;
+    const vals = new Float32Array(w * h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++)
+        vals[y * w + x] = grid[y][x] / maxState;
+    return vals;
+  }
+}
+
+class Automaton1D {
+  constructor(genome) {
+    this.w = genome.width; this.h = genome.height;
+    this.rule = genome.rule;
+    const rng = mulberry32(genome.seed);
+    this.rows = [];
+    const first = new Float32Array(this.w);
+    if (rng() > 0.5) {
+      first[Math.floor(this.w / 2)] = 1;
+    } else {
+      for (let i = 0; i < this.w; i++) first[i] = rng() > 0.7 ? 1 : 0;
+    }
+    this.rows.push(first);
+  }
+  step() {
+    if (this.rows.length >= this.h) this.rows.shift();
+    const prev = this.rows[this.rows.length - 1];
+    const row = new Float32Array(this.w);
+    const ruleNum = this.rule.number;
+    for (let x = 0; x < this.w; x++) {
+      const l = prev[(x - 1 + this.w) % this.w];
+      const c = prev[x];
+      const r = prev[(x + 1) % this.w];
+      const hood = (l << 2) | (c << 1) | r;
+      row[x] = (ruleNum >> hood) & 1;
+    }
+    this.rows.push(row);
+  }
+  getValues() {
+    const { w, h, rows } = this;
+    const vals = new Float32Array(w * h);
+    const startY = Math.max(0, h - rows.length);
+    for (let i = 0; i < rows.length && (startY + i) < h; i++)
+      for (let x = 0; x < w; x++)
+        vals[(startY + i) * w + x] = rows[i][x];
+    return vals;
+  }
+}
+
+function createEngine(genome) {
+  switch (genome.type) {
+    case 'julia': return new JuliaLive(genome);
+    case 'reaction-diffusion': return new ReactionDiffusion(genome);
+    case 'spirograph': return new SpirographLive(genome);
+    case 'attractor': return new AttractorLive(genome);
+    case 'noise': return new NoiseLive(genome);
+    case 'flowfield': return new FlowFieldLive(genome);
+    case '2d': return new Life2D(genome);
+    case '1d': return new Automaton1D(genome);
+    default: return null;
+  }
+}
+
+// ============================================================
+//  Type definitions with slider configs
+// ============================================================
+
+const TYPES = [
+  {
+    id: 'julia', label: 'Julia Set',
+    defaults: () => ({ cReal: -0.7, cImag: 0.27, zoom: 1.2, maxIter: 80, centerX: 0, centerY: 0, escape: 4 }),
+    sliders: [
+      { key: 'cReal', label: 'c (real)', min: -1.5, max: 1.5, step: 0.001 },
+      { key: 'cImag', label: 'c (imaginary)', min: -1.5, max: 1.5, step: 0.001 },
+      { key: 'zoom', label: 'Zoom', min: 0.3, max: 8, step: 0.1 },
+      { key: 'maxIter', label: 'Max Iterations', min: 20, max: 200, step: 1 },
+      { key: 'centerX', label: 'Center X', min: -2, max: 2, step: 0.01 },
+      { key: 'centerY', label: 'Center Y', min: -2, max: 2, step: 0.01 },
+    ],
+    randomize: (rng) => ({
+      // Famous Julia set c values with some jitter
+      cReal: [-0.7, -0.8, 0.285, -0.4, 0.36, -1.25][Math.floor(rng() * 6)] + (rng() - 0.5) * 0.15,
+      cImag: [0.27, 0.156, 0.01, 0.6, 0.1, 0][Math.floor(rng() * 6)] + (rng() - 0.5) * 0.15,
+      zoom: 0.8 + rng() * 2,
+      maxIter: 60 + Math.floor(rng() * 100),
+      centerX: (rng() - 0.5) * 0.5,
+      centerY: (rng() - 0.5) * 0.5,
+      escape: 4,
+    }),
+  },
+  {
+    id: 'reaction-diffusion', label: 'Reaction-Diffusion',
+    defaults: () => ({ feed: 0.037, kill: 0.06, Du: 0.21, Dv: 0.105 }),
+    sliders: [
+      { key: 'feed', label: 'Feed Rate', min: 0.01, max: 0.08, step: 0.001 },
+      { key: 'kill', label: 'Kill Rate', min: 0.04, max: 0.075, step: 0.001 },
+      { key: 'Du', label: 'Diffusion U', min: 0.1, max: 0.3, step: 0.005 },
+      { key: 'Dv', label: 'Diffusion V', min: 0.03, max: 0.15, step: 0.005 },
+    ],
+    randomize: (rng) => {
+      // Interesting parameter regions for Gray-Scott
+      const presets = [
+        { feed: 0.037, kill: 0.06 },   // spots
+        { feed: 0.03, kill: 0.062 },    // stripes
+        { feed: 0.025, kill: 0.06 },    // mazes
+        { feed: 0.04, kill: 0.06 },     // waves
+        { feed: 0.055, kill: 0.062 },   // mitosis
+        { feed: 0.022, kill: 0.051 },   // coral
+      ];
+      const p = presets[Math.floor(rng() * presets.length)];
+      return {
+        feed: p.feed + (rng() - 0.5) * 0.008,
+        kill: p.kill + (rng() - 0.5) * 0.006,
+        Du: 0.16 + rng() * 0.1,
+        Dv: 0.06 + rng() * 0.06,
+      };
+    },
+  },
+  {
+    id: 'attractor', label: 'Strange Attractor',
+    defaults: () => ({ variant: 'dejong', a: 1.4, b: -2.3, c: 2.4, d: -2.1 }),
+    sliders: [
+      { key: 'a', label: 'a', min: -3, max: 3, step: 0.01 },
+      { key: 'b', label: 'b', min: -3, max: 3, step: 0.01 },
+      { key: 'c', label: 'c', min: -3, max: 3, step: 0.01 },
+      { key: 'd', label: 'd', min: -3, max: 3, step: 0.01 },
+    ],
+    randomize: (rng) => ({
+      variant: rng() > 0.5 ? 'dejong' : 'clifford',
+      a: (rng() * 2 - 1) * 3,
+      b: (rng() * 2 - 1) * 3,
+      c: (rng() * 2 - 1) * 3,
+      d: (rng() * 2 - 1) * 3,
+    }),
+  },
+  {
+    id: 'spirograph', label: 'Spirograph',
+    defaults: () => ({ layers: [{ R: 8, r: 3, d: 5, mode: 'hypo' }], steps: 3000 }),
+    sliders: [
+      { key: 'R', label: 'Outer Radius (R)', min: 2, max: 15, step: 0.1, path: 'layers.0' },
+      { key: 'r', label: 'Inner Radius (r)', min: 0.5, max: 10, step: 0.1, path: 'layers.0' },
+      { key: 'd', label: 'Pen Distance (d)', min: 0.5, max: 12, step: 0.1, path: 'layers.0' },
+      { key: 'steps', label: 'Resolution', min: 500, max: 8000, step: 100 },
+    ],
+    randomize: (rng) => {
+      const numLayers = 1 + Math.floor(rng() * 3);
+      const layers = [];
+      for (let i = 0; i < numLayers; i++) {
+        layers.push({
+          R: 3 + rng() * 10,
+          r: 1 + rng() * 7,
+          d: 1 + rng() * 9,
+          mode: rng() > 0.5 ? 'epi' : 'hypo',
+        });
+      }
+      return { layers, steps: 2000 + Math.floor(rng() * 4000) };
+    },
+  },
+  {
+    id: 'noise', label: 'Fractal Noise',
+    defaults: () => ({ scale: 0.06, octaves: 5, persistence: 0.5, lacunarity: 2, offsetX: 0, offsetY: 0, warp: 1.5 }),
+    sliders: [
+      { key: 'scale', label: 'Scale', min: 0.01, max: 0.2, step: 0.005 },
+      { key: 'octaves', label: 'Octaves', min: 1, max: 8, step: 1 },
+      { key: 'persistence', label: 'Persistence', min: 0.1, max: 0.9, step: 0.05 },
+      { key: 'lacunarity', label: 'Lacunarity', min: 1.2, max: 4, step: 0.1 },
+      { key: 'warp', label: 'Domain Warp', min: 0, max: 5, step: 0.1 },
+    ],
+    randomize: (rng) => ({
+      scale: 0.02 + rng() * 0.15,
+      octaves: 2 + Math.floor(rng() * 6),
+      persistence: 0.3 + rng() * 0.4,
+      lacunarity: 1.5 + rng() * 2,
+      offsetX: Math.floor(rng() * 1000),
+      offsetY: Math.floor(rng() * 1000),
+      warp: rng() * 4,
+    }),
+  },
+  {
+    id: 'flowfield', label: 'Flow Field',
+    defaults: () => ({ fieldScale: 0.03, stepLength: 1.2, particles: 500, steps: 80, curl: 0.5, offsetX: 0, offsetY: 0, decay: 0.01 }),
+    sliders: [
+      { key: 'fieldScale', label: 'Field Scale', min: 0.005, max: 0.1, step: 0.005 },
+      { key: 'stepLength', label: 'Step Length', min: 0.3, max: 3, step: 0.1 },
+      { key: 'particles', label: 'Particles', min: 100, max: 800, step: 50 },
+      { key: 'curl', label: 'Curl', min: 0, max: 1, step: 0.05 },
+    ],
+    randomize: (rng) => ({
+      fieldScale: 0.01 + rng() * 0.08,
+      stepLength: 0.5 + rng() * 2,
+      particles: 200 + Math.floor(rng() * 600),
+      steps: 40 + Math.floor(rng() * 100),
+      curl: rng(),
+      offsetX: Math.floor(rng() * 1000),
+      offsetY: Math.floor(rng() * 1000),
+      decay: 0.01,
+    }),
+  },
+  {
+    id: '2d', label: '2D Life-like',
+    defaults: () => ({ birth: [3], survive: [2, 3], states: 2 }),
+    sliders: [
+      { key: 'states', label: 'States', min: 2, max: 6, step: 1 },
+    ],
+    // Birth/survive are toggle buttons, not sliders — handled separately
+    randomize: (rng) => {
+      const birth = [], survive = [];
+      for (let i = 0; i <= 8; i++) {
+        if (rng() > 0.65) birth.push(i);
+        if (rng() > 0.55) survive.push(i);
+      }
+      if (birth.length === 0) birth.push(3);
+      if (survive.length === 0) survive.push(2, 3);
+      return { birth, survive, states: 2 + Math.floor(rng() * 4) };
+    },
+  },
+  {
+    id: '1d', label: '1D Automaton',
+    defaults: () => ({ number: 110, states: 2 }),
+    sliders: [
+      { key: 'number', label: 'Rule Number', min: 0, max: 255, step: 1 },
+    ],
+    randomize: (rng) => {
+      const famous = [30, 45, 54, 60, 73, 90, 105, 110, 150, 184, 225];
+      return { number: famous[Math.floor(rng() * famous.length)], states: 2 };
+    },
+  },
+];
+
+// ============================================================
+//  State
+// ============================================================
+
+const SIM_W = 100, SIM_H = 60;
+let currentType = TYPES[0];
+let currentRule = currentType.defaults();
+let currentSeed = Math.floor(Math.random() * 0xFFFFFFFF);
+let engine = null;
+let lut = null;
+let paused = false;
+let frameCount = 0;
+let lastFpsTime = performance.now();
+let fps = 0;
+
+// ============================================================
+//  Canvas sizing
+// ============================================================
+
+function resizeCanvas() {
+  const area = document.querySelector('.canvas-area');
+  const aw = area.clientWidth;
+  const ah = area.clientHeight;
+  const aspect = SIM_W / SIM_H;
+  const pad = 40;
+  let cw, ch;
+  if (aw / ah > aspect) {
+    ch = ah - pad;
+    cw = ch * aspect;
+  } else {
+    cw = aw - pad;
+    ch = cw / aspect;
+  }
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = cw + 'px';
+  canvas.style.height = ch + 'px';
+  canvas.width = cw * dpr;
+  canvas.height = ch * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ============================================================
+//  Rendering
+// ============================================================
+
+function renderToCanvas(values) {
+  const cw = parseFloat(canvas.style.width);
+  const ch = parseFloat(canvas.style.height);
+  const cellW = cw / SIM_W;
+  const cellH = ch / SIM_H;
+
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, cw, ch);
+
+  for (let y = 0; y < SIM_H; y++) {
+    for (let x = 0; x < SIM_W; x++) {
+      const val = values[y * SIM_W + x];
+      if (val < 0.01) continue;
+      const ci = Math.floor(val * 255) * 3;
+      const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
+    }
+  }
+}
+
+// Soft vignette
+function drawVignette() {
+  const cw = parseFloat(canvas.style.width);
+  const ch = parseFloat(canvas.style.height);
+  const grad = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.35, cw / 2, ch / 2, Math.max(cw, ch) * 0.7);
+  grad.addColorStop(0, 'rgba(10, 10, 15, 0)');
+  grad.addColorStop(1, 'rgba(10, 10, 15, 0.4)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+}
+
+// ============================================================
+//  Engine lifecycle
+// ============================================================
+
+function rebuildEngine() {
+  const genome = {
+    type: currentType.id,
+    rule: { ...currentRule },
+    width: SIM_W,
+    height: SIM_H,
+    seed: currentSeed,
+  };
+  engine = createEngine(genome);
+  lut = buildLUT(currentType.id);
+  document.getElementById('info-type').textContent = currentType.label;
+  document.getElementById('seed-display').textContent = 'seed: 0x' + currentSeed.toString(16).padStart(8, '0');
+}
+
+// ============================================================
+//  UI: Type selector
+// ============================================================
+
+const typeGrid = document.getElementById('type-grid');
+TYPES.forEach((t, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'type-btn' + (i === 0 ? ' active' : '');
+  btn.textContent = t.label;
+  btn.dataset.idx = i;
+  btn.addEventListener('click', () => selectType(i));
+  typeGrid.appendChild(btn);
+});
+
+function selectType(idx) {
+  currentType = TYPES[idx];
+  currentRule = currentType.defaults();
+  currentSeed = Math.floor(Math.random() * 0xFFFFFFFF);
+  typeGrid.querySelectorAll('.type-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  buildControls();
+  rebuildEngine();
+}
+
+// ============================================================
+//  UI: Controls
+// ============================================================
+
+const controlsEl = document.getElementById('controls');
+
+function buildControls() {
+  controlsEl.innerHTML = '';
+
+  // Birth/Survive toggles for 2D Life-like
+  if (currentType.id === '2d') {
+    controlsEl.appendChild(buildRuleToggles('Birth', 'birth'));
+    controlsEl.appendChild(buildRuleToggles('Survive', 'survive'));
+  }
+
+  for (const slider of currentType.sliders) {
+    const group = document.createElement('div');
+    group.className = 'control-group';
+
+    const labelRow = document.createElement('div');
+    labelRow.className = 'control-label';
+
+    const labelText = document.createElement('span');
+    labelText.textContent = slider.label;
+
+    const valueText = document.createElement('span');
+    valueText.className = 'control-value';
+
+    labelRow.appendChild(labelText);
+    labelRow.appendChild(valueText);
+
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = slider.min;
+    input.max = slider.max;
+    input.step = slider.step;
+
+    // Get current value
+    let val;
+    if (slider.path === 'layers.0' && currentRule.layers) {
+      val = currentRule.layers[0][slider.key];
+    } else {
+      val = currentRule[slider.key];
+    }
+    input.value = val;
+    valueText.textContent = formatValue(val, slider);
+
+    input.addEventListener('input', () => {
+      const v = parseFloat(input.value);
+      if (slider.path === 'layers.0' && currentRule.layers) {
+        currentRule.layers[0][slider.key] = v;
+      } else {
+        currentRule[slider.key] = slider.step >= 1 ? Math.round(v) : v;
+      }
+      valueText.textContent = formatValue(v, slider);
+      rebuildEngine();
+    });
+
+    group.appendChild(labelRow);
+    group.appendChild(input);
+    controlsEl.appendChild(group);
+  }
+}
+
+function formatValue(val, slider) {
+  if (slider.step >= 1) return Math.round(val).toString();
+  if (slider.step >= 0.1) return val.toFixed(1);
+  if (slider.step >= 0.01) return val.toFixed(2);
+  return val.toFixed(3);
+}
+
+function buildRuleToggles(label, key) {
+  const group = document.createElement('div');
+  group.className = 'control-group';
+
+  const labelDiv = document.createElement('div');
+  labelDiv.className = 'control-label';
+  labelDiv.innerHTML = `<span>${label}</span><span class="control-value" id="${key}-display">${currentRule[key].join(',')}</span>`;
+  group.appendChild(labelDiv);
+
+  const row = document.createElement('div');
+  row.style.cssText = 'display: flex; gap: 0.3rem; flex-wrap: wrap;';
+
+  for (let n = 0; n <= 8; n++) {
+    const btn = document.createElement('button');
+    btn.textContent = n;
+    btn.className = 'type-btn';
+    btn.style.cssText = 'width: 28px; height: 28px; padding: 0; font-size: 0.6rem;';
+    if (currentRule[key].includes(n)) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      const idx = currentRule[key].indexOf(n);
+      if (idx >= 0) {
+        currentRule[key].splice(idx, 1);
+        btn.classList.remove('active');
+      } else {
+        currentRule[key].push(n);
+        currentRule[key].sort((a, b) => a - b);
+        btn.classList.add('active');
+      }
+      document.getElementById(key + '-display').textContent = currentRule[key].join(',');
+      rebuildEngine();
+    });
+    row.appendChild(btn);
+  }
+
+  group.appendChild(row);
+  return group;
+}
+
+// ============================================================
+//  Actions
+// ============================================================
+
+document.getElementById('btn-randomize').addEventListener('click', randomize);
+document.getElementById('btn-mutate').addEventListener('click', mutate);
+document.getElementById('btn-download').addEventListener('click', downloadPNG);
+document.getElementById('btn-reset').addEventListener('click', () => {
+  currentRule = currentType.defaults();
+  currentSeed = Math.floor(Math.random() * 0xFFFFFFFF);
+  buildControls();
+  rebuildEngine();
+});
+
+document.getElementById('seed-display').addEventListener('click', () => {
+  const hex = '0x' + currentSeed.toString(16).padStart(8, '0');
+  navigator.clipboard.writeText(hex).catch(() => {});
+  const el = document.getElementById('seed-display');
+  const orig = el.textContent;
+  el.textContent = 'copied!';
+  el.style.color = 'var(--green)';
+  setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 1000);
+});
+
+function randomize() {
+  const rng = mulberry32(Math.floor(Math.random() * 0xFFFFFFFF));
+  currentRule = currentType.randomize(rng);
+  currentSeed = Math.floor(Math.random() * 0xFFFFFFFF);
+  buildControls();
+  rebuildEngine();
+}
+
+function mutate() {
+  const rng = mulberry32(Math.floor(Math.random() * 0xFFFFFFFF));
+  // Slightly perturb each numeric value in currentRule
+  for (const slider of currentType.sliders) {
+    if (slider.path === 'layers.0' && currentRule.layers) {
+      const range = slider.max - slider.min;
+      currentRule.layers[0][slider.key] += (rng() - 0.5) * range * 0.15;
+      currentRule.layers[0][slider.key] = Math.max(slider.min, Math.min(slider.max, currentRule.layers[0][slider.key]));
+    } else if (typeof currentRule[slider.key] === 'number') {
+      const range = slider.max - slider.min;
+      currentRule[slider.key] += (rng() - 0.5) * range * 0.15;
+      currentRule[slider.key] = Math.max(slider.min, Math.min(slider.max, currentRule[slider.key]));
+      if (slider.step >= 1) currentRule[slider.key] = Math.round(currentRule[slider.key]);
+    }
+  }
+  currentSeed = Math.floor(Math.random() * 0xFFFFFFFF);
+  buildControls();
+  rebuildEngine();
+}
+
+function downloadPNG() {
+  // Render at higher resolution for export
+  const exportScale = 4;
+  const ew = SIM_W * exportScale;
+  const eh = SIM_H * exportScale;
+  const exportCanvas = document.createElement('canvas');
+  exportCanvas.width = ew;
+  exportCanvas.height = eh;
+  const ectx = exportCanvas.getContext('2d');
+
+  // Fill background
+  ectx.fillStyle = '#0a0a0f';
+  ectx.fillRect(0, 0, ew, eh);
+
+  // Render current values at export resolution
+  if (engine) {
+    const values = engine.getValues();
+    const cellW = ew / SIM_W;
+    const cellH = eh / SIM_H;
+    for (let y = 0; y < SIM_H; y++) {
+      for (let x = 0; x < SIM_W; x++) {
+        const val = values[y * SIM_W + x];
+        if (val < 0.01) continue;
+        const ci = Math.floor(val * 255) * 3;
+        const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
+        ectx.fillStyle = `rgb(${r},${g},${b})`;
+        ectx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
+      }
+    }
+  }
+
+  const link = document.createElement('a');
+  link.download = `lattice-${currentType.id}-${currentSeed.toString(16)}.png`;
+  link.href = exportCanvas.toDataURL('image/png');
+  link.click();
+}
+
+// ============================================================
+//  Keyboard shortcuts
+// ============================================================
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key.toLowerCase()) {
+    case 'r': randomize(); break;
+    case 'm': mutate(); break;
+    case 's': e.preventDefault(); downloadPNG(); break;
+    case ' ': e.preventDefault(); paused = !paused; break;
+    case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8':
+      const idx = parseInt(e.key) - 1;
+      if (idx < TYPES.length) selectType(idx);
+      break;
+  }
+});
+
+// ============================================================
+//  Animation loop
+// ============================================================
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (!paused && engine) {
+    engine.step();
+  }
+
+  if (engine) {
+    const values = engine.getValues();
+    renderToCanvas(values);
+    drawVignette();
+  }
+
+  // FPS counter
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime > 500) {
+    fps = Math.round(frameCount / ((now - lastFpsTime) / 1000));
+    frameCount = 0;
+    lastFpsTime = now;
+    document.getElementById('info-fps').textContent = fps + ' fps' + (paused ? ' (paused)' : '');
+  }
+}
+
+// ============================================================
+//  Init
+// ============================================================
+
+buildControls();
+rebuildEngine();
+animate();
+
+</script>
+</body>
+</html>

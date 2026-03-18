@@ -16,6 +16,12 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Pages**: `docs/listen.html` (new), `docs/index.html` (added Listen button in header + footer link)
 - **Inspiration**: The visual pieces encode structure, density, edge activity — all properties that map naturally to sound. A dense region should be loud; a sparse region should whisper. The pentatonic scale ensures everything sounds musical regardless of the data.
 
+### 2026-03-18 — Create / Interactive Genome Playground (autonomous session)
+- **What**: Interactive genome playground (`docs/create.html`) — visitors become co-creators
+- **Details**: Split-pane layout: full Canvas rendering on the left, control sidebar on the right. 8 engine types available (Julia Set, Reaction-Diffusion, Strange Attractor, Spirograph, Fractal Noise, Flow Field, 2D Life-like, 1D Automaton). Each type has tailored parameter sliders with real-time updates — drag a slider, watch the piece transform instantly. Julia sets expose c-real/c-imaginary/zoom/iterations; reaction-diffusion has feed/kill/diffusion rates; attractors have a/b/c/d coefficients; etc. 2D Life-like gets special birth/survive toggle buttons. **Randomize** picks from curated interesting parameter regions (famous Julia c-values, known Gray-Scott patterns, etc.) with jitter for variety. **Mutate** applies small perturbations (15% of range) to current parameters — evolutionary micro-steps. **Download PNG** exports at 4x resolution. Seed displayed with click-to-copy. FPS counter. Keyboard shortcuts (R/M/S/Space/1-8). Vignette overlay. Responsive layout collapses to stacked on mobile.
+- **Pages**: `docs/create.html` (new), `docs/index.html` (added Create button in header + footer link)
+- **Inspiration**: The gallery, live mode, and listen mode are all about observation — watching what the evolutionary system has produced. But the most compelling thing about generative art is the moment you touch a parameter and see reality shift. This page gives visitors that agency. You're not just watching evolution's results — you're doing the same thing evolution does, but with intention. The randomize button is serendipity; the sliders are craft; the mutate button is evolution itself.
+
 ## In Progress
 
 (nothing currently)
