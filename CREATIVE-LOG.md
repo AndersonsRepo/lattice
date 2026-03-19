@@ -22,6 +22,12 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Pages**: `docs/create.html` (new), `docs/index.html` (added Create button in header + footer link)
 - **Inspiration**: The gallery, live mode, and listen mode are all about observation — watching what the evolutionary system has produced. But the most compelling thing about generative art is the moment you touch a parameter and see reality shift. This page gives visitors that agency. You're not just watching evolution's results — you're doing the same thing evolution does, but with intention. The randomize button is serendipity; the sliders are craft; the mutate button is evolution itself.
 
+### 2026-03-18 — Atlas / Evolutionary Star Map (autonomous session)
+- **What**: Interactive cosmic visualization (`docs/atlas.html`) — every piece is a star in a navigable universe
+- **Details**: Full-screen Canvas star map. Each piece becomes a glowing node positioned by force-directed layout seeded from its 8 fitness metrics (structural richness vs order/chaos projection, with generation-based spiral offset). Stars sized by score, colored by species type, Hall of Fame pieces pulse with a white-hot core. Lineage connections rendered as curved arcs with animated particles flowing along ancestry paths. 400 ambient background stars with parallax twinkling. Smooth camera pan/drag + scroll zoom + pinch-zoom on mobile. Click any star to see full detail card: type, score, all 8 metrics with percentages, mutation count, lineage depth, and a miniature ASCII art preview colored in the species hue. Legend sidebar lets you filter species by clicking to dim types. Toggle buttons for lineage lines, motion trails, and generation labels. When a star is selected, its full ancestry chain highlights with thicker glowing connections. Vignette overlay and subtle nebula gradient in the background.
+- **Pages**: `docs/atlas.html` (new), `docs/index.html` (added Atlas button in header + footer link)
+- **Inspiration**: The gallery shows pieces as individual works. Live mode shows them as processes. Listen mode makes them audible. Create mode makes them interactive. But none of these show the *relationships* — the evolutionary tree, the clustering of similar organisms, the lineage paths that connect ancestor to descendant. Atlas makes the invisible topology of evolution visible. It's a map of a universe that built itself.
+
 ## In Progress
 
 (nothing currently)

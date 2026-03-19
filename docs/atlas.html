@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Atlas</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0f;
+      overflow: hidden;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      color: #c8c8d4;
+    }
+
+    canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; }
+
+    /* Info overlay */
+    #info {
+      position: fixed;
+      bottom: 2rem;
+      left: 2rem;
+      z-index: 20;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      pointer-events: none;
+      max-width: 340px;
+    }
+    #info.visible { opacity: 1; }
+
+    #info .card {
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(124, 111, 224, 0.2);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+    }
+
+    #info .type-label {
+      color: #7c6fe0;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.3rem;
+    }
+
+    #info .score-line {
+      font-size: 1.4rem;
+      font-weight: 300;
+      color: #4ade80;
+      margin-bottom: 0.5rem;
+    }
+
+    #info .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.2rem 1rem;
+      font-size: 0.65rem;
+      color: #6e6e82;
+    }
+
+    #info .metric-val { color: #c8c8d4; }
+    #info .lineage-line {
+      margin-top: 0.5rem;
+      font-size: 0.6rem;
+      color: #6e6e82;
+    }
+
+    /* Piece art preview */
+    #info .art-preview {
+      margin-top: 0.6rem;
+      font-size: 0.35rem;
+      line-height: 1.05;
+      white-space: pre;
+      overflow: hidden;
+      max-height: 120px;
+      opacity: 0.8;
+      border-top: 1px solid rgba(124, 111, 224, 0.1);
+      padding-top: 0.5rem;
+    }
+
+    /* Top bar */
+    .top-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.5rem;
+      pointer-events: none;
+    }
+
+    .top-bar > * { pointer-events: auto; }
+
+    .back-link {
+      color: #6e6e82;
+      text-decoration: none;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: #7c6fe0; }
+
+    .title {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: #7c6fe0;
+      text-shadow: 0 0 20px rgba(124, 111, 224, 0.3);
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .pill-btn {
+      padding: 0.35rem 0.8rem;
+      border-radius: 16px;
+      background: rgba(18, 18, 26, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(124, 111, 224, 0.15);
+      color: #6e6e82;
+      font-family: inherit;
+      font-size: 0.65rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .pill-btn:hover { border-color: #7c6fe0; color: #c8c8d4; }
+    .pill-btn.active { background: rgba(124, 111, 224, 0.2); border-color: #7c6fe0; color: #7c6fe0; }
+
+    /* Legend */
+    .legend {
+      position: fixed;
+      top: 4rem;
+      right: 1.5rem;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      opacity: 0.6;
+      transition: opacity 0.3s;
+    }
+    .legend:hover { opacity: 1; }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.6rem;
+      color: #6e6e82;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .legend-item:hover { color: #c8c8d4; }
+    .legend-item.dimmed { opacity: 0.25; }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Hint */
+    #hint {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: #6e6e82;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-align: center;
+      line-height: 2;
+      z-index: 10;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+    #hint.visible { opacity: 1; }
+
+    /* Tooltip for hovered stars */
+    #tooltip {
+      position: fixed;
+      z-index: 30;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      font-size: 0.6rem;
+      color: #c8c8d4;
+      background: rgba(18, 18, 26, 0.9);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(124, 111, 224, 0.2);
+      border-radius: 6px;
+      padding: 0.3rem 0.6rem;
+      white-space: nowrap;
+    }
+    #tooltip.visible { opacity: 1; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div class="top-bar">
+    <a href="index.html" class="back-link">&larr; Gallery</a>
+    <span class="title">Atlas</span>
+    <div class="controls">
+      <button class="pill-btn active" id="btn-lineage">Lineage</button>
+      <button class="pill-btn" id="btn-trails">Trails</button>
+      <button class="pill-btn" id="btn-labels">Labels</button>
+    </div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div id="info">
+    <div class="card">
+      <div class="type-label" id="info-type"></div>
+      <div class="score-line" id="info-score"></div>
+      <div class="metrics-grid" id="info-metrics"></div>
+      <div class="lineage-line" id="info-lineage"></div>
+      <div class="art-preview" id="info-art"></div>
+    </div>
+  </div>
+
+  <div id="tooltip"></div>
+
+  <div id="hint">
+    scroll to zoom &bull; drag to pan &bull; click a star to inspect<br>
+    <span style="color: #7c6fe040">each star is a piece &bull; lines trace ancestry</span>
+  </div>
+
+  <script>
+    // --- Color palette per type ---
+    const TYPE_COLORS = {
+      '1d':                 '#c8abff',
+      '2d':                 '#4ade80',
+      'lsystem':            '#f5b84a',
+      'reaction-diffusion': '#d44af5',
+      'voronoi':            '#4ad4f5',
+      'wfc':                '#f54a9d',
+      'spirograph':         '#d4f54a',
+      'attractor':          '#f59d6b',
+      'julia':              '#4af5d4',
+      'noise':              '#d4d44a',
+      'flowfield':          '#4ad4d4',
+    };
+
+    const TYPE_LABELS = {
+      '1d': '1D Automaton', '2d': '2D Life-like', 'lsystem': 'L-System',
+      'reaction-diffusion': 'Reaction-Diffusion', 'voronoi': 'Voronoi',
+      'wfc': 'Wave Function Collapse', 'spirograph': 'Spirograph',
+      'attractor': 'Strange Attractor', 'julia': 'Julia Set',
+      'noise': 'Fractal Noise', 'flowfield': 'Flow Field',
+    };
+
+    const METRIC_KEYS = ['complexity', 'symmetry', 'density', 'novelty', 'edgeActivity', 'structuralInterest', 'fractalDimension', 'informationDensity'];
+    const METRIC_LABELS = { complexity: 'Complexity', symmetry: 'Symmetry', density: 'Density', novelty: 'Novelty', edgeActivity: 'Edge Activity', structuralInterest: 'Structure', fractalDimension: 'Fractal Dim', informationDensity: 'Info Density' };
+    const METRIC_MAX = { complexity: 3.5, symmetry: 1, density: 1, novelty: 1, edgeActivity: 1, structuralInterest: 1, fractalDimension: 2, informationDensity: 1 };
+
+    // --- Canvas setup ---
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let W, H, dpr;
+
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // --- Camera ---
+    let cam = { x: 0, y: 0, zoom: 1 };
+    let targetCam = { x: 0, y: 0, zoom: 1 };
+
+    function worldToScreen(wx, wy) {
+      return {
+        x: (wx - cam.x) * cam.zoom + W / 2,
+        y: (wy - cam.y) * cam.zoom + H / 2,
+      };
+    }
+    function screenToWorld(sx, sy) {
+      return {
+        x: (sx - W / 2) / cam.zoom + cam.x,
+        y: (sy - H / 2) / cam.zoom + cam.y,
+      };
+    }
+
+    // --- Stars (nodes) ---
+    let stars = [];
+    let edges = []; // lineage connections
+    let bgStars = []; // ambient background
+    let typeFilter = new Set(); // empty = show all
+
+    // Toggle buttons
+    let showLineage = true;
+    let showTrails = false;
+    let showLabels = false;
+
+    document.getElementById('btn-lineage').addEventListener('click', function() {
+      showLineage = !showLineage;
+      this.classList.toggle('active', showLineage);
+    });
+    document.getElementById('btn-trails').addEventListener('click', function() {
+      showTrails = !showTrails;
+      this.classList.toggle('active', showTrails);
+    });
+    document.getElementById('btn-labels').addEventListener('click', function() {
+      showLabels = !showLabels;
+      this.classList.toggle('active', showLabels);
+    });
+
+    // --- Force-directed layout ---
+    function initLayout(nodes) {
+      // Seed positions from normalized metrics (use PCA-like 2D projection)
+      // Use complexity+fractalDim vs symmetry+density as the two axes
+      // Then add generation as a subtle radial influence
+      const maxGen = Math.max(...nodes.map(n => n.generation), 1);
+
+      nodes.forEach(n => {
+        const m = n.metrics;
+        // Normalize metrics to [0, 1]
+        const cx = (m.complexity || 0) / 3.5;
+        const sy = (m.symmetry || 0);
+        const dn = (m.density || 0);
+        const ea = (m.edgeActivity || 0);
+        const si = (m.structuralInterest || 0);
+        const fd = (m.fractalDimension || 0) / 2;
+        const id = (m.informationDensity || 0);
+        const nv = (m.novelty || 0);
+
+        // 2D projection: axis1 = structural richness, axis2 = order/chaos
+        const axis1 = (cx * 0.4 + fd * 0.3 + si * 0.2 + id * 0.1) * 800 - 400;
+        const axis2 = (sy * 0.35 + dn * 0.25 - ea * 0.25 + nv * 0.15) * 800 - 400;
+
+        // Spread by generation (spiral outward)
+        const genAngle = (n.generation / maxGen) * Math.PI * 4;
+        const genRadius = (n.generation / maxGen) * 100;
+
+        n.x = axis1 + Math.cos(genAngle) * genRadius + (Math.random() - 0.5) * 60;
+        n.y = axis2 + Math.sin(genAngle) * genRadius + (Math.random() - 0.5) * 60;
+        n.vx = 0;
+        n.vy = 0;
+      });
+
+      // Run force simulation
+      const iterations = 200;
+      for (let iter = 0; iter < iterations; iter++) {
+        const alpha = 1 - iter / iterations;
+        const repulsion = 2000 * alpha;
+        const attraction = 0.005 * alpha;
+
+        // Repulsion between all pairs
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const dx = nodes[j].x - nodes[i].x;
+            const dy = nodes[j].y - nodes[i].y;
+            const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+            const force = repulsion / (dist * dist);
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            nodes[i].vx -= fx;
+            nodes[i].vy -= fy;
+            nodes[j].vx += fx;
+            nodes[j].vy += fy;
+          }
+        }
+
+        // Attraction along edges
+        for (const edge of edges) {
+          const a = edge.source;
+          const b = edge.target;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+          const force = dist * attraction;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          a.vx += fx;
+          a.vy += fy;
+          b.vx -= fx;
+          b.vy -= fy;
+        }
+
+        // Apply velocity with damping
+        const damping = 0.85;
+        for (const n of nodes) {
+          n.vx *= damping;
+          n.vy *= damping;
+          n.x += n.vx;
+          n.y += n.vy;
+        }
+      }
+    }
+
+    // --- Background stars ---
+    function initBgStars() {
+      bgStars = [];
+      for (let i = 0; i < 400; i++) {
+        bgStars.push({
+          x: (Math.random() - 0.5) * 3000,
+          y: (Math.random() - 0.5) * 3000,
+          size: Math.random() * 1.2 + 0.2,
+          brightness: Math.random() * 0.3 + 0.05,
+          twinkleSpeed: Math.random() * 0.02 + 0.005,
+          twinklePhase: Math.random() * Math.PI * 2,
+        });
+      }
+    }
+
+    // --- Data loading ---
+    async function loadData() {
+      const res = await fetch('./gallery.json');
+      const data = await res.json();
+
+      const allPieces = [...data.hallOfFame, ...data.pieces, ...(data.archive || [])];
+
+      // Deduplicate by id
+      const seen = new Set();
+      const unique = [];
+      for (const p of allPieces) {
+        if (!seen.has(p.id)) {
+          seen.add(p.id);
+          unique.push(p);
+        }
+      }
+
+      // Build star nodes
+      const idMap = new Map();
+      stars = unique.map(p => {
+        const star = {
+          id: p.id,
+          type: p.genome.type,
+          score: p.score,
+          generation: p.generation || 0,
+          metrics: p.metrics || {},
+          genome: p.genome,
+          rendered: p.rendered || '',
+          lineage: p.genome.lineage || [],
+          isHof: data.hallOfFame.some(h => h.id === p.id),
+          x: 0, y: 0, vx: 0, vy: 0,
+          // Visual properties
+          radius: 3 + p.score * 12,
+          pulsePhase: Math.random() * Math.PI * 2,
+          pulseSpeed: 0.01 + Math.random() * 0.015,
+          // Trail
+          trail: [],
+        };
+        idMap.set(p.id, star);
+        return star;
+      });
+
+      // Build lineage edges by matching lineage IDs to star IDs
+      // Lineage array contains ancestor ID prefixes
+      edges = [];
+      for (const star of stars) {
+        for (const ancestorPrefix of star.lineage) {
+          if (ancestorPrefix === 'typeswap' || ancestorPrefix === '×') continue;
+          // Find a star whose id starts with this prefix
+          for (const other of stars) {
+            if (other.id !== star.id && other.id.startsWith(ancestorPrefix)) {
+              edges.push({ source: other, target: star });
+              break;
+            }
+          }
+        }
+      }
+
+      // Layout
+      initLayout(stars);
+      initBgStars();
+
+      // Center camera on centroid
+      if (stars.length > 0) {
+        const cx = stars.reduce((s, n) => s + n.x, 0) / stars.length;
+        const cy = stars.reduce((s, n) => s + n.y, 0) / stars.length;
+        cam.x = targetCam.x = cx;
+        cam.y = targetCam.y = cy;
+
+        // Fit all stars in view
+        let maxDist = 0;
+        for (const s of stars) {
+          const d = Math.sqrt((s.x - cx) ** 2 + (s.y - cy) ** 2);
+          if (d > maxDist) maxDist = d;
+        }
+        const fitZoom = Math.min(W, H) / (maxDist * 2.5 + 100);
+        cam.zoom = targetCam.zoom = Math.max(0.3, Math.min(fitZoom, 2));
+      }
+
+      // Build legend
+      buildLegend();
+
+      // Show hint
+      const hint = document.getElementById('hint');
+      hint.classList.add('visible');
+      setTimeout(() => hint.classList.remove('visible'), 5000);
+    }
+
+    function buildLegend() {
+      const types = new Set(stars.map(s => s.type));
+      const legend = document.getElementById('legend');
+      legend.innerHTML = '';
+      for (const type of types) {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        item.innerHTML = `<span class="legend-dot" style="background: ${TYPE_COLORS[type] || '#888'}"></span>${TYPE_LABELS[type] || type}`;
+        item.addEventListener('click', () => {
+          if (typeFilter.has(type)) {
+            typeFilter.delete(type);
+            item.classList.remove('dimmed');
+          } else {
+            typeFilter.add(type);
+            item.classList.add('dimmed');
+          }
+        });
+        legend.appendChild(item);
+      }
+    }
+
+    // --- Interaction ---
+    let hoveredStar = null;
+    let selectedStar = null;
+    let isDragging = false;
+    let dragStart = { x: 0, y: 0, camX: 0, camY: 0 };
+
+    canvas.addEventListener('mousedown', e => {
+      isDragging = true;
+      dragStart = { x: e.clientX, y: e.clientY, camX: cam.x, camY: cam.y };
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      if (isDragging) {
+        const dx = e.clientX - dragStart.x;
+        const dy = e.clientY - dragStart.y;
+        targetCam.x = dragStart.camX - dx / cam.zoom;
+        targetCam.y = dragStart.camY - dy / cam.zoom;
+        return;
+      }
+
+      // Hit test
+      const world = screenToWorld(e.clientX, e.clientY);
+      let closest = null;
+      let closestDist = Infinity;
+      for (const star of stars) {
+        if (typeFilter.has(star.type)) continue;
+        const dx = star.x - world.x;
+        const dy = star.y - world.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const hitRadius = (star.radius + 5) / cam.zoom;
+        if (dist < hitRadius && dist < closestDist) {
+          closest = star;
+          closestDist = dist;
+        }
+      }
+
+      hoveredStar = closest;
+      canvas.style.cursor = closest ? 'pointer' : 'grab';
+
+      // Tooltip
+      const tooltip = document.getElementById('tooltip');
+      if (closest) {
+        tooltip.textContent = `${TYPE_LABELS[closest.type] || closest.type} — ${(closest.score * 100).toFixed(1)}% — gen ${closest.generation}`;
+        tooltip.style.left = (e.clientX + 12) + 'px';
+        tooltip.style.top = (e.clientY - 8) + 'px';
+        tooltip.classList.add('visible');
+      } else {
+        tooltip.classList.remove('visible');
+      }
+    });
+
+    canvas.addEventListener('mouseup', e => {
+      if (isDragging) {
+        const dx = e.clientX - dragStart.x;
+        const dy = e.clientY - dragStart.y;
+        if (Math.abs(dx) < 3 && Math.abs(dy) < 3) {
+          // Click — select/deselect
+          if (hoveredStar) {
+            selectedStar = (selectedStar === hoveredStar) ? null : hoveredStar;
+            showInfo(selectedStar);
+          } else {
+            selectedStar = null;
+            showInfo(null);
+          }
+        }
+      }
+      isDragging = false;
+    });
+
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      targetCam.zoom = Math.max(0.15, Math.min(targetCam.zoom * zoomFactor, 8));
+    }, { passive: false });
+
+    // Touch support
+    let lastTouchDist = 0;
+    canvas.addEventListener('touchstart', e => {
+      if (e.touches.length === 1) {
+        isDragging = true;
+        dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, camX: cam.x, camY: cam.y };
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+      }
+    });
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      if (e.touches.length === 1 && isDragging) {
+        const dx = e.touches[0].clientX - dragStart.x;
+        const dy = e.touches[0].clientY - dragStart.y;
+        targetCam.x = dragStart.camX - dx / cam.zoom;
+        targetCam.y = dragStart.camY - dy / cam.zoom;
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (lastTouchDist > 0) {
+          targetCam.zoom = Math.max(0.15, Math.min(targetCam.zoom * (dist / lastTouchDist), 8));
+        }
+        lastTouchDist = dist;
+      }
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => { isDragging = false; lastTouchDist = 0; });
+
+    // --- Info panel ---
+    function showInfo(star) {
+      const info = document.getElementById('info');
+      if (!star) {
+        info.classList.remove('visible');
+        return;
+      }
+
+      document.getElementById('info-type').textContent =
+        (star.isHof ? '\u2605 ' : '') + (TYPE_LABELS[star.type] || star.type) + ' \u2014 gen ' + star.generation;
+      document.getElementById('info-score').textContent = (star.score * 100).toFixed(1) + '%';
+
+      const metricsEl = document.getElementById('info-metrics');
+      metricsEl.innerHTML = METRIC_KEYS.map(k => {
+        const val = star.metrics[k] || 0;
+        const max = METRIC_MAX[k];
+        const pct = (val / max * 100).toFixed(0);
+        return `<span>${METRIC_LABELS[k]}</span><span class="metric-val">${val.toFixed(2)} (${pct}%)</span>`;
+      }).join('');
+
+      document.getElementById('info-lineage').textContent =
+        `${star.genome.mutations} mutations \u2022 lineage depth ${star.lineage.length}`;
+
+      // Mini art preview
+      const artEl = document.getElementById('info-art');
+      if (star.rendered) {
+        const lines = star.rendered.split('\n');
+        artEl.textContent = lines.slice(0, Math.min(lines.length, 20)).join('\n');
+        artEl.style.color = TYPE_COLORS[star.type] || '#7c6fe0';
+      } else {
+        artEl.textContent = '';
+      }
+
+      info.classList.add('visible');
+    }
+
+    // --- Render loop ---
+    let time = 0;
+
+    function hexToRgb(hex) {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return { r, g, b };
+    }
+
+    function draw() {
+      time += 0.016;
+
+      // Smooth camera
+      cam.x += (targetCam.x - cam.x) * 0.08;
+      cam.y += (targetCam.y - cam.y) * 0.08;
+      cam.zoom += (targetCam.zoom - cam.zoom) * 0.08;
+
+      ctx.clearRect(0, 0, W, H);
+
+      // Background nebula glow
+      const nebulaGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.6);
+      nebulaGrad.addColorStop(0, 'rgba(124, 111, 224, 0.03)');
+      nebulaGrad.addColorStop(0.5, 'rgba(74, 222, 128, 0.01)');
+      nebulaGrad.addColorStop(1, 'rgba(10, 10, 15, 0)');
+      ctx.fillStyle = nebulaGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Background stars (parallax)
+      for (const bg of bgStars) {
+        const parallax = 0.3;
+        const sx = (bg.x - cam.x * parallax) * cam.zoom * 0.5 + W / 2;
+        const sy = (bg.y - cam.y * parallax) * cam.zoom * 0.5 + H / 2;
+        if (sx < -10 || sx > W + 10 || sy < -10 || sy > H + 10) continue;
+
+        const twinkle = bg.brightness + Math.sin(time * bg.twinkleSpeed + bg.twinklePhase) * 0.1;
+        ctx.globalAlpha = Math.max(0, twinkle);
+        ctx.fillStyle = '#c8c8d4';
+        ctx.beginPath();
+        ctx.arc(sx, sy, bg.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Lineage edges
+      if (showLineage) {
+        for (const edge of edges) {
+          if (typeFilter.has(edge.source.type) && typeFilter.has(edge.target.type)) continue;
+          const a = worldToScreen(edge.source.x, edge.source.y);
+          const b = worldToScreen(edge.target.x, edge.target.y);
+
+          // Fade if either end is filtered
+          const dimA = typeFilter.has(edge.source.type);
+          const dimB = typeFilter.has(edge.target.type);
+
+          ctx.globalAlpha = (dimA || dimB) ? 0.03 : 0.12;
+          ctx.strokeStyle = TYPE_COLORS[edge.target.type] || '#7c6fe0';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+
+          // Curved line
+          const mx = (a.x + b.x) / 2 + (a.y - b.y) * 0.1;
+          const my = (a.y + b.y) / 2 + (b.x - a.x) * 0.1;
+          ctx.moveTo(a.x, a.y);
+          ctx.quadraticCurveTo(mx, my, b.x, b.y);
+          ctx.stroke();
+
+          // Animated particle along edge
+          if (!dimA && !dimB) {
+            const t = (time * 0.3 + edge.source.x * 0.01) % 1;
+            const px = (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * mx + t * t * b.x;
+            const py = (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * my + t * t * b.y;
+            ctx.globalAlpha = 0.4 * Math.sin(t * Math.PI);
+            ctx.fillStyle = TYPE_COLORS[edge.target.type] || '#7c6fe0';
+            ctx.beginPath();
+            ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Stars
+      for (const star of stars) {
+        const dimmed = typeFilter.has(star.type);
+        const screen = worldToScreen(star.x, star.y);
+
+        // Cull off-screen
+        if (screen.x < -50 || screen.x > W + 50 || screen.y < -50 || screen.y > H + 50) continue;
+
+        const pulse = 1 + Math.sin(time * star.pulseSpeed + star.pulsePhase) * 0.15;
+        const r = star.radius * cam.zoom * pulse;
+        const isHovered = star === hoveredStar;
+        const isSelected = star === selectedStar;
+        const color = TYPE_COLORS[star.type] || '#7c6fe0';
+        const rgb = hexToRgb(color);
+
+        // Trail
+        if (showTrails) {
+          star.trail.push({ x: screen.x, y: screen.y, t: time });
+          if (star.trail.length > 30) star.trail.shift();
+
+          if (!dimmed && star.trail.length > 1) {
+            for (let i = 1; i < star.trail.length; i++) {
+              const age = (time - star.trail[i].t);
+              const alpha = Math.max(0, 0.3 - age * 0.5);
+              ctx.globalAlpha = alpha;
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 0.5;
+              ctx.beginPath();
+              ctx.moveTo(star.trail[i - 1].x, star.trail[i - 1].y);
+              ctx.lineTo(star.trail[i].x, star.trail[i].y);
+              ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+          }
+        }
+
+        if (dimmed) {
+          ctx.globalAlpha = 0.08;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(screen.x, screen.y, Math.max(r, 1.5), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          continue;
+        }
+
+        // Outer glow
+        const glowR = r * (isHovered ? 4 : isSelected ? 3.5 : 2.5);
+        const glow = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, glowR);
+        glow.addColorStop(0, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${isHovered ? 0.35 : 0.15})`);
+        glow.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, glowR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core
+        ctx.fillStyle = color;
+        ctx.globalAlpha = isHovered ? 1 : 0.9;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, Math.max(r, 1.5), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Hot center for HoF pieces
+        if (star.isHof) {
+          ctx.fillStyle = '#fff';
+          ctx.globalAlpha = 0.6 + Math.sin(time * 2 + star.pulsePhase) * 0.2;
+          ctx.beginPath();
+          ctx.arc(screen.x, screen.y, Math.max(r * 0.35, 1), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        // Selection ring
+        if (isSelected) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.5;
+          ctx.globalAlpha = 0.6 + Math.sin(time * 3) * 0.2;
+          ctx.beginPath();
+          ctx.arc(screen.x, screen.y, r + 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+
+        // Label
+        if (showLabels && r > 3) {
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.5;
+          ctx.font = `${Math.max(9, 10 * cam.zoom)}px 'SF Mono', monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillText(`g${star.generation}`, screen.x, screen.y + r + 12);
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // Highlight lineage of selected star
+      if (selectedStar && showLineage) {
+        const related = new Set();
+        related.add(selectedStar.id);
+        for (const prefix of selectedStar.lineage) {
+          for (const s of stars) {
+            if (s.id.startsWith(prefix)) related.add(s.id);
+          }
+        }
+        // Also find descendants
+        for (const s of stars) {
+          for (const prefix of s.lineage) {
+            if (selectedStar.id.startsWith(prefix)) {
+              related.add(s.id);
+              break;
+            }
+          }
+        }
+
+        for (const edge of edges) {
+          if (!related.has(edge.source.id) && !related.has(edge.target.id)) continue;
+          const a = worldToScreen(edge.source.x, edge.source.y);
+          const b = worldToScreen(edge.target.x, edge.target.y);
+          ctx.globalAlpha = 0.5;
+          ctx.strokeStyle = TYPE_COLORS[edge.target.type] || '#7c6fe0';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          const mx = (a.x + b.x) / 2 + (a.y - b.y) * 0.1;
+          const my = (a.y + b.y) / 2 + (b.x - a.x) * 0.1;
+          ctx.moveTo(a.x, a.y);
+          ctx.quadraticCurveTo(mx, my, b.x, b.y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Vignette
+      const vigGrad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
+      vigGrad.addColorStop(0, 'rgba(10, 10, 15, 0)');
+      vigGrad.addColorStop(1, 'rgba(10, 10, 15, 0.6)');
+      ctx.fillStyle = vigGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      requestAnimationFrame(draw);
+    }
+
+    // --- Init ---
+    loadData().then(() => {
+      draw();
+    });
+  </script>
+</body>
+</html>
