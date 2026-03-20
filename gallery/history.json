@@ -11380,5 +11380,128 @@
         "informationDensity": 0.8232063676997741
       }
     }
+  },
+  {
+    "generation": 134,
+    "bestScore": 0.7957661972459781,
+    "avgScore": 0.6713180970237829,
+    "epoch": "order",
+    "speciesCounts": {
+      "wfc": 3,
+      "reaction-diffusion": 2,
+      "2d": 1,
+      "voronoi": 1,
+      "1d": 1,
+      "julia": 1,
+      "lsystem": 1,
+      "spirograph": 1,
+      "noise": 1,
+      "attractor": 1,
+      "flowfield": 1
+    },
+    "hallOfFameSize": 20,
+    "timestamp": "2026-03-20T18:13:13.175Z",
+    "bestPiece": {
+      "id": "gen127-mmyseshm",
+      "genome": {
+        "type": "wfc",
+        "rule": {
+          "tileCount": 8,
+          "adjacency": [
+            [
+              0,
+              1,
+              7
+            ],
+            [
+              1,
+              5,
+              7
+            ],
+            [
+              2,
+              4,
+              0,
+              3,
+              7
+            ],
+            [
+              3,
+              2,
+              4
+            ],
+            [
+              4,
+              1,
+              6
+            ],
+            [
+              5,
+              0,
+              6
+            ],
+            [
+              6,
+              2,
+              3
+            ],
+            [
+              0,
+              6,
+              4
+            ]
+          ],
+          "weights": [
+            1.082715910053557,
+            0.4609340402945051,
+            0.9320795412727589,
+            0.430483551100687,
+            0.6271941659037381,
+            0.6833409095935754,
+            0.8289680574880451,
+            0.9768488644195248
+          ],
+          "symmetry": "horizontal"
+        },
+        "width": 53,
+        "height": 31,
+        "palette": [
+          " ",
+          ".",
+          ":",
+          "❦",
+          "✿",
+          "❀",
+          "❁"
+        ],
+        "seed": 2306786802,
+        "mutations": 5,
+        "lineage": [
+          "8ee82007",
+          "d495d89a",
+          "c665cf47",
+          "4f10e4e",
+          "43a54372",
+          "2293189",
+          "typeswap",
+          "64c25ab6",
+          "6878414f",
+          "a64cab3f",
+          "99e8984f",
+          "45737f37"
+        ]
+      },
+      "score": 0.7957661972459781,
+      "metrics": {
+        "complexity": 2.667708209330826,
+        "symmetry": 0.5915053091817614,
+        "density": 0.9257455873402313,
+        "novelty": 1,
+        "edgeActivity": 0.6939412866958151,
+        "structuralInterest": 0.5477784540474742,
+        "fractalDimension": 2,
+        "informationDensity": 0.8232063676997741
+      }
+    }
   }
 ]
