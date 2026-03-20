@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Origin — Lattice Evolutionary Record</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #ef4444;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Top HUD ── */
+    #top-hud {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(to bottom, rgba(10,10,15,0.85) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-title {
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .hud-title span {
+      color: var(--text);
+    }
+
+    .hud-badges {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .badge {
+      padding: 0.2rem 0.65rem;
+      border-radius: 10px;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid currentColor;
+      opacity: 0.8;
+      transition: color 0.6s ease, border-color 0.6s ease;
+    }
+
+    .badge.epoch {
+      font-size: 0.6rem;
+    }
+
+    .hud-score {
+      font-size: 0.8rem;
+      color: var(--green);
+      letter-spacing: 0.05em;
+      min-width: 5ch;
+      text-align: right;
+    }
+
+    /* ── Bottom HUD ── */
+    #bottom-hud {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(10,10,15,0.95) 0%, transparent 100%);
+      padding: 0 1.5rem 1.25rem;
+      z-index: 10;
+    }
+
+    /* Narrative text */
+    #narrative {
+      text-align: center;
+      height: 1.6rem;
+      margin-bottom: 0.75rem;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      transition: opacity 0.4s ease;
+    }
+
+    #narrative.flash {
+      color: var(--text);
+    }
+
+    /* Timeline */
+    #timeline-wrap {
+      position: relative;
+      height: 3px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 2px;
+      margin-bottom: 0.85rem;
+      cursor: pointer;
+    }
+
+    #timeline-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--accent);
+      transition: width 0.3s ease;
+      pointer-events: none;
+    }
+
+    #timeline-thumb {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      transition: left 0.3s ease;
+      pointer-events: none;
+    }
+
+    /* Epoch bands on timeline */
+    .epoch-band {
+      position: absolute;
+      top: 0; bottom: 0;
+      border-radius: 2px;
+      opacity: 0.25;
+      pointer-events: none;
+    }
+
+    /* Controls */
+    #controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+    }
+
+    .ctrl-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      padding: 0.25rem;
+      transition: color 0.2s;
+      line-height: 1;
+    }
+
+    .ctrl-btn:hover, .ctrl-btn.active { color: var(--text); }
+
+    .ctrl-btn.play-btn {
+      font-size: 1.1rem;
+      color: var(--text);
+      width: 2rem;
+      height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .speed-group {
+      display: flex;
+      gap: 0.15rem;
+    }
+
+    .speed-btn {
+      background: none;
+      border: 1px solid transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.65rem;
+      cursor: pointer;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      letter-spacing: 0.03em;
+      transition: all 0.15s;
+    }
+
+    .speed-btn:hover { color: var(--text); border-color: var(--border); }
+    .speed-btn.active { color: var(--accent); border-color: var(--accent); }
+
+    .ctrl-sep {
+      width: 1px;
+      height: 16px;
+      background: var(--border);
+    }
+
+    #gen-counter {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      min-width: 7ch;
+      text-align: center;
+    }
+
+    /* Back button */
+    #back-btn {
+      position: fixed;
+      top: 1rem;
+      left: 1.5rem;
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      text-decoration: none;
+      transition: color 0.2s;
+      z-index: 20;
+    }
+    #back-btn:hover { color: var(--text); }
+
+    /* Epoch flash overlay */
+    #epoch-flash {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 5;
+      transition: opacity 0.15s ease;
+    }
+
+    /* Click to begin */
+    #start-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10,10,15,0.88);
+      z-index: 30;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+
+    #start-overlay h2 {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 40px rgba(124,111,224,0.4);
+      margin-bottom: 0.5rem;
+    }
+
+    #start-overlay .start-sub {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      letter-spacing: 0.12em;
+      margin-bottom: 2.5rem;
+    }
+
+    #start-overlay .start-prompt {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      padding: 0.5rem 1.5rem;
+      border-radius: 20px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    #start-overlay .start-stats {
+      display: flex;
+      gap: 2.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    #start-overlay .start-stat {
+      text-align: center;
+    }
+
+    #start-overlay .start-stat-val {
+      font-size: 1.4rem;
+      color: var(--text);
+      font-weight: 300;
+    }
+
+    #start-overlay .start-stat-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-top: 0.2rem;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* Keyboard hint */
+    #kb-hint {
+      position: fixed;
+      bottom: 5rem;
+      right: 1.5rem;
+      font-size: 0.58rem;
+      color: var(--text-dim);
+      opacity: 0;
+      transition: opacity 0.4s;
+      letter-spacing: 0.04em;
+      text-align: right;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #kb-hint.show { opacity: 1; }
+    #kb-hint div { margin-bottom: 0.2rem; }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+<div id="epoch-flash"></div>
+
+<!-- Back link -->
+<a href="index.html" id="back-btn">← Lattice</a>
+
+<!-- Top HUD -->
+<div id="top-hud">
+  <div class="hud-title">ORIGIN &nbsp;&mdash;&nbsp; <span>evolutionary record</span></div>
+  <div class="hud-badges">
+    <div class="badge" id="badge-type" style="color: #7c6fe0; border-color: #7c6fe0;">—</div>
+    <div class="badge epoch" id="badge-epoch" style="color: #7c6fe0; border-color: #7c6fe0;">—</div>
+  </div>
+  <div class="hud-score" id="hud-score">—</div>
+</div>
+
+<!-- Bottom HUD -->
+<div id="bottom-hud">
+  <div id="narrative">&nbsp;</div>
+
+  <div id="timeline-wrap">
+    <!-- Epoch bands rendered by JS -->
+    <div id="timeline-fill" style="width:0%"></div>
+    <div id="timeline-thumb" style="left:0%"></div>
+  </div>
+
+  <div id="controls">
+    <button class="ctrl-btn" id="btn-prev" title="Previous (←)">&#9664;</button>
+    <button class="ctrl-btn play-btn" id="btn-play" title="Play/Pause (Space)">&#9646;&#9646;</button>
+    <button class="ctrl-btn" id="btn-next" title="Next (→)">&#9654;</button>
+    <div class="ctrl-sep"></div>
+    <div id="gen-counter">— / —</div>
+    <div class="ctrl-sep"></div>
+    <div class="speed-group" id="speed-group">
+      <button class="speed-btn" data-speed="0.25">¼×</button>
+      <button class="speed-btn" data-speed="0.5">½×</button>
+      <button class="speed-btn active" data-speed="1">1×</button>
+      <button class="speed-btn" data-speed="2">2×</button>
+      <button class="speed-btn" data-speed="4">4×</button>
+    </div>
+  </div>
+</div>
+
+<!-- Keyboard hints -->
+<div id="kb-hint">
+  <div>Space — play / pause</div>
+  <div>← → — step frame</div>
+  <div>1–4 — jump to epoch</div>
+</div>
+
+<!-- Start overlay -->
+<div id="start-overlay">
+  <h2>Origin</h2>
+  <p class="start-sub">the evolutionary record of lattice</p>
+  <div class="start-stats" id="start-stats"></div>
+  <div class="start-prompt">click to begin</div>
+</div>
+
+<script>
+// ── Color themes ──────────────────────────────────────────────────────────────
+const TYPE_COLORS = {
+  '1d':                 { colors: ['#0a0a0f','#1a1a3e','#3b2d8b','#6b4edb','#9d7af5','#c8abff','#e8d8ff','#ffffff'] },
+  '2d':                 { colors: ['#0a0a0f','#0d2818','#166b3a','#22a95c','#4ade80','#7af5a8','#b8ffd4','#e8fff0'] },
+  'lsystem':            { colors: ['#0a0a0f','#2d1a0a','#6b3a0d','#a85c16','#db8b22','#f5b84a','#ffe088','#fff4cc'] },
+  'reaction-diffusion': { colors: ['#0a0a0f','#1a0a2d','#3b0d6b','#6b16a8','#a822db','#d44af5','#f088ff','#ffccff'] },
+  'voronoi':            { colors: ['#0a0a0f','#0a1a2d','#0d3b6b','#166ba8','#22a8db','#4ad4f5','#88eeff','#ccf8ff'] },
+  'wfc':                { colors: ['#0a0a0f','#2d0a0a','#6b0d1a','#a8163b','#db226b','#f54a9d','#ff88c8','#ffccee'] },
+  'spirograph':         { colors: ['#0a0a0f','#1a2d0a','#3b6b0d','#6ba816','#a8db22','#d4f54a','#eeff88','#ffffcc'] },
+  'attractor':          { colors: ['#0a0a0f','#2d1a1a','#6b2d2d','#a84a3b','#db6b4a','#f59d6b','#ffc8a0','#ffe8d8'] },
+  'julia':              { colors: ['#0a0a0f','#0a2d2d','#0d6b5b','#16a88a','#22dbb5','#4af5d4','#88ffe8','#ccfff4'] },
+  'noise':              { colors: ['#0a0a0f','#1a1a0a','#3b3b0d','#6b6b16','#a8a822','#d4d44a','#eeff88','#ffffcc'] },
+  'flowfield':          { colors: ['#0a0a0f','#0a1a1a','#0d3b3b','#166b6b','#22a8a8','#4ad4d4','#88eeff','#ccffff'] },
+};
+
+const EPOCH_COLORS = {
+  emergence: '#7c6fe0',
+  order:     '#4ade80',
+  chaos:     '#ef4444',
+  harmony:   '#fbbf24',
+};
+
+const TYPE_LABELS = {
+  '1d': '1D Automaton', '2d': '2D Life-like', 'lsystem': 'L-System',
+  'reaction-diffusion': 'Reaction-Diffusion', 'voronoi': 'Voronoi',
+  'wfc': 'Wave Function Collapse', 'spirograph': 'Spirograph',
+  'attractor': 'Strange Attractor', 'julia': 'Julia Set',
+  'noise': 'Fractal Noise', 'flowfield': 'Flow Field',
+};
+
+function charIntensity(ch) {
+  if (ch === ' ') return 0;
+  const light = '\u00B7.:~\u2801';
+  const med1  = '\u2591\u2022\u2248\u2803\u25B3\u25BD\u2726';
+  const med2  = '\u2592\u25CB\u223F\u2807\u25C7\u2727\u2766';
+  const med3  = '\u2593\u25CF\u224B\u280F\u25C8\u2605\u273F';
+  const heavy = '\u2588\u25C6\u2307\u281F\u2B21\u2736\u2740\u2741';
+  const max   = '\u2573\u25D0\u25D1\u25D2\u25D3\u2301\u283F\u28FF\u2B22\u2739\u273A';
+  if (light.includes(ch)) return 1;
+  if (med1.includes(ch))  return 2;
+  if (med2.includes(ch))  return 3;
+  if (med3.includes(ch))  return 4;
+  if (heavy.includes(ch)) return 5;
+  if (max.includes(ch))   return 6;
+  return 3;
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let archive = [];
+let events = {};   // generation → narrative string
+let playing = false;
+let speed = 1;     // frames per second multiplier (base = 3s per frame)
+let currentIndex = 0;
+let lastAdvanceTime = 0;
+let transitioning = false;
+let transStart = 0;
+const TRANS_DURATION = 700; // ms crossfade
+let prevIndex = -1;
+
+// Precomputed parsed pieces for fast drawing
+let parsed = []; // {chars: [{ch, intensity, col, row}], rows, cols}
+
+// ── Canvas resize ─────────────────────────────────────────────────────────────
+function resize() {
+  canvas.width  = window.innerWidth  * devicePixelRatio;
+  canvas.height = window.innerHeight * devicePixelRatio;
+  canvas.style.width  = window.innerWidth  + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  if (archive.length > 0) drawFrame(1);
+}
+
+window.addEventListener('resize', () => { resize(); });
+
+// ── Parse rendered ASCII into char cells ──────────────────────────────────────
+function parseRendered(rendered) {
+  const lines = rendered.split('\n');
+  const nonEmpty = lines.filter(l => l.length > 0);
+  const rows = nonEmpty.length;
+  const cols = Math.max(...nonEmpty.map(l => [...l].length));
+  const chars = [];
+  for (let row = 0; row < nonEmpty.length; row++) {
+    const line = nonEmpty[row];
+    let col = 0;
+    for (const ch of line) {
+      const intensity = charIntensity(ch);
+      if (intensity > 0) chars.push({ ch, intensity, col, row });
+      col++;
+    }
+  }
+  return { chars, rows, cols };
+}
+
+// ── Draw one piece onto canvas at given alpha ─────────────────────────────────
+function drawPiece(index, alpha) {
+  if (index < 0 || index >= archive.length) return;
+  const piece = archive[index];
+  const p = parsed[index];
+  if (!p || p.chars.length === 0) return;
+
+  const theme = TYPE_COLORS[piece.genome.type] || TYPE_COLORS['2d'];
+
+  // Calculate font size to fit art within canvas
+  // Leave some margin for the HUD (top ~60px, bottom ~100px)
+  const marginTop  = 70  * devicePixelRatio;
+  const marginBot  = 110 * devicePixelRatio;
+  const availW = canvas.width;
+  const availH = canvas.height - marginTop - marginBot;
+
+  // Measure character: monospace ratio ≈ 0.6 (width/height)
+  const charRatio = 0.6;
+  // Size to fit within available space
+  const sizeByW = availW / (p.cols * charRatio);
+  const sizeByH = availH / (p.rows * 1.25); // 1.25 = line height factor
+  const fontSize = Math.min(sizeByW, sizeByH, 24 * devicePixelRatio);
+
+  const charW  = fontSize * charRatio;
+  const lineH  = fontSize * 1.25;
+  const totalW = p.cols  * charW;
+  const totalH = p.rows  * lineH;
+
+  const offsetX = (canvas.width  - totalW) / 2;
+  const offsetY = marginTop + (availH - totalH) / 2;
+
+  ctx.save();
+  ctx.font = `${fontSize}px 'SF Mono', 'Fira Code', 'Cascadia Code', monospace`;
+  ctx.textBaseline = 'top';
+  ctx.globalAlpha = alpha;
+
+  for (const { ch, intensity, col, row } of p.chars) {
+    const color = theme.colors[Math.min(intensity, theme.colors.length - 1)];
+    ctx.fillStyle = color;
+    ctx.fillText(ch, offsetX + col * charW, offsetY + row * lineH);
+  }
+
+  ctx.restore();
+}
+
+// ── Compute narrative events from gallery data ────────────────────────────────
+function computeEvents(data, sortedArchive) {
+  const ev = {};
+
+  // First piece ever
+  if (sortedArchive.length > 0) {
+    const first = sortedArchive[0];
+    ev[first.generation] = `generation ${first.generation} — first structured form emerges`;
+  }
+
+  // Epoch transitions (from history)
+  let prevEpoch = null;
+  for (const h of data.history) {
+    if (h.epoch !== prevEpoch && prevEpoch !== null) {
+      ev[h.generation] = `epoch shift — ${prevEpoch} → ${h.epoch}`;
+    }
+    prevEpoch = h.epoch;
+  }
+
+  // First appearance of each species
+  const seenTypes = {};
+  for (const p of sortedArchive) {
+    const t = p.genome.type;
+    if (!seenTypes[t]) {
+      seenTypes[t] = true;
+      const label = TYPE_LABELS[t] || t;
+      // Don't overwrite epoch messages — they're more dramatic
+      if (!ev[p.generation]) {
+        ev[p.generation] = `new life form discovered — ${label.toLowerCase()}`;
+      }
+    }
+  }
+
+  // Score milestones
+  let maxSeen = 0;
+  const milestones = [0.70, 0.75, 0.78, 0.79, 0.80];
+  for (const p of sortedArchive) {
+    for (const m of milestones) {
+      if (p.score >= m && maxSeen < m) {
+        maxSeen = m;
+        if (!ev[p.generation]) {
+          ev[p.generation] = `fitness milestone — score exceeds ${(m * 100).toFixed(0)}%`;
+        }
+      }
+    }
+  }
+
+  // HoF induction (use generation from HoF pieces)
+  for (const p of (data.hallOfFame || [])) {
+    const gen = p.generation;
+    if (gen && !ev[gen]) {
+      ev[gen] = `hall of fame — this piece will be remembered`;
+    }
+  }
+
+  return ev;
+}
+
+// ── Animation loop ────────────────────────────────────────────────────────────
+function drawBackground() {
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawFrame(alpha) {
+  drawBackground();
+  if (prevIndex >= 0 && transitioning) {
+    const t = (performance.now() - transStart) / TRANS_DURATION;
+    const progress = Math.min(t, 1);
+    const eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+    drawPiece(prevIndex, (1 - eased) * alpha);
+    drawPiece(currentIndex, eased * alpha);
+    if (progress >= 1) {
+      transitioning = false;
+      prevIndex = -1;
+    }
+  } else {
+    drawPiece(currentIndex, alpha);
+  }
+}
+
+let rafId = null;
+let globalAlpha = 1;
+let lastFrameTime = 0;
+const BASE_INTERVAL = 3000; // ms per piece at 1× speed
+
+function loop(timestamp) {
+  rafId = requestAnimationFrame(loop);
+
+  drawFrame(globalAlpha);
+
+  if (playing) {
+    const interval = BASE_INTERVAL / speed;
+    if (timestamp - lastAdvanceTime >= interval) {
+      advance();
+      lastAdvanceTime = timestamp;
+    }
+  }
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function advance() {
+  if (currentIndex < archive.length - 1) {
+    goTo(currentIndex + 1);
+  } else {
+    // End of record — pause
+    playing = false;
+    updatePlayBtn();
+    showNarrative('— end of record —', 3000);
+  }
+}
+
+function goTo(index, instant = false) {
+  if (index === currentIndex && !instant) return;
+  prevIndex = instant ? -1 : currentIndex;
+  currentIndex = Math.max(0, Math.min(archive.length - 1, index));
+  if (!instant) {
+    transitioning = true;
+    transStart = performance.now();
+  }
+  updateHUD();
+  lastAdvanceTime = performance.now();
+}
+
+function updateHUD() {
+  if (archive.length === 0) return;
+  const piece = archive[currentIndex];
+
+  const typeColor  = (TYPE_COLORS[piece.genome.type]?.colors[5]) || '#7c6fe0';
+  const epochColor = EPOCH_COLORS[piece.epoch] || '#7c6fe0';
+
+  // Badges
+  const badgeType  = document.getElementById('badge-type');
+  const badgeEpoch = document.getElementById('badge-epoch');
+  badgeType.textContent  = TYPE_LABELS[piece.genome.type] || piece.genome.type;
+  badgeType.style.color  = typeColor;
+  badgeType.style.borderColor = typeColor;
+  badgeEpoch.textContent = piece.epoch;
+  badgeEpoch.style.color = epochColor;
+  badgeEpoch.style.borderColor = epochColor;
+
+  document.getElementById('hud-score').textContent = (piece.score * 100).toFixed(1) + '%';
+  document.getElementById('gen-counter').textContent = `${piece.generation} / ${archive[archive.length - 1].generation}`;
+
+  // Timeline
+  const pct = archive.length > 1 ? (currentIndex / (archive.length - 1)) * 100 : 0;
+  document.getElementById('timeline-fill').style.width  = pct + '%';
+  document.getElementById('timeline-thumb').style.left  = pct + '%';
+
+  // Narrative event
+  const ev = events[piece.generation];
+  if (ev) showNarrative(ev, 4000);
+
+  // Epoch flash on transitions
+  const isEpochEvent = ev && ev.includes('epoch shift');
+  if (isEpochEvent) triggerEpochFlash(epochColor);
+}
+
+let narrativeTimeout = null;
+function showNarrative(text, duration = 2500) {
+  const el = document.getElementById('narrative');
+  el.textContent = text;
+  el.classList.add('flash');
+  if (narrativeTimeout) clearTimeout(narrativeTimeout);
+  narrativeTimeout = setTimeout(() => {
+    el.classList.remove('flash');
+    el.textContent = '\u00A0'; // nbsp
+  }, duration);
+}
+
+function triggerEpochFlash(color) {
+  const el = document.getElementById('epoch-flash');
+  el.style.background = color;
+  el.style.opacity = '0.12';
+  requestAnimationFrame(() => {
+    el.style.transition = 'opacity 1.2s ease';
+    setTimeout(() => { el.style.opacity = '0'; }, 80);
+  });
+}
+
+// ── Timeline click-scrub ──────────────────────────────────────────────────────
+const timelineWrap = document.getElementById('timeline-wrap');
+
+function scrubToX(clientX) {
+  const rect = timelineWrap.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  const idx = Math.round(pct * (archive.length - 1));
+  goTo(idx);
+}
+
+let scrubbing = false;
+timelineWrap.addEventListener('mousedown', e => { scrubbing = true; scrubToX(e.clientX); });
+window.addEventListener('mousemove',  e => { if (scrubbing) scrubToX(e.clientX); });
+window.addEventListener('mouseup',    () => { scrubbing = false; });
+
+timelineWrap.addEventListener('touchstart', e => { scrubbing = true; scrubToX(e.touches[0].clientX); }, { passive: true });
+window.addEventListener('touchmove',  e => { if (scrubbing) scrubToX(e.touches[0].clientX); }, { passive: true });
+window.addEventListener('touchend',   () => { scrubbing = false; });
+
+// ── Build epoch bands on timeline ─────────────────────────────────────────────
+function buildTimelineBands() {
+  if (archive.length === 0) return;
+  const firstGen = archive[0].generation;
+  const lastGen  = archive[archive.length - 1].generation;
+  const totalSpan = Math.max(lastGen - firstGen, 1);
+
+  // Group by epoch spans
+  let bands = [];
+  let prev = null;
+  let bandStart = firstGen;
+
+  for (const piece of archive) {
+    if (piece.epoch !== prev) {
+      if (prev !== null) {
+        bands.push({ epoch: prev, start: bandStart, end: piece.generation });
+      }
+      bandStart = piece.generation;
+      prev = piece.epoch;
+    }
+  }
+  if (prev) bands.push({ epoch: prev, start: bandStart, end: lastGen });
+
+  const wrap = document.getElementById('timeline-wrap');
+  for (const b of bands) {
+    const left = ((b.start - firstGen) / totalSpan) * 100;
+    const width = ((b.end - b.start) / totalSpan) * 100;
+    const el = document.createElement('div');
+    el.className = 'epoch-band';
+    el.style.left = left + '%';
+    el.style.width = Math.max(width, 0.5) + '%';
+    el.style.background = EPOCH_COLORS[b.epoch] || '#888';
+    el.title = b.epoch;
+    wrap.insertBefore(el, wrap.firstChild);
+  }
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+function updatePlayBtn() {
+  const btn = document.getElementById('btn-play');
+  btn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+}
+
+document.getElementById('btn-play').addEventListener('click', () => {
+  playing = !playing;
+  if (playing) lastAdvanceTime = performance.now();
+  updatePlayBtn();
+});
+
+document.getElementById('btn-prev').addEventListener('click', () => {
+  playing = false;
+  updatePlayBtn();
+  goTo(currentIndex - 1);
+});
+
+document.getElementById('btn-next').addEventListener('click', () => {
+  playing = false;
+  updatePlayBtn();
+  goTo(currentIndex + 1);
+});
+
+document.getElementById('speed-group').addEventListener('click', e => {
+  const btn = e.target.closest('.speed-btn');
+  if (!btn) return;
+  speed = parseFloat(btn.dataset.speed);
+  document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+});
+
+// Jump to epoch via keyboard 1-4
+const epochStarts = {};
+function buildEpochJumps() {
+  const seen = {};
+  const epochs = ['emergence', 'order', 'chaos', 'harmony'];
+  for (let i = 0; i < archive.length; i++) {
+    const ep = archive[i].epoch;
+    if (!seen[ep]) {
+      seen[ep] = i;
+      const n = epochs.indexOf(ep);
+      if (n >= 0) epochStarts[n + 1] = i;
+    }
+  }
+}
+
+// Keyboard
+window.addEventListener('keydown', e => {
+  if (e.key === ' ') {
+    e.preventDefault();
+    playing = !playing;
+    if (playing) lastAdvanceTime = performance.now();
+    updatePlayBtn();
+  } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    playing = false;
+    updatePlayBtn();
+    goTo(currentIndex + 1);
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    playing = false;
+    updatePlayBtn();
+    goTo(currentIndex - 1);
+  } else if (['1','2','3','4'].includes(e.key)) {
+    const idx = epochStarts[parseInt(e.key)];
+    if (idx !== undefined) goTo(idx);
+  } else if (e.key === 'k') {
+    const hint = document.getElementById('kb-hint');
+    hint.classList.toggle('show');
+  }
+});
+
+// ── Start overlay ─────────────────────────────────────────────────────────────
+document.getElementById('start-overlay').addEventListener('click', () => {
+  const overlay = document.getElementById('start-overlay');
+  overlay.style.transition = 'opacity 0.6s ease';
+  overlay.style.opacity = '0';
+  setTimeout(() => overlay.remove(), 600);
+  playing = true;
+  lastAdvanceTime = performance.now();
+  updatePlayBtn();
+});
+
+// ── Load and initialize ───────────────────────────────────────────────────────
+async function init() {
+  const res = await fetch('./gallery.json');
+  if (!res.ok) throw new Error('Failed to load gallery.json');
+  const data = await res.json();
+
+  // Sort archive by generation ascending
+  archive = [...(data.archive || [])].sort((a, b) => a.generation - b.generation);
+
+  if (archive.length === 0) {
+    document.getElementById('start-overlay').innerHTML =
+      '<p style="color:var(--text-dim); font-size: 0.8rem;">No evolutionary archive yet.<br>Run a few evolution cycles first.</p>';
+    return;
+  }
+
+  // Parse all rendered strings
+  parsed = archive.map(p => parseRendered(p.rendered || ''));
+
+  // Compute narrative events
+  events = computeEvents(data, archive);
+
+  // Build timeline epoch bands
+  buildTimelineBands();
+  buildEpochJumps();
+
+  // Populate start screen stats
+  const firstGen = archive[0].generation;
+  const lastGen  = archive[archive.length - 1].generation;
+  const typeSet  = new Set(archive.map(p => p.genome.type));
+  const bestScore = Math.max(...archive.map(p => p.score));
+  document.getElementById('start-stats').innerHTML = `
+    <div class="start-stat">
+      <div class="start-stat-val">${archive.length}</div>
+      <div class="start-stat-label">frames</div>
+    </div>
+    <div class="start-stat">
+      <div class="start-stat-val">${lastGen - firstGen + 1}</div>
+      <div class="start-stat-label">generations</div>
+    </div>
+    <div class="start-stat">
+      <div class="start-stat-val">${typeSet.size}</div>
+      <div class="start-stat-label">species</div>
+    </div>
+    <div class="start-stat">
+      <div class="start-stat-val">${(bestScore * 100).toFixed(1)}%</div>
+      <div class="start-stat-label">peak fitness</div>
+    </div>
+  `;
+
+  // Initial draw and HUD
+  resize();
+  updateHUD();
+  drawFrame(1);
+
+  // Start render loop
+  rafId = requestAnimationFrame(loop);
+}
+
+init().catch(err => {
+  console.error('Origin init failed:', err);
+  document.getElementById('start-overlay').innerHTML =
+    `<p style="color:var(--text-dim); font-size:0.8rem;">Failed to load gallery data.<br>${err.message}</p>`;
+});
+</script>
+</body>
+</html>
