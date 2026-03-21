@@ -550,12 +550,16 @@
         'Accept': 'application/json',
       };
       const base = SUPABASE_URL + '/rest/v1';
-      const [popRes, genRes, hofRes] = await Promise.all([
+      const [popRes, genRes, hofRes, archiveCountRes, archiveRes] = await Promise.all([
         fetch(base + '/population?order=score.desc&limit=8', { headers }),
         fetch(base + '/generations?order=generation.asc', { headers }),
         fetch(base + '/hall_of_fame?order=score.desc&limit=20', { headers }),
+        fetch(base + '/archive?select=id', { headers: { ...headers, 'Prefer': 'count=exact', 'Range': '0-0' } }),
+        fetch(base + '/archive?order=generation.desc&select=id,genome,score,metrics,rendered,generation,created_at', { headers: { ...headers, 'Range': '0-49' } }),
       ]);
       if (!popRes.ok || !genRes.ok || !hofRes.ok) throw new Error('Supabase fetch failed');
+      const totalPiecesEver = parseInt(archiveCountRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+      const archiveRaw = archiveRes.ok ? await archiveRes.json() : [];
       const [pieces, generations, hallOfFame] = await Promise.all([popRes.json(), genRes.json(), hofRes.json()]);
       if (generations.length === 0) throw new Error('No data in Supabase');
       const latest = generations[generations.length - 1];
@@ -567,9 +571,9 @@
       }));
       return {
         generation: latest.generation,
-        stats: { totalPiecesEver: 0, bestScoreEver: Math.max(...generations.map(g => g.best_score)), avgScore: latest.avg_score },
+        stats: { totalPiecesEver: totalPiecesEver, bestScoreEver: Math.max(...generations.map(g => g.best_score)), avgScore: latest.avg_score },
         history,
-        archive: [],
+        archive: archiveRaw.map(a => ({ id: a.id, genome: a.genome, score: a.score, metrics: a.metrics, rendered: a.rendered, generation: a.generation, createdAt: a.created_at })),
         hallOfFame: hallOfFame.map(h => ({ id: h.id, genome: h.genome, score: h.score, metrics: h.metrics, rendered: h.rendered, generation: h.generation, createdAt: h.inducted_at })),
         pieces: pieces.map(p => ({ id: p.id, genome: p.genome, score: p.score, metrics: p.metrics, rendered: p.rendered, generation: p.generation, createdAt: p.created_at })),
       };
