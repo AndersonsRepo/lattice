@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Terraform</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .canvas-area {
+      flex: 1;
+      position: relative;
+    }
+
+    #scene { display: block; width: 100%; height: 100%; }
+
+    .canvas-info {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+    .canvas-info .type-name { color: var(--accent); text-transform: uppercase; letter-spacing: 0.12em; }
+
+    .sidebar {
+      width: 320px;
+      min-width: 320px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 1.25rem 1.25rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header h1 {
+      font-size: 1rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+    }
+    .sidebar-header .back-link {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .sidebar-header .back-link:hover { color: var(--accent); }
+
+    .type-selector {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .type-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+    .type-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+    }
+    .type-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      padding: 0.4rem 0.2rem;
+      border-radius: 4px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      letter-spacing: 0.03em;
+    }
+    .type-btn:hover { border-color: var(--accent); color: var(--text); }
+    .type-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .controls-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 1.25rem;
+    }
+    .controls-scroll::-webkit-scrollbar { width: 4px; }
+    .controls-scroll::-webkit-scrollbar-track { background: transparent; }
+    .controls-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .control-group {
+      margin-bottom: 1rem;
+    }
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.35rem;
+    }
+    .control-value {
+      color: var(--accent);
+      font-size: 0.6rem;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: 2px solid var(--bg);
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    .section-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      padding-bottom: 0.4rem;
+      margin-bottom: 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .action-bar {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .action-btn {
+      flex: 1;
+      min-width: 60px;
+      padding: 0.5rem 0.4rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      text-align: center;
+      letter-spacing: 0.05em;
+      transition: all 0.15s;
+    }
+    .action-btn:hover { border-color: var(--accent); color: var(--text); }
+    .action-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .mic-indicator {
+      position: absolute;
+      top: 1.25rem;
+      left: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.6rem;
+      color: var(--green);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .mic-indicator.active { opacity: 1; }
+    .mic-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: mic-pulse 1.2s infinite;
+    }
+    @keyframes mic-pulse {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.4); }
+    }
+
+    .shortcuts {
+      position: absolute;
+      bottom: 1.25rem;
+      right: 340px;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+      opacity: 0.5;
+      pointer-events: none;
+      text-align: right;
+      line-height: 1.8;
+    }
+
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      .sidebar { width: 100%; min-width: 100%; max-height: 45vh; border-left: none; border-top: 1px solid var(--border); }
+      .canvas-area { height: 55vh; }
+      .shortcuts { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas-area">
+    <canvas id="scene"></canvas>
+    <div class="mic-indicator" id="micIndicator">
+      <span class="mic-dot"></span> mic active
+    </div>
+    <div class="canvas-info">
+      <span class="type-name" id="typeName">julia set</span><br>
+      <span id="fpsDisplay">60 fps</span>
+    </div>
+    <div class="shortcuts">
+      R randomize &middot; M mutate &middot; space wireframe<br>
+      A audio &middot; scroll zoom &middot; drag orbit
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Terraform</h1>
+      <a href="index.html" class="back-link">&larr; back to gallery</a>
+    </div>
+
+    <div class="type-selector">
+      <div class="type-label">Engine</div>
+      <div class="type-grid" id="typeGrid">
+        <button class="type-btn active" data-type="julia">Julia Set</button>
+        <button class="type-btn" data-type="noise">Fractal Noise</button>
+        <button class="type-btn" data-type="rd">React-Diffuse</button>
+        <button class="type-btn" data-type="flow">Flow Field</button>
+        <button class="type-btn" data-type="attractor">Attractor</button>
+        <button class="type-btn" data-type="voronoi">Voronoi</button>
+      </div>
+    </div>
+
+    <div class="controls-scroll" id="controlsContainer"></div>
+
+    <div class="action-bar">
+      <button class="action-btn" id="btnRandomize">Randomize</button>
+      <button class="action-btn" id="btnMutate">Mutate</button>
+      <button class="action-btn" id="btnWireframe">Wireframe</button>
+      <button class="action-btn" id="btnMic">Mic</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // --- Constants ---
+    const GRID = 128;
+    const HALF = GRID / 2;
+
+    // --- Three.js Setup ---
+    const canvas = document.getElementById('scene');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x0a0a0f);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0a0a0f, 0.008);
+
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 500);
+    camera.position.set(60, 80, 100);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.target.set(0, 0, 0);
+    controls.maxDistance = 250;
+    controls.minDistance = 20;
+
+    // Lights
+    const ambient = new THREE.AmbientLight(0x1a1a2e, 0.6);
+    scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0x7c6fe0, 0.8);
+    dirLight.position.set(40, 80, 60);
+    scene.add(dirLight);
+    const rimLight = new THREE.DirectionalLight(0x4ade80, 0.3);
+    rimLight.position.set(-40, 20, -60);
+    scene.add(rimLight);
+
+    // Ground reference plane
+    const groundGeo = new THREE.PlaneGeometry(200, 200);
+    const groundMat = new THREE.MeshBasicMaterial({ color: 0x0a0a0f, transparent: true, opacity: 0.5 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -1;
+    scene.add(ground);
+
+    // Grid helper
+    const gridHelper = new THREE.GridHelper(160, 40, 0x1e1e2e, 0x12121a);
+    gridHelper.position.y = -0.5;
+    scene.add(gridHelper);
+
+    // Terrain mesh
+    const terrainGeo = new THREE.PlaneGeometry(GRID, GRID, GRID - 1, GRID - 1);
+    terrainGeo.rotateX(-Math.PI / 2);
+
+    const terrainMat = new THREE.MeshPhongMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      shininess: 40,
+      specular: new THREE.Color(0x3a3560),
+      flatShading: true,
+    });
+    const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+    scene.add(terrain);
+
+    // Wireframe overlay
+    const wireMat = new THREE.MeshBasicMaterial({
+      color: 0x7c6fe0,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.12,
+    });
+    const wireOverlay = new THREE.Mesh(terrainGeo, wireMat);
+    wireOverlay.visible = false;
+    scene.add(wireOverlay);
+
+    // --- Heightmap buffer ---
+    const heightmap = new Float32Array(GRID * GRID);
+    let audioLevel = 0;
+
+    // --- Seeded RNG ---
+    let rngSeed = Math.random() * 99999 | 0;
+    function rng() {
+      rngSeed = (rngSeed * 1664525 + 1013904223) & 0x7fffffff;
+      return rngSeed / 0x7fffffff;
+    }
+
+    // --- Simplex-like value noise ---
+    const permutation = new Uint8Array(512);
+    function initNoise(seed) {
+      rngSeed = seed;
+      for (let i = 0; i < 256; i++) permutation[i] = i;
+      for (let i = 255; i > 0; i--) {
+        const j = (rng() * (i + 1)) | 0;
+        [permutation[i], permutation[j]] = [permutation[j], permutation[i]];
+      }
+      for (let i = 0; i < 256; i++) permutation[i + 256] = permutation[i];
+    }
+
+    function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    function lerp(a, b, t) { return a + t * (b - a); }
+    function grad(hash, x, y) {
+      const h = hash & 3;
+      const u = h < 2 ? x : y;
+      const v = h < 2 ? y : x;
+      return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+    }
+
+    function noise2d(x, y) {
+      const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+      const xf = x - Math.floor(x), yf = y - Math.floor(y);
+      const u = fade(xf), v = fade(yf);
+      const aa = permutation[permutation[X] + Y];
+      const ab = permutation[permutation[X] + Y + 1];
+      const ba = permutation[permutation[X + 1] + Y];
+      const bb = permutation[permutation[X + 1] + Y + 1];
+      return lerp(
+        lerp(grad(aa, xf, yf), grad(ba, xf - 1, yf), u),
+        lerp(grad(ab, xf, yf - 1), grad(bb, xf - 1, yf - 1), u),
+        v
+      );
+    }
+
+    function fbm(x, y, octaves, persistence, lacunarity) {
+      let val = 0, amp = 1, freq = 1, max = 0;
+      for (let i = 0; i < octaves; i++) {
+        val += noise2d(x * freq, y * freq) * amp;
+        max += amp;
+        amp *= persistence;
+        freq *= lacunarity;
+      }
+      return val / max;
+    }
+
+    // --- Engine Definitions ---
+    const ENGINES = {
+      julia: {
+        name: 'Julia Set',
+        params: {
+          cReal: { min: -2, max: 2, step: 0.001, default: -0.7269 },
+          cImag: { min: -2, max: 2, step: 0.001, default: 0.1889 },
+          zoom: { min: 0.3, max: 4, step: 0.01, default: 1.2 },
+          maxIter: { min: 20, max: 200, step: 1, default: 80 },
+          height: { min: 5, max: 60, step: 0.5, default: 25 },
+        },
+        generate(p) {
+          for (let j = 0; j < GRID; j++) {
+            for (let i = 0; i < GRID; i++) {
+              let zr = (i - HALF) / (GRID * 0.25 * p.zoom);
+              let zi = (j - HALF) / (GRID * 0.25 * p.zoom);
+              let iter = 0;
+              while (zr * zr + zi * zi < 4 && iter < p.maxIter) {
+                const tmp = zr * zr - zi * zi + p.cReal;
+                zi = 2 * zr * zi + p.cImag;
+                zr = tmp;
+                iter++;
+              }
+              heightmap[j * GRID + i] = (iter / p.maxIter) * p.height;
+            }
+          }
+        },
+        randomize() {
+          const famous = [
+            [-0.7269, 0.1889], [-0.8, 0.156], [-0.4, 0.6],
+            [0.285, 0.01], [-0.835, -0.2321], [-0.70176, -0.3842],
+            [0.355, 0.355], [-0.1, 0.651], [-0.75, 0.11],
+          ];
+          const [cr, ci] = famous[(Math.random() * famous.length) | 0];
+          return {
+            cReal: cr + (Math.random() - 0.5) * 0.05,
+            cImag: ci + (Math.random() - 0.5) * 0.05,
+            zoom: 0.8 + Math.random() * 1.5,
+            maxIter: 40 + (Math.random() * 120) | 0,
+            height: 15 + Math.random() * 30,
+          };
+        },
+      },
+
+      noise: {
+        name: 'Fractal Noise',
+        params: {
+          scale: { min: 0.01, max: 0.2, step: 0.001, default: 0.05 },
+          octaves: { min: 1, max: 8, step: 1, default: 5 },
+          persistence: { min: 0.1, max: 0.9, step: 0.01, default: 0.55 },
+          lacunarity: { min: 1.2, max: 3.5, step: 0.01, default: 2.0 },
+          warp: { min: 0, max: 3, step: 0.01, default: 0.5 },
+          height: { min: 5, max: 60, step: 0.5, default: 30 },
+        },
+        generate(p) {
+          initNoise(rngSeed);
+          for (let j = 0; j < GRID; j++) {
+            for (let i = 0; i < GRID; i++) {
+              let x = i * p.scale, y = j * p.scale;
+              if (p.warp > 0) {
+                const wx = fbm(x + 5.2, y + 1.3, 3, 0.5, 2.0) * p.warp;
+                const wy = fbm(x + 1.7, y + 9.2, 3, 0.5, 2.0) * p.warp;
+                x += wx; y += wy;
+              }
+              const v = fbm(x, y, p.octaves, p.persistence, p.lacunarity);
+              heightmap[j * GRID + i] = (v * 0.5 + 0.5) * p.height;
+            }
+          }
+        },
+        randomize() {
+          return {
+            scale: 0.02 + Math.random() * 0.12,
+            octaves: 2 + (Math.random() * 6) | 0,
+            persistence: 0.3 + Math.random() * 0.5,
+            lacunarity: 1.5 + Math.random() * 1.5,
+            warp: Math.random() * 2.5,
+            height: 15 + Math.random() * 35,
+          };
+        },
+      },
+
+      rd: {
+        name: 'Reaction-Diffusion',
+        params: {
+          feed: { min: 0.01, max: 0.08, step: 0.001, default: 0.037 },
+          kill: { min: 0.04, max: 0.075, step: 0.001, default: 0.06 },
+          Du: { min: 0.1, max: 0.3, step: 0.005, default: 0.21 },
+          Dv: { min: 0.03, max: 0.12, step: 0.005, default: 0.05 },
+          steps: { min: 200, max: 3000, step: 50, default: 1200 },
+          height: { min: 5, max: 60, step: 0.5, default: 25 },
+        },
+        generate(p) {
+          const N = GRID;
+          const u = new Float32Array(N * N).fill(1);
+          const v = new Float32Array(N * N).fill(0);
+          // Seed center region
+          for (let j = N / 2 - 10; j < N / 2 + 10; j++) {
+            for (let i = N / 2 - 10; i < N / 2 + 10; i++) {
+              if (i >= 0 && i < N && j >= 0 && j < N) {
+                u[j * N + i] = 0.5 + Math.random() * 0.1;
+                v[j * N + i] = 0.25 + Math.random() * 0.1;
+              }
+            }
+          }
+          // Additional random seeds
+          for (let s = 0; s < 5; s++) {
+            const cx = (Math.random() * N) | 0, cy = (Math.random() * N) | 0;
+            for (let dj = -4; dj <= 4; dj++) for (let di = -4; di <= 4; di++) {
+              const ni = (cx + di + N) % N, nj = (cy + dj + N) % N;
+              u[nj * N + ni] = 0.5;
+              v[nj * N + ni] = 0.25;
+            }
+          }
+          const un = new Float32Array(N * N);
+          const vn = new Float32Array(N * N);
+          for (let step = 0; step < p.steps; step++) {
+            for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+              const idx = j * N + i;
+              const up = ((j - 1 + N) % N) * N + i;
+              const dn = ((j + 1) % N) * N + i;
+              const lt = j * N + (i - 1 + N) % N;
+              const rt = j * N + (i + 1) % N;
+              const lapU = u[up] + u[dn] + u[lt] + u[rt] - 4 * u[idx];
+              const lapV = v[up] + v[dn] + v[lt] + v[rt] - 4 * v[idx];
+              const uvv = u[idx] * v[idx] * v[idx];
+              un[idx] = u[idx] + p.Du * lapU - uvv + p.feed * (1 - u[idx]);
+              vn[idx] = v[idx] + p.Dv * lapV + uvv - (p.feed + p.kill) * v[idx];
+            }
+            u.set(un);
+            v.set(vn);
+          }
+          for (let k = 0; k < N * N; k++) {
+            heightmap[k] = v[k] * p.height;
+          }
+        },
+        randomize() {
+          const presets = [
+            { feed: 0.037, kill: 0.06 },
+            { feed: 0.03, kill: 0.062 },
+            { feed: 0.025, kill: 0.06 },
+            { feed: 0.04, kill: 0.06 },
+            { feed: 0.055, kill: 0.062 },
+            { feed: 0.014, kill: 0.054 },
+          ];
+          const pr = presets[(Math.random() * presets.length) | 0];
+          return {
+            feed: pr.feed + (Math.random() - 0.5) * 0.005,
+            kill: pr.kill + (Math.random() - 0.5) * 0.003,
+            Du: 0.15 + Math.random() * 0.1,
+            Dv: 0.04 + Math.random() * 0.06,
+            steps: 800 + (Math.random() * 1500) | 0,
+            height: 15 + Math.random() * 35,
+          };
+        },
+      },
+
+      flow: {
+        name: 'Flow Field',
+        params: {
+          fieldScale: { min: 0.01, max: 0.15, step: 0.001, default: 0.04 },
+          particles: { min: 200, max: 5000, step: 50, default: 2000 },
+          stepLength: { min: 0.3, max: 2, step: 0.01, default: 0.8 },
+          steps: { min: 20, max: 200, step: 5, default: 80 },
+          curl: { min: 0, max: 1, step: 0.01, default: 0.6 },
+          height: { min: 5, max: 60, step: 0.5, default: 20 },
+        },
+        generate(p) {
+          initNoise(rngSeed);
+          heightmap.fill(0);
+          const accum = new Float32Array(GRID * GRID);
+          for (let n = 0; n < p.particles; n++) {
+            let x = Math.random() * GRID, y = Math.random() * GRID;
+            for (let s = 0; s < p.steps; s++) {
+              const nx = x * p.fieldScale, ny = y * p.fieldScale;
+              let angle;
+              if (p.curl > 0.01) {
+                const eps = 0.01;
+                const dx = (noise2d(nx, ny + eps) - noise2d(nx, ny - eps)) / (2 * eps);
+                const dy = -(noise2d(nx + eps, ny) - noise2d(nx - eps, ny)) / (2 * eps);
+                const gradAngle = Math.atan2(dy, dx);
+                const noiseAngle = noise2d(nx, ny) * Math.PI * 2;
+                angle = lerp(noiseAngle, gradAngle, p.curl);
+              } else {
+                angle = noise2d(nx, ny) * Math.PI * 2;
+              }
+              x += Math.cos(angle) * p.stepLength;
+              y += Math.sin(angle) * p.stepLength;
+              const gi = Math.round(x), gj = Math.round(y);
+              if (gi >= 0 && gi < GRID && gj >= 0 && gj < GRID) {
+                accum[gj * GRID + gi] += 1;
+              }
+            }
+          }
+          let maxA = 1;
+          for (let k = 0; k < accum.length; k++) if (accum[k] > maxA) maxA = accum[k];
+          for (let k = 0; k < GRID * GRID; k++) {
+            heightmap[k] = (accum[k] / maxA) * p.height;
+          }
+        },
+        randomize() {
+          return {
+            fieldScale: 0.02 + Math.random() * 0.1,
+            particles: 500 + (Math.random() * 4000) | 0,
+            stepLength: 0.4 + Math.random() * 1.2,
+            steps: 30 + (Math.random() * 150) | 0,
+            curl: Math.random(),
+            height: 12 + Math.random() * 35,
+          };
+        },
+      },
+
+      attractor: {
+        name: 'Strange Attractor',
+        params: {
+          a: { min: -3, max: 3, step: 0.01, default: -1.4 },
+          b: { min: -3, max: 3, step: 0.01, default: 1.6 },
+          c: { min: -3, max: 3, step: 0.01, default: 1.0 },
+          d: { min: -3, max: 3, step: 0.01, default: 0.7 },
+          iterations: { min: 50000, max: 500000, step: 10000, default: 200000 },
+          height: { min: 5, max: 60, step: 0.5, default: 25 },
+        },
+        generate(p) {
+          heightmap.fill(0);
+          const accum = new Float32Array(GRID * GRID);
+          let x = 0.1, y = 0.1;
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          const pts = [];
+          for (let i = 0; i < p.iterations; i++) {
+            const nx = Math.sin(p.a * y) + p.c * Math.cos(p.a * x);
+            const ny = Math.sin(p.b * x) + p.d * Math.cos(p.b * y);
+            x = nx; y = ny;
+            if (i > 100) { pts.push(x, y); minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+          }
+          const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
+          for (let i = 0; i < pts.length; i += 2) {
+            const gi = ((pts[i] - minX) / rangeX * (GRID - 1)) | 0;
+            const gj = ((pts[i + 1] - minY) / rangeY * (GRID - 1)) | 0;
+            if (gi >= 0 && gi < GRID && gj >= 0 && gj < GRID) accum[gj * GRID + gi]++;
+          }
+          let maxA = 1;
+          for (let k = 0; k < accum.length; k++) if (accum[k] > maxA) maxA = accum[k];
+          for (let k = 0; k < GRID * GRID; k++) {
+            heightmap[k] = Math.sqrt(accum[k] / maxA) * p.height;
+          }
+        },
+        randomize() {
+          return {
+            a: (Math.random() - 0.5) * 4,
+            b: (Math.random() - 0.5) * 4,
+            c: (Math.random() - 0.5) * 4,
+            d: (Math.random() - 0.5) * 4,
+            iterations: 100000 + (Math.random() * 300000) | 0,
+            height: 15 + Math.random() * 35,
+          };
+        },
+      },
+
+      voronoi: {
+        name: 'Voronoi',
+        params: {
+          seeds: { min: 3, max: 60, step: 1, default: 20 },
+          jitter: { min: 0, max: 1, step: 0.01, default: 0.8 },
+          height: { min: 5, max: 60, step: 0.5, default: 20 },
+          ridgeWidth: { min: 0.5, max: 10, step: 0.1, default: 3 },
+        },
+        generate(p) {
+          const pts = [];
+          const cols = Math.ceil(Math.sqrt(p.seeds));
+          const cellSize = GRID / cols;
+          for (let s = 0; s < p.seeds; s++) {
+            const row = (s / cols) | 0, col = s % cols;
+            const cx = (col + 0.5) * cellSize + (Math.random() - 0.5) * cellSize * p.jitter;
+            const cy = (row + 0.5) * cellSize + (Math.random() - 0.5) * cellSize * p.jitter;
+            pts.push({ x: cx, y: cy });
+          }
+          for (let j = 0; j < GRID; j++) {
+            for (let i = 0; i < GRID; i++) {
+              let d1 = Infinity, d2 = Infinity;
+              for (const pt of pts) {
+                const d = Math.sqrt((i - pt.x) ** 2 + (j - pt.y) ** 2);
+                if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; }
+              }
+              const edge = d2 - d1;
+              const ridge = Math.max(0, 1 - edge / p.ridgeWidth);
+              heightmap[j * GRID + i] = ridge * p.height;
+            }
+          }
+        },
+        randomize() {
+          return {
+            seeds: 5 + (Math.random() * 50) | 0,
+            jitter: 0.3 + Math.random() * 0.7,
+            height: 10 + Math.random() * 40,
+            ridgeWidth: 1 + Math.random() * 8,
+          };
+        },
+      },
+    };
+
+    // --- Color mapping ---
+    const TYPE_COLORS = {
+      julia:     [0.49, 0.44, 0.88],  // accent purple
+      noise:     [0.29, 0.87, 0.50],  // green
+      rd:        [0.75, 0.20, 0.55],  // magenta
+      flow:      [0.20, 0.65, 0.85],  // cyan
+      attractor: [0.98, 0.75, 0.14],  // amber
+      voronoi:   [0.30, 0.70, 0.90],  // cerulean
+    };
+
+    function heightToColor(h, maxH, typeColor) {
+      const t = Math.min(h / (maxH || 1), 1);
+      const r = lerp(0.04, typeColor[0], t * 0.8) + t * t * 0.2;
+      const g = lerp(0.04, typeColor[1], t * 0.6) + t * t * 0.15;
+      const b = lerp(0.06, typeColor[2], t * 0.7) + t * t * 0.1;
+      return [Math.min(r, 1), Math.min(g, 1), Math.min(b, 1)];
+    }
+
+    // --- State ---
+    let currentType = 'julia';
+    let params = {};
+    let needsRegenerate = true;
+    let isWireframe = false;
+    let micActive = false;
+    let analyser = null;
+    let micData = null;
+
+    function copyDefaults(type) {
+      const p = {};
+      for (const [k, v] of Object.entries(ENGINES[type].params)) p[k] = v.default;
+      return p;
+    }
+
+    function setType(type) {
+      currentType = type;
+      params = copyDefaults(type);
+      rngSeed = (Math.random() * 99999) | 0;
+      buildControls();
+      updateTypeButtons();
+      document.getElementById('typeName').textContent = ENGINES[type].name;
+      needsRegenerate = true;
+    }
+
+    function updateTypeButtons() {
+      document.querySelectorAll('.type-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.type === currentType);
+      });
+    }
+
+    // --- Build sliders ---
+    function buildControls() {
+      const container = document.getElementById('controlsContainer');
+      container.innerHTML = '';
+
+      const secLabel = document.createElement('div');
+      secLabel.className = 'section-label';
+      secLabel.textContent = 'Parameters';
+      container.appendChild(secLabel);
+
+      const engine = ENGINES[currentType];
+      for (const [key, spec] of Object.entries(engine.params)) {
+        const group = document.createElement('div');
+        group.className = 'control-group';
+
+        const label = document.createElement('div');
+        label.className = 'control-label';
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = key;
+        const valSpan = document.createElement('span');
+        valSpan.className = 'control-value';
+        valSpan.id = `val-${key}`;
+        valSpan.textContent = formatVal(params[key], spec);
+        label.appendChild(nameSpan);
+        label.appendChild(valSpan);
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = spec.min;
+        slider.max = spec.max;
+        slider.step = spec.step;
+        slider.value = params[key];
+        slider.addEventListener('input', () => {
+          params[key] = parseFloat(slider.value);
+          valSpan.textContent = formatVal(params[key], spec);
+          needsRegenerate = true;
+        });
+
+        group.appendChild(label);
+        group.appendChild(slider);
+        container.appendChild(group);
+      }
+
+      // Audio reactivity section
+      const audioSec = document.createElement('div');
+      audioSec.className = 'section-label';
+      audioSec.style.marginTop = '0.8rem';
+      audioSec.textContent = 'Audio Reactivity';
+      container.appendChild(audioSec);
+
+      const audioNote = document.createElement('div');
+      audioNote.style.cssText = 'font-size:0.55rem;color:var(--text-dim);line-height:1.5;margin-bottom:0.5rem;';
+      audioNote.textContent = 'Enable mic to modulate terrain height with audio amplitude. Bass drives peaks, treble adds surface detail.';
+      container.appendChild(audioNote);
+    }
+
+    function formatVal(v, spec) {
+      if (spec.step >= 1) return v.toFixed(0);
+      if (spec.step >= 0.01) return v.toFixed(2);
+      return v.toFixed(3);
+    }
+
+    // --- Regenerate terrain ---
+    function regenerate() {
+      ENGINES[currentType].generate(params);
+      applyHeightmap();
+    }
+
+    function applyHeightmap() {
+      const pos = terrainGeo.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+      const tc = TYPE_COLORS[currentType];
+      let maxH = 0;
+      for (let k = 0; k < GRID * GRID; k++) if (heightmap[k] > maxH) maxH = heightmap[k];
+
+      for (let j = 0; j < GRID; j++) {
+        for (let i = 0; i < GRID; i++) {
+          const vi = j * GRID + i;
+          let h = heightmap[vi];
+          // Audio modulation
+          if (micActive && analyser && micData) {
+            analyser.getByteFrequencyData(micData);
+            const bassIdx = Math.min(i, micData.length - 1);
+            const trebleIdx = Math.min(i + GRID, micData.length - 1);
+            const bassBoost = (micData[bassIdx % micData.length] / 255) * audioLevel * 15;
+            const trebleDetail = (micData[trebleIdx % micData.length] / 255) * audioLevel * 3;
+            h += bassBoost + trebleDetail * Math.sin(i * 0.3 + j * 0.3);
+          }
+          pos.setY(vi, h);
+          const [r, g, b] = heightToColor(h, maxH || 1, tc);
+          colors[vi * 3] = r;
+          colors[vi * 3 + 1] = g;
+          colors[vi * 3 + 2] = b;
+        }
+      }
+      terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      pos.needsUpdate = true;
+      terrainGeo.computeVertexNormals();
+    }
+
+    // --- Mutation ---
+    function mutate() {
+      const engine = ENGINES[currentType];
+      for (const [key, spec] of Object.entries(engine.params)) {
+        const range = spec.max - spec.min;
+        params[key] += (Math.random() - 0.5) * range * 0.15;
+        params[key] = Math.max(spec.min, Math.min(spec.max, params[key]));
+        if (spec.step >= 1) params[key] = Math.round(params[key]);
+      }
+      buildControls();
+      needsRegenerate = true;
+    }
+
+    // --- Microphone ---
+    async function toggleMic() {
+      if (micActive) {
+        micActive = false;
+        document.getElementById('micIndicator').classList.remove('active');
+        document.getElementById('btnMic').classList.remove('active');
+        audioLevel = 0;
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const ctx = new AudioContext();
+        const source = ctx.createMediaStreamSource(stream);
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        micData = new Uint8Array(analyser.frequencyBinCount);
+        micActive = true;
+        audioLevel = 1;
+        document.getElementById('micIndicator').classList.add('active');
+        document.getElementById('btnMic').classList.add('active');
+      } catch (e) {
+        console.warn('Mic access denied', e);
+      }
+    }
+
+    // --- Events ---
+    document.getElementById('typeGrid').addEventListener('click', e => {
+      const btn = e.target.closest('.type-btn');
+      if (btn) setType(btn.dataset.type);
+    });
+
+    document.getElementById('btnRandomize').addEventListener('click', () => {
+      rngSeed = (Math.random() * 99999) | 0;
+      params = { ...ENGINES[currentType].randomize() };
+      buildControls();
+      needsRegenerate = true;
+    });
+
+    document.getElementById('btnMutate').addEventListener('click', mutate);
+
+    document.getElementById('btnWireframe').addEventListener('click', () => {
+      isWireframe = !isWireframe;
+      wireOverlay.visible = isWireframe;
+      document.getElementById('btnWireframe').classList.toggle('active', isWireframe);
+    });
+
+    document.getElementById('btnMic').addEventListener('click', toggleMic);
+
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT') return;
+      switch (e.key.toLowerCase()) {
+        case 'r':
+          rngSeed = (Math.random() * 99999) | 0;
+          params = { ...ENGINES[currentType].randomize() };
+          buildControls();
+          needsRegenerate = true;
+          break;
+        case 'm': mutate(); break;
+        case ' ':
+          e.preventDefault();
+          isWireframe = !isWireframe;
+          wireOverlay.visible = isWireframe;
+          document.getElementById('btnWireframe').classList.toggle('active', isWireframe);
+          break;
+        case 'a': toggleMic(); break;
+      }
+    });
+
+    // --- Resize ---
+    function resize() {
+      const area = document.querySelector('.canvas-area');
+      const w = area.clientWidth, h = area.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+
+    // --- Animation loop ---
+    let lastTime = 0, frameCount = 0, fpsTime = 0;
+
+    function animate(time) {
+      requestAnimationFrame(animate);
+
+      // FPS counter
+      frameCount++;
+      if (time - fpsTime > 1000) {
+        document.getElementById('fpsDisplay').textContent = `${frameCount} fps`;
+        frameCount = 0;
+        fpsTime = time;
+      }
+
+      // Regenerate if needed (throttle RD to avoid blocking)
+      if (needsRegenerate) {
+        needsRegenerate = false;
+        regenerate();
+      }
+
+      // Live audio modulation (update vertex heights each frame)
+      if (micActive && analyser) {
+        applyHeightmap();
+      }
+
+      // Gentle terrain rotation when idle
+      // terrain.rotation.y += 0.0005;
+      // wireOverlay.rotation.y = terrain.rotation.y;
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // --- Init ---
+    setType('julia');
+    resize();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
