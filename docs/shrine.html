@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Shrine</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: default;
+    }
+
+    canvas#particles {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      z-index: 0;
+    }
+
+    .vignette {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      background: radial-gradient(ellipse at center,
+        transparent 30%,
+        rgba(10,10,15,0.4) 60%,
+        rgba(10,10,15,0.85) 100%);
+    }
+
+    .shrine-container {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+
+    .piece-frame {
+      position: relative;
+      padding: 2px;
+      border-radius: 4px;
+      background: linear-gradient(135deg, var(--accent), var(--green), var(--amber), var(--accent));
+      background-size: 300% 300%;
+      animation: borderShift 12s ease-in-out infinite;
+      box-shadow:
+        0 0 40px rgba(124, 111, 224, 0.15),
+        0 0 80px rgba(124, 111, 224, 0.08),
+        0 0 120px rgba(74, 222, 128, 0.05);
+    }
+
+    @keyframes borderShift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .piece-inner {
+      background: var(--bg);
+      border-radius: 3px;
+      padding: 1.5rem 2rem;
+    }
+
+    #piece-art {
+      font-size: 0.58rem;
+      line-height: 1.12;
+      white-space: pre;
+      letter-spacing: 0.02em;
+      animation: breathe 6s ease-in-out infinite;
+      transition: opacity 1.5s ease;
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.92; filter: brightness(1); }
+      50% { opacity: 1; filter: brightness(1.08); }
+    }
+
+    .piece-title {
+      text-align: center;
+      margin-top: 1.5rem;
+      opacity: 0;
+      animation: fadeUp 2s ease 1.5s forwards;
+    }
+
+    .piece-title .species {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+    }
+
+    .piece-title .id {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      margin-top: 0.3rem;
+      letter-spacing: 0.08em;
+    }
+
+    .metrics-bar {
+      display: flex;
+      gap: 1.5rem;
+      justify-content: center;
+      margin-top: 1.2rem;
+      opacity: 0;
+      animation: fadeUp 2s ease 2.5s forwards;
+    }
+
+    .metric {
+      text-align: center;
+    }
+
+    .metric-value {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--green);
+      text-shadow: 0 0 12px rgba(74, 222, 128, 0.3);
+    }
+
+    .metric-label {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-top: 0.15rem;
+    }
+
+    .lineage-strip {
+      display: flex;
+      gap: 0.4rem;
+      justify-content: center;
+      align-items: center;
+      margin-top: 1rem;
+      opacity: 0;
+      animation: fadeUp 2s ease 3s forwards;
+    }
+
+    .lineage-node {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+
+    .lineage-node.current {
+      width: 10px;
+      height: 10px;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    .lineage-arrow {
+      color: var(--text-dim);
+      font-size: 0.5rem;
+    }
+
+    .inscription {
+      text-align: center;
+      margin-top: 1.8rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      font-style: italic;
+      opacity: 0;
+      animation: fadeUp 3s ease 3.5s forwards;
+      max-width: 500px;
+      line-height: 1.6;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .nav-arrow {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 10;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 1.2rem;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+      opacity: 0;
+      animation: fadeUp 2s ease 4s forwards;
+    }
+
+    .nav-arrow:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+
+    .nav-arrow.left { left: 1.5rem; }
+    .nav-arrow.right { right: 1.5rem; }
+
+    #back-btn {
+      position: fixed;
+      top: 1.2rem;
+      left: 1.5rem;
+      z-index: 100;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+      transition: color 0.2s;
+    }
+    #back-btn:hover { color: var(--text); }
+
+    .counter {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 10;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      opacity: 0;
+      animation: fadeUp 2s ease 4s forwards;
+    }
+
+    .genome-dna {
+      display: flex;
+      justify-content: center;
+      gap: 2px;
+      margin-top: 1rem;
+      opacity: 0;
+      animation: fadeUp 2s ease 3.2s forwards;
+    }
+
+    .dna-bar {
+      width: 3px;
+      border-radius: 1px;
+    }
+
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.97);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      cursor: pointer;
+      transition: opacity 1s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 3rem;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+      animation: startPulse 3s ease-in-out infinite;
+    }
+    .start-title {
+      font-size: 1.4rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      color: var(--accent);
+      margin-top: 1rem;
+      text-transform: uppercase;
+    }
+    .start-sub {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 0.8rem;
+      letter-spacing: 0.1em;
+    }
+    @keyframes startPulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 1; }
+    }
+
+    @media (max-width: 700px) {
+      #piece-art { font-size: 0.35rem; }
+      .piece-inner { padding: 0.8rem 1rem; }
+      .metrics-bar { gap: 0.8rem; }
+      .metric-value { font-size: 0.8rem; }
+      .nav-arrow { width: 32px; height: 32px; font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" id="back-btn">&larr; Gallery</a>
+  <canvas id="particles"></canvas>
+  <div class="vignette"></div>
+
+  <div class="start-overlay" id="start-overlay">
+    <div class="start-icon">&#10022;</div>
+    <div class="start-title">Shrine</div>
+    <div class="start-sub">the finest specimens, presented as sacred artifacts</div>
+    <div class="start-sub" style="margin-top: 1.5rem; opacity: 0.5;">click to enter</div>
+  </div>
+
+  <div class="shrine-container" id="shrine">
+    <div class="piece-frame" id="piece-frame">
+      <div class="piece-inner">
+        <div id="piece-art"></div>
+      </div>
+    </div>
+    <div class="piece-title">
+      <div class="species" id="species-name"></div>
+      <div class="id" id="piece-id"></div>
+    </div>
+    <div class="metrics-bar" id="metrics-bar"></div>
+    <div class="genome-dna" id="genome-dna"></div>
+    <div class="lineage-strip" id="lineage-strip"></div>
+    <div class="inscription" id="inscription"></div>
+  </div>
+
+  <button class="nav-arrow left" id="prev-btn">&larr;</button>
+  <button class="nav-arrow right" id="next-btn">&rarr;</button>
+  <div class="counter" id="counter"></div>
+
+  <script>
+    const TYPE_COLORS = {
+      '1d':                  { accent: '#c8abff', colors: ['#0a0a0f', '#1a1a3e', '#3b2d8b', '#6b4edb', '#9d7af5', '#c8abff', '#e8d8ff', '#ffffff'] },
+      '2d':                  { accent: '#4ade80', colors: ['#0a0a0f', '#0d2818', '#166b3a', '#22a95c', '#4ade80', '#7af5a8', '#b8ffd4', '#e8fff0'] },
+      'lsystem':             { accent: '#f5b84a', colors: ['#0a0a0f', '#2d1a0a', '#6b3a0d', '#a85c16', '#db8b22', '#f5b84a', '#ffe088', '#fff4cc'] },
+      'reaction-diffusion':  { accent: '#d44af5', colors: ['#0a0a0f', '#1a0a2d', '#3b0d6b', '#6b16a8', '#a822db', '#d44af5', '#f088ff', '#ffccff'] },
+      'voronoi':             { accent: '#4ad4f5', colors: ['#0a0a0f', '#0a1a2d', '#0d3b6b', '#166ba8', '#22a8db', '#4ad4f5', '#88eeff', '#ccf8ff'] },
+      'wfc':                 { accent: '#f54a9d', colors: ['#0a0a0f', '#2d0a0a', '#6b0d1a', '#a8163b', '#db226b', '#f54a9d', '#ff88c8', '#ffccee'] },
+      'spirograph':          { accent: '#d4f54a', colors: ['#0a0a0f', '#1a2d0a', '#3b6b0d', '#6ba816', '#a8db22', '#d4f54a', '#eeff88', '#ffffcc'] },
+      'attractor':           { accent: '#f59d6b', colors: ['#0a0a0f', '#2d1a1a', '#6b2d2d', '#a84a3b', '#db6b4a', '#f59d6b', '#ffc8a0', '#ffe8d8'] },
+      'julia':               { accent: '#4af5d4', colors: ['#0a0a0f', '#0a2d2d', '#0d6b5b', '#16a88a', '#22dbb5', '#4af5d4', '#88ffe8', '#ccfff4'] },
+      'noise':               { accent: '#d4d44a', colors: ['#0a0a0f', '#1a1a0a', '#3b3b0d', '#6b6b16', '#a8a822', '#d4d44a', '#eeff88', '#ffffcc'] },
+      'flowfield':           { accent: '#4ad4d4', colors: ['#0a0a0f', '#0a1a1a', '#0d3b3b', '#166b6b', '#22a8a8', '#4ad4d4', '#88eeff', '#ccffff'] },
+    };
+
+    function charIntensity(ch) {
+      if (ch === ' ') return 0;
+      const light = '\u00B7.:~\u2801';
+      const med1  = '\u2591\u2022\u2248\u2803\u25B3\u25BD\u2726';
+      const med2  = '\u2592\u25CB\u223F\u2807\u25C7\u2727\u2766';
+      const med3  = '\u2593\u25CF\u2234\u280F\u25C6\u272A\u2740\u273F';
+      const heavy = '\u2588\u2B1B\u2263\u281F\u25A0\u2605\u2741\u2764';
+      if (light.includes(ch)) return 1;
+      if (med1.includes(ch)) return 2;
+      if (med2.includes(ch)) return 3;
+      if (med3.includes(ch)) return 4;
+      if (heavy.includes(ch)) return 5;
+      return ch.charCodeAt(0) % 6 + 2;
+    }
+
+    function generateInscription(piece) {
+      const m = piece.metrics || {};
+      const g = piece.genome || {};
+      const lines = [];
+      if (m.symmetry > 0.5) lines.push('born of mirror and reflection');
+      else lines.push('shaped by asymmetry and chance');
+      if (m.complexity > 2.0) lines.push('carrying the weight of deep structure');
+      else lines.push('elegance through simplicity');
+      if (m.edgeActivity > 0.6) lines.push('alive at every boundary');
+      else lines.push('quiet, centered, still');
+      const mutCount = g.mutations || 0;
+      if (mutCount > 5) lines.push(mutCount + ' mutations refined its form');
+      else if (mutCount > 0) lines.push(mutCount + ' careful mutations shaped it');
+      else lines.push('emerged fully formed from the void');
+      return lines.join(' \u2014 ');
+    }
+
+    const canvas = document.getElementById('particles');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    let currentAccent = '#7c6fe0';
+    let animationStarted = false;
+
+    function resize() {
+      canvas.width = window.innerWidth * devicePixelRatio;
+      canvas.height = window.innerHeight * devicePixelRatio;
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function spawnParticle() {
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 80 + Math.random() * 60;
+      return {
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        vx: Math.cos(angle) * (0.15 + Math.random() * 0.25),
+        vy: Math.sin(angle) * (0.15 + Math.random() * 0.25),
+        life: 1,
+        decay: 0.001 + Math.random() * 0.003,
+        size: 0.5 + Math.random() * 1.5
+      };
+    }
+
+    function hexToRgb(hex) {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return { r, g, b };
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      if (animationStarted && particles.length < 120) {
+        particles.push(spawnParticle());
+      }
+      const rgb = hexToRgb(currentAccent);
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+        if (p.life <= 0) { particles[i] = spawnParticle(); continue; }
+        const alpha = p.life * 0.4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + alpha + ')';
+        ctx.fill();
+        if (p.size > 1) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (alpha * 0.15) + ')';
+          ctx.fill();
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+
+    function renderPiece(piece) {
+      const artEl = document.getElementById('piece-art');
+      const speciesEl = document.getElementById('species-name');
+      const idEl = document.getElementById('piece-id');
+      const metricsEl = document.getElementById('metrics-bar');
+      const lineageEl = document.getElementById('lineage-strip');
+      const inscriptionEl = document.getElementById('inscription');
+      const dnaEl = document.getElementById('genome-dna');
+
+      const type = piece.genome?.type || 'unknown';
+      const tc = TYPE_COLORS[type] || TYPE_COLORS['2d'];
+      currentAccent = tc.accent;
+
+      const lines = (piece.rendered || '').split('\n');
+      artEl.innerHTML = '';
+      lines.forEach(function(line) {
+        const span = document.createElement('span');
+        span.style.display = 'block';
+        let html = '';
+        for (const ch of line) {
+          const intensity = charIntensity(ch);
+          const color = tc.colors[Math.min(intensity, tc.colors.length - 1)];
+          if (ch === ' ') html += '<span style="color:' + color + '">&nbsp;</span>';
+          else if (ch === '<') html += '<span style="color:' + color + '">&lt;</span>';
+          else if (ch === '&') html += '<span style="color:' + color + '">&amp;</span>';
+          else html += '<span style="color:' + color + '">' + ch + '</span>';
+        }
+        span.innerHTML = html;
+        artEl.appendChild(span);
+      });
+
+      speciesEl.textContent = type.replace(/-/g, ' ');
+      speciesEl.style.color = tc.accent;
+      idEl.textContent = piece.id || 'unknown';
+
+      const metricDefs = [
+        { key: 'score', label: 'Fitness', format: function(v) { return (v * 100).toFixed(1) + '%'; } },
+        { key: 'density', label: 'Density', format: function(v) { return (v * 100).toFixed(0) + '%'; }, source: 'metrics' },
+        { key: 'symmetry', label: 'Symmetry', format: function(v) { return (v * 100).toFixed(0) + '%'; }, source: 'metrics' },
+        { key: 'complexity', label: 'Complexity', format: function(v) { return v.toFixed(2); }, source: 'metrics' },
+        { key: 'edgeActivity', label: 'Edge', format: function(v) { return (v * 100).toFixed(0) + '%'; }, source: 'metrics' },
+        { key: 'novelty', label: 'Novelty', format: function(v) { return (v * 100).toFixed(0) + '%'; }, source: 'metrics' },
+      ];
+
+      metricsEl.innerHTML = '';
+      for (const md of metricDefs) {
+        const val = md.source === 'metrics' ? piece.metrics?.[md.key] : piece[md.key];
+        if (val == null) continue;
+        const div = document.createElement('div');
+        div.className = 'metric';
+        const mcolor = md.key === 'score' ? tc.accent : 'var(--green)';
+        div.innerHTML = '<div class="metric-value" style="color:' + mcolor + '">' + md.format(val) + '</div><div class="metric-label">' + md.label + '</div>';
+        metricsEl.appendChild(div);
+      }
+
+      dnaEl.innerHTML = '';
+      const genome = piece.genome || {};
+      const barValues = [];
+      const seed = genome.seed || 0;
+      for (let i = 0; i < 32; i++) {
+        barValues.push(((seed >> i) & 1) ? 0.7 + Math.random() * 0.3 : 0.2 + Math.random() * 0.3);
+      }
+      if (genome.rule?.weights) {
+        genome.rule.weights.forEach(function(w) { barValues.push(Math.min(w / 1.5, 1)); });
+      }
+      for (let i = 0; i < (genome.mutations || 0); i++) barValues.push(0.9);
+
+      barValues.slice(0, 48).forEach(function(v) {
+        const bar = document.createElement('div');
+        bar.className = 'dna-bar';
+        bar.style.height = (4 + v * 18) + 'px';
+        bar.style.background = tc.colors[Math.floor(v * (tc.colors.length - 1))];
+        bar.style.opacity = String(0.6 + v * 0.4);
+        dnaEl.appendChild(bar);
+      });
+
+      lineageEl.innerHTML = '';
+      const lineage = genome.lineage || [];
+      lineage.forEach(function(hash, i) {
+        if (hash === '\u00d7' || hash === '\u00d7') {
+          const arrow = document.createElement('span');
+          arrow.className = 'lineage-arrow';
+          arrow.textContent = '\u00d7';
+          lineageEl.appendChild(arrow);
+        } else {
+          const node = document.createElement('div');
+          node.className = 'lineage-node';
+          node.title = hash;
+          lineageEl.appendChild(node);
+          if (i < lineage.length - 1) {
+            const arrow = document.createElement('span');
+            arrow.className = 'lineage-arrow';
+            arrow.textContent = '\u2192';
+            lineageEl.appendChild(arrow);
+          }
+        }
+      });
+      const currentNode = document.createElement('div');
+      currentNode.className = 'lineage-node current';
+      currentNode.title = piece.id;
+      lineageEl.appendChild(currentNode);
+
+      inscriptionEl.textContent = generateInscription(piece);
+      document.getElementById('piece-frame').style.boxShadow =
+        '0 0 40px ' + tc.accent + '20, 0 0 80px ' + tc.accent + '10, 0 0 120px ' + tc.accent + '08';
+    }
+
+    let pieces = [];
+    let currentIndex = 0;
+
+    async function init() {
+      try {
+        const res = await fetch('gallery.json');
+        const data = await res.json();
+        pieces = (data.hallOfFame || [])
+          .filter(function(p) { return p.rendered && p.rendered.length > 0; })
+          .sort(function(a, b) { return (b.score || 0) - (a.score || 0); });
+        if (pieces.length === 0) {
+          document.getElementById('piece-art').textContent = 'no specimens found';
+          return;
+        }
+        document.getElementById('counter').textContent = '1 / ' + pieces.length;
+        renderPiece(pieces[0]);
+      } catch (e) {
+        document.getElementById('piece-art').textContent = 'failed to load gallery data';
+      }
+    }
+
+    function navigate(dir) {
+      if (pieces.length === 0) return;
+      currentIndex = (currentIndex + dir + pieces.length) % pieces.length;
+      document.getElementById('piece-art').style.opacity = '0';
+      setTimeout(function() {
+        renderPiece(pieces[currentIndex]);
+        document.getElementById('piece-art').style.opacity = '1';
+        document.getElementById('counter').textContent = (currentIndex + 1) + ' / ' + pieces.length;
+      }, 400);
+    }
+
+    document.getElementById('prev-btn').addEventListener('click', function() { navigate(-1); });
+    document.getElementById('next-btn').addEventListener('click', function() { navigate(1); });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowLeft') navigate(-1);
+      if (e.key === 'ArrowRight') navigate(1);
+      if (e.key === 'Escape') window.location.href = 'index.html';
+    });
+
+    let touchStartX = 0;
+    document.addEventListener('touchstart', function(e) { touchStartX = e.touches[0].clientX; });
+    document.addEventListener('touchend', function(e) {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(dx) > 50) navigate(dx < 0 ? 1 : -1);
+    });
+
+    document.getElementById('start-overlay').addEventListener('click', function() {
+      document.getElementById('start-overlay').classList.add('hidden');
+      animationStarted = true;
+    });
+
+    init();
+    animate();
+  </script>
+</body>
+</html>
