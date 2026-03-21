@@ -15,8 +15,7 @@
       --accent-glow: #7c6fe040;
       --green: #4ade80;
       --amber: #fbbf24;
-      --botanical: #22c55e;
-      --botanical-dim: #16a34a;
+      --amber-glow: #fbbf2430;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -30,458 +29,364 @@
       display: flex;
     }
 
+    /* --- Canvas area --- */
     .canvas-area {
       flex: 1;
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bg);
-    }
-
-    canvas { display: block; border-radius: 4px; }
-
-    .canvas-info {
-      position: absolute;
-      bottom: 1.25rem;
-      left: 1.25rem;
-      font-size: 0.65rem;
-      color: var(--text-dim);
-      letter-spacing: 0.05em;
-      line-height: 1.6;
-      pointer-events: none;
-    }
-    .canvas-info .preset-name { color: var(--botanical); text-transform: uppercase; letter-spacing: 0.12em; }
-    .canvas-info .grammar-info { color: var(--text-dim); font-size: 0.55rem; }
-
-    .grow-indicator {
-      position: absolute;
-      top: 1.25rem;
-      left: 1.25rem;
-      font-size: 0.6rem;
-      color: var(--botanical);
-      letter-spacing: 0.1em;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-    .grow-indicator.visible { opacity: 1; }
-
-    .sidebar {
-      width: 340px;
-      min-width: 340px;
-      background: var(--surface);
-      border-left: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
       overflow: hidden;
     }
 
-    .sidebar-header {
-      padding: 1.25rem 1.25rem 0.75rem;
-      border-bottom: 1px solid var(--border);
+    canvas {
+      background: var(--bg);
+      border-radius: 4px;
     }
 
-    .sidebar-header h1 {
-      font-size: 1rem;
+    /* --- Sidebar --- */
+    .sidebar {
+      width: 320px;
+      min-width: 320px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .sidebar h1 {
+      font-size: 0.8rem;
       font-weight: 400;
-      letter-spacing: 0.2em;
+      letter-spacing: 0.25em;
       text-transform: uppercase;
-      color: var(--botanical);
+      color: var(--amber);
+      text-shadow: 0 0 20px var(--amber-glow);
       margin-bottom: 0.25rem;
     }
 
-    .sidebar-header .back-link {
-      font-size: 0.65rem;
+    .sidebar .back-link {
+      font-size: 0.55rem;
       color: var(--text-dim);
       text-decoration: none;
       letter-spacing: 0.05em;
     }
-    .sidebar-header .back-link:hover { color: var(--accent); }
-
-    .preset-selector {
-      padding: 0.75rem 1.25rem;
-      border-bottom: 1px solid var(--border);
-    }
+    .sidebar .back-link:hover { color: var(--accent); }
 
     .section-label {
-      font-size: 0.6rem;
+      font-size: 0.55rem;
       color: var(--text-dim);
       text-transform: uppercase;
       letter-spacing: 0.15em;
-      margin-bottom: 0.5rem;
-    }
-
-    .preset-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 0.25rem;
-    }
-
-    .preset-btn {
-      padding: 0.3rem 0.3rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: transparent;
-      color: var(--text-dim);
-      font-family: inherit;
-      font-size: 0.5rem;
-      letter-spacing: 0.02em;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-align: center;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .preset-btn:hover { border-color: var(--botanical); color: var(--text); }
-    .preset-btn.active {
-      background: var(--botanical);
-      border-color: var(--botanical);
-      color: #fff;
-    }
-
-    .controls {
-      flex: 1;
-      overflow-y: auto;
-      padding: 0.75rem 1.25rem;
-    }
-
-    .controls::-webkit-scrollbar { width: 4px; }
-    .controls::-webkit-scrollbar-track { background: transparent; }
-    .controls::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-    .control-group { margin-bottom: 0.75rem; }
-
-    .control-label {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      font-size: 0.6rem;
-      color: var(--text-dim);
-      margin-bottom: 0.3rem;
-      letter-spacing: 0.03em;
-    }
-
-    .control-value {
-      color: var(--green);
-      font-variant-numeric: tabular-nums;
-    }
-
-    input[type="range"] {
-      -webkit-appearance: none;
-      width: 100%;
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-      outline: none;
-      cursor: pointer;
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: var(--botanical);
-      cursor: pointer;
-      transition: transform 0.15s;
-      box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
-    }
-    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
-    input[type="range"]::-webkit-slider-thumb:active { transform: scale(1.3); background: var(--green); }
-
-    .grammar-section {
-      padding: 0.75rem 1.25rem;
-      border-top: 1px solid var(--border);
+      margin-top: 0.5rem;
+      padding-bottom: 0.25rem;
       border-bottom: 1px solid var(--border);
     }
 
-    .rule-row {
+    /* --- Presets --- */
+    .presets {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem;
+    }
+
+    .preset-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.55rem;
+      padding: 0.4rem 0.5rem;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: left;
+    }
+    .preset-btn:hover {
+      border-color: var(--amber);
+      color: var(--amber);
+      box-shadow: 0 0 8px var(--amber-glow);
+    }
+    .preset-btn.active {
+      border-color: var(--amber);
+      color: var(--amber);
+      background: #fbbf2410;
+    }
+    .preset-btn .preset-label { display: block; font-weight: 500; }
+    .preset-btn .preset-sub { display: block; color: var(--text-dim); margin-top: 2px; font-size: 0.5rem; }
+
+    /* --- Sliders / inputs --- */
+    .param-row {
       display: flex;
       align-items: center;
-      gap: 0.4rem;
-      margin-bottom: 0.3rem;
+      gap: 0.5rem;
     }
-
-    .rule-symbol {
-      font-size: 0.7rem;
-      color: var(--botanical);
-      width: 1.2rem;
-      text-align: center;
-      flex-shrink: 0;
-    }
-
-    .rule-arrow {
+    .param-row label {
+      font-size: 0.55rem;
       color: var(--text-dim);
-      font-size: 0.6rem;
+      min-width: 80px;
       flex-shrink: 0;
     }
+    .param-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--amber);
+      height: 3px;
+    }
+    .param-row .val {
+      font-size: 0.55rem;
+      color: var(--amber);
+      min-width: 32px;
+      text-align: right;
+    }
 
-    .rule-input {
+    .param-row input[type="text"] {
       flex: 1;
       background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 0.3rem 0.5rem;
       color: var(--text);
       font-family: inherit;
-      font-size: 0.6rem;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    .rule-input:focus { border-color: var(--botanical); }
-
-    .rule-delete {
-      background: none;
-      border: none;
-      color: var(--text-dim);
-      font-size: 0.6rem;
-      cursor: pointer;
-      padding: 0.1rem 0.3rem;
+      font-size: 0.55rem;
+      padding: 0.3rem 0.4rem;
       border-radius: 3px;
-      transition: all 0.2s;
-      flex-shrink: 0;
+      outline: none;
     }
-    .rule-delete:hover { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+    .param-row input[type="text"]:focus {
+      border-color: var(--amber);
+    }
 
-    .axiom-input {
+    /* --- Actions --- */
+    .actions {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+    .action-btn {
       background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 0.3rem 0.5rem;
-      color: var(--amber);
+      color: var(--text);
       font-family: inherit;
-      font-size: 0.6rem;
-      outline: none;
-      width: 100%;
-      transition: border-color 0.2s;
+      font-size: 0.55rem;
+      padding: 0.35rem 0.6rem;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.15s;
     }
-    .axiom-input:focus { border-color: var(--amber); }
+    .action-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .action-btn.primary {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+    .action-btn.primary:hover {
+      background: #fbbf2415;
+      box-shadow: 0 0 10px var(--amber-glow);
+    }
 
-    .grammar-tools {
-      margin-top: 0.4rem;
+    /* --- Grammar display --- */
+    .grammar-display {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.4rem 0.5rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      max-height: 60px;
+      overflow-y: auto;
+      word-break: break-all;
+      line-height: 1.6;
+    }
+    .grammar-display .sym { color: var(--amber); }
+    .grammar-display .arrow { color: var(--text-dim); }
+    .grammar-display .prod { color: var(--green); }
+
+    /* --- Stats bar --- */
+    .stats-bar {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .stats-bar .val { color: var(--green); }
+
+    /* --- Color scheme picker --- */
+    .color-schemes {
       display: flex;
       gap: 0.3rem;
       flex-wrap: wrap;
     }
-
-    .grammar-tool-btn {
-      font-size: 0.5rem;
-      color: var(--text-dim);
-      background: none;
+    .color-swatch {
+      width: 28px;
+      height: 14px;
+      border-radius: 2px;
       border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 0.15rem 0.4rem;
       cursor: pointer;
-      font-family: inherit;
-      transition: all 0.2s;
+      transition: all 0.15s;
     }
-    .grammar-tool-btn:hover { border-color: var(--botanical); color: var(--text); }
-    .grammar-tool-btn.active { border-color: var(--accent); color: var(--accent); }
+    .color-swatch:hover, .color-swatch.active {
+      border-color: var(--amber);
+      transform: scale(1.15);
+    }
 
-    .stoch-weight-label {
+    /* --- Keyboard hints --- */
+    .hints {
       font-size: 0.45rem;
-      color: var(--text-dim);
-      width: 2.2rem;
-      text-align: right;
-      flex-shrink: 0;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .actions {
-      padding: 0.75rem 1.25rem;
-      border-top: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      gap: 0.4rem;
-    }
-
-    .action-row {
-      display: flex;
-      gap: 0.4rem;
-    }
-
-    .btn {
-      flex: 1;
-      padding: 0.5rem 0.6rem;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: transparent;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 0.6rem;
-      letter-spacing: 0.06em;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-align: center;
-    }
-    .btn:hover { border-color: var(--botanical); color: #fff; }
-
-    .btn-primary {
-      background: linear-gradient(135deg, var(--botanical), var(--accent));
-      border-color: transparent;
-      color: #fff;
-    }
-    .btn-primary:hover {
-      box-shadow: 0 0 20px rgba(34, 197, 94, 0.25);
-      transform: translateY(-1px);
-    }
-
-    .btn-grow {
-      border-color: var(--botanical-dim);
-      color: var(--botanical);
-      position: relative;
-      overflow: hidden;
-    }
-    .btn-grow:hover { background: rgba(34, 197, 94, 0.08); }
-    .btn-grow.animating {
-      border-color: var(--green);
-      box-shadow: 0 0 12px rgba(74, 222, 128, 0.2);
-    }
-
-    .shortcuts {
-      padding: 0.5rem 1.25rem;
-      border-top: 1px solid var(--border);
-      font-size: 0.5rem;
       color: var(--text-dim);
       line-height: 1.8;
+      margin-top: auto;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--border);
     }
-    .shortcuts kbd {
-      display: inline-block;
-      padding: 0.1rem 0.25rem;
-      border-radius: 3px;
-      background: rgba(34, 197, 94, 0.1);
-      border: 1px solid rgba(34, 197, 94, 0.2);
-      font-family: inherit;
-      font-size: 0.45rem;
-      color: var(--text);
-      margin-right: 0.15rem;
-    }
-
-    .seed-display {
-      font-size: 0.55rem;
-      color: var(--text-dim);
-      text-align: center;
-      padding: 0.25rem;
-      letter-spacing: 0.05em;
-      font-variant-numeric: tabular-nums;
-      cursor: pointer;
-      transition: color 0.2s;
-    }
-    .seed-display:hover { color: var(--botanical); }
-
-    .render-mode-toggle {
-      position: absolute;
-      top: 1.25rem;
-      right: 1.25rem;
-      display: flex;
-      gap: 0.2rem;
-    }
-    .render-mode-btn {
-      font-size: 0.5rem;
-      color: var(--text-dim);
-      background: rgba(10, 10, 15, 0.7);
+    .hints kbd {
+      background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 0.2rem 0.5rem;
-      cursor: pointer;
-      font-family: inherit;
-      transition: all 0.2s;
-      backdrop-filter: blur(4px);
+      padding: 1px 4px;
+      border-radius: 2px;
+      color: var(--text);
     }
-    .render-mode-btn:hover { border-color: var(--botanical); color: var(--text); }
-    .render-mode-btn.active { border-color: var(--botanical); color: var(--botanical); }
 
-    @media (max-width: 700px) {
+    /* --- Responsive --- */
+    @media (max-width: 768px) {
       body { flex-direction: column-reverse; }
       .sidebar {
         width: 100%;
-        min-width: unset;
-        max-height: 55vh;
+        min-width: 0;
+        max-height: 45vh;
         border-left: none;
         border-top: 1px solid var(--border);
       }
-      .canvas-area { min-height: 45vh; }
-      .render-mode-toggle { top: 0.5rem; right: 0.5rem; }
     }
   </style>
 </head>
 <body>
-  <div class="canvas-area">
-    <canvas id="canvas"></canvas>
-    <div class="canvas-info">
-      <span class="preset-name" id="info-preset"></span><br>
-      <span class="grammar-info" id="info-grammar"></span>
-    </div>
-    <div class="grow-indicator" id="grow-indicator">GROWING...</div>
-    <div class="render-mode-toggle">
-      <button class="render-mode-btn active" id="btn-mode-grid" title="Grid rendering">Grid</button>
-      <button class="render-mode-btn" id="btn-mode-line" title="Line rendering (smooth curves)">Lines</button>
-    </div>
+
+<div class="canvas-area">
+  <canvas id="canvas"></canvas>
+</div>
+
+<div class="sidebar">
+  <div>
+    <h1>Flora</h1>
+    <a href="index.html" class="back-link">&larr; lattice</a>
   </div>
 
-  <div class="sidebar">
-    <div class="sidebar-header">
-      <h1>Flora</h1>
-      <a href="index.html" class="back-link">&larr; back to gallery</a>
-    </div>
+  <div class="section-label">Species</div>
+  <div class="presets" id="presets"></div>
 
-    <div class="preset-selector">
-      <div class="section-label">Presets</div>
-      <div class="preset-grid" id="preset-grid"></div>
-    </div>
-
-    <div class="grammar-section">
-      <div class="section-label">Grammar</div>
-      <div class="control-group" style="margin-bottom: 0.5rem;">
-        <div class="control-label"><span>Axiom</span></div>
-        <input type="text" class="axiom-input" id="axiom-input" value="F" spellcheck="false">
-      </div>
-      <div id="rule-editor"></div>
-      <div class="grammar-tools">
-        <button class="grammar-tool-btn" id="btn-add-rule">+ rule</button>
-        <button class="grammar-tool-btn" id="btn-stochastic">stochastic</button>
-        <button class="grammar-tool-btn" id="btn-context">context</button>
-      </div>
-    </div>
-
-    <div class="controls" id="controls"></div>
-
-    <div class="seed-display" id="seed-display" title="Click to copy seed"></div>
-
-    <div class="actions">
-      <div class="action-row">
-        <button class="btn btn-primary" id="btn-randomize">Randomize</button>
-        <button class="btn" id="btn-mutate">Mutate</button>
-      </div>
-      <div class="action-row">
-        <button class="btn" id="btn-download">Download PNG</button>
-        <button class="btn btn-grow" id="btn-grow-anim">Animate Growth</button>
-      </div>
-    </div>
-
-    <div class="shortcuts">
-      <kbd>R</kbd> Randomize
-      <kbd>M</kbd> Mutate
-      <kbd>S</kbd> Save PNG
-      <kbd>A</kbd> Animate growth
-      <kbd>G</kbd> Grow +1
-      <kbd>L</kbd> Toggle lines/grid
-      <kbd>1</kbd>-<kbd>9</kbd><kbd>0</kbd> Presets
-    </div>
+  <div class="section-label">Grammar</div>
+  <div class="param-row">
+    <label>Axiom</label>
+    <input type="text" id="axiom" value="F">
   </div>
+  <div id="rule-inputs"></div>
+  <div class="actions" style="margin-top:0.25rem">
+    <button class="action-btn" onclick="addRule()">+ rule</button>
+    <button class="action-btn" onclick="removeRule()">&minus; rule</button>
+  </div>
+  <div class="grammar-display" id="grammar-display"></div>
+
+  <div class="section-label">Structure</div>
+  <div class="param-row">
+    <label>Angle</label>
+    <input type="range" id="angle" min="1" max="180" value="25">
+    <span class="val" id="angle-val">25&deg;</span>
+  </div>
+  <div class="param-row">
+    <label>Iterations</label>
+    <input type="range" id="iterations" min="1" max="8" value="4">
+    <span class="val" id="iterations-val">4</span>
+  </div>
+  <div class="param-row">
+    <label>Seed</label>
+    <input type="range" id="seed" min="1" max="9999" value="42">
+    <span class="val" id="seed-val">42</span>
+  </div>
+
+  <div class="section-label">Organic</div>
+  <div class="param-row">
+    <label>Jitter</label>
+    <input type="range" id="jitter" min="0" max="150" value="0">
+    <span class="val" id="jitter-val">0&deg;</span>
+  </div>
+  <div class="param-row">
+    <label>Length scale</label>
+    <input type="range" id="lengthScale" min="50" max="100" value="100">
+    <span class="val" id="lengthScale-val">1.0</span>
+  </div>
+  <div class="param-row">
+    <label>Tropism</label>
+    <input type="range" id="tropism" min="-30" max="30" value="0">
+    <span class="val" id="tropism-val">0</span>
+  </div>
+  <div class="param-row">
+    <label>Width decay</label>
+    <input type="range" id="widthDecay" min="50" max="100" value="85">
+    <span class="val" id="widthDecay-val">0.85</span>
+  </div>
+  <div class="param-row">
+    <label>Step wave</label>
+    <input type="range" id="stepWave" min="0" max="100" value="0">
+    <span class="val" id="stepWave-val">0</span>
+  </div>
+
+  <div class="section-label">Botanical</div>
+  <div class="param-row">
+    <label>Leaf size</label>
+    <input type="range" id="leafSize" min="0" max="100" value="30">
+    <span class="val" id="leafSize-val">0.3</span>
+  </div>
+  <div class="param-row">
+    <label>Petals</label>
+    <input type="range" id="petals" min="0" max="12" value="0">
+    <span class="val" id="petals-val">0</span>
+  </div>
+  <div class="param-row">
+    <label>Pruning</label>
+    <input type="range" id="pruning" min="0" max="50" value="0">
+    <span class="val" id="pruning-val">0%</span>
+  </div>
+  <div class="param-row">
+    <label>Season</label>
+    <input type="range" id="season" min="0" max="100" value="0">
+    <span class="val" id="season-val">spring</span>
+  </div>
+
+  <div class="section-label">Color</div>
+  <div class="color-schemes" id="color-schemes"></div>
+
+  <div class="section-label">Info</div>
+  <div class="stats-bar" id="stats"></div>
+
+  <div class="actions">
+    <button class="action-btn primary" onclick="randomize()">Randomize</button>
+    <button class="action-btn" onclick="exportPNG()">Save PNG</button>
+    <button class="action-btn" onclick="toggleAnimate()">Animate</button>
+  </div>
+
+  <div class="hints">
+    <kbd>Space</kbd> randomize &nbsp;
+    <kbd>&larr;&rarr;</kbd> cycle presets &nbsp;
+    <kbd>S</kbd> save PNG &nbsp;
+    <kbd>A</kbd> animate &nbsp;
+    <kbd>R</kbd> re-render
+  </div>
+</div>
 
 <script>
 // ============================================================
-//  Lattice Flora — Botanical L-System Art Studio
-//  Extended engine: stochastic grammars, context-sensitive rules,
-//  parametric L-systems, line rendering, animated growth
+//  Flora — Interactive L-System Explorer
+//  Pure client-side: L-system grammar -> turtle graphics -> canvas
 // ============================================================
 
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-
-// --- Deterministic PRNG ---
+// --- RNG (mulberry32, matches engine) ---
 function mulberry32(seed) {
   let s = seed | 0;
   return () => {
@@ -492,34 +397,35 @@ function mulberry32(seed) {
   };
 }
 
-// --- Color gradients ---
-const GRADIENTS = {
-  verdant:   ['#0a0a0f', '#0a1a0f', '#0d3b1a', '#166b2d', '#22a94e', '#4ade80', '#7af5a8', '#c8ffe0'],
-  autumn:    ['#0a0a0f', '#2d1a0a', '#6b3b0d', '#a86b16', '#dba822', '#f5d44a', '#ffe888', '#fffacc'],
-  sakura:    ['#0a0a0f', '#1a0a1a', '#3b0d3b', '#6b166b', '#a822a8', '#d44ad4', '#f088f0', '#ffccff'],
-  frost:     ['#0a0a0f', '#0a0a2d', '#0d0d6b', '#1616a8', '#2222db', '#4a4af5', '#8888ff', '#ccccff'],
-  twilight:  ['#0a0a0f', '#1a0a1a', '#3b0d2d', '#6b1648', '#a82268', '#d44a88', '#f088b8', '#ffcce0'],
-  moss:      ['#0a0a0f', '#0a1a0a', '#1a3b0d', '#2d6b16', '#48a822', '#6bd44a', '#a0f088', '#d8ffcc'],
-  coral:     ['#0a0a0f', '#2d0a0a', '#6b1a0d', '#a83b16', '#db6822', '#f5a04a', '#ffc888', '#ffe8cc'],
-  ocean:     ['#0a0a0f', '#0a0f1a', '#0d1a3b', '#162d6b', '#2248a8', '#4a6edb', '#88a8f5', '#cce0ff'],
-  ember:     ['#0a0a0f', '#2d0a0a', '#6b0d0d', '#a81616', '#db2222', '#f54a4a', '#ff8888', '#ffcccc'],
-  bone:      ['#0a0a0f', '#1a1a1a', '#2d2d2d', '#4a4a4a', '#6e6e6e', '#9a9a9a', '#c8c8c8', '#e8e8e8'],
-};
+// --- Color schemes ---
+const COLOR_SCHEMES = [
+  { name: 'Amber',    stops: ['#1a1408', '#3d2e0a', '#8b6914', '#fbbf24', '#fde68a', '#ffffff'] },
+  { name: 'Emerald',  stops: ['#061a0e', '#0a3d1f', '#16a34a', '#4ade80', '#a7f3d0', '#ecfdf5'] },
+  { name: 'Violet',   stops: ['#0f0a1a', '#2e1a5e', '#7c6fe0', '#a78bfa', '#c4b5fd', '#ede9fe'] },
+  { name: 'Rose',     stops: ['#1a0a0f', '#5e1a2e', '#e0436f', '#fb7185', '#fda4af', '#fff1f2'] },
+  { name: 'Cyan',     stops: ['#061a1a', '#0a3d3d', '#06b6d4', '#22d3ee', '#a5f3fc', '#ecfeff'] },
+  { name: 'Bone',     stops: ['#0a0a0f', '#1e1e2e', '#4a4a5e', '#8e8ea0', '#c8c8d4', '#f0f0f4'] },
+  { name: 'Fire',     stops: ['#1a0800', '#5e1a00', '#dc2626', '#f97316', '#fbbf24', '#fef3c7'] },
+  { name: 'Forest',   stops: ['#050f05', '#0a2e0a', '#166534', '#15803d', '#4ade80', '#86efac'] },
+  { name: 'Twilight', stops: ['#0f0520', '#2e1065', '#7c3aed', '#c084fc', '#f0abfc', '#fdf4ff'] },
+  { name: 'Ocean',    stops: ['#001520', '#003050', '#0369a1', '#0ea5e9', '#7dd3fc', '#e0f2fe'] },
+];
 
-function hexToRgb(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+let currentScheme = 0;
+
+function hexToRGB(hex) {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
 }
 
-function buildLUT(gradientName) {
-  const stops = (GRADIENTS[gradientName] || GRADIENTS.verdant).map(hexToRgb);
+function buildLUT(scheme) {
+  const stops = scheme.stops.map(hexToRGB);
   const lut = new Uint8Array(256 * 3);
   for (let i = 0; i < 256; i++) {
-    const t = i / 255 * (stops.length - 1);
-    const idx = Math.floor(t);
-    const frac = t - idx;
-    const a = stops[Math.min(idx, stops.length - 1)];
-    const b = stops[Math.min(idx + 1, stops.length - 1)];
+    const t = i / 255;
+    const seg = t * (stops.length - 1);
+    const idx = Math.min(Math.floor(seg), stops.length - 2);
+    const frac = seg - idx;
+    const a = stops[idx], b = stops[idx + 1];
     lut[i * 3]     = Math.round(a[0] + (b[0] - a[0]) * frac);
     lut[i * 3 + 1] = Math.round(a[1] + (b[1] - a[1]) * frac);
     lut[i * 3 + 2] = Math.round(a[2] + (b[2] - a[2]) * frac);
@@ -527,84 +433,157 @@ function buildLUT(gradientName) {
   return lut;
 }
 
-// ============================================================
-//  L-System Engine (stochastic + context-sensitive + parametric)
-// ============================================================
+// --- Presets ---
+const PRESETS = [
+  {
+    name: 'Barnsley Fern', sub: 'classic fractal',
+    axiom: 'X', rules: { X: 'F-[[X]+X]+F[+FX]-X', F: 'FF' },
+    angle: 25, iterations: 6, jitter: 2, lengthScale: 0.9, tropism: -0.08, widthDecay: 0.82,
+    leafSize: 0, petals: 0, pruning: 0, season: 0, stepWave: 0, scheme: 1
+  },
+  {
+    name: 'Sakura Tree', sub: 'flowering cherry',
+    axiom: 'X', rules: { X: 'F[@][+X][-X]FX', F: 'FF' },
+    angle: 28, iterations: 5, jitter: 5, lengthScale: 0.82, tropism: -0.06, widthDecay: 0.78,
+    leafSize: 0.45, petals: 5, pruning: 0.1, season: 0, stepWave: 0, scheme: 3
+  },
+  {
+    name: 'Weeping Willow', sub: 'gravity-pulled',
+    axiom: 'F', rules: { F: 'FF&[+F{~F}@][-F{~F}@]' },
+    angle: 22, iterations: 4, jitter: 3, lengthScale: 0.88, tropism: 0.18, widthDecay: 0.75,
+    leafSize: 0.3, petals: 0, pruning: 0, season: 0, stepWave: 0.2, scheme: 7
+  },
+  {
+    name: 'Koch Snowflake', sub: 'geometric',
+    axiom: 'F-F-F-F-F-F', rules: { F: 'F+F-F-F+F' },
+    angle: 60, iterations: 4, jitter: 0, lengthScale: 1, tropism: 0, widthDecay: 1,
+    leafSize: 0, petals: 0, pruning: 0, season: 0, stepWave: 0, scheme: 4
+  },
+  {
+    name: 'Coral Reef', sub: 'organic tendrils',
+    axiom: 'X', rules: { X: '~F[+X]~F[-X]@', F: '~F~F!' },
+    angle: 30, iterations: 5, jitter: 8, lengthScale: 0.85, tropism: 0.05, widthDecay: 0.8,
+    leafSize: 0.25, petals: 4, pruning: 0.05, season: 0, stepWave: 0.4, scheme: 3
+  },
+  {
+    name: 'Dragon Curve', sub: 'space-filling',
+    axiom: 'FX', rules: { X: 'X+YF+', Y: '-FX-Y' },
+    angle: 90, iterations: 12, jitter: 0, lengthScale: 1, tropism: 0, widthDecay: 1,
+    leafSize: 0, petals: 0, pruning: 0, season: 0, stepWave: 0, scheme: 2
+  },
+  {
+    name: 'Hilbert Curve', sub: 'space-filling',
+    axiom: 'X', rules: { X: '-YF+XFX+FY-', Y: '+XF-YFY-FX+' },
+    angle: 90, iterations: 6, jitter: 0, lengthScale: 1, tropism: 0, widthDecay: 1,
+    leafSize: 0, petals: 0, pruning: 0, season: 0, stepWave: 0, scheme: 5
+  },
+  {
+    name: 'Kelp Forest', sub: 'undulating algae',
+    axiom: 'X', rules: { X: 'F[+X]~F~[-X]~F', F: '~F~F' },
+    angle: 25, iterations: 5, jitter: 6, lengthScale: 0.9, tropism: -0.12, widthDecay: 0.82,
+    leafSize: 0.35, petals: 0, pruning: 0.08, season: 0, stepWave: 0.5, scheme: 9
+  },
+  {
+    name: 'Autumn Oak', sub: 'seasonal decay',
+    axiom: 'X', rules: { X: 'F!F[+X][-X]!F@', F: 'F!F' },
+    angle: 30, iterations: 5, jitter: 4, lengthScale: 0.85, tropism: -0.05, widthDecay: 0.78,
+    leafSize: 0.4, petals: 3, pruning: 0.15, season: 0.6, stepWave: 0, scheme: 0
+  },
+  {
+    name: 'Winter Birch', sub: 'bare branches',
+    axiom: 'F', rules: { F: 'FF[+F^][-F^]F[+F][-F]' },
+    angle: 20, iterations: 4, jitter: 3, lengthScale: 0.88, tropism: -0.03, widthDecay: 0.72,
+    leafSize: 0.1, petals: 0, pruning: 0.25, season: 0.95, stepWave: 0, scheme: 5
+  },
+  {
+    name: 'Sierpinski', sub: 'triangle fractal',
+    axiom: 'F-G-G', rules: { F: 'F-G+F+G-F', G: 'GG' },
+    angle: 120, iterations: 6, jitter: 0, lengthScale: 1, tropism: 0, widthDecay: 1,
+    leafSize: 0, petals: 0, pruning: 0, season: 0, stepWave: 0, scheme: 6
+  },
+  {
+    name: 'Vine Trellis', sub: 'climbing tendrils',
+    axiom: 'F', rules: { F: 'F[+~F~F][-~F~F]F' },
+    angle: 35, iterations: 4, jitter: 6, lengthScale: 0.9, tropism: -0.15, widthDecay: 0.8,
+    leafSize: 0.3, petals: 0, pruning: 0, season: 0, stepWave: 0.35, scheme: 1
+  },
+  {
+    name: 'Penrose', sub: 'quasi-crystal',
+    axiom: '[X]++[X]++[X]++[X]++[X]', rules: { X: '+YF--XF[---YF--XF]+', Y: '-XF++YF[+++XF++YF]-', F: 'F' },
+    angle: 36, iterations: 5, jitter: 0, lengthScale: 1, tropism: 0, widthDecay: 1,
+    leafSize: 0, petals: 0, pruning: 0, season: 0, stepWave: 0, scheme: 8
+  },
+  {
+    name: 'Moss Carpet', sub: 'dense ground cover',
+    axiom: 'X', rules: { X: 'F^[+X]^[-X]^[+X]F', F: 'F!F' },
+    angle: 45, iterations: 5, jitter: 10, lengthScale: 0.78, tropism: 0.02, widthDecay: 0.85,
+    leafSize: 0.2, petals: 0, pruning: 0.12, season: 0, stepWave: 0.15, scheme: 7
+  },
+];
 
-function generateLSystem(axiom, rules, stochastic, contextSensitive, iterations, rng) {
+// --- State ---
+let currentPreset = 0;
+let animating = false;
+let animFrame = null;
+let animSeed = 1;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// --- L-System Engine (client-side, mirrors automata.ts) ---
+function generateString(axiom, rules, iterations, seed) {
+  const rng = mulberry32(seed);
   let current = axiom;
   for (let i = 0; i < iterations; i++) {
     let next = '';
     for (let ci = 0; ci < current.length; ci++) {
       const ch = current[ci];
-      // 1. Context-sensitive rules (highest priority)
-      if (contextSensitive && contextSensitive[ch]) {
-        let matched = false;
-        for (const cr of contextSensitive[ch]) {
-          const leftOk = !cr.left || (ci > 0 && current[ci - 1] === cr.left);
-          const rightOk = !cr.right || (ci < current.length - 1 && current[ci + 1] === cr.right);
-          if (leftOk && rightOk) {
-            next += cr.production;
-            matched = true;
-            break;
-          }
-        }
-        if (matched) continue;
-      }
-      // 2. Stochastic rules (weighted random selection)
-      if (stochastic && stochastic[ch]) {
-        const alts = stochastic[ch];
-        const totalWeight = alts.reduce((s, a) => s + a.weight, 0);
-        let r = rng() * totalWeight;
-        let chosen = alts[0].production;
-        for (const alt of alts) {
-          r -= alt.weight;
-          if (r <= 0) { chosen = alt.production; break; }
-        }
-        next += chosen;
-      } else {
-        // 3. Deterministic rules
-        next += rules[ch] || ch;
-      }
+      next += rules[ch] !== undefined ? rules[ch] : ch;
     }
     current = next;
-    if (current.length > 80000) break;
+    if (current.length > 50000) break;
   }
   return current;
 }
 
-function traceTurtle(str, angle, angleJitter, lengthScale, tropism, widthDecay, rng) {
+function traceTurtle(str, params) {
+  const {
+    angle, seed, jitter, lengthScale, tropism, widthDecay,
+    leafSize, petals, pruning, season, stepWave
+  } = params;
+  const rng = mulberry32(seed + 7777);
   const points = [];
   let tx = 0, ty = 0, tAngle = -90, tDepth = 0, tWidth = 1.0;
   const stack = [];
   let stepCount = 0;
 
-  for (const ch of str) {
+  for (let ci = 0; ci < str.length; ci++) {
+    const ch = str[ci];
     switch (ch) {
       case 'F': case 'G': {
-        const depthFactor = Math.pow(lengthScale, tDepth);
-        const jitter = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
-        const tropismBend = tropism * tDepth * 2;
-        const finalAngle = tAngle + jitter + tropismBend;
-        const rad = finalAngle * Math.PI / 180;
-        const nx = tx + depthFactor * Math.cos(rad);
-        const ny = ty + depthFactor * Math.sin(rad);
-        points.push({ x: tx, y: ty, nx, ny, depth: tDepth, width: tWidth, draw: true });
+        const waveM = stepWave > 0 ? 1 + stepWave * Math.sin(stepCount * 0.5) * 0.3 : 1;
+        const df = Math.pow(lengthScale, tDepth) * waveM;
+        const j = jitter > 0 ? (rng() - 0.5) * 2 * jitter : 0;
+        const tb = tropism * tDepth * 2;
+        const fa = tAngle + j + tb;
+        const rad = fa * Math.PI / 180;
+        const nx = tx + df * Math.cos(rad);
+        const ny = ty + df * Math.sin(rad);
+        points.push({ x: nx, y: ny, depth: tDepth, width: tWidth, type: 'line' });
         tx = nx; ty = ny;
         stepCount++;
         break;
       }
       case '~': {
-        // Sinusoidal step for organic tendrils
-        const depthFactor = Math.pow(lengthScale, tDepth);
+        const df = Math.pow(lengthScale, tDepth);
         const wave = Math.sin(stepCount * 0.8) * 0.3;
-        const jitter = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
-        const tropismBend = tropism * tDepth * 2;
-        const finalAngle = tAngle + jitter + wave * angle + tropismBend;
-        const rad = finalAngle * Math.PI / 180;
-        const nx = tx + depthFactor * Math.cos(rad);
-        const ny = ty + depthFactor * Math.sin(rad);
-        points.push({ x: tx, y: ty, nx, ny, depth: tDepth, width: tWidth, draw: true });
+        const j = jitter > 0 ? (rng() - 0.5) * 2 * jitter : 0;
+        const tb = tropism * tDepth * 2;
+        const fa = tAngle + j + wave * angle + tb;
+        const rad = fa * Math.PI / 180;
+        const nx = tx + df * Math.cos(rad);
+        const ny = ty + df * Math.sin(rad);
+        points.push({ x: nx, y: ny, depth: tDepth, width: tWidth, type: 'line' });
         tx = nx; ty = ny;
         stepCount++;
         break;
@@ -613,18 +592,59 @@ function traceTurtle(str, angle, angleJitter, lengthScale, tropism, widthDecay, 
       case '-': tAngle -= angle; break;
       case '|': tAngle += 180; break;
       case '!': tWidth *= widthDecay; break;
-      case '[':
+      case '@': {
+        if (season > 0.8 && rng() < season) break;
+        const bp = petals || 5;
+        const np = season > 0.3 ? Math.max(2, Math.round(bp * (1 - season * 0.6))) : bp;
+        const df = Math.pow(lengthScale, tDepth) * leafSize;
+        for (let pi = 0; pi < np; pi++) {
+          const pa = tAngle + (pi * 360) / np;
+          const prad = pa * Math.PI / 180;
+          const pl = df * (0.8 + rng() * 0.4);
+          points.push({ x: tx + pl * Math.cos(prad), y: ty + pl * Math.sin(prad), depth: Math.max(0, tDepth - 1), width: tWidth * 1.3, type: 'flower' });
+        }
+        points.push({ x: tx, y: ty, depth: Math.max(0, tDepth - 1), width: tWidth * 1.5, type: 'flower' });
+        break;
+      }
+      case '{': case '}': break;
+      case '&': {
+        const gs = Math.abs(tropism) > 0 ? tropism * 15 : 5;
+        tAngle += gs;
+        break;
+      }
+      case '[': {
+        if (pruning > 0 && rng() < pruning) {
+          let bd = 1;
+          while (++ci < str.length && bd > 0) {
+            if (str[ci] === '[') bd++;
+            else if (str[ci] === ']') bd--;
+          }
+          ci--;
+          break;
+        }
         stack.push({ x: tx, y: ty, angle: tAngle, depth: tDepth, width: tWidth });
         tDepth++;
         tWidth *= widthDecay;
         break;
+      }
       case ']': {
-        const s = stack.pop();
-        if (s) {
-          // Record a "jump" so line renderer knows not to connect
-          points.push({ x: tx, y: ty, nx: s.x, ny: s.y, depth: s.depth, width: s.width, draw: false });
-          tx = s.x; ty = s.y; tAngle = s.angle; tDepth = s.depth; tWidth = s.width;
+        const state = stack.pop();
+        if (state) ({ x: tx, y: ty, angle: tAngle, depth: tDepth, width: tWidth } = state);
+        break;
+      }
+      case '%': {
+        let bd = 0;
+        while (++ci < str.length) {
+          if (str[ci] === '[') bd++;
+          else if (str[ci] === ']') {
+            if (bd === 0) { ci--; break; }
+            bd--;
+          }
         }
+        break;
+      }
+      case '^': {
+        tAngle += (rng() - 0.5) * 10 * Math.pow(0.9, tDepth);
         break;
       }
     }
@@ -632,1108 +652,367 @@ function traceTurtle(str, angle, angleJitter, lengthScale, tropism, widthDecay, 
   return points;
 }
 
-// Grid-based rendering (original pixel mode)
-function renderGrid(points, w, h) {
-  const vals = new Float32Array(w * h);
-  if (points.length === 0) return vals;
+function render(points, lut) {
+  const dpr = window.devicePixelRatio || 1;
+  const area = document.querySelector('.canvas-area');
+  const cw = area.clientWidth;
+  const ch = area.clientHeight;
+  canvas.width = cw * dpr;
+  canvas.height = ch * dpr;
+  canvas.style.width = cw + 'px';
+  canvas.style.height = ch + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+  // Clear
+  ctx.fillStyle = COLOR_SCHEMES[currentScheme].stops[0];
+  ctx.fillRect(0, 0, cw, ch);
+
+  if (points.length === 0) return;
+
+  // Bounding box
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  let maxDepth = 0;
   for (const p of points) {
-    if (p.nx < minX) minX = p.nx; if (p.nx > maxX) maxX = p.nx;
-    if (p.ny < minY) minY = p.ny; if (p.ny > maxY) maxY = p.ny;
-    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-    if (p.depth > maxDepth) maxDepth = p.depth;
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
   }
 
-  const margin = 3;
-  const drawW = w - margin * 2;
-  const drawH = h - margin * 2;
+  const margin = 40;
+  const drawW = cw - margin * 2;
+  const drawH = ch - margin * 2;
   const bboxW = maxX - minX || 1;
   const bboxH = maxY - minY || 1;
   const scale = Math.min(drawW / bboxW, drawH / bboxH);
   const offsetX = margin + (drawW - bboxW * scale) / 2 - minX * scale;
   const offsetY = margin + (drawH - bboxH * scale) / 2 - minY * scale;
 
-  for (const p of points) {
-    if (!p.draw) continue;
-    const gx = Math.round(p.nx * scale + offsetX);
-    const gy = Math.round(p.ny * scale + offsetY);
-    const radius = Math.max(0, 2 - Math.floor(p.depth / 2));
-    const intensity = maxDepth > 0 ? 0.3 + 0.7 * (1 - p.depth / (maxDepth + 1)) : 1;
-
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        if (dx * dx + dy * dy > radius * radius + 0.5) continue;
-        const px = gx + dx, py = gy + dy;
-        if (px < 0 || px >= w || py < 0 || py >= h) continue;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const falloff = intensity * (1 - dist / (radius + 1));
-        const idx = py * w + px;
-        vals[idx] = Math.max(vals[idx], falloff);
-      }
-    }
-  }
-
-  // Bloom pass
-  const bloomed = new Float32Array(vals);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const v = vals[y * w + x];
-      if (v > 0.05) {
-        for (const [dy, dx] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]) {
-          const ny = y + dy, nx = x + dx;
-          if (ny >= 0 && ny < h && nx >= 0 && nx < w) {
-            const ni = ny * w + nx;
-            bloomed[ni] = Math.max(bloomed[ni], v * 0.4);
-          }
-        }
-      }
-    }
-  }
-  return bloomed;
-}
-
-// Line-based rendering (smooth anti-aliased curves)
-function renderLines(points, canvasW, canvasH, lut) {
-  ctx.fillStyle = '#0a0a0f';
-  ctx.fillRect(0, 0, canvasW, canvasH);
-
-  if (points.length === 0) return;
-
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  // Find max depth
   let maxDepth = 0;
-  for (const p of points) {
-    for (const v of [p.x, p.nx]) { if (v < minX) minX = v; if (v > maxX) maxX = v; }
-    for (const v of [p.y, p.ny]) { if (v < minY) minY = v; if (v > maxY) maxY = v; }
-    if (p.depth > maxDepth) maxDepth = p.depth;
-  }
+  for (const p of points) if (p.depth > maxDepth) maxDepth = p.depth;
+  maxDepth = Math.max(maxDepth, 1);
 
-  const margin = 30;
-  const drawW = canvasW - margin * 2;
-  const drawH = canvasH - margin * 2;
-  const bboxW = maxX - minX || 1;
-  const bboxH = maxY - minY || 1;
-  const scale = Math.min(drawW / bboxW, drawH / bboxH);
-  const oX = margin + (drawW - bboxW * scale) / 2 - minX * scale;
-  const oY = margin + (drawH - bboxH * scale) / 2 - minY * scale;
-
+  // Glow pass
   ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  // Draw glow pass first (thicker, transparent)
+  ctx.globalAlpha = 0.12;
+  ctx.shadowBlur = 15;
   for (const p of points) {
-    if (!p.draw) continue;
-    const intensity = maxDepth > 0 ? 0.2 + 0.8 * (1 - p.depth / (maxDepth + 1)) : 1;
-    const ci = Math.floor(intensity * 255) * 3;
-    const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
-    const lineW = Math.max(0.5, (1 - p.depth / (maxDepth + 1)) * 5 * p.width);
-
-    ctx.strokeStyle = `rgba(${r},${g},${b},0.15)`;
-    ctx.lineWidth = lineW + 4;
+    const gx = p.x * scale + offsetX;
+    const gy = p.y * scale + offsetY;
+    const t = 1 - (p.depth / maxDepth);
+    const ci = Math.min(255, Math.round(t * 220 + 35));
+    const r = lut[ci * 3], g = lut[ci * 3 + 1], b = lut[ci * 3 + 2];
+    const color = 'rgb(' + r + ',' + g + ',' + b + ')';
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
+    const radius = Math.max(0.5, (2.5 - p.depth * 0.3) * p.width) * Math.min(1.2, scale * 0.5);
     ctx.beginPath();
-    ctx.moveTo(p.x * scale + oX, p.y * scale + oY);
-    ctx.lineTo(p.nx * scale + oX, p.ny * scale + oY);
-    ctx.stroke();
+    ctx.arc(gx, gy, radius * 2.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // Main lines
+  // Main pass
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
   for (const p of points) {
-    if (!p.draw) continue;
-    const intensity = maxDepth > 0 ? 0.2 + 0.8 * (1 - p.depth / (maxDepth + 1)) : 1;
-    const ci = Math.floor(intensity * 255) * 3;
-    const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
-    const lineW = Math.max(0.3, (1 - p.depth / (maxDepth + 1)) * 4 * p.width);
+    const gx = p.x * scale + offsetX;
+    const gy = p.y * scale + offsetY;
+    const t = 1 - (p.depth / maxDepth);
+    const ci = Math.min(255, Math.round(t * 220 + 35));
+    const r = lut[ci * 3], g = lut[ci * 3 + 1], b = lut[ci * 3 + 2];
+    ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+    const radius = Math.max(0.3, (1.8 - p.depth * 0.2) * p.width) * Math.min(1, scale * 0.35);
 
-    ctx.strokeStyle = `rgb(${r},${g},${b})`;
-    ctx.lineWidth = lineW;
-    ctx.beginPath();
-    ctx.moveTo(p.x * scale + oX, p.y * scale + oY);
-    ctx.lineTo(p.nx * scale + oX, p.ny * scale + oY);
-    ctx.stroke();
-  }
-}
-
-// ============================================================
-//  20 Presets — botanical, fractal, space-filling, organic
-// ============================================================
-
-const PRESETS = [
-  // --- Botanical ---
-  {
-    name: 'Fern',
-    gradient: 'verdant',
-    axiom: 'X',
-    rules: { X: 'F+[[X]-X]-F[-FX]+X', F: 'FF' },
-    angle: 25, iterations: 5,
-    angleJitter: 4, lengthScale: 0.85, tropism: -0.06, widthDecay: 0.82,
-  },
-  {
-    name: 'Willow',
-    gradient: 'moss',
-    axiom: 'F',
-    rules: { F: 'FF-[-F+F+F]+[+F-F-F]' },
-    angle: 22, iterations: 4,
-    angleJitter: 6, lengthScale: 0.82, tropism: 0.12, widthDecay: 0.78,
-    stochastic: {
-      F: [
-        { production: 'FF-[-F+F+F]+[+F-F-F]', weight: 0.65 },
-        { production: 'FF+[+F-F]-[-F+F+F]', weight: 0.35 },
-      ],
-    },
-  },
-  {
-    name: 'Cherry',
-    gradient: 'sakura',
-    axiom: 'F',
-    rules: { F: 'FF+[+F-F-F]-[-F+F+F]' },
-    angle: 25, iterations: 4,
-    angleJitter: 3, lengthScale: 0.88, tropism: -0.04, widthDecay: 0.85,
-  },
-  {
-    name: 'Canopy',
-    gradient: 'verdant',
-    axiom: 'F',
-    rules: { F: 'F[-F]F[+F][F]' },
-    angle: 28, iterations: 4,
-    angleJitter: 5, lengthScale: 0.78, tropism: -0.08, widthDecay: 0.8,
-  },
-  {
-    name: 'Bonsai',
-    gradient: 'autumn',
-    axiom: 'F',
-    rules: { F: 'FF[+F[-F]F][-F[+F]F]' },
-    angle: 30, iterations: 4,
-    angleJitter: 4, lengthScale: 0.72, tropism: -0.1, widthDecay: 0.7,
-    stochastic: {
-      F: [
-        { production: 'FF[+F[-F]F][-F[+F]F]', weight: 0.6 },
-        { production: 'FF[-F][+F]F', weight: 0.4 },
-      ],
-    },
-  },
-  {
-    name: 'Lavender',
-    gradient: 'twilight',
-    axiom: 'X',
-    rules: { X: 'F[+X][-X]F[+X]~X', F: 'FF' },
-    angle: 15, iterations: 5,
-    angleJitter: 8, lengthScale: 0.8, tropism: -0.12, widthDecay: 0.75,
-  },
-  {
-    name: 'Kelp',
-    gradient: 'ocean',
-    axiom: 'F',
-    rules: { F: 'F~[+F]~[-F]F' },
-    angle: 18, iterations: 5,
-    angleJitter: 10, lengthScale: 0.78, tropism: -0.18, widthDecay: 0.8,
-    stochastic: {
-      F: [
-        { production: 'F~[+F]~[-F]F', weight: 0.5 },
-        { production: 'F[-F~F][+F~F]', weight: 0.3 },
-        { production: 'FF~[-F]+F', weight: 0.2 },
-      ],
-    },
-  },
-  {
-    name: 'Moss',
-    gradient: 'moss',
-    axiom: 'X',
-    rules: { X: 'F[+X]F[-X]+X', F: 'FF' },
-    angle: 20, iterations: 5,
-    angleJitter: 7, lengthScale: 0.76, tropism: -0.05, widthDecay: 0.78,
-    stochastic: {
-      X: [
-        { production: 'F[+X]F[-X]+X', weight: 0.6 },
-        { production: 'F[-X]F[+X]-X', weight: 0.4 },
-      ],
-    },
-  },
-  {
-    name: 'Lichen',
-    gradient: 'bone',
-    axiom: 'F+F+F+F',
-    rules: { F: 'F[+F]F[-F][F]' },
-    angle: 90, iterations: 3,
-    angleJitter: 12, lengthScale: 0.7, tropism: 0, widthDecay: 0.85,
-    stochastic: {
-      F: [
-        { production: 'F[+F]F[-F][F]', weight: 0.5 },
-        { production: 'F[-F+F]F[+F-F]', weight: 0.3 },
-        { production: 'FF[+F][-F]', weight: 0.2 },
-      ],
-    },
-  },
-  {
-    name: 'Seaweed',
-    gradient: 'twilight',
-    axiom: 'F',
-    rules: { F: 'FF[+F+F][-F-F][F]' },
-    angle: 20, iterations: 4,
-    angleJitter: 8, lengthScale: 0.75, tropism: -0.15, widthDecay: 0.78,
-    stochastic: {
-      F: [
-        { production: 'FF[+F+F][-F-F][F]', weight: 0.5 },
-        { production: 'FF[-F+F][+F-F]', weight: 0.3 },
-        { production: 'F[+F][-F]', weight: 0.2 },
-      ],
-    },
-  },
-  // --- Geometric / Fractal ---
-  {
-    name: 'Koch',
-    gradient: 'frost',
-    axiom: 'F-F-F-F',
-    rules: { F: 'F+F-F-FF+F+F-F' },
-    angle: 90, iterations: 3,
-    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
-  },
-  {
-    name: 'Dragon',
-    gradient: 'coral',
-    axiom: 'FX',
-    rules: { X: 'X+YF+', Y: '-FX-Y' },
-    angle: 90, iterations: 12,
-    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
-  },
-  {
-    name: 'Sierpinski',
-    gradient: 'autumn',
-    axiom: 'F-G-G',
-    rules: { F: 'F-G+F+G-F', G: 'GG' },
-    angle: 120, iterations: 6,
-    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
-  },
-  {
-    name: 'Hilbert',
-    gradient: 'frost',
-    axiom: 'X',
-    rules: { X: '-YF+XFX+FY-', Y: '+XF-YFY-FX+' },
-    angle: 90, iterations: 5,
-    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
-  },
-  {
-    name: 'Gosper',
-    gradient: 'ember',
-    axiom: 'F',
-    rules: { F: 'F+G++G-F--FF-G+', G: '-F+GG++G+F--F-G' },
-    angle: 60, iterations: 4,
-    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
-  },
-  {
-    name: 'Penrose',
-    gradient: 'ocean',
-    axiom: '[X]++[X]++[X]++[X]++[X]',
-    rules: { F: '', X: '+YF--ZF[---WF--XF]+', Y: '-WF++XF[+++YF++ZF]-', Z: '--YF++++WF[+ZF++++XF]--XF', W: '++ZF----YF[---WF----XF]++YF' },
-    angle: 36, iterations: 4,
-    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
-  },
-  {
-    name: 'Snowflake',
-    gradient: 'frost',
-    axiom: 'F++F++F',
-    rules: { F: 'F-F++F-F' },
-    angle: 60, iterations: 4,
-    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
-  },
-  // --- Space-filling ---
-  {
-    name: 'Binary',
-    gradient: 'moss',
-    axiom: 'X',
-    rules: { X: 'F[+X][-X]FX', F: 'FF' },
-    angle: 36, iterations: 5,
-    angleJitter: 3, lengthScale: 0.8, tropism: -0.1, widthDecay: 0.8,
-  },
-  {
-    name: 'Coral',
-    gradient: 'coral',
-    axiom: 'F',
-    rules: { F: 'F+F-F-F+F+FF-F' },
-    angle: 60, iterations: 3,
-    angleJitter: 2, lengthScale: 0.95, tropism: 0, widthDecay: 0.9,
-  },
-  {
-    name: 'Lotus',
-    gradient: 'sakura',
-    axiom: 'F+F+F+F+F+F',
-    rules: { F: 'F[+FF][-FF]F[+FF][-FF]F' },
-    angle: 60, iterations: 3,
-    angleJitter: 5, lengthScale: 0.68, tropism: 0, widthDecay: 0.72,
-    stochastic: {
-      F: [
-        { production: 'F[+FF][-FF]F[+FF][-FF]F', weight: 0.6 },
-        { production: 'F[+F~F][-F~F]FF', weight: 0.4 },
-      ],
-    },
-  },
-];
-
-// ============================================================
-//  State
-// ============================================================
-
-const SIM_W = 120, SIM_H = 80;
-let currentPreset = 0;
-let axiom = PRESETS[0].axiom;
-let rules = { ...PRESETS[0].rules };
-let stochastic = PRESETS[0].stochastic ? JSON.parse(JSON.stringify(PRESETS[0].stochastic)) : null;
-let contextSensitive = null;
-let angle = PRESETS[0].angle;
-let iterations = PRESETS[0].iterations;
-let angleJitter = PRESETS[0].angleJitter;
-let lengthScale = PRESETS[0].lengthScale;
-let tropism = PRESETS[0].tropism;
-let widthDecay = PRESETS[0].widthDecay;
-let gradientName = PRESETS[0].gradient;
-let seed = Math.floor(Math.random() * 0xFFFFFFFF);
-let stochasticEnabled = !!stochastic;
-let contextEnabled = false;
-let lut = buildLUT(gradientName);
-let cachedValues = null;
-let cachedPoints = null;
-let needsRegen = true;
-let renderMode = 'grid'; // 'grid' or 'line'
-let animating = false;
-let animFrame = null;
-
-// ============================================================
-//  Canvas sizing
-// ============================================================
-
-function resizeCanvas() {
-  const area = document.querySelector('.canvas-area');
-  const aw = area.clientWidth;
-  const ah = area.clientHeight;
-  const aspect = SIM_W / SIM_H;
-  const pad = 40;
-  let cw, ch;
-  if (aw / ah > aspect) { ch = ah - pad; cw = ch * aspect; }
-  else { cw = aw - pad; ch = cw / aspect; }
-  const dpr = window.devicePixelRatio || 1;
-  canvas.style.width = cw + 'px';
-  canvas.style.height = ch + 'px';
-  canvas.width = cw * dpr;
-  canvas.height = ch * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-resizeCanvas();
-window.addEventListener('resize', () => { resizeCanvas(); render(); });
-
-// ============================================================
-//  Rendering
-// ============================================================
-
-function generate(maxIter) {
-  const iters = maxIter !== undefined ? maxIter : iterations;
-  const rng = mulberry32(seed);
-  const str = generateLSystem(axiom, rules,
-    stochasticEnabled ? stochastic : null,
-    contextEnabled ? contextSensitive : null,
-    iters, rng);
-  const rng2 = mulberry32(seed + 1);
-  cachedPoints = traceTurtle(str, angle, angleJitter, lengthScale, tropism, widthDecay, rng2);
-
-  if (renderMode === 'grid') {
-    cachedValues = renderGrid(cachedPoints, SIM_W, SIM_H);
-  }
-
-  document.getElementById('info-grammar').textContent =
-    `${str.length.toLocaleString()} symbols  \u00b7  ${cachedPoints.filter(p => p.draw).length.toLocaleString()} segments  \u00b7  ${iters} iter`;
-  needsRegen = false;
-}
-
-function render() {
-  if (needsRegen) generate();
-
-  const cw = parseFloat(canvas.style.width);
-  const ch = parseFloat(canvas.style.height);
-
-  if (renderMode === 'line') {
-    renderLines(cachedPoints, cw, ch, lut);
-  } else {
-    if (!cachedValues) return;
-    const cellW = cw / SIM_W;
-    const cellH = ch / SIM_H;
-
-    ctx.fillStyle = '#0a0a0f';
-    ctx.fillRect(0, 0, cw, ch);
-
-    for (let y = 0; y < SIM_H; y++) {
-      for (let x = 0; x < SIM_W; x++) {
-        const val = cachedValues[y * SIM_W + x];
-        if (val < 0.01) continue;
-        const ci = Math.floor(val * 255) * 3;
-        const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        ctx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
-      }
+    if (p.type === 'flower') {
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.arc(gx, gy, radius * 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.beginPath();
+      ctx.arc(gx, gy, radius, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
   // Vignette
-  const cw2 = parseFloat(canvas.style.width);
-  const ch2 = parseFloat(canvas.style.height);
-  const grad = ctx.createRadialGradient(cw2/2, ch2/2, Math.min(cw2,ch2)*0.35, cw2/2, ch2/2, Math.max(cw2,ch2)*0.7);
-  grad.addColorStop(0, 'rgba(10, 10, 15, 0)');
-  grad.addColorStop(1, 'rgba(10, 10, 15, 0.35)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, cw2, ch2);
+  const vg = ctx.createRadialGradient(cw / 2, ch / 2, cw * 0.3, cw / 2, ch / 2, cw * 0.75);
+  vg.addColorStop(0, 'transparent');
+  vg.addColorStop(1, COLOR_SCHEMES[currentScheme].stops[0] + 'cc');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, cw, ch);
 }
 
-function regenerate() {
-  needsRegen = true;
-  render();
+// --- UI helpers ---
+function $(id) { return document.getElementById(id); }
+
+function getParams() {
+  return {
+    angle: +$('angle').value,
+    seed: +$('seed').value,
+    jitter: +$('jitter').value / 10,
+    lengthScale: +$('lengthScale').value / 100,
+    tropism: +$('tropism').value / 100,
+    widthDecay: +$('widthDecay').value / 100,
+    leafSize: +$('leafSize').value / 100,
+    petals: +$('petals').value,
+    pruning: +$('pruning').value / 100,
+    season: +$('season').value / 100,
+    stepWave: +$('stepWave').value / 100,
+  };
 }
 
-// ============================================================
-//  Animated Growth — watch it grow iteration by iteration
-// ============================================================
+function getRules() {
+  const rules = {};
+  document.querySelectorAll('.rule-input').forEach(row => {
+    const sym = row.querySelector('.rule-sym').value.trim();
+    const prod = row.querySelector('.rule-prod').value.trim();
+    if (sym && prod) rules[sym] = prod;
+  });
+  return rules;
+}
 
-function animateGrowth() {
-  if (animating) {
-    stopAnimation();
-    return;
+function esc(s) {
+  const d = document.createElement('span');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function updateDisplay() {
+  $('angle-val').textContent = $('angle').value + '\u00B0';
+  $('iterations-val').textContent = $('iterations').value;
+  $('seed-val').textContent = $('seed').value;
+  $('jitter-val').textContent = (+$('jitter').value / 10).toFixed(1) + '\u00B0';
+  $('lengthScale-val').textContent = (+$('lengthScale').value / 100).toFixed(2);
+  $('tropism-val').textContent = (+$('tropism').value / 100).toFixed(2);
+  $('widthDecay-val').textContent = (+$('widthDecay').value / 100).toFixed(2);
+  $('stepWave-val').textContent = (+$('stepWave').value / 100).toFixed(2);
+  $('leafSize-val').textContent = (+$('leafSize').value / 100).toFixed(2);
+  $('petals-val').textContent = $('petals').value;
+  $('pruning-val').textContent = $('pruning').value + '%';
+  const s = +$('season').value / 100;
+  $('season-val').textContent = s < 0.2 ? 'spring' : s < 0.4 ? 'summer' : s < 0.7 ? 'autumn' : 'winter';
+}
+
+function updateGrammarDisplay() {
+  const rules = getRules();
+  const axiom = $('axiom').value;
+  let html = '<span class="sym">axiom</span> <span class="arrow">\u2192</span> <span class="prod">' + esc(axiom) + '</span>';
+  for (const [sym, prod] of Object.entries(rules)) {
+    html += '<br><span class="sym">' + esc(sym) + '</span> <span class="arrow">\u2192</span> <span class="prod">' + esc(prod) + '</span>';
   }
-  animating = true;
-  const btn = document.getElementById('btn-grow-anim');
-  btn.classList.add('animating');
-  btn.textContent = 'Stop';
-  const indicator = document.getElementById('grow-indicator');
-  indicator.classList.add('visible');
+  $('grammar-display').innerHTML = html;
+}
 
-  let step = 0;
-  const maxIter = iterations;
+let renderTimeout = null;
+function scheduleRender() {
+  if (renderTimeout) clearTimeout(renderTimeout);
+  renderTimeout = setTimeout(doRender, 80);
+}
 
-  function tick() {
-    if (!animating || step > maxIter) {
-      stopAnimation();
-      return;
-    }
-    indicator.textContent = `GROWING... iter ${step}/${maxIter}`;
-    generate(step);
-    render();
-    step++;
-    animFrame = setTimeout(tick, 500 + Math.min(step * 100, 800));
+function doRender() {
+  const axiom = $('axiom').value;
+  const rules = getRules();
+  const params = getParams();
+  const iterations = +$('iterations').value;
+
+  const t0 = performance.now();
+  const str = generateString(axiom, rules, iterations, params.seed);
+  const points = traceTurtle(str, params);
+  const lut = buildLUT(COLOR_SCHEMES[currentScheme]);
+  render(points, lut);
+  const elapsed = (performance.now() - t0).toFixed(1);
+
+  $('stats').innerHTML =
+    'String: <span class="val">' + str.length.toLocaleString() + '</span> chars &nbsp; ' +
+    'Points: <span class="val">' + points.length.toLocaleString() + '</span> &nbsp; ' +
+    'Render: <span class="val">' + elapsed + 'ms</span>';
+
+  updateDisplay();
+  updateGrammarDisplay();
+}
+
+// --- Rule inputs ---
+function buildRuleInputs(rules) {
+  $('rule-inputs').innerHTML = '';
+  for (const [sym, prod] of Object.entries(rules)) {
+    addRuleRow(sym, prod);
   }
-  tick();
 }
 
-function stopAnimation() {
-  animating = false;
-  if (animFrame) { clearTimeout(animFrame); animFrame = null; }
-  const btn = document.getElementById('btn-grow-anim');
-  btn.classList.remove('animating');
-  btn.textContent = 'Animate Growth';
-  document.getElementById('grow-indicator').classList.remove('visible');
-  regenerate();
+function addRuleRow(sym, prod) {
+  sym = sym || '';
+  prod = prod || '';
+  const row = document.createElement('div');
+  row.className = 'param-row rule-input';
+  const symIn = document.createElement('input');
+  symIn.type = 'text';
+  symIn.className = 'rule-sym';
+  symIn.value = sym;
+  symIn.style.cssText = 'max-width:30px;text-align:center';
+  symIn.placeholder = 'F';
+  const arrow = document.createElement('span');
+  arrow.style.cssText = 'color:var(--text-dim);font-size:0.55rem';
+  arrow.textContent = '\u2192';
+  const prodIn = document.createElement('input');
+  prodIn.type = 'text';
+  prodIn.className = 'rule-prod';
+  prodIn.value = prod;
+  prodIn.placeholder = 'FF+[+F]-F';
+  row.appendChild(symIn);
+  row.appendChild(arrow);
+  row.appendChild(prodIn);
+  symIn.addEventListener('input', scheduleRender);
+  prodIn.addEventListener('input', scheduleRender);
+  $('rule-inputs').appendChild(row);
 }
 
-// ============================================================
-//  Render mode toggle
-// ============================================================
+function addRule() { addRuleRow(); }
+function removeRule() {
+  const rows = document.querySelectorAll('.rule-input');
+  if (rows.length > 1) rows[rows.length - 1].remove();
+  scheduleRender();
+}
 
-document.getElementById('btn-mode-grid').addEventListener('click', () => {
-  renderMode = 'grid';
-  document.getElementById('btn-mode-grid').classList.add('active');
-  document.getElementById('btn-mode-line').classList.remove('active');
-  regenerate();
-});
-
-document.getElementById('btn-mode-line').addEventListener('click', () => {
-  renderMode = 'line';
-  document.getElementById('btn-mode-line').classList.add('active');
-  document.getElementById('btn-mode-grid').classList.remove('active');
-  regenerate();
-});
-
-// ============================================================
-//  Preset selector
-// ============================================================
-
-const presetGrid = document.getElementById('preset-grid');
-PRESETS.forEach((p, i) => {
-  const btn = document.createElement('button');
-  btn.className = 'preset-btn' + (i === 0 ? ' active' : '');
-  btn.textContent = p.name;
-  btn.addEventListener('click', () => selectPreset(i));
-  presetGrid.appendChild(btn);
-});
-
-function selectPreset(idx) {
-  if (animating) stopAnimation();
+// --- Preset loading ---
+function loadPreset(idx) {
   currentPreset = idx;
   const p = PRESETS[idx];
-  axiom = p.axiom;
-  rules = { ...p.rules };
-  stochastic = p.stochastic ? JSON.parse(JSON.stringify(p.stochastic)) : null;
-  contextSensitive = p.contextSensitive ? JSON.parse(JSON.stringify(p.contextSensitive)) : null;
-  angle = p.angle;
-  iterations = p.iterations;
-  angleJitter = p.angleJitter;
-  lengthScale = p.lengthScale;
-  tropism = p.tropism;
-  widthDecay = p.widthDecay;
-  gradientName = p.gradient;
-  stochasticEnabled = !!stochastic;
-  contextEnabled = !!contextSensitive;
-  lut = buildLUT(gradientName);
-  seed = Math.floor(Math.random() * 0xFFFFFFFF);
-  presetGrid.querySelectorAll('.preset-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
-  document.getElementById('info-preset').textContent = p.name;
-  buildGrammarEditor();
-  buildControls();
-  updateSeedDisplay();
-  regenerate();
+  $('axiom').value = p.axiom;
+  $('angle').value = p.angle;
+  $('iterations').value = p.iterations;
+  $('seed').value = 42;
+  $('jitter').value = Math.round(p.jitter * 10);
+  $('lengthScale').value = Math.round(p.lengthScale * 100);
+  $('tropism').value = Math.round(p.tropism * 100);
+  $('widthDecay').value = Math.round(p.widthDecay * 100);
+  $('stepWave').value = Math.round(p.stepWave * 100);
+  $('leafSize').value = Math.round(p.leafSize * 100);
+  $('petals').value = p.petals;
+  $('pruning').value = Math.round(p.pruning * 100);
+  $('season').value = Math.round(p.season * 100);
+  currentScheme = p.scheme;
+  buildRuleInputs(p.rules);
+  updateColorSwatches();
+  updatePresetButtons();
+  doRender();
 }
 
-// ============================================================
-//  Grammar editor (deterministic + stochastic + context-sensitive)
-// ============================================================
-
-function buildGrammarEditor() {
-  document.getElementById('axiom-input').value = axiom;
-
-  const editor = document.getElementById('rule-editor');
-  editor.innerHTML = '';
-
-  for (const [sym, prod] of Object.entries(rules)) {
-    const row = document.createElement('div');
-    row.className = 'rule-row';
-
-    const symEl = document.createElement('span');
-    symEl.className = 'rule-symbol';
-    symEl.textContent = sym;
-
-    const arrow = document.createElement('span');
-    arrow.className = 'rule-arrow';
-    arrow.textContent = '\u2192';
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'rule-input';
-    input.value = prod;
-    input.spellcheck = false;
-    input.dataset.sym = sym;
-    input.addEventListener('input', () => {
-      rules[sym] = input.value;
-      if (stochastic && stochastic[sym] && stochastic[sym][0]) {
-        stochastic[sym][0].production = input.value;
-      }
-      regenerate();
-    });
-
-    const delBtn = document.createElement('button');
-    delBtn.className = 'rule-delete';
-    delBtn.textContent = '\u00d7';
-    delBtn.title = 'Remove rule';
-    delBtn.addEventListener('click', () => {
-      delete rules[sym];
-      if (stochastic) delete stochastic[sym];
-      if (contextSensitive) delete contextSensitive[sym];
-      buildGrammarEditor();
-      regenerate();
-    });
-
-    row.appendChild(symEl);
-    row.appendChild(arrow);
-    row.appendChild(input);
-    if (Object.keys(rules).length > 1) row.appendChild(delBtn);
-    editor.appendChild(row);
-
-    // Stochastic variants
-    if (stochasticEnabled && stochastic && stochastic[sym]) {
-      for (let vi = 1; vi < stochastic[sym].length; vi++) {
-        const vrow = document.createElement('div');
-        vrow.className = 'rule-row';
-        vrow.style.paddingLeft = '1.6rem';
-
-        const wInput = document.createElement('input');
-        wInput.type = 'range';
-        wInput.min = 0; wInput.max = 1; wInput.step = 0.05;
-        wInput.value = stochastic[sym][vi].weight;
-        wInput.style.cssText = 'width: 50px; height: 3px; flex-shrink: 0;';
-
-        const wLabel = document.createElement('span');
-        wLabel.className = 'stoch-weight-label';
-        wLabel.textContent = (stochastic[sym][vi].weight * 100).toFixed(0) + '%';
-
-        const capturedVi = vi;
-        const capturedSym = sym;
-        wInput.addEventListener('input', () => {
-          stochastic[capturedSym][capturedVi].weight = parseFloat(wInput.value);
-          wLabel.textContent = (parseFloat(wInput.value) * 100).toFixed(0) + '%';
-          regenerate();
-        });
-
-        const vInput = document.createElement('input');
-        vInput.type = 'text';
-        vInput.className = 'rule-input';
-        vInput.value = stochastic[sym][vi].production;
-        vInput.spellcheck = false;
-        vInput.style.fontSize = '0.55rem';
-        vInput.addEventListener('input', () => {
-          stochastic[capturedSym][capturedVi].production = vInput.value;
-          regenerate();
-        });
-
-        const vDel = document.createElement('button');
-        vDel.className = 'rule-delete';
-        vDel.textContent = '\u00d7';
-        vDel.addEventListener('click', () => {
-          stochastic[capturedSym].splice(capturedVi, 1);
-          if (stochastic[capturedSym].length <= 1) delete stochastic[capturedSym];
-          buildGrammarEditor();
-          regenerate();
-        });
-
-        vrow.appendChild(wInput);
-        vrow.appendChild(wLabel);
-        vrow.appendChild(vInput);
-        vrow.appendChild(vDel);
-        editor.appendChild(vrow);
-      }
-
-      // "+ variant" button for this symbol
-      const addVarRow = document.createElement('div');
-      addVarRow.className = 'rule-row';
-      addVarRow.style.paddingLeft = '1.6rem';
-      const addVarBtn = document.createElement('button');
-      addVarBtn.className = 'grammar-tool-btn';
-      addVarBtn.textContent = '+ variant';
-      addVarBtn.style.fontSize = '0.45rem';
-      const capturedSym2 = sym;
-      addVarBtn.addEventListener('click', () => {
-        if (!stochastic[capturedSym2]) stochastic[capturedSym2] = [{ production: rules[capturedSym2], weight: 0.6 }];
-        stochastic[capturedSym2].push({ production: rules[capturedSym2], weight: 0.3 });
-        buildGrammarEditor();
-        regenerate();
-      });
-      addVarRow.appendChild(addVarBtn);
-      editor.appendChild(addVarRow);
-    }
-
-    // Context-sensitive rules
-    if (contextEnabled && contextSensitive && contextSensitive[sym]) {
-      for (let ci = 0; ci < contextSensitive[sym].length; ci++) {
-        const crow = document.createElement('div');
-        crow.className = 'rule-row';
-        crow.style.paddingLeft = '1.6rem';
-
-        const ctxLabel = document.createElement('span');
-        ctxLabel.style.cssText = 'font-size: 0.45rem; color: var(--accent); flex-shrink: 0;';
-        ctxLabel.textContent = 'ctx';
-
-        const leftIn = document.createElement('input');
-        leftIn.type = 'text';
-        leftIn.className = 'rule-input';
-        leftIn.value = contextSensitive[sym][ci].left || '';
-        leftIn.placeholder = 'L';
-        leftIn.style.cssText = 'width: 1.8rem; flex: none; font-size: 0.55rem; text-align: center;';
-        leftIn.maxLength = 1;
-
-        const ctxArrow = document.createElement('span');
-        ctxArrow.className = 'rule-arrow';
-        ctxArrow.textContent = '<' + sym + '>';
-
-        const rightIn = document.createElement('input');
-        rightIn.type = 'text';
-        rightIn.className = 'rule-input';
-        rightIn.value = contextSensitive[sym][ci].right || '';
-        rightIn.placeholder = 'R';
-        rightIn.style.cssText = 'width: 1.8rem; flex: none; font-size: 0.55rem; text-align: center;';
-        rightIn.maxLength = 1;
-
-        const prodIn = document.createElement('input');
-        prodIn.type = 'text';
-        prodIn.className = 'rule-input';
-        prodIn.value = contextSensitive[sym][ci].production;
-        prodIn.spellcheck = false;
-        prodIn.style.fontSize = '0.55rem';
-
-        const capturedCi = ci;
-        const capturedCSym = sym;
-        leftIn.addEventListener('input', () => { contextSensitive[capturedCSym][capturedCi].left = leftIn.value || undefined; regenerate(); });
-        rightIn.addEventListener('input', () => { contextSensitive[capturedCSym][capturedCi].right = rightIn.value || undefined; regenerate(); });
-        prodIn.addEventListener('input', () => { contextSensitive[capturedCSym][capturedCi].production = prodIn.value; regenerate(); });
-
-        const cDel = document.createElement('button');
-        cDel.className = 'rule-delete';
-        cDel.textContent = '\u00d7';
-        cDel.addEventListener('click', () => {
-          contextSensitive[capturedCSym].splice(capturedCi, 1);
-          if (contextSensitive[capturedCSym].length === 0) delete contextSensitive[capturedCSym];
-          buildGrammarEditor();
-          regenerate();
-        });
-
-        crow.appendChild(ctxLabel);
-        crow.appendChild(leftIn);
-        crow.appendChild(ctxArrow);
-        crow.appendChild(rightIn);
-        crow.appendChild(prodIn);
-        crow.appendChild(cDel);
-        editor.appendChild(crow);
-      }
-    }
-  }
-
-  // Update toggle buttons
-  document.getElementById('btn-stochastic').classList.toggle('active', stochasticEnabled);
-  document.getElementById('btn-context').classList.toggle('active', contextEnabled);
+function updatePresetButtons() {
+  document.querySelectorAll('.preset-btn').forEach(function(btn, i) {
+    btn.classList.toggle('active', i === currentPreset);
+  });
 }
 
-document.getElementById('axiom-input').addEventListener('input', (e) => {
-  axiom = e.target.value;
-  regenerate();
-});
-
-document.getElementById('btn-add-rule').addEventListener('click', () => {
-  const syms = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  for (const s of syms) {
-    if (!rules[s]) {
-      rules[s] = 'F';
-      buildGrammarEditor();
-      regenerate();
-      break;
-    }
-  }
-});
-
-document.getElementById('btn-stochastic').addEventListener('click', () => {
-  stochasticEnabled = !stochasticEnabled;
-  if (stochasticEnabled && !stochastic) {
-    stochastic = {};
-    const firstKey = Object.keys(rules)[0];
-    stochastic[firstKey] = [
-      { production: rules[firstKey], weight: 0.6 },
-      { production: rules[firstKey].split('').reverse().join(''), weight: 0.4 },
-    ];
-  }
-  buildGrammarEditor();
-  regenerate();
-});
-
-document.getElementById('btn-context').addEventListener('click', () => {
-  contextEnabled = !contextEnabled;
-  if (contextEnabled && !contextSensitive) {
-    contextSensitive = {};
-    const firstKey = Object.keys(rules)[0];
-    contextSensitive[firstKey] = [
-      { left: undefined, right: '+', production: rules[firstKey] },
-    ];
-  }
-  buildGrammarEditor();
-  regenerate();
-});
-
-// ============================================================
-//  Controls (sliders)
-// ============================================================
-
-const SLIDERS = [
-  { key: 'angle', label: 'Branch Angle', min: 1, max: 180, step: 0.5, unit: '\u00b0' },
-  { key: 'iterations', label: 'Iterations', min: 1, max: 8, step: 1 },
-  { key: 'angleJitter', label: 'Angle Jitter', min: 0, max: 20, step: 0.5, unit: '\u00b0' },
-  { key: 'lengthScale', label: 'Length Decay', min: 0.4, max: 1.0, step: 0.01 },
-  { key: 'tropism', label: 'Tropism', min: -0.3, max: 0.3, step: 0.01 },
-  { key: 'widthDecay', label: 'Width Decay', min: 0.4, max: 1.0, step: 0.01 },
-];
-
-const GRADIENT_NAMES = Object.keys(GRADIENTS);
-
-function getSliderVal(key) {
-  switch (key) {
-    case 'angle': return angle;
-    case 'iterations': return iterations;
-    case 'angleJitter': return angleJitter;
-    case 'lengthScale': return lengthScale;
-    case 'tropism': return tropism;
-    case 'widthDecay': return widthDecay;
-  }
+// --- Color swatches ---
+function buildColorSwatches() {
+  var container = $('color-schemes');
+  container.innerHTML = '';
+  COLOR_SCHEMES.forEach(function(scheme, i) {
+    var sw = document.createElement('div');
+    sw.className = 'color-swatch' + (i === currentScheme ? ' active' : '');
+    sw.title = scheme.name;
+    sw.style.background = 'linear-gradient(90deg, ' + scheme.stops.slice(1).join(', ') + ')';
+    sw.onclick = function() {
+      currentScheme = i;
+      updateColorSwatches();
+      doRender();
+    };
+    container.appendChild(sw);
+  });
 }
 
-function setSliderVal(key, v) {
-  switch (key) {
-    case 'angle': angle = v; break;
-    case 'iterations': iterations = Math.round(v); break;
-    case 'angleJitter': angleJitter = v; break;
-    case 'lengthScale': lengthScale = v; break;
-    case 'tropism': tropism = v; break;
-    case 'widthDecay': widthDecay = v; break;
-  }
+function updateColorSwatches() {
+  document.querySelectorAll('.color-swatch').forEach(function(sw, i) {
+    sw.classList.toggle('active', i === currentScheme);
+  });
 }
 
-function buildControls() {
-  const el = document.getElementById('controls');
-  el.innerHTML = '';
-
-  for (const slider of SLIDERS) {
-    const group = document.createElement('div');
-    group.className = 'control-group';
-
-    const labelRow = document.createElement('div');
-    labelRow.className = 'control-label';
-    const labelText = document.createElement('span');
-    labelText.textContent = slider.label;
-    const valueText = document.createElement('span');
-    valueText.className = 'control-value';
-
-    const val = getSliderVal(slider.key);
-    const fmt = slider.step >= 1 ? Math.round(val) : val.toFixed(slider.step >= 0.1 ? 1 : 2);
-    valueText.textContent = fmt + (slider.unit || '');
-
-    labelRow.appendChild(labelText);
-    labelRow.appendChild(valueText);
-
-    const input = document.createElement('input');
-    input.type = 'range';
-    input.min = slider.min;
-    input.max = slider.max;
-    input.step = slider.step;
-    input.value = val;
-    input.addEventListener('input', () => {
-      const v = parseFloat(input.value);
-      setSliderVal(slider.key, v);
-      const f = slider.step >= 1 ? Math.round(v) : v.toFixed(slider.step >= 0.1 ? 1 : 2);
-      valueText.textContent = f + (slider.unit || '');
-      regenerate();
-    });
-
-    group.appendChild(labelRow);
-    group.appendChild(input);
-    el.appendChild(group);
-  }
-
-  // Gradient selector
-  const gradGroup = document.createElement('div');
-  gradGroup.className = 'control-group';
-  const gradLabel = document.createElement('div');
-  gradLabel.className = 'control-label';
-  gradLabel.innerHTML = '<span>Color Theme</span>';
-  gradGroup.appendChild(gradLabel);
-
-  const gradRow = document.createElement('div');
-  gradRow.style.cssText = 'display: flex; gap: 0.25rem; flex-wrap: wrap;';
-  for (const gn of GRADIENT_NAMES) {
-    const btn = document.createElement('button');
-    btn.className = 'preset-btn' + (gn === gradientName ? ' active' : '');
-    btn.textContent = gn;
-    btn.style.cssText = 'font-size: 0.45rem; padding: 0.15rem 0.35rem;';
-    btn.addEventListener('click', () => {
-      gradientName = gn;
-      lut = buildLUT(gn);
-      gradRow.querySelectorAll('.preset-btn').forEach(b => b.classList.toggle('active', b.textContent === gn));
-      if (renderMode === 'grid') {
-        render();
-      } else {
-        regenerate();
-      }
-    });
-    gradRow.appendChild(btn);
-  }
-  gradGroup.appendChild(gradRow);
-  el.appendChild(gradGroup);
+// --- Build preset buttons ---
+function buildPresets() {
+  var container = $('presets');
+  PRESETS.forEach(function(p, i) {
+    var btn = document.createElement('button');
+    btn.className = 'preset-btn';
+    var label = document.createElement('span');
+    label.className = 'preset-label';
+    label.textContent = p.name;
+    var sub = document.createElement('span');
+    sub.className = 'preset-sub';
+    sub.textContent = p.sub;
+    btn.appendChild(label);
+    btn.appendChild(sub);
+    btn.onclick = function() { loadPreset(i); };
+    container.appendChild(btn);
+  });
 }
 
-// ============================================================
-//  Actions
-// ============================================================
-
-function updateSeedDisplay() {
-  document.getElementById('seed-display').textContent = 'seed: 0x' + seed.toString(16).padStart(8, '0');
-}
-
-document.getElementById('seed-display').addEventListener('click', () => {
-  const hex = '0x' + seed.toString(16).padStart(8, '0');
-  navigator.clipboard.writeText(hex).catch(() => {});
-  const el = document.getElementById('seed-display');
-  el.textContent = 'copied!';
-  el.style.color = 'var(--green)';
-  setTimeout(() => { el.textContent = 'seed: ' + hex; el.style.color = ''; }, 1000);
-});
-
-document.getElementById('btn-randomize').addEventListener('click', randomize);
-document.getElementById('btn-mutate').addEventListener('click', mutate);
-document.getElementById('btn-download').addEventListener('click', downloadPNG);
-document.getElementById('btn-grow-anim').addEventListener('click', animateGrowth);
-
+// --- Actions ---
 function randomize() {
-  if (animating) stopAnimation();
-  const idx = Math.floor(Math.random() * PRESETS.length);
-  selectPreset(idx);
+  var rng = mulberry32(Date.now());
+  var presetIdx = Math.floor(rng() * PRESETS.length);
+  loadPreset(presetIdx);
+  $('seed').value = Math.floor(rng() * 9999) + 1;
+  $('jitter').value = Math.min(150, Math.max(0, +$('jitter').value + Math.floor((rng() - 0.5) * 40)));
+  $('tropism').value = Math.min(30, Math.max(-30, +$('tropism').value + Math.floor((rng() - 0.5) * 20)));
+  currentScheme = Math.floor(rng() * COLOR_SCHEMES.length);
+  updateColorSwatches();
+  doRender();
 }
 
-function mutate() {
-  if (animating) stopAnimation();
-  const rng = mulberry32(Math.floor(Math.random() * 0xFFFFFFFF));
-
-  angle = Math.max(1, Math.min(180, angle + (rng() - 0.5) * 10));
-  angleJitter = Math.max(0, Math.min(20, angleJitter + (rng() - 0.5) * 3));
-  lengthScale = Math.max(0.4, Math.min(1.0, lengthScale + (rng() - 0.5) * 0.08));
-  tropism = Math.max(-0.3, Math.min(0.3, tropism + (rng() - 0.5) * 0.06));
-  widthDecay = Math.max(0.4, Math.min(1.0, widthDecay + (rng() - 0.5) * 0.06));
-
-  // Possibly mutate a rule
-  if (rng() > 0.4) {
-    const keys = Object.keys(rules);
-    const key = keys[Math.floor(rng() * keys.length)];
-    const chars = 'F+-[]G~!|';
-    if (rng() > 0.5 && rules[key].length > 3) {
-      const pos = Math.floor(rng() * rules[key].length);
-      rules[key] = rules[key].slice(0, pos) + rules[key].slice(pos + 1);
-    } else {
-      const pos = Math.floor(rng() * (rules[key].length + 1));
-      const ch = chars[Math.floor(rng() * chars.length)];
-      rules[key] = rules[key].slice(0, pos) + ch + rules[key].slice(pos);
-    }
-  }
-
-  seed = Math.floor(Math.random() * 0xFFFFFFFF);
-  buildGrammarEditor();
-  buildControls();
-  updateSeedDisplay();
-  regenerate();
-}
-
-function downloadPNG() {
-  if (renderMode === 'line') {
-    // For line mode, render at high res directly
-    const offCanvas = document.createElement('canvas');
-    const scale = 4;
-    offCanvas.width = SIM_W * scale;
-    offCanvas.height = SIM_H * scale;
-    const offCtx = offCanvas.getContext('2d');
-
-    // Temporarily swap ctx
-    const origCtx = ctx;
-    const origCanvas = canvas;
-    // We can't reassign ctx directly, so render lines to offscreen
-    offCtx.fillStyle = '#0a0a0f';
-    offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height);
-
-    if (cachedPoints && cachedPoints.length > 0) {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      let maxDepth = 0;
-      for (const p of cachedPoints) {
-        for (const v of [p.x, p.nx]) { if (v < minX) minX = v; if (v > maxX) maxX = v; }
-        for (const v of [p.y, p.ny]) { if (v < minY) minY = v; if (v > maxY) maxY = v; }
-        if (p.depth > maxDepth) maxDepth = p.depth;
-      }
-      const margin = 30;
-      const drawW = offCanvas.width - margin * 2;
-      const drawH = offCanvas.height - margin * 2;
-      const bboxW = maxX - minX || 1;
-      const bboxH = maxY - minY || 1;
-      const sc = Math.min(drawW / bboxW, drawH / bboxH);
-      const oX = margin + (drawW - bboxW * sc) / 2 - minX * sc;
-      const oY = margin + (drawH - bboxH * sc) / 2 - minY * sc;
-
-      offCtx.lineCap = 'round';
-      offCtx.lineJoin = 'round';
-
-      // Glow pass
-      for (const p of cachedPoints) {
-        if (!p.draw) continue;
-        const intensity = maxDepth > 0 ? 0.2 + 0.8 * (1 - p.depth / (maxDepth + 1)) : 1;
-        const ci = Math.floor(intensity * 255) * 3;
-        const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
-        const lineW = Math.max(0.5, (1 - p.depth / (maxDepth + 1)) * 5 * p.width) * (scale / 2);
-        offCtx.strokeStyle = `rgba(${r},${g},${b},0.15)`;
-        offCtx.lineWidth = lineW + 4 * (scale / 2);
-        offCtx.beginPath();
-        offCtx.moveTo(p.x * sc + oX, p.y * sc + oY);
-        offCtx.lineTo(p.nx * sc + oX, p.ny * sc + oY);
-        offCtx.stroke();
-      }
-      // Main lines
-      for (const p of cachedPoints) {
-        if (!p.draw) continue;
-        const intensity = maxDepth > 0 ? 0.2 + 0.8 * (1 - p.depth / (maxDepth + 1)) : 1;
-        const ci = Math.floor(intensity * 255) * 3;
-        const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
-        const lineW = Math.max(0.3, (1 - p.depth / (maxDepth + 1)) * 4 * p.width) * (scale / 2);
-        offCtx.strokeStyle = `rgb(${r},${g},${b})`;
-        offCtx.lineWidth = lineW;
-        offCtx.beginPath();
-        offCtx.moveTo(p.x * sc + oX, p.y * sc + oY);
-        offCtx.lineTo(p.nx * sc + oX, p.ny * sc + oY);
-        offCtx.stroke();
-      }
-    }
-
-    const link = document.createElement('a');
-    link.download = `lattice-flora-${seed.toString(16)}.png`;
-    link.href = offCanvas.toDataURL('image/png');
-    link.click();
-    return;
-  }
-
-  // Grid mode export
-  const scale = 4;
-  const offCanvas = document.createElement('canvas');
-  offCanvas.width = SIM_W * scale;
-  offCanvas.height = SIM_H * scale;
-  const offCtx = offCanvas.getContext('2d');
-  const cellW = scale;
-  const cellH = scale;
-
-  offCtx.fillStyle = '#0a0a0f';
-  offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height);
-
-  if (cachedValues) {
-    for (let y = 0; y < SIM_H; y++) {
-      for (let x = 0; x < SIM_W; x++) {
-        const val = cachedValues[y * SIM_W + x];
-        if (val < 0.01) continue;
-        const ci = Math.floor(val * 255) * 3;
-        const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
-        offCtx.fillStyle = `rgb(${r},${g},${b})`;
-        offCtx.fillRect(x * cellW, y * cellH, cellW, cellH);
-      }
-    }
-  }
-
-  const link = document.createElement('a');
-  link.download = `lattice-flora-${seed.toString(16)}.png`;
-  link.href = offCanvas.toDataURL('image/png');
+function exportPNG() {
+  var link = document.createElement('a');
+  link.download = 'flora-' + Date.now() + '.png';
+  link.href = canvas.toDataURL('image/png');
   link.click();
 }
 
-// Keyboard shortcuts
-document.addEventListener('keydown', (e) => {
+function toggleAnimate() {
+  animating = !animating;
+  if (animating) {
+    animSeed = +$('seed').value;
+    animateLoop();
+  } else if (animFrame) {
+    cancelAnimationFrame(animFrame);
+    animFrame = null;
+  }
+}
+
+function animateLoop() {
+  if (!animating) return;
+  animSeed++;
+  $('seed').value = animSeed;
+  doRender();
+  animFrame = requestAnimationFrame(animateLoop);
+}
+
+// --- Keyboard ---
+document.addEventListener('keydown', function(e) {
   if (e.target.tagName === 'INPUT') return;
-  switch (e.key.toLowerCase()) {
-    case 'r': randomize(); break;
-    case 'm': mutate(); break;
-    case 's': e.preventDefault(); downloadPNG(); break;
-    case 'a': animateGrowth(); break;
-    case 'g':
-      if (iterations < 8) { iterations++; buildControls(); regenerate(); }
-      break;
-    case 'l':
-      if (renderMode === 'grid') {
-        document.getElementById('btn-mode-line').click();
-      } else {
-        document.getElementById('btn-mode-grid').click();
-      }
-      break;
-  }
-  if (e.key >= '1' && e.key <= '9') {
-    const idx = parseInt(e.key) - 1;
-    if (idx < PRESETS.length) selectPreset(idx);
-  }
-  if (e.key === '0') {
-    if (9 < PRESETS.length) selectPreset(9);
+  switch (e.key) {
+    case ' ': e.preventDefault(); randomize(); break;
+    case 'ArrowLeft': loadPreset((currentPreset - 1 + PRESETS.length) % PRESETS.length); break;
+    case 'ArrowRight': loadPreset((currentPreset + 1) % PRESETS.length); break;
+    case 's': case 'S': exportPNG(); break;
+    case 'a': case 'A': toggleAnimate(); break;
+    case 'r': case 'R': doRender(); break;
   }
 });
 
-// ============================================================
-//  Init
-// ============================================================
+// --- Slider events ---
+document.querySelectorAll('.sidebar input[type="range"]').forEach(function(slider) {
+  slider.addEventListener('input', scheduleRender);
+});
+$('axiom').addEventListener('input', scheduleRender);
 
-selectPreset(0);
+// --- Resize ---
+window.addEventListener('resize', doRender);
+
+// --- Init ---
+buildPresets();
+buildColorSwatches();
+loadPreset(0);
 </script>
 </body>
 </html>
