@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lattice — Performance Benchmark</title>
   <script src="lattice-perf.js"></script>
+  <script src="lattice-pool.js"></script>
   <style>
     :root {
       --bg: #0a0a0f;
@@ -38,10 +39,20 @@
       margin-bottom: 0.5rem;
     }
 
+    h2 {
+      font-size: 0.95rem;
+      font-weight: 400;
+      color: var(--accent);
+      margin: 2rem 0 0.5rem;
+      letter-spacing: 0.1em;
+    }
+
     .subtitle {
       color: var(--text-dim);
       font-size: 0.75rem;
       margin-bottom: 2rem;
+      max-width: 900px;
+      line-height: 1.6;
     }
 
     .back-link {
@@ -56,6 +67,7 @@
       gap: 1rem;
       margin-bottom: 1.5rem;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     button {
@@ -117,6 +129,7 @@
     }
     .bar.main { background: rgba(248, 113, 113, 0.3); border: 1px solid rgba(248, 113, 113, 0.4); }
     .bar.worker { background: rgba(74, 222, 128, 0.3); border: 1px solid rgba(74, 222, 128, 0.4); }
+    .bar.pool { background: rgba(124, 111, 224, 0.3); border: 1px solid rgba(124, 111, 224, 0.4); }
 
     .legend {
       display: flex;
@@ -134,6 +147,7 @@
     }
     .legend-dot.main { background: rgba(248, 113, 113, 0.5); }
     .legend-dot.worker { background: rgba(74, 222, 128, 0.5); }
+    .legend-dot.pool { background: rgba(124, 111, 224, 0.5); }
 
     canvas { display: none; }
 
@@ -148,55 +162,128 @@
       line-height: 1.8;
       display: none;
     }
-    .summary h2 {
+    .summary h3 {
       font-size: 0.85rem;
       font-weight: 400;
       color: var(--accent);
       margin-bottom: 0.5rem;
+    }
+
+    .section {
+      margin-top: 2.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .render-results {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      max-width: 900px;
+    }
+    .render-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: 0.75rem;
+    }
+    .render-card .label {
+      color: var(--text-dim);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.3rem;
+    }
+    .render-card .value {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+    .render-card .detail {
+      color: var(--text-dim);
+      font-size: 0.65rem;
+      margin-top: 0.3rem;
+    }
+
+    .pool-results {
+      max-width: 900px;
+    }
+    .pool-row {
+      display: flex;
+      gap: 2rem;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.75rem;
+      align-items: center;
+    }
+    .pool-row .metric-name {
+      min-width: 180px;
+      color: var(--text-dim);
     }
   </style>
 </head>
 <body>
   <a class="back-link" href="index.html">&larr; Back to Gallery</a>
   <h1>Performance Benchmark</h1>
-  <p class="subtitle">Measures per-engine computation time and WebWorker round-trip. All 11 engine types, 60 frames each. Double-buffered pipeline means main thread cost is ~0ms during normal operation.</p>
+  <p class="subtitle">Comprehensive profiling of the Lattice pipeline: WebWorker simulation, render path, and worker pool overhead. All measurements use high-resolution timers (performance.now).</p>
 
   <div class="controls">
-    <button id="btn-run">Run Benchmark</button>
+    <button id="btn-run">Run Full Benchmark</button>
+    <button id="btn-engines">Engines Only</button>
+    <button id="btn-render">Render Only</button>
+    <button id="btn-pool">Pool Only</button>
     <span class="status" id="status">Ready</span>
   </div>
 
+  <!-- Section 1: Engine Simulation Benchmarks -->
+  <h2>Engine Simulation</h2>
+  <p class="subtitle" style="margin-bottom:1rem">Per-engine computation time vs WebWorker round-trip. 60 frames each at 120x80.</p>
   <div class="legend">
-    <span><span class="legend-dot main"></span>Main Thread</span>
-    <span><span class="legend-dot worker"></span>WebWorker</span>
+    <span><span class="legend-dot main"></span>Computation (in-worker)</span>
+    <span><span class="legend-dot worker"></span>Round-trip (postMessage + Transferable)</span>
   </div>
 
   <table>
     <thead>
       <tr>
         <th>Engine</th>
-        <th>Main Thread (avg ms)</th>
-        <th>WebWorker (avg ms)</th>
-        <th>Speedup</th>
+        <th>Compute (ms)</th>
+        <th>Round-trip (ms)</th>
+        <th>Main Thread Freed</th>
         <th>Visual</th>
       </tr>
     </thead>
     <tbody id="results"></tbody>
   </table>
 
-  <div class="summary" id="summary"></div>
+  <div class="summary" id="engine-summary"></div>
 
-  <canvas id="bench-canvas" width="120" height="80"></canvas>
+  <!-- Section 2: Render Pipeline Benchmarks -->
+  <div class="section">
+    <h2>Render Pipeline</h2>
+    <p class="subtitle" style="margin-bottom:1rem">FastRenderer (Uint32Array) vs LegacyRenderer (fillRect). 1000 frames at 120x80 on 800x600 canvas.</p>
+    <div id="render-results" class="render-results"></div>
+  </div>
+
+  <!-- Section 3: Worker Pool Benchmarks -->
+  <div class="section">
+    <h2>Worker Pool</h2>
+    <p class="subtitle" style="margin-bottom:1rem">WorkerBridge (new Worker each time) vs PooledBridge (reuse warm workers). Measures init-to-ready latency across 10 piece transitions.</p>
+    <div id="pool-results" class="pool-results"></div>
+  </div>
+
+  <div class="summary" id="full-summary"></div>
+
+  <canvas id="bench-canvas" width="800" height="600"></canvas>
 
 <script>
 // ============================================================
-//  Benchmark — compares main-thread vs WebWorker simulation
+//  Benchmark Suite v2 — engines, render, worker pool
 // ============================================================
 
 const FRAMES = 60;
 const SIM_W = 120, SIM_H = 80;
 
-// Test genomes — one per engine type with representative parameters
 const TEST_GENOMES = [
   { type: '1d', width: 60, height: 40, seed: 42, rule: { number: 110, states: 2 } },
   { type: '2d', width: 60, height: 40, seed: 42, rule: { birth: [3], survive: [2, 3], states: 2 } },
@@ -221,39 +308,33 @@ const TYPE_LABELS = {
 
 const tbody = document.getElementById('results');
 const statusEl = document.getElementById('status');
-const summaryEl = document.getElementById('summary');
-const btnRun = document.getElementById('btn-run');
 
-// Initialize table rows
+// Initialize engine table rows
 for (const g of TEST_GENOMES) {
   const tr = document.createElement('tr');
   tr.id = `row-${g.type}`;
   tr.innerHTML = `
     <td class="type-name">${TYPE_LABELS[g.type]}</td>
-    <td id="main-${g.type}">—</td>
-    <td id="worker-${g.type}">—</td>
-    <td id="speedup-${g.type}">—</td>
+    <td id="main-${g.type}">&mdash;</td>
+    <td id="worker-${g.type}">&mdash;</td>
+    <td id="speedup-${g.type}">&mdash;</td>
     <td class="bar-cell" id="bars-${g.type}"></td>
   `;
   tbody.appendChild(tr);
 }
 
-// Measure pure computation time using worker's internal timing
+// --- Engine Benchmarks ---
 function benchComputation(genome) {
   return new Promise((resolve) => {
     const simGenome = { ...genome, width: SIM_W, height: SIM_H };
     const bridge = new LatticePerf.WorkerBridge('lattice-worker.js');
     let framesCollected = 0;
     const simTimes = [];
-    const roundTrips = [];
 
     bridge.init(simGenome, {
-      onReady() {
-        bridge.step();
-      }
+      onReady() { bridge.step(); }
     });
 
-    // Poll for results (WorkerBridge stores values internally)
     let lastFrameCount = 0;
     const poll = setInterval(() => {
       if (bridge.frameCount > lastFrameCount) {
@@ -263,8 +344,7 @@ function benchComputation(genome) {
         if (framesCollected >= FRAMES) {
           clearInterval(poll);
           bridge.destroy();
-          const avgSim = simTimes.reduce((a, b) => a + b, 0) / simTimes.length;
-          resolve(avgSim);
+          resolve(simTimes.reduce((a, b) => a + b, 0) / simTimes.length);
         } else {
           bridge.step();
         }
@@ -273,7 +353,6 @@ function benchComputation(genome) {
   });
 }
 
-// Measure worker round-trip time (includes postMessage overhead)
 function benchRoundTrip(genome) {
   return new Promise((resolve) => {
     const simGenome = { ...genome, width: SIM_W, height: SIM_H };
@@ -283,10 +362,7 @@ function benchRoundTrip(genome) {
     let t0 = 0;
 
     bridge.init(simGenome, {
-      onReady() {
-        t0 = performance.now();
-        bridge.step();
-      }
+      onReady() { t0 = performance.now(); bridge.step(); }
     });
 
     let lastFrameCount = 0;
@@ -308,52 +384,29 @@ function benchRoundTrip(genome) {
   });
 }
 
-async function runBenchmark() {
-  btnRun.disabled = true;
-  btnRun.classList.add('running');
-  btnRun.textContent = 'Running...';
-  summaryEl.style.display = 'none';
-
+async function runEnginesBenchmark() {
   const results = [];
   let maxTime = 0;
 
   for (let i = 0; i < TEST_GENOMES.length; i++) {
     const genome = TEST_GENOMES[i];
-    statusEl.textContent = `Benchmarking ${TYPE_LABELS[genome.type]}... (${i + 1}/${TEST_GENOMES.length})`;
-
-    // Measure pure computation time (worker-internal, = what would block main thread)
+    statusEl.textContent = `Engine: ${TYPE_LABELS[genome.type]} (${i + 1}/${TEST_GENOMES.length})`;
     const computation = await benchComputation(genome);
-
-    // Measure round-trip (includes postMessage + Transferable overhead)
     const roundTrip = await benchRoundTrip(genome);
-
     results.push({ type: genome.type, mainMs: computation, workerRoundTrip: roundTrip });
     maxTime = Math.max(maxTime, computation, roundTrip);
 
-    // Update table row
-    const mainCell = document.getElementById(`main-${genome.type}`);
-    const workerCell = document.getElementById(`worker-${genome.type}`);
-    const speedupCell = document.getElementById(`speedup-${genome.type}`);
-    const barsCell = document.getElementById(`bars-${genome.type}`);
-
-    mainCell.textContent = computation.toFixed(2);
-    workerCell.textContent = roundTrip.toFixed(2);
-
-    const mainThreadFree = Math.max(0, computation - 0.3);
-    speedupCell.innerHTML = `<span class="speedup ${mainThreadFree > 2 ? 'fast' : mainThreadFree > 0.5 ? 'neutral' : 'slow'}">${mainThreadFree.toFixed(1)}ms freed</span>`;
-
-    const scale = 200 / Math.max(maxTime, 1);
-    barsCell.innerHTML = `
-      <div class="bar main" style="width: ${Math.max(2, computation * scale)}px"></div>
-      <div class="bar worker" style="width: ${Math.max(2, roundTrip * scale)}px; margin-top: 2px"></div>
-    `;
+    document.getElementById(`main-${genome.type}`).textContent = computation.toFixed(2);
+    document.getElementById(`worker-${genome.type}`).textContent = roundTrip.toFixed(2);
+    const freed = Math.max(0, computation - 0.3);
+    document.getElementById(`speedup-${genome.type}`).innerHTML =
+      `<span class="speedup ${freed > 2 ? 'fast' : freed > 0.5 ? 'neutral' : 'slow'}">${freed.toFixed(1)}ms freed</span>`;
   }
 
-  // Re-scale all bars with final maxTime
+  // Re-scale bars
   const scale = 200 / Math.max(maxTime, 1);
   for (const r of results) {
-    const barsCell = document.getElementById(`bars-${r.type}`);
-    barsCell.innerHTML = `
+    document.getElementById(`bars-${r.type}`).innerHTML = `
       <div class="bar main" style="width: ${Math.max(2, r.mainMs * scale)}px"></div>
       <div class="bar worker" style="width: ${Math.max(2, r.workerRoundTrip * scale)}px; margin-top: 2px"></div>
     `;
@@ -361,30 +414,229 @@ async function runBenchmark() {
 
   // Summary
   const totalMain = results.reduce((s, r) => s + r.mainMs, 0);
-  const heavyTypes = results.filter(r => r.mainMs > 5).map(r => TYPE_LABELS[r.type]);
   const totalFreed = results.reduce((s, r) => s + Math.max(0, r.mainMs - 0.3), 0);
+  const heavyTypes = results.filter(r => r.mainMs > 5).map(r => TYPE_LABELS[r.type]);
 
+  const summaryEl = document.getElementById('engine-summary');
   summaryEl.innerHTML = `
-    <h2>Results — v4 Pipeline</h2>
-    <p><strong>Architecture:</strong> All 11 engines run in WebWorkers with double-buffered Transferable ArrayBuffers. Main thread cost = 0ms (render only).</p>
-    <p>Total computation per frame across all engines: <strong>${totalMain.toFixed(1)}ms</strong></p>
-    <p>Main thread freed per frame by WebWorker offloading: <strong class="fast">${totalFreed.toFixed(1)}ms</strong></p>
-    ${heavyTypes.length > 0 ? `<p>Heavy engines (&gt;5ms/frame): <strong>${heavyTypes.join(', ')}</strong></p>` : ''}
-    <p style="color: var(--text-dim); margin-top: 0.5rem;">
-      "Main Thread" = computation time if engine ran synchronously (measured inside worker for accuracy).<br>
-      "WebWorker" = wall-clock round-trip including postMessage + Transferable overhead.<br>
-      With double-buffering, worker computes next frame during current render — zero sim blocking.
+    <h3>Engine Results</h3>
+    <p><strong>Architecture:</strong> All 11 engines in WebWorkers, double-buffered Transferable ArrayBuffers. Main thread cost = 0ms.</p>
+    <p>Total computation/frame: <strong>${totalMain.toFixed(1)}ms</strong> | Freed: <strong class="fast">${totalFreed.toFixed(1)}ms</strong></p>
+    ${heavyTypes.length > 0 ? `<p>Heavy engines (&gt;5ms): <strong>${heavyTypes.join(', ')}</strong></p>` : ''}
+    <p style="color:var(--text-dim);margin-top:0.5rem">Compute = in-worker time. Round-trip = postMessage + Transferable overhead.</p>
+  `;
+  summaryEl.style.display = 'block';
+  return results;
+}
+
+// --- Render Pipeline Benchmarks ---
+async function runRenderBenchmark() {
+  statusEl.textContent = 'Benchmarking render pipeline...';
+  const container = document.getElementById('render-results');
+  container.innerHTML = '';
+
+  const RENDER_FRAMES = 1000;
+  const canvas = document.getElementById('bench-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 800;
+  canvas.height = 600;
+
+  // Generate test data
+  const testValues = new Float32Array(SIM_W * SIM_H);
+  for (let i = 0; i < testValues.length; i++) testValues[i] = Math.random();
+
+  // Build a test LUT
+  const lut = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    lut[i * 3] = Math.floor(10 + (i / 255) * 114);      // R: 10 -> 124
+    lut[i * 3 + 1] = Math.floor(10 + (i / 255) * 101);   // G: 10 -> 111
+    lut[i * 3 + 2] = Math.floor(15 + (i / 255) * 209);   // B: 15 -> 224
+  }
+
+  // Benchmark FastRenderer
+  const fast = new LatticePerf.FastRenderer();
+  const t0f = performance.now();
+  for (let i = 0; i < RENDER_FRAMES; i++) {
+    fast.render(ctx, testValues, SIM_W, SIM_H, lut, 1.0, 800, 600);
+  }
+  const fastMs = (performance.now() - t0f) / RENDER_FRAMES;
+
+  // Benchmark LegacyRenderer
+  const legacy = new LatticePerf.LegacyRenderer();
+  const t0l = performance.now();
+  for (let i = 0; i < RENDER_FRAMES; i++) {
+    legacy.render(ctx, testValues, SIM_W, SIM_H, lut, 1.0, 800, 600);
+  }
+  const legacyMs = (performance.now() - t0l) / RENDER_FRAMES;
+
+  // Benchmark vignette (cached vs uncached)
+  const t0v = performance.now();
+  for (let i = 0; i < RENDER_FRAMES; i++) {
+    fast.drawVignette(ctx, 800, 600, 0.3, 0.7, 0.5);
+  }
+  const vigMs = (performance.now() - t0v) / RENDER_FRAMES;
+
+  const speedup = legacyMs / fastMs;
+
+  const cards = [
+    { label: 'FastRenderer', value: `${fastMs.toFixed(3)}ms`, detail: `Uint32Array pixel writes, ${RENDER_FRAMES} frames`, cls: 'fast' },
+    { label: 'LegacyRenderer', value: `${legacyMs.toFixed(3)}ms`, detail: `fillRect per pixel, ${RENDER_FRAMES} frames`, cls: 'slow' },
+    { label: 'Speedup', value: `${speedup.toFixed(1)}x`, detail: `FastRenderer is ${speedup.toFixed(1)}x faster`, cls: speedup > 5 ? 'fast' : 'neutral' },
+    { label: 'Vignette (cached)', value: `${vigMs.toFixed(3)}ms`, detail: 'Computed once, composited via drawImage', cls: 'fast' },
+    { label: 'Pixels/Frame', value: `${(SIM_W * SIM_H).toLocaleString()}`, detail: `${SIM_W}x${SIM_H} sim → 800x600 canvas`, cls: '' },
+    { label: 'Throughput', value: `${(1000 / fastMs).toFixed(0)} fps`, detail: 'Render-only (no sim)', cls: 'fast' },
+  ];
+
+  for (const card of cards) {
+    const el = document.createElement('div');
+    el.className = 'render-card';
+    el.innerHTML = `
+      <div class="label">${card.label}</div>
+      <div class="value ${card.cls}">${card.value}</div>
+      <div class="detail">${card.detail}</div>
+    `;
+    container.appendChild(el);
+  }
+
+  statusEl.textContent = 'Render benchmark complete';
+  return { fastMs, legacyMs, speedup, vigMs };
+}
+
+// --- Worker Pool Benchmarks ---
+async function runPoolBenchmark() {
+  statusEl.textContent = 'Benchmarking worker pool...';
+  const container = document.getElementById('pool-results');
+  container.innerHTML = '';
+
+  const TRANSITIONS = 10;
+  const testGenomes = TEST_GENOMES.slice(0, 5); // Use 5 engine types
+
+  // Benchmark: new Worker() per init (WorkerBridge)
+  function benchBridgeInit(genome) {
+    return new Promise((resolve) => {
+      const t0 = performance.now();
+      const bridge = new LatticePerf.WorkerBridge('lattice-worker.js');
+      bridge.init({ ...genome, width: SIM_W, height: SIM_H }, {
+        onReady() {
+          const elapsed = performance.now() - t0;
+          bridge.destroy();
+          resolve(elapsed);
+        }
+      });
+    });
+  }
+
+  // Benchmark: pooled init (PooledBridge)
+  function benchPooledInit(genome, pooledBridge) {
+    return new Promise((resolve) => {
+      const t0 = performance.now();
+      pooledBridge.init({ ...genome, width: SIM_W, height: SIM_H }, {
+        onReady() {
+          resolve(performance.now() - t0);
+        }
+      });
+    });
+  }
+
+  // Cold start: new Worker each time
+  const coldTimes = [];
+  for (let i = 0; i < TRANSITIONS; i++) {
+    const genome = testGenomes[i % testGenomes.length];
+    statusEl.textContent = `Pool bench: cold init ${i + 1}/${TRANSITIONS}`;
+    coldTimes.push(await benchBridgeInit(genome));
+  }
+
+  // Warm pool: pre-warmed, reuses workers
+  const pool = LatticePool.getDefaultPool('lattice-worker.js');
+  pool.warmup(4);
+  const poolBridge = new LatticePool.PooledBridge(pool);
+  const warmTimes = [];
+  for (let i = 0; i < TRANSITIONS; i++) {
+    const genome = testGenomes[i % testGenomes.length];
+    statusEl.textContent = `Pool bench: warm init ${i + 1}/${TRANSITIONS}`;
+    warmTimes.push(await benchPooledInit(genome, poolBridge));
+  }
+  poolBridge.destroy();
+  pool.drain();
+
+  const avgCold = coldTimes.reduce((a, b) => a + b, 0) / coldTimes.length;
+  const avgWarm = warmTimes.reduce((a, b) => a + b, 0) / warmTimes.length;
+  const p95Cold = coldTimes.slice().sort((a, b) => a - b)[Math.floor(coldTimes.length * 0.95)];
+  const p95Warm = warmTimes.slice().sort((a, b) => a - b)[Math.floor(warmTimes.length * 0.95)];
+  const savings = avgCold - avgWarm;
+  const pctSaved = ((savings / avgCold) * 100);
+
+  const rows = [
+    { name: 'Cold init (new Worker)', avg: avgCold, p95: p95Cold, cls: 'slow' },
+    { name: 'Warm init (pooled)', avg: avgWarm, p95: p95Warm, cls: 'fast' },
+    { name: 'Savings per transition', avg: savings, p95: null, cls: savings > 1 ? 'fast' : 'neutral' },
+    { name: 'Improvement', avg: null, p95: null, pct: pctSaved, cls: pctSaved > 30 ? 'fast' : 'neutral' },
+  ];
+
+  for (const row of rows) {
+    const el = document.createElement('div');
+    el.className = 'pool-row';
+    let val = '';
+    if (row.avg !== null) val += `<span class="${row.cls}">${row.avg.toFixed(2)}ms avg</span>`;
+    if (row.p95 !== null) val += ` <span style="color:var(--text-dim)">(p95: ${row.p95.toFixed(2)}ms)</span>`;
+    if (row.pct !== undefined) val = `<span class="${row.cls}">${row.pct.toFixed(1)}% faster</span>`;
+    el.innerHTML = `<span class="metric-name">${row.name}</span>${val}`;
+    container.appendChild(el);
+  }
+
+  statusEl.textContent = 'Pool benchmark complete';
+  return { avgCold, avgWarm, savings, pctSaved };
+}
+
+// --- Full Benchmark ---
+async function runFull() {
+  const btns = document.querySelectorAll('button');
+  btns.forEach(b => { b.disabled = true; });
+  document.getElementById('btn-run').classList.add('running');
+  document.getElementById('btn-run').textContent = 'Running...';
+
+  const engineResults = await runEnginesBenchmark();
+  const renderResults = await runRenderBenchmark();
+  const poolResults = await runPoolBenchmark();
+
+  // Full summary
+  const totalCompute = engineResults.reduce((s, r) => s + r.mainMs, 0);
+  const summaryEl = document.getElementById('full-summary');
+  summaryEl.innerHTML = `
+    <h3>Full Pipeline Summary</h3>
+    <p><strong>Simulation:</strong> ${totalCompute.toFixed(1)}ms total across 11 engines (all off main thread)</p>
+    <p><strong>Rendering:</strong> FastRenderer ${renderResults.fastMs.toFixed(3)}ms/frame (${renderResults.speedup.toFixed(1)}x faster than legacy fillRect)</p>
+    <p><strong>Worker Pool:</strong> ${poolResults.pctSaved.toFixed(0)}% faster transitions (${poolResults.savings.toFixed(1)}ms saved per piece change)</p>
+    <p style="color:var(--text-dim);margin-top:0.5rem">
+      <strong>Architecture:</strong> WebWorker sim + double-buffered Transferable + Uint32 pixel writes + worker pooling.<br>
+      Main thread budget: ~${renderResults.fastMs.toFixed(1)}ms render + 0ms sim = ${(1000 / (renderResults.fastMs + 0.5)).toFixed(0)}+ fps headroom.
     </p>
   `;
   summaryEl.style.display = 'block';
 
-  statusEl.textContent = 'Done';
-  btnRun.disabled = false;
-  btnRun.classList.remove('running');
-  btnRun.textContent = 'Run Again';
+  btns.forEach(b => { b.disabled = false; });
+  document.getElementById('btn-run').classList.remove('running');
+  document.getElementById('btn-run').textContent = 'Run Again';
+  statusEl.textContent = 'All benchmarks complete';
 }
 
-btnRun.addEventListener('click', runBenchmark);
+// Button handlers
+document.getElementById('btn-run').addEventListener('click', runFull);
+document.getElementById('btn-engines').addEventListener('click', async () => {
+  document.getElementById('btn-engines').disabled = true;
+  await runEnginesBenchmark();
+  document.getElementById('btn-engines').disabled = false;
+});
+document.getElementById('btn-render').addEventListener('click', async () => {
+  document.getElementById('btn-render').disabled = true;
+  await runRenderBenchmark();
+  document.getElementById('btn-render').disabled = false;
+});
+document.getElementById('btn-pool').addEventListener('click', async () => {
+  document.getElementById('btn-pool').disabled = true;
+  await runPoolBenchmark();
+  document.getElementById('btn-pool').disabled = false;
+});
 </script>
 </body>
 </html>
