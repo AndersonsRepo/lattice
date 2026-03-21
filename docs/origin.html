@@ -465,6 +465,48 @@
     .evo-label { color: var(--text-dim); }
     .evo-val { color: var(--text); }
     .evo-extinction { color: var(--red); font-weight: bold; }
+
+    /* Fitness Landscape panel */
+    #landscape-panel {
+      position: fixed;
+      bottom: 5.5rem;
+      right: 1.5rem;
+      width: 280px;
+      height: 280px;
+      background: rgba(18,18,26,0.92);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: none;
+      z-index: 10;
+      backdrop-filter: blur(6px);
+    }
+    #landscape-panel.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .lp-header {
+      font-size: 0.5rem;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      margin-bottom: 0.3rem;
+      display: flex;
+      justify-content: space-between;
+    }
+    .lp-axis-label {
+      font-size: 0.45rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+    #landscape-canvas {
+      width: 100%;
+      height: calc(100% - 1.2rem);
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -518,6 +560,7 @@
     <button class="ctrl-btn" id="btn-radar" title="Species Radar (R)">◎</button>
     <button class="ctrl-btn" id="btn-strata" title="Species Timeline (S)">▤</button>
     <button class="ctrl-btn" id="btn-metrics" title="Metrics Panel (M)">☰</button>
+    <button class="ctrl-btn" id="btn-landscape" title="Fitness Landscape (F)">◈</button>
   </div>
 </div>
 

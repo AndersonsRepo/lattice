@@ -4,6 +4,20 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Scoring & Evolution Enrichment + Origin Visualization Upgrades
+- **What**: Implemented two missing scoring metrics in `src/automata.ts`, added stagnation immigration to `src/evolve.ts`, and enhanced `docs/origin.html` with three new visualization features
+- **Scoring changes** (`src/automata.ts`):
+  - **Composition balance**: Computes visual weight distribution across four quadrants (TL, TR, BL, BR). Measures deviation from ideal even distribution. Score 1.0 = perfectly balanced, 0.0 = all mass in one corner. Previously declared in PieceMetrics interface but returned as 0.
+  - **Rhythmic regularity**: Autocorrelation at multiple spatial lags (2, 3, 4, 6, 8) in both horizontal and vertical axes. Detects periodic tiling patterns. High values indicate regular repeating structure; low values indicate aperiodic or random arrangements. Previously declared but never computed.
+- **Evolution changes** (`src/evolve.ts`):
+  - **Stagnation immigration**: When 15+ generations show <0.5% score improvement, 1-2 random fresh genomes from seed pools are injected directly into the population, breaking local optima without relying solely on more aggressive mutation
+- **Origin.html changes**:
+  - **Diversity curve on fitness landscape**: Blue dashed line showing Simpson's diversity index over time, overlaid on the mountain-range fitness chart. Labeled with "div" at the endpoint. Reveals the tension between fitness optimization and species diversity.
+  - **Genome DNA barcode**: Colorful horizontal strip in the metrics panel that visualizes the current piece's genome parameters as a barcode. Extracts all numeric values from the genome rule, hashes them to species-colored stripes. Each piece gets a unique visual fingerprint.
+  - **New metric bars**: Added compositionBalance (pink) and rhythmicRegularity (rose) to the metrics panel alongside the 8 existing metric bars
+- **Files**: `src/automata.ts` (modified), `src/evolve.ts` (modified), `docs/origin.html` (modified)
+- **How it differs from previous origin upgrades**: The previous round added structural features (landscape, stream graph, lineage depth). This round enriches the *data quality* — two metrics that were declared but never computed are now live, and the visualizations surface new dimensions (diversity trajectory, genome fingerprinting) rather than repeating existing ones.
+
 ### 2026-03-21 — Census / Population Analytics Dashboard
 - **What**: Interactive species population analytics page (`docs/census.html`) — the data science view of evolution
 - **Details**: Five chart sections, all rendered from gallery.json with Canvas 2D. **Population Flow**: stacked area streamgraph showing species populations over all tracked generations, with epoch color bands and mouse tooltips revealing per-generation breakdowns. **Shannon Diversity Index**: line chart of ecological diversity (H) over time with average line, measuring how evenly populations are distributed. **Fitness by Species**: box-and-whisker plots showing score distributions per species type (min, Q1, median, Q3, max). **Epoch Composition**: stacked bar chart showing species dominance percentages within each epoch. **Species Leaderboard**: sortable data table with avg population, peak population, first appearance, generations active, and dominance share with inline bar charts. Summary cards show key stats. Click-to-toggle legend hides/shows species across all charts simultaneously. Tooltips on all charts.
@@ -41,10 +55,11 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ### 2026-03-21 — Performance Pipeline v4 / Full Worker Offloading + Double-Buffering
 - **What**: Profiled and optimized the entire evolution rendering pipeline. All 11 engines now run in WebWorkers with double-buffered Transferable ArrayBuffers — main thread does zero simulation work.
-- **Bugs fixed**: `live.html` called undefined `createEngine()` crashing non-heavy engines. `perf.html` referenced non-existent `WorkerSim` breaking benchmark.
-- **Architecture**: WorkerBridge `autoStep` double-buffering, BufferPool, 4x unrolled fill. ALL engines off main thread. Adaptive FrameBudget. R-D modulo elimination, FlowField incremental max tracking, Attractor log tone mapping.
-- **Before/After**: 7/11 engines blocked main thread → all 11 off-thread. Main thread sim cost: 0ms.
-- **Pages**: `docs/lattice-perf.js`, `docs/lattice-worker.js`, `docs/live.html`, `docs/perf.html`
+- **Bugs fixed**: `live.html` called undefined `createEngine()` crashing non-heavy engines. `bench.html` referenced non-existent `SimWorker` class breaking worker benchmark — rewritten to use `WorkerBridge` with proper init/step/poll cycle.
+- **Architecture**: WorkerBridge `autoStep` double-buffering. ALL engines off main thread. Adaptive `FrameBudget` in `live.html` (skips render when behind 30fps budget). Worker bridge swap via field-level swap + `onmessage` rebind for seamless crossfade transitions.
+- **Worker hot-path optimizations**: R-D pre-computed row offsets + edge-peeled inner loop (no modulo). FlowField curl noise reduced from 5→3 fbm calls/particle via forward differences. Noise warp uses fewer octaves for displacement. FlowField incremental max tracking eliminates per-frame scan.
+- **Before/After**: 7/11 engines blocked main thread → all 11 off-thread. Main thread sim cost: 0ms. FlowField curl: 40% fewer fbm calls.
+- **Pages**: `docs/lattice-perf.js`, `docs/lattice-worker.js`, `docs/live.html`, `docs/bench.html`
 
 ### 2026-03-21 — Choir / Evolutionary Ensemble
 - **What**: The entire population sings as one — every Hall of Fame and current piece plays simultaneously as a voice in a living choir (`docs/choir.html`)

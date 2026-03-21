@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Botanica</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --leaf: #22c55e;
+      --leaf-dim: #16a34a;
+      --petal: #e879a8;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+    }
+
+    canvas { display: block; border-radius: 4px; }
+
+    .hud-top-left {
+      position: absolute;
+      top: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.6rem;
+      color: var(--leaf);
+      letter-spacing: 0.1em;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .hud-top-left.visible { opacity: 1; }
+
+    .hud-bottom-left {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+    .hud-bottom-left .species { color: var(--leaf); text-transform: uppercase; letter-spacing: 0.12em; }
+    .hud-bottom-left .stats { font-size: 0.5rem; }
+
+    .sidebar {
+      width: 320px;
+      min-width: 320px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 1.25rem 1.25rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header h1 {
+      font-size: 1rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--leaf);
+      margin-bottom: 0.25rem;
+    }
+    .sidebar-header .sub {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+    }
+    .sidebar-header .back-link {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .sidebar-header .back-link:hover { color: var(--accent); }
+
+    .species-grid {
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.5rem;
+    }
+    .species-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.25rem;
+    }
+    .species-btn {
+      padding: 0.3rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.48rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .species-btn:hover { border-color: var(--leaf); color: var(--text); }
+    .species-btn.active { background: var(--leaf); border-color: var(--leaf); color: #fff; }
+
+    .controls {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem 1.25rem;
+    }
+    .controls::-webkit-scrollbar { width: 4px; }
+    .controls::-webkit-scrollbar-track { background: transparent; }
+    .controls::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .control-group { margin-bottom: 0.65rem; }
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      margin-bottom: 0.25rem;
+      letter-spacing: 0.03em;
+    }
+    .control-value {
+      color: var(--green);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--leaf);
+      cursor: pointer;
+      transition: transform 0.15s;
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.3);
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+    .grammar-section {
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .rule-row {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-bottom: 0.25rem;
+    }
+    .rule-sym {
+      font-size: 0.65rem;
+      color: var(--leaf);
+      width: 1.1rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .rule-arrow {
+      color: var(--text-dim);
+      font-size: 0.55rem;
+      flex-shrink: 0;
+    }
+    .rule-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.25rem 0.4rem;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.55rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .rule-input:focus { border-color: var(--leaf); }
+
+    .axiom-input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.25rem 0.4rem;
+      color: var(--amber);
+      font-family: inherit;
+      font-size: 0.55rem;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.2s;
+    }
+    .axiom-input:focus { border-color: var(--amber); }
+
+    .stoch-row {
+      padding-left: 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      margin-bottom: 0.2rem;
+    }
+    .stoch-weight {
+      font-size: 0.4rem;
+      color: var(--text-dim);
+      width: 2rem;
+      text-align: right;
+      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .grammar-tools {
+      margin-top: 0.35rem;
+      display: flex;
+      gap: 0.25rem;
+      flex-wrap: wrap;
+    }
+    .tool-btn {
+      font-size: 0.48rem;
+      color: var(--text-dim);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.12rem 0.35rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .tool-btn:hover { border-color: var(--leaf); color: var(--text); }
+    .tool-btn.active { border-color: var(--accent); color: var(--accent); }
+
+    .actions {
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .action-row { display: flex; gap: 0.35rem; }
+
+    .btn {
+      flex: 1;
+      padding: 0.45rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .btn:hover { border-color: var(--leaf); color: #fff; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--leaf), var(--accent));
+      border-color: transparent;
+      color: #fff;
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.2);
+      transform: translateY(-1px);
+    }
+    .btn-bloom {
+      border-color: var(--petal);
+      color: var(--petal);
+    }
+    .btn-bloom:hover { background: rgba(232, 121, 168, 0.08); }
+    .btn-bloom.active {
+      border-color: var(--green);
+      color: var(--green);
+      box-shadow: 0 0 10px rgba(74, 222, 128, 0.15);
+    }
+
+    .shortcuts {
+      padding: 0.4rem 1.25rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.45rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+    }
+    .shortcuts kbd {
+      display: inline-block;
+      padding: 0.08rem 0.2rem;
+      border-radius: 3px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+      font-family: inherit;
+      font-size: 0.42rem;
+      color: var(--text);
+      margin-right: 0.1rem;
+    }
+
+    .seed-display {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 0.2rem;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .seed-display:hover { color: var(--leaf); }
+
+    .palette-picker {
+      display: flex;
+      gap: 0.2rem;
+      flex-wrap: wrap;
+      margin-top: 0.3rem;
+    }
+    .palette-swatch {
+      width: 24px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .palette-swatch:hover { transform: scale(1.15); }
+    .palette-swatch.active { border-color: #fff; box-shadow: 0 0 6px rgba(255,255,255,0.2); }
+
+    @media (max-width: 700px) {
+      body { flex-direction: column-reverse; }
+      .sidebar {
+        width: 100%;
+        min-width: unset;
+        max-height: 55vh;
+        border-left: none;
+        border-top: 1px solid var(--border);
+      }
+      .canvas-area { min-height: 45vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas-area">
+    <canvas id="canvas"></canvas>
+    <div class="hud-top-left" id="hud-status">GROWING...</div>
+    <div class="hud-bottom-left">
+      <span class="species" id="hud-species"></span><br>
+      <span class="stats" id="hud-stats"></span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Botanica</h1>
+      <div class="sub">parametric L-system illustrator</div>
+      <a href="index.html" class="back-link">&larr; gallery</a>
+    </div>
+
+    <div class="species-grid">
+      <div class="section-label">Species</div>
+      <div class="species-list" id="species-list"></div>
+    </div>
+
+    <div class="grammar-section">
+      <div class="section-label">Grammar</div>
+      <div class="control-group" style="margin-bottom:0.4rem">
+        <div class="control-label"><span>Axiom</span></div>
+        <input type="text" class="axiom-input" id="axiom-input" value="F" spellcheck="false">
+      </div>
+      <div id="rule-editor"></div>
+      <div class="grammar-tools">
+        <button class="tool-btn" id="btn-add-rule">+ rule</button>
+        <button class="tool-btn" id="btn-stochastic">stochastic</button>
+      </div>
+    </div>
+
+    <div class="controls" id="controls"></div>
+
+    <div class="seed-display" id="seed-display" title="Click for new seed"></div>
+
+    <div class="actions">
+      <div class="action-row">
+        <button class="btn btn-primary" id="btn-randomize">Randomize</button>
+        <button class="btn" id="btn-mutate">Mutate</button>
+      </div>
+      <div class="action-row">
+        <button class="btn" id="btn-download">Save PNG</button>
+        <button class="btn btn-bloom" id="btn-grow">Animate</button>
+      </div>
+    </div>
+
+    <div class="shortcuts">
+      <kbd>R</kbd> Random
+      <kbd>M</kbd> Mutate
+      <kbd>S</kbd> Save
+      <kbd>A</kbd> Animate
+      <kbd>G</kbd> Grow +1
+      <kbd>1</kbd>-<kbd>9</kbd><kbd>0</kbd> Species
+    </div>
+  </div>
+
+<script>
+// ============================================================
+//  Botanica — Parametric L-System Botanical Illustrator
+//  Extended engine: stochastic grammars, leaf/flower decorations,
+//  parametric depth modulation, smooth vector rendering
+// ============================================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// --- PRNG ---
+function mulberry32(seed) {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// --- Color palettes ---
+const PALETTES = {
+  chlorophyll: ['#0a0a0f','#071a0a','#0d3b1a','#166b2d','#22a94e','#4ade80','#7af5a8','#c8ffe0'],
+  autumn:      ['#0a0a0f','#2d1a0a','#6b3b0d','#a86b16','#dba822','#f5d44a','#ffe888','#fffacc'],
+  sakura:      ['#0a0a0f','#1a0a18','#3b0d35','#6b1660','#a82290','#d44ab8','#f088d8','#ffccf0'],
+  arctic:      ['#0a0a0f','#0a0a2d','#0d0d6b','#1616a8','#2222db','#4a4af5','#8888ff','#ccccff'],
+  dusk:        ['#0a0a0f','#1a0a1a','#3b0d2d','#6b1648','#a82268','#d44a88','#f088b8','#ffcce0'],
+  lichen:      ['#0a0a0f','#0a1a0a','#1a3b0d','#2d6b16','#48a822','#6bd44a','#a0f088','#d8ffcc'],
+  coral:       ['#0a0a0f','#2d0a0a','#6b1a0d','#a83b16','#db6822','#f5a04a','#ffc888','#ffe8cc'],
+  deep:        ['#0a0a0f','#0a0f1a','#0d1a3b','#162d6b','#2248a8','#4a6edb','#88a8f5','#cce0ff'],
+  ember:       ['#0a0a0f','#2d0a0a','#6b0d0d','#a81616','#db2222','#f54a4a','#ff8888','#ffcccc'],
+  bone:        ['#0a0a0f','#1a1a1a','#2d2d2d','#4a4a4a','#6e6e6e','#9a9a9a','#c8c8c8','#e8e8e8'],
+  bioluminescent: ['#0a0a0f','#0a1a1a','#0d3b3b','#166b6b','#22a8a8','#4adbd4','#80f5ee','#ccfffa'],
+  nightbloom: ['#0a0a0f','#120a1a','#220d3b','#3a166b','#5822a8','#7c4adb','#a888f5','#d4ccff'],
+};
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function buildLUT(name) {
+  const stops = (PALETTES[name] || PALETTES.chlorophyll).map(hexToRgb);
+  const lut = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255 * (stops.length - 1);
+    const idx = Math.floor(t);
+    const frac = t - idx;
+    const a = stops[Math.min(idx, stops.length - 1)];
+    const b = stops[Math.min(idx + 1, stops.length - 1)];
+    lut[i * 3]     = Math.round(a[0] + (b[0] - a[0]) * frac);
+    lut[i * 3 + 1] = Math.round(a[1] + (b[1] - a[1]) * frac);
+    lut[i * 3 + 2] = Math.round(a[2] + (b[2] - a[2]) * frac);
+  }
+  return lut;
+}
+
+// ============================================================
+//  L-System Engine — stochastic + parametric + leaf/flower
+// ============================================================
+
+function generateLSystem(axiom, rules, stochastic, iterations, rng) {
+  let current = axiom;
+  for (let i = 0; i < iterations; i++) {
+    let next = '';
+    for (let ci = 0; ci < current.length; ci++) {
+      const ch = current[ci];
+      if (stochastic && stochastic[ch]) {
+        const alts = stochastic[ch];
+        const total = alts.reduce((s, a) => s + a.weight, 0);
+        let r = rng() * total;
+        let chosen = alts[0].production;
+        for (const alt of alts) {
+          r -= alt.weight;
+          if (r <= 0) { chosen = alt.production; break; }
+        }
+        next += chosen;
+      } else {
+        next += rules[ch] || ch;
+      }
+    }
+    current = next;
+    if (current.length > 100000) break;
+  }
+  return current;
+}
+
+function traceTurtle(str, params) {
+  const { angle, angleJitter, lengthScale, tropism, widthDecay, leafSize, leafAngle, flowerPetals } = params;
+  const rng = params.rng;
+  const segments = [];
+  const leaves = [];
+  const flowers = [];
+  let tx = 0, ty = 0, tAngle = -90, tDepth = 0, tWidth = 1.0;
+  const stack = [];
+  let stepCount = 0;
+
+  for (const ch of str) {
+    switch (ch) {
+      case 'F': case 'G': {
+        const df = Math.pow(lengthScale, tDepth);
+        const j = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
+        const tb = tropism * tDepth * 2;
+        const fa = tAngle + j + tb;
+        const rad = fa * Math.PI / 180;
+        const nx = tx + df * Math.cos(rad);
+        const ny = ty + df * Math.sin(rad);
+        segments.push({ x: tx, y: ty, nx, ny, depth: tDepth, width: tWidth, draw: true });
+        tx = nx; ty = ny;
+        stepCount++;
+        break;
+      }
+      case '~': {
+        const df = Math.pow(lengthScale, tDepth);
+        const wave = Math.sin(stepCount * 0.8) * 0.3;
+        const j = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
+        const tb = tropism * tDepth * 2;
+        const fa = tAngle + j + wave * angle + tb;
+        const rad = fa * Math.PI / 180;
+        const nx = tx + df * Math.cos(rad);
+        const ny = ty + df * Math.sin(rad);
+        segments.push({ x: tx, y: ty, nx, ny, depth: tDepth, width: tWidth, draw: true });
+        tx = nx; ty = ny;
+        stepCount++;
+        break;
+      }
+      case '@': {
+        // Leaf decoration at current position
+        if (flowerPetals > 0) {
+          flowers.push({ x: tx, y: ty, angle: tAngle, depth: tDepth, petals: flowerPetals });
+        } else {
+          leaves.push({ x: tx, y: ty, angle: tAngle, depth: tDepth, size: leafSize });
+        }
+        break;
+      }
+      case '+': tAngle += angle; break;
+      case '-': tAngle -= angle; break;
+      case '|': tAngle += 180; break;
+      case '!': tWidth *= widthDecay; break;
+      case '[':
+        stack.push({ x: tx, y: ty, angle: tAngle, depth: tDepth, width: tWidth });
+        tDepth++;
+        tWidth *= widthDecay;
+        break;
+      case ']': {
+        const s = stack.pop();
+        if (s) {
+          segments.push({ x: tx, y: ty, nx: s.x, ny: s.y, depth: s.depth, width: s.width, draw: false });
+          tx = s.x; ty = s.y; tAngle = s.angle; tDepth = s.depth; tWidth = s.width;
+        }
+        break;
+      }
+    }
+  }
+  return { segments, leaves, flowers };
+}
+
+// ============================================================
+//  Vector Renderer — smooth lines with leaf/flower decorations
+// ============================================================
+
+function computeBounds(segments, leaves, flowers) {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  let maxDepth = 0;
+  for (const p of segments) {
+    for (const v of [p.x, p.nx]) { if (v < minX) minX = v; if (v > maxX) maxX = v; }
+    for (const v of [p.y, p.ny]) { if (v < minY) minY = v; if (v > maxY) maxY = v; }
+    if (p.depth > maxDepth) maxDepth = p.depth;
+  }
+  for (const l of leaves) {
+    const r = (l.size || 0.3) * 2;
+    if (l.x - r < minX) minX = l.x - r;
+    if (l.x + r > maxX) maxX = l.x + r;
+    if (l.y - r < minY) minY = l.y - r;
+    if (l.y + r > maxY) maxY = l.y + r;
+  }
+  for (const f of flowers) {
+    const r = 1.5;
+    if (f.x - r < minX) minX = f.x - r;
+    if (f.x + r > maxX) maxX = f.x + r;
+    if (f.y - r < minY) minY = f.y - r;
+    if (f.y + r > maxY) maxY = f.y + r;
+  }
+  return { minX, maxX, minY, maxY, maxDepth };
+}
+
+function renderScene(segments, leaves, flowers, cw, ch, lut, paletteName) {
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, cw, ch);
+
+  if (segments.length === 0) return;
+
+  const bounds = computeBounds(segments, leaves, flowers);
+  const { minX, maxX, minY, maxY, maxDepth } = bounds;
+  const margin = 35;
+  const drawW = cw - margin * 2;
+  const drawH = ch - margin * 2;
+  const bboxW = maxX - minX || 1;
+  const bboxH = maxY - minY || 1;
+  const scale = Math.min(drawW / bboxW, drawH / bboxH);
+  const oX = margin + (drawW - bboxW * scale) / 2 - minX * scale;
+  const oY = margin + (drawH - bboxH * scale) / 2 - minY * scale;
+
+  const tx = (x) => x * scale + oX;
+  const ty = (y) => y * scale + oY;
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Pass 1: Glow
+  for (const p of segments) {
+    if (!p.draw) continue;
+    const intensity = maxDepth > 0 ? 0.15 + 0.85 * (1 - p.depth / (maxDepth + 1)) : 1;
+    const ci = Math.floor(intensity * 255) * 3;
+    const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
+    const lineW = Math.max(0.5, (1 - p.depth / (maxDepth + 1)) * 6 * p.width);
+
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.1)`;
+    ctx.lineWidth = lineW + 5;
+    ctx.beginPath();
+    ctx.moveTo(tx(p.x), ty(p.y));
+    ctx.lineTo(tx(p.nx), ty(p.ny));
+    ctx.stroke();
+  }
+
+  // Pass 2: Main branches
+  for (const p of segments) {
+    if (!p.draw) continue;
+    const intensity = maxDepth > 0 ? 0.15 + 0.85 * (1 - p.depth / (maxDepth + 1)) : 1;
+    const ci = Math.floor(intensity * 255) * 3;
+    const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
+    const lineW = Math.max(0.3, (1 - p.depth / (maxDepth + 1)) * 5 * p.width);
+
+    ctx.strokeStyle = `rgb(${r},${g},${b})`;
+    ctx.lineWidth = lineW;
+    ctx.beginPath();
+    ctx.moveTo(tx(p.x), ty(p.y));
+    ctx.lineTo(tx(p.nx), ty(p.ny));
+    ctx.stroke();
+  }
+
+  // Pass 3: Leaves — elongated ellipses
+  const leafColors = PALETTES[paletteName] || PALETTES.chlorophyll;
+  const leafColor = leafColors[Math.min(5, leafColors.length - 1)];
+  const leafRgb = hexToRgb(leafColor);
+
+  for (const l of leaves) {
+    const sz = (l.size || 0.3) * scale * 0.8;
+    if (sz < 1) continue;
+    const lx = tx(l.x);
+    const ly = ty(l.y);
+    const la = l.angle * Math.PI / 180;
+
+    ctx.save();
+    ctx.translate(lx, ly);
+    ctx.rotate(la);
+
+    // Leaf shape: two quadratic curves forming an almond
+    const leafLen = sz * 1.8;
+    const leafWid = sz * 0.6;
+
+    // Glow
+    ctx.fillStyle = `rgba(${leafRgb[0]},${leafRgb[1]},${leafRgb[2]},0.15)`;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(leafLen * 0.5, -leafWid * 1.3, leafLen, 0);
+    ctx.quadraticCurveTo(leafLen * 0.5, leafWid * 1.3, 0, 0);
+    ctx.fill();
+
+    // Fill
+    const depthAlpha = Math.max(0.3, 1 - l.depth * 0.12);
+    ctx.fillStyle = `rgba(${leafRgb[0]},${leafRgb[1]},${leafRgb[2]},${depthAlpha * 0.7})`;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(leafLen * 0.5, -leafWid, leafLen, 0);
+    ctx.quadraticCurveTo(leafLen * 0.5, leafWid, 0, 0);
+    ctx.fill();
+
+    // Midrib
+    ctx.strokeStyle = `rgba(${leafRgb[0]},${leafRgb[1]},${leafRgb[2]},${depthAlpha * 0.4})`;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(leafLen * 0.9, 0);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // Pass 4: Flowers — radial petals
+  for (const f of flowers) {
+    const fx = tx(f.x);
+    const fy = ty(f.y);
+    const petalLen = scale * 0.6;
+    const petalWid = petalLen * 0.35;
+    if (petalLen < 2) continue;
+
+    const petalColor = PALETTES[paletteName] ? PALETTES[paletteName][6] : '#f088d8';
+    const pRgb = hexToRgb(petalColor);
+    const depthAlpha = Math.max(0.3, 1 - f.depth * 0.1);
+
+    for (let pi = 0; pi < f.petals; pi++) {
+      const pa = (pi / f.petals) * Math.PI * 2;
+      ctx.save();
+      ctx.translate(fx, fy);
+      ctx.rotate(pa);
+
+      // Petal glow
+      ctx.fillStyle = `rgba(${pRgb[0]},${pRgb[1]},${pRgb[2]},${depthAlpha * 0.12})`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(petalLen * 0.4, -petalWid * 1.2, petalLen, 0);
+      ctx.quadraticCurveTo(petalLen * 0.4, petalWid * 1.2, 0, 0);
+      ctx.fill();
+
+      // Petal fill
+      ctx.fillStyle = `rgba(${pRgb[0]},${pRgb[1]},${pRgb[2]},${depthAlpha * 0.55})`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(petalLen * 0.4, -petalWid, petalLen, 0);
+      ctx.quadraticCurveTo(petalLen * 0.4, petalWid, 0, 0);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // Center dot
+    ctx.fillStyle = `rgba(${pRgb[0]},${pRgb[1]},${pRgb[2]},${depthAlpha * 0.8})`;
+    ctx.beginPath();
+    ctx.arc(fx, fy, Math.max(1, petalLen * 0.15), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Vignette
+  const grad = ctx.createRadialGradient(cw/2, ch/2, Math.min(cw,ch)*0.35, cw/2, ch/2, Math.max(cw,ch)*0.7);
+  grad.addColorStop(0, 'rgba(10,10,15,0)');
+  grad.addColorStop(1, 'rgba(10,10,15,0.3)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+}
+
+// ============================================================
+//  Species Presets — 24 botanical, fractal, and organic forms
+// ============================================================
+
+const SPECIES = [
+  // --- Botanical ---
+  {
+    name: 'Fern',
+    palette: 'chlorophyll',
+    axiom: 'X',
+    rules: { X: 'F+[[X]-X]-F[-FX]+X', F: 'FF' },
+    angle: 25, iterations: 5,
+    angleJitter: 4, lengthScale: 0.85, tropism: -0.06, widthDecay: 0.82,
+    leafSize: 0, leafAngle: 30, flowerPetals: 0,
+  },
+  {
+    name: 'Weeping Fig',
+    palette: 'lichen',
+    axiom: 'F',
+    rules: { F: 'FF-[-F+F+F]+[+F-F-F]' },
+    angle: 22, iterations: 4,
+    angleJitter: 5, lengthScale: 0.82, tropism: 0.14, widthDecay: 0.78,
+    leafSize: 0.25, leafAngle: 25, flowerPetals: 0,
+    stochastic: {
+      F: [
+        { production: 'FF-[-F+F+F@]+[+F-F-F@]', weight: 0.6 },
+        { production: 'FF+[+F-F@]-[-F+F+F]', weight: 0.4 },
+      ],
+    },
+  },
+  {
+    name: 'Cherry',
+    palette: 'sakura',
+    axiom: 'F',
+    rules: { F: 'FF+[+F-F-F]-[-F+F+F]' },
+    angle: 25, iterations: 4,
+    angleJitter: 3, lengthScale: 0.88, tropism: -0.04, widthDecay: 0.85,
+    leafSize: 0, leafAngle: 30, flowerPetals: 5,
+    stochastic: {
+      F: [
+        { production: 'FF+[+F-F-F@]-[-F+F+F@]', weight: 0.7 },
+        { production: 'FF[+F@][-F@]', weight: 0.3 },
+      ],
+    },
+  },
+  {
+    name: 'Magnolia',
+    palette: 'dusk',
+    axiom: 'X',
+    rules: { X: 'F[+X@]F[-X@]+X', F: 'FF' },
+    angle: 28, iterations: 5,
+    angleJitter: 3, lengthScale: 0.8, tropism: -0.05, widthDecay: 0.8,
+    leafSize: 0.35, leafAngle: 35, flowerPetals: 6,
+  },
+  {
+    name: 'Bonsai',
+    palette: 'autumn',
+    axiom: 'F',
+    rules: { F: 'FF[+F[-F]F][-F[+F]F]' },
+    angle: 30, iterations: 4,
+    angleJitter: 4, lengthScale: 0.72, tropism: -0.1, widthDecay: 0.7,
+    leafSize: 0.3, leafAngle: 40, flowerPetals: 0,
+    stochastic: {
+      F: [
+        { production: 'FF[+F[-F@]F][-F[+F@]F]', weight: 0.55 },
+        { production: 'FF[-F@][+F@]F', weight: 0.45 },
+      ],
+    },
+  },
+  {
+    name: 'Lavender',
+    palette: 'nightbloom',
+    axiom: 'X',
+    rules: { X: 'F[+X@][-X@]F[+X]~X', F: 'FF' },
+    angle: 15, iterations: 5,
+    angleJitter: 8, lengthScale: 0.8, tropism: -0.12, widthDecay: 0.75,
+    leafSize: 0, leafAngle: 20, flowerPetals: 4,
+  },
+  {
+    name: 'Kelp',
+    palette: 'bioluminescent',
+    axiom: 'F',
+    rules: { F: 'F~[+F]~[-F]F' },
+    angle: 18, iterations: 5,
+    angleJitter: 10, lengthScale: 0.78, tropism: -0.18, widthDecay: 0.8,
+    leafSize: 0.35, leafAngle: 45, flowerPetals: 0,
+    stochastic: {
+      F: [
+        { production: 'F~[+F@]~[-F@]F', weight: 0.5 },
+        { production: 'F[-F~F@][+F~F@]', weight: 0.3 },
+        { production: 'FF~[-F]+F', weight: 0.2 },
+      ],
+    },
+  },
+  {
+    name: 'Lotus',
+    palette: 'sakura',
+    axiom: 'F+F+F+F+F+F',
+    rules: { F: 'F[+FF@][-FF@]F[+FF][-FF]F' },
+    angle: 60, iterations: 3,
+    angleJitter: 5, lengthScale: 0.68, tropism: 0, widthDecay: 0.72,
+    leafSize: 0.3, leafAngle: 30, flowerPetals: 6,
+    stochastic: {
+      F: [
+        { production: 'F[+FF@][-FF@]F[+FF][-FF]F', weight: 0.6 },
+        { production: 'F[+F~F@][-F~F@]FF', weight: 0.4 },
+      ],
+    },
+  },
+  // --- Organic ---
+  {
+    name: 'Moss',
+    palette: 'lichen',
+    axiom: 'X',
+    rules: { X: 'F[+X]F[-X]+X', F: 'FF' },
+    angle: 20, iterations: 5,
+    angleJitter: 7, lengthScale: 0.76, tropism: -0.05, widthDecay: 0.78,
+    leafSize: 0.2, leafAngle: 30, flowerPetals: 0,
+    stochastic: {
+      X: [
+        { production: 'F[+X@]F[-X@]+X', weight: 0.6 },
+        { production: 'F[-X]F[+X]-X', weight: 0.4 },
+      ],
+    },
+  },
+  {
+    name: 'Coral',
+    palette: 'coral',
+    axiom: 'F',
+    rules: { F: 'F+F-F-F+F+FF-F' },
+    angle: 60, iterations: 3,
+    angleJitter: 3, lengthScale: 0.95, tropism: 0, widthDecay: 0.9,
+    leafSize: 0, leafAngle: 30, flowerPetals: 0,
+  },
+  {
+    name: 'Wisteria',
+    palette: 'nightbloom',
+    axiom: 'F',
+    rules: { F: 'FF[+F+F][-F-F][F@]' },
+    angle: 20, iterations: 4,
+    angleJitter: 6, lengthScale: 0.75, tropism: 0.15, widthDecay: 0.76,
+    leafSize: 0, leafAngle: 30, flowerPetals: 5,
+    stochastic: {
+      F: [
+        { production: 'FF[+F+F@][-F-F@][F@]', weight: 0.5 },
+        { production: 'FF[-F+F@][+F-F@]', weight: 0.3 },
+        { production: 'F[+F@][-F@]', weight: 0.2 },
+      ],
+    },
+  },
+  {
+    name: 'Mycelium',
+    palette: 'bone',
+    axiom: 'X',
+    rules: { X: 'F[+X][-X]FX', F: 'FF' },
+    angle: 36, iterations: 5,
+    angleJitter: 12, lengthScale: 0.72, tropism: 0.03, widthDecay: 0.75,
+    leafSize: 0, leafAngle: 30, flowerPetals: 0,
+  },
+  // --- Fractals ---
+  {
+    name: 'Koch',
+    palette: 'arctic',
+    axiom: 'F-F-F-F',
+    rules: { F: 'F+F-F-FF+F+F-F' },
+    angle: 90, iterations: 3,
+    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
+    leafSize: 0, leafAngle: 30, flowerPetals: 0,
+  },
+  {
+    name: 'Dragon',
+    palette: 'ember',
+    axiom: 'FX',
+    rules: { X: 'X+YF+', Y: '-FX-Y' },
+    angle: 90, iterations: 12,
+    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
+    leafSize: 0, leafAngle: 30, flowerPetals: 0,
+  },
+  {
+    name: 'Sierpinski',
+    palette: 'autumn',
+    axiom: 'F-G-G',
+    rules: { F: 'F-G+F+G-F', G: 'GG' },
+    angle: 120, iterations: 6,
+    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
+    leafSize: 0, leafAngle: 30, flowerPetals: 0,
+  },
+  {
+    name: 'Hilbert',
+    palette: 'deep',
+    axiom: 'X',
+    rules: { X: '-YF+XFX+FY-', Y: '+XF-YFY-FX+' },
+    angle: 90, iterations: 5,
+    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
+    leafSize: 0, leafAngle: 30, flowerPetals: 0,
+  },
+  {
+    name: 'Gosper',
+    palette: 'coral',
+    axiom: 'F',
+    rules: { F: 'F+G++G-F--FF-G+', G: '-F+GG++G+F--F-G' },
+    angle: 60, iterations: 4,
+    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
+    leafSize: 0, leafAngle: 30, flowerPetals: 0,
+  },
+  {
+    name: 'Snowflake',
+    palette: 'arctic',
+    axiom: 'F++F++F',
+    rules: { F: 'F-F++F-F' },
+    angle: 60, iterations: 4,
+    angleJitter: 0, lengthScale: 1, tropism: 0, widthDecay: 0.85,
+    leafSize: 0, leafAngle: 30, flowerPetals: 0,
+  },
+  // --- Stochastic botanical ---
+  {
+    name: 'Wildflower',
+    palette: 'dusk',
+    axiom: 'X',
+    rules: { X: 'F[+X][-X]F@X', F: 'FF' },
+    angle: 25, iterations: 5,
+    angleJitter: 6, lengthScale: 0.78, tropism: -0.08, widthDecay: 0.76,
+    leafSize: 0.25, leafAngle: 35, flowerPetals: 5,
+    stochastic: {
+      X: [
+        { production: 'F[+X@][-X]F@X', weight: 0.4 },
+        { production: 'F[-X@][+X]FX', weight: 0.35 },
+        { production: 'F[+X]F[-X@]+X@', weight: 0.25 },
+      ],
+    },
+  },
+  {
+    name: 'Ivy',
+    palette: 'chlorophyll',
+    axiom: 'X',
+    rules: { X: 'F~[+X@]~[-X@]~FX', F: 'F~F' },
+    angle: 30, iterations: 5,
+    angleJitter: 8, lengthScale: 0.78, tropism: 0.1, widthDecay: 0.8,
+    leafSize: 0.35, leafAngle: 40, flowerPetals: 0,
+  },
+  {
+    name: 'Orchid',
+    palette: 'sakura',
+    axiom: 'F',
+    rules: { F: 'FF![-F+F@][+F-F@]' },
+    angle: 22, iterations: 4,
+    angleJitter: 3, lengthScale: 0.85, tropism: -0.05, widthDecay: 0.8,
+    leafSize: 0.3, leafAngle: 25, flowerPetals: 5,
+    stochastic: {
+      F: [
+        { production: 'FF![-F+F@][+F-F@]', weight: 0.65 },
+        { production: 'FF[-F@][+F@]', weight: 0.35 },
+      ],
+    },
+  },
+  {
+    name: 'Seagrass',
+    palette: 'bioluminescent',
+    axiom: 'F',
+    rules: { F: 'F~F[+~F@][-~F@]' },
+    angle: 15, iterations: 5,
+    angleJitter: 12, lengthScale: 0.8, tropism: -0.2, widthDecay: 0.82,
+    leafSize: 0.3, leafAngle: 50, flowerPetals: 0,
+  },
+  {
+    name: 'Dahlia',
+    palette: 'ember',
+    axiom: 'X',
+    rules: { X: 'F[+X@][-X@]FX@', F: 'FF' },
+    angle: 18, iterations: 5,
+    angleJitter: 5, lengthScale: 0.75, tropism: 0, widthDecay: 0.7,
+    leafSize: 0.2, leafAngle: 30, flowerPetals: 8,
+    stochastic: {
+      X: [
+        { production: 'F[+X@][-X@]FX@', weight: 0.5 },
+        { production: 'F[+X]F[-X@]X@', weight: 0.3 },
+        { production: 'FF[+X@][-X@]', weight: 0.2 },
+      ],
+    },
+  },
+  {
+    name: 'Canopy',
+    palette: 'chlorophyll',
+    axiom: 'F',
+    rules: { F: 'F[-F@]F[+F@][F@]' },
+    angle: 28, iterations: 4,
+    angleJitter: 5, lengthScale: 0.78, tropism: -0.08, widthDecay: 0.8,
+    leafSize: 0.3, leafAngle: 35, flowerPetals: 0,
+  },
+];
+
+// ============================================================
+//  State
+// ============================================================
+
+let currentSpecies = 0;
+let axiom = SPECIES[0].axiom;
+let rules = { ...SPECIES[0].rules };
+let stochastic = SPECIES[0].stochastic ? JSON.parse(JSON.stringify(SPECIES[0].stochastic)) : null;
+let stochasticEnabled = !!stochastic;
+let angle = SPECIES[0].angle;
+let iterations = SPECIES[0].iterations;
+let angleJitter = SPECIES[0].angleJitter;
+let lengthScale = SPECIES[0].lengthScale;
+let tropism = SPECIES[0].tropism;
+let widthDecay = SPECIES[0].widthDecay;
+let leafSize = SPECIES[0].leafSize;
+let leafAngle = SPECIES[0].leafAngle;
+let flowerPetals = SPECIES[0].flowerPetals;
+let paletteName = SPECIES[0].palette;
+let seed = Math.floor(Math.random() * 0xFFFFFFFF);
+let lut = buildLUT(paletteName);
+
+let cachedSegments = [];
+let cachedLeaves = [];
+let cachedFlowers = [];
+let needsRegen = true;
+let animating = false;
+let animTimer = null;
+
+// ============================================================
+//  Canvas sizing
+// ============================================================
+
+function resizeCanvas() {
+  const area = document.querySelector('.canvas-area');
+  const pad = 30;
+  const aw = area.clientWidth - pad;
+  const ah = area.clientHeight - pad;
+  const sz = Math.min(aw, ah);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = sz + 'px';
+  canvas.style.height = sz + 'px';
+  canvas.width = sz * dpr;
+  canvas.height = sz * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resizeCanvas();
+window.addEventListener('resize', () => { resizeCanvas(); render(); });
+
+// ============================================================
+//  Generate & Render
+// ============================================================
+
+function generate(maxIter) {
+  const iters = maxIter !== undefined ? maxIter : iterations;
+  const rng = mulberry32(seed);
+  const str = generateLSystem(axiom, rules, stochasticEnabled ? stochastic : null, iters, rng);
+  const rng2 = mulberry32(seed + 1);
+  const result = traceTurtle(str, {
+    angle, angleJitter, lengthScale, tropism, widthDecay,
+    leafSize, leafAngle, flowerPetals, rng: rng2,
+  });
+  cachedSegments = result.segments;
+  cachedLeaves = result.leaves;
+  cachedFlowers = result.flowers;
+
+  const drawSegs = cachedSegments.filter(p => p.draw).length;
+  document.getElementById('hud-stats').textContent =
+    `${str.length.toLocaleString()} sym  \u00b7  ${drawSegs.toLocaleString()} seg  \u00b7  ${cachedLeaves.length} leaves  \u00b7  ${cachedFlowers.length} flowers  \u00b7  ${iters} iter`;
+  needsRegen = false;
+}
+
+function render() {
+  if (needsRegen) generate();
+  const sz = parseFloat(canvas.style.width);
+  renderScene(cachedSegments, cachedLeaves, cachedFlowers, sz, sz, lut, paletteName);
+}
+
+function regenerate() {
+  needsRegen = true;
+  render();
+}
+
+// ============================================================
+//  Animated growth
+// ============================================================
+
+function animateGrowth() {
+  if (animating) { stopAnimation(); return; }
+  animating = true;
+  const btn = document.getElementById('btn-grow');
+  btn.classList.add('active');
+  btn.textContent = 'Stop';
+  const hud = document.getElementById('hud-status');
+  hud.classList.add('visible');
+
+  let step = 0;
+  const maxIter = iterations;
+  function tick() {
+    if (!animating || step > maxIter) { stopAnimation(); return; }
+    hud.textContent = `GROWING... iter ${step}/${maxIter}`;
+    generate(step);
+    render();
+    step++;
+    animTimer = setTimeout(tick, 400 + Math.min(step * 120, 900));
+  }
+  tick();
+}
+
+function stopAnimation() {
+  animating = false;
+  if (animTimer) { clearTimeout(animTimer); animTimer = null; }
+  const btn = document.getElementById('btn-grow');
+  btn.classList.remove('active');
+  btn.textContent = 'Animate';
+  document.getElementById('hud-status').classList.remove('visible');
+  regenerate();
+}
+
+// ============================================================
+//  Species selector
+// ============================================================
+
+const speciesList = document.getElementById('species-list');
+SPECIES.forEach((sp, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'species-btn' + (i === 0 ? ' active' : '');
+  btn.textContent = sp.name;
+  btn.addEventListener('click', () => selectSpecies(i));
+  speciesList.appendChild(btn);
+});
+
+function selectSpecies(idx) {
+  if (animating) stopAnimation();
+  currentSpecies = idx;
+  const sp = SPECIES[idx];
+  axiom = sp.axiom;
+  rules = { ...sp.rules };
+  stochastic = sp.stochastic ? JSON.parse(JSON.stringify(sp.stochastic)) : null;
+  stochasticEnabled = !!stochastic;
+  angle = sp.angle;
+  iterations = sp.iterations;
+  angleJitter = sp.angleJitter;
+  lengthScale = sp.lengthScale;
+  tropism = sp.tropism;
+  widthDecay = sp.widthDecay;
+  leafSize = sp.leafSize;
+  leafAngle = sp.leafAngle;
+  flowerPetals = sp.flowerPetals;
+  paletteName = sp.palette;
+  lut = buildLUT(paletteName);
+  seed = Math.floor(Math.random() * 0xFFFFFFFF);
+
+  speciesList.querySelectorAll('.species-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  document.getElementById('hud-species').textContent = sp.name;
+  buildGrammarEditor();
+  buildControls();
+  updateSeedDisplay();
+  regenerate();
+}
+
+// ============================================================
+//  Grammar editor
+// ============================================================
+
+function buildGrammarEditor() {
+  document.getElementById('axiom-input').value = axiom;
+  const editor = document.getElementById('rule-editor');
+  editor.innerHTML = '';
+
+  for (const [sym, prod] of Object.entries(rules)) {
+    const row = document.createElement('div');
+    row.className = 'rule-row';
+
+    const symEl = document.createElement('span');
+    symEl.className = 'rule-sym';
+    symEl.textContent = sym;
+
+    const arrow = document.createElement('span');
+    arrow.className = 'rule-arrow';
+    arrow.textContent = '\u2192';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rule-input';
+    input.value = prod;
+    input.spellcheck = false;
+    input.dataset.sym = sym;
+    input.addEventListener('input', () => {
+      rules[sym] = input.value;
+      if (stochastic && stochastic[sym] && stochastic[sym][0]) {
+        stochastic[sym][0].production = input.value;
+      }
+      regenerate();
+    });
+
+    row.appendChild(symEl);
+    row.appendChild(arrow);
+    row.appendChild(input);
+    editor.appendChild(row);
+
+    // Stochastic variants
+    if (stochasticEnabled && stochastic && stochastic[sym]) {
+      for (let vi = 1; vi < stochastic[sym].length; vi++) {
+        const vrow = document.createElement('div');
+        vrow.className = 'stoch-row';
+
+        const wLabel = document.createElement('span');
+        wLabel.className = 'stoch-weight';
+        wLabel.textContent = (stochastic[sym][vi].weight * 100).toFixed(0) + '%';
+
+        const vInput = document.createElement('input');
+        vInput.type = 'text';
+        vInput.className = 'rule-input';
+        vInput.value = stochastic[sym][vi].production;
+        vInput.spellcheck = false;
+        vInput.style.fontSize = '0.5rem';
+
+        const capturedVi = vi, capturedSym = sym;
+        vInput.addEventListener('input', () => {
+          stochastic[capturedSym][capturedVi].production = vInput.value;
+          regenerate();
+        });
+
+        vrow.appendChild(wLabel);
+        vrow.appendChild(vInput);
+        editor.appendChild(vrow);
+      }
+    }
+  }
+
+  document.getElementById('btn-stochastic').classList.toggle('active', stochasticEnabled);
+}
+
+document.getElementById('axiom-input').addEventListener('input', (e) => {
+  axiom = e.target.value;
+  regenerate();
+});
+
+document.getElementById('btn-add-rule').addEventListener('click', () => {
+  const syms = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (const s of syms) {
+    if (!rules[s]) {
+      rules[s] = 'F';
+      buildGrammarEditor();
+      regenerate();
+      break;
+    }
+  }
+});
+
+document.getElementById('btn-stochastic').addEventListener('click', () => {
+  stochasticEnabled = !stochasticEnabled;
+  if (stochasticEnabled && !stochastic) {
+    stochastic = {};
+    for (const [sym, prod] of Object.entries(rules)) {
+      stochastic[sym] = [
+        { production: prod, weight: 0.6 },
+        { production: prod, weight: 0.4 },
+      ];
+    }
+  }
+  buildGrammarEditor();
+  regenerate();
+});
+
+// ============================================================
+//  Parameter controls
+// ============================================================
+
+function buildControls() {
+  const container = document.getElementById('controls');
+  container.innerHTML = '';
+
+  const params = [
+    { label: 'Angle', key: 'angle', min: 1, max: 120, step: 1, get: () => angle, set: v => { angle = v; } },
+    { label: 'Iterations', key: 'iterations', min: 1, max: 8, step: 1, get: () => iterations, set: v => { iterations = v; } },
+    { label: 'Angle Jitter', key: 'angleJitter', min: 0, max: 15, step: 0.5, get: () => angleJitter, set: v => { angleJitter = v; } },
+    { label: 'Length Scale', key: 'lengthScale', min: 0.5, max: 1.0, step: 0.01, get: () => lengthScale, set: v => { lengthScale = v; } },
+    { label: 'Tropism', key: 'tropism', min: -0.3, max: 0.3, step: 0.01, get: () => tropism, set: v => { tropism = v; } },
+    { label: 'Width Decay', key: 'widthDecay', min: 0.5, max: 1.0, step: 0.01, get: () => widthDecay, set: v => { widthDecay = v; } },
+    { label: 'Leaf Size', key: 'leafSize', min: 0, max: 1.0, step: 0.05, get: () => leafSize, set: v => { leafSize = v; } },
+    { label: 'Leaf Angle', key: 'leafAngle', min: 10, max: 60, step: 1, get: () => leafAngle, set: v => { leafAngle = v; } },
+    { label: 'Flower Petals', key: 'flowerPetals', min: 0, max: 8, step: 1, get: () => flowerPetals, set: v => { flowerPetals = v; } },
+  ];
+
+  for (const p of params) {
+    const group = document.createElement('div');
+    group.className = 'control-group';
+
+    const label = document.createElement('div');
+    label.className = 'control-label';
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = p.label;
+    const valSpan = document.createElement('span');
+    valSpan.className = 'control-value';
+    const fmtVal = () => {
+      const v = p.get();
+      return p.step < 1 ? v.toFixed(2) : String(Math.round(v));
+    };
+    valSpan.textContent = fmtVal();
+    label.appendChild(nameSpan);
+    label.appendChild(valSpan);
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = p.min;
+    slider.max = p.max;
+    slider.step = p.step;
+    slider.value = p.get();
+    slider.addEventListener('input', () => {
+      p.set(parseFloat(slider.value));
+      valSpan.textContent = fmtVal();
+      regenerate();
+    });
+
+    group.appendChild(label);
+    group.appendChild(slider);
+    container.appendChild(group);
+  }
+
+  // Palette picker
+  const palGroup = document.createElement('div');
+  palGroup.className = 'control-group';
+  const palLabel = document.createElement('div');
+  palLabel.className = 'control-label';
+  palLabel.innerHTML = '<span>Palette</span>';
+  palGroup.appendChild(palLabel);
+
+  const palPicker = document.createElement('div');
+  palPicker.className = 'palette-picker';
+  for (const name of Object.keys(PALETTES)) {
+    const stops = PALETTES[name];
+    const swatch = document.createElement('div');
+    swatch.className = 'palette-swatch' + (name === paletteName ? ' active' : '');
+    swatch.title = name;
+    const mid = stops[Math.floor(stops.length * 0.6)];
+    const hi = stops[Math.floor(stops.length * 0.85)];
+    swatch.style.background = `linear-gradient(135deg, ${mid}, ${hi})`;
+    swatch.addEventListener('click', () => {
+      paletteName = name;
+      lut = buildLUT(name);
+      palPicker.querySelectorAll('.palette-swatch').forEach(s => s.classList.remove('active'));
+      swatch.classList.add('active');
+      render();
+    });
+    palPicker.appendChild(swatch);
+  }
+  palGroup.appendChild(palPicker);
+  container.appendChild(palGroup);
+}
+
+// ============================================================
+//  Seed display
+// ============================================================
+
+function updateSeedDisplay() {
+  document.getElementById('seed-display').textContent = `seed: ${seed.toString(16).padStart(8, '0')}`;
+}
+
+document.getElementById('seed-display').addEventListener('click', () => {
+  seed = Math.floor(Math.random() * 0xFFFFFFFF);
+  updateSeedDisplay();
+  regenerate();
+});
+
+// ============================================================
+//  Actions
+// ============================================================
+
+document.getElementById('btn-randomize').addEventListener('click', randomize);
+document.getElementById('btn-mutate').addEventListener('click', mutate);
+document.getElementById('btn-download').addEventListener('click', downloadPNG);
+document.getElementById('btn-grow').addEventListener('click', animateGrowth);
+
+function randomize() {
+  if (animating) stopAnimation();
+  selectSpecies(Math.floor(Math.random() * SPECIES.length));
+}
+
+function mutate() {
+  if (animating) stopAnimation();
+  const rng = mulberry32(Date.now());
+  // Mutate angle
+  if (rng() < 0.4) angle = Math.max(1, Math.min(120, angle + (rng() - 0.5) * 10));
+  // Mutate jitter
+  if (rng() < 0.3) angleJitter = Math.max(0, Math.min(15, angleJitter + (rng() - 0.5) * 4));
+  // Mutate length scale
+  if (rng() < 0.3) lengthScale = Math.max(0.5, Math.min(1.0, lengthScale + (rng() - 0.5) * 0.1));
+  // Mutate tropism
+  if (rng() < 0.3) tropism = Math.max(-0.3, Math.min(0.3, tropism + (rng() - 0.5) * 0.08));
+  // Mutate width decay
+  if (rng() < 0.3) widthDecay = Math.max(0.5, Math.min(1.0, widthDecay + (rng() - 0.5) * 0.08));
+  // Mutate leaf size
+  if (rng() < 0.25) leafSize = Math.max(0, Math.min(1.0, leafSize + (rng() - 0.5) * 0.15));
+  // Mutate flower petals
+  if (rng() < 0.15) flowerPetals = flowerPetals > 0 ? (rng() < 0.3 ? 0 : Math.min(8, Math.max(3, flowerPetals + Math.round((rng() - 0.5) * 2)))) : (rng() < 0.3 ? Math.floor(3 + rng() * 5) : 0);
+  seed = Math.floor(Math.random() * 0xFFFFFFFF);
+  buildControls();
+  updateSeedDisplay();
+  regenerate();
+}
+
+function downloadPNG() {
+  const link = document.createElement('a');
+  link.download = `botanica-${seed.toString(16)}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+// ============================================================
+//  Keyboard shortcuts
+// ============================================================
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key.toLowerCase()) {
+    case 'r': randomize(); break;
+    case 'm': mutate(); break;
+    case 's': e.preventDefault(); downloadPNG(); break;
+    case 'a': animateGrowth(); break;
+    case 'g':
+      // Grow +1 iteration
+      if (iterations < 8) {
+        iterations++;
+        buildControls();
+        regenerate();
+      }
+      break;
+    default:
+      // Number keys for species
+      const num = parseInt(e.key);
+      if (!isNaN(num)) {
+        const idx = num === 0 ? 9 : num - 1;
+        if (idx < SPECIES.length) selectSpecies(idx);
+      }
+  }
+});
+
+// ============================================================
+//  Init
+// ============================================================
+
+document.getElementById('hud-species').textContent = SPECIES[0].name;
+buildGrammarEditor();
+buildControls();
+updateSeedDisplay();
+regenerate();
+</script>
+</body>
+</html>

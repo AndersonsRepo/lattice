@@ -31,6 +31,8 @@ import {
   evolveNoise,
   evolveFlowField,
   evolveFractalFlame,
+  evolveSandpile,
+  evolveMagneticPendulum,
   render,
   score,
   computeScore,

@@ -6,6 +6,12 @@
  */
 
 
+// Import palette system (OKLCH color science)
+import type { ColorTheme, HarmonyMode } from "./palette.js";
+import { SPECIES_THEMES, getSpeciesColors, themeToColors, mutateColorTheme, crossoverColorThemes, generateGradient, analyzePalette, deltaE, gamutMaxChroma, cuspGradient, contrastRatio as wcagContrastRatio, simulateColorBlindness, blendPalettes as blendColorRamps, extractPaletteFromRendered, hexToOklch, oklchToHex, scorePaletteAesthetics, paletteTemperature } from "./palette.js";
+export type { ColorTheme, HarmonyMode };
+export { SPECIES_THEMES, getSpeciesColors, themeToColors, generateGradient, analyzePalette, deltaE, gamutMaxChroma, cuspGradient, simulateColorBlindness, extractPaletteFromRendered, hexToOklch, oklchToHex, scorePaletteAesthetics, paletteTemperature };
+
 // Import flame engine
 import { FlameRule, FlameTransform, evolveFlame, mutateFlame, crossoverFlame, randomFlameRule, VARIATION_COUNT, VARIATION_NAMES } from "./flame.js";
 export type { FlameRule, FlameTransform };
@@ -18,6 +24,22 @@ export { evolveDLA };
 import { CymaticsRule, evolveCymatics, mutateCymatics, crossoverCymatics, randomCymaticsRule, CYMATICS_SEED_GENOMES_PARTIAL } from "./cymatics.js";
 export type { CymaticsRule };
 export { evolveCymatics };
+// Import sandpile engine
+import { SandpileRule, evolveSandpile, mutateSandpile, crossoverSandpile, randomSandpileRule, SANDPILE_SEED_GENOMES_PARTIAL } from "./sandpile.js";
+export type { SandpileRule };
+export { evolveSandpile };
+// Import magnetic pendulum engine
+import { MagneticPendulumRule, evolveMagneticPendulum, mutateMagneticPendulum, crossoverMagneticPendulum, randomMagneticPendulumRule, MAGNETIC_PENDULUM_SEED_GENOMES_PARTIAL } from "./magnetic-pendulum.js";
+export type { MagneticPendulumRule };
+export { evolveMagneticPendulum };
+// Import particle-life engine
+import { ParticleLifeRule, evolveParticleLife, mutateParticleLife, crossoverParticleLife, randomParticleLifeRule, PARTICLE_LIFE_SEED_GENOMES_PARTIAL } from "./particle-life.js";
+export type { ParticleLifeRule };
+export { evolveParticleLife };
+// Import turmite engine
+import { TurmiteRule, evolveTurmite, mutateTurmite, crossoverTurmite, randomTurmiteRule, TURMITE_SEED_GENOMES_PARTIAL } from "./turmite.js";
+export type { TurmiteRule };
+export { evolveTurmite };
 
 // Unicode palettes for rendering (light → dense)
 const PALETTE = [" ", "░", "▒", "▓", "█", "╱", "╲", "╳", "◊", "◆", "●", "○", "◐", "◑", "◒", "◓"];
@@ -144,14 +166,15 @@ export interface DLARule {
 }
 
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla" | "fractal-flame" | "physarum";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule | FlameRule | PhysarumRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla" | "fractal-flame" | "physarum" | "sandpile" | "magnetic-pendulum" | "particle-life";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule | FlameRule | PhysarumRule | SandpileRule | MagneticPendulumRule | ParticleLifeRule;
   width: number;
   height: number;
   palette: string[];
   seed: number;
   mutations: number; // how many times this genome has been mutated
   lineage: string[]; // parent genome IDs
+  colorTheme?: ColorTheme & { stops?: string[] }; // OKLCH color theme with cached gradient stops
 }
 
 export interface LSystemRule {
@@ -166,6 +189,20 @@ export interface LSystemRule {
   lengthScale?: number;        // branch length multiplier per depth (0.5-1.0, default 1)
   tropism?: number;            // gravity pull factor (-0.3 to 0.3, negative = upward growth)
   widthDecay?: number;         // stroke width decay per depth (0.5-1.0, default 0.85)
+  // Botanical decoration extensions
+  leafSize?: number;           // size of leaf decorations at @ commands (0-1, default 0.3)
+  leafAngle?: number;          // spread angle of leaf lobes in degrees (10-60, default 30)
+  flowerPetals?: number;       // number of petals for flower terminals (0=no flowers, 3-8)
+  // Context-sensitive rules (check left/right neighbor symbols)
+  contextSensitive?: Record<string, { left?: string; right?: string; production: string }[]>;
+  // Probabilistic branch pruning: chance a [ branch is skipped entirely (0-0.5)
+  branchProbability?: number;
+  // Seasonal phase: 0=spring (full leaves), 0.5=autumn (sparse), 1=winter (bare)
+  seasonalPhase?: number;
+  // Heliotropism: secondary angle bend toward light source direction (degrees, 0=disabled)
+  heliotropism?: number;
+  // Step length variation: sinusoidal modulation of step size (0-1, 0=uniform)
+  stepWave?: number;
 }
 
 export interface Piece {
@@ -191,6 +228,7 @@ export interface PieceMetrics {
   compositionBalance: number;  // visual weight distribution across quadrants (0=lopsided, 1=balanced)
   spatialCoherence: number;    // spatial autocorrelation — nearby cells relate to each other (structure vs noise)
   rhythmicRegularity: number;  // periodic pattern strength at multiple scales (0=aperiodic, 1=highly periodic)
+  aestheticHarmony: number;    // meta-metric: how well metrics complement each other (0=discordant, 1=harmonious)
 }
 
 // --- Pseudorandom number generator (deterministic from seed) ---
@@ -332,6 +370,10 @@ export function evolveLSystem(genome: Genome): number[][] {
   const { width, height } = genome;
   const maxState = Math.max((genome.palette?.length ?? 2) - 1, 1);
   const rng = mulberry32(genome.seed);
+  const branchProb = rule.branchProbability ?? 0;
+  const seasonalPhase = rule.seasonalPhase ?? 0;
+  const heliotropism = rule.heliotropism ?? 0;
+  const stepWave = rule.stepWave ?? 0;
   const angleJitter = rule.angleJitter ?? 0;
   const lengthScale = rule.lengthScale ?? 1;
   const tropism = rule.tropism ?? 0;
@@ -380,6 +422,9 @@ export function evolveLSystem(genome: Genome): number[][] {
   // Phase 1: Trace turtle path with parametric extensions
   // F/G = draw forward, + = turn left, - = turn right,
   // [ = push, ] = pop, | = 180° turn, ! = reduce width, ~ = sinusoidal step
+  // @ = draw leaf decoration at current position
+  const leafSize = rule.leafSize ?? 0.3;
+  const leafAngle = rule.leafAngle ?? 30;
   const points: { x: number; y: number; depth: number; width: number }[] = [];
   let tx = 0, ty = 0;
   let tAngle = -90;
@@ -387,12 +432,15 @@ export function evolveLSystem(genome: Genome): number[][] {
   let tWidth = 1.0;
   const tStack: { x: number; y: number; angle: number; depth: number; width: number }[] = [];
   let stepCount = 0;
+  let inLeaf = false;
 
-  for (const ch of current) {
+  for (let ci = 0; ci < current.length; ci++) {
+    const ch = current[ci];
     switch (ch) {
       case "F":
       case "G": {
-        const depthFactor = Math.pow(lengthScale, tDepth);
+        const waveModulation = stepWave > 0 ? 1 + stepWave * Math.sin(stepCount * 0.5) * 0.3 : 1;
+        const depthFactor = Math.pow(lengthScale, tDepth) * waveModulation;
         const jitter = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
         const tropismBend = tropism * tDepth * 2;
         const finalAngle = tAngle + jitter + tropismBend;
@@ -423,14 +471,78 @@ export function evolveLSystem(genome: Genome): number[][] {
       case "-": tAngle -= rule.angle; break;
       case "|": tAngle += 180; break;
       case "!": tWidth *= widthDecay; break;
-      case "[":
+      case "@": {
+        // Flower/fruit marker: seasonal phase modulates density
+        // spring=full, autumn=sparse, winter=bare
+        if (seasonalPhase > 0.8 && rng() < seasonalPhase) break; // bare branches in winter
+        const basePetals = rule.flowerPetals ?? 5;
+        const petals = seasonalPhase > 0.3 ? Math.max(2, Math.round(basePetals * (1 - seasonalPhase * 0.6))) : basePetals;
+        const depthFactor = Math.pow(lengthScale, tDepth) * leafSize;
+        for (let pi = 0; pi < petals; pi++) {
+          const pa = tAngle + (pi * 360) / petals;
+          const rad = (pa * Math.PI) / 180;
+          const petalLen = depthFactor * (0.8 + rng() * 0.4);
+          const px = tx + petalLen * Math.cos(rad);
+          const py = ty + petalLen * Math.sin(rad);
+          points.push({ x: px, y: py, depth: Math.max(0, tDepth - 1), width: tWidth * 1.3 });
+        }
+        // Center dot
+        points.push({ x: tx, y: ty, depth: Math.max(0, tDepth - 1), width: tWidth * 1.5 });
+        break;
+      }
+      case "{": inLeaf = true; break;
+      case "}": inLeaf = false; break;
+      case "&": {
+        // Gravity bend: pull angle toward downward (90°) proportional to tropism
+        const gravityStrength = Math.abs(tropism) > 0 ? tropism * 15 : 5;
+        tAngle += gravityStrength;
+        break;
+      }
+      case "[": {
+        // Probabilistic branch pruning: skip entire branch with branchProb chance
+        if (branchProb > 0 && rng() < branchProb) {
+          // Fast-forward past matching ]
+          let bracketDepth = 1;
+          while (++ci < current.length && bracketDepth > 0) {
+            if (current[ci] === "[") bracketDepth++;
+            else if (current[ci] === "]") bracketDepth--;
+          }
+          ci--; // back up so the for-loop increment lands on ]
+          break;
+        }
         tStack.push({ x: tx, y: ty, angle: tAngle, depth: tDepth, width: tWidth });
         tDepth++;
         tWidth *= widthDecay;
         break;
+      }
       case "]": {
         const state = tStack.pop();
         if (state) ({ x: tx, y: ty, angle: tAngle, depth: tDepth, width: tWidth } = state);
+        break;
+      }
+      case "%": {
+        // Cut: skip to end of current branch (next unmatched ])
+        let bracketDepth = 0;
+        while (++ci < current.length) {
+          if (current[ci] === "[") bracketDepth++;
+          else if (current[ci] === "]") {
+            if (bracketDepth === 0) { ci--; break; }
+            bracketDepth--;
+          }
+        }
+        break;
+      }
+      case "$": {
+        // Roll to vertical: bend angle toward -90° (upward) by heliotropism strength
+        if (heliotropism !== 0) {
+          const target = -90 + heliotropism;
+          tAngle += (target - tAngle) * 0.15;
+        }
+        break;
+      }
+      case "^": {
+        // Pitch variation: add a depth-modulated angle perturbation
+        tAngle += (rng() - 0.5) * 10 * Math.pow(0.9, tDepth);
         break;
       }
     }
@@ -1364,6 +1476,8 @@ export const SPECIES_COLORS: Record<string, { bg: string; colors: string[] }> = 
   'julia':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a2d2d', '#0d6b5b', '#16a88a', '#22dbb5', '#4af5d4', '#88ffe8', '#ccfff4'] },
   'noise':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a0a', '#3b3b0d', '#6b6b16', '#a8a822', '#d4d44a', '#eeff88', '#ffffcc'] },
   'flowfield':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a1a', '#0d3b3b', '#166b6b', '#22a8a8', '#4ad4d4', '#88eeff', '#ccffff'] },
+  'sandpile':            { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0a1a', '#3b0d3b', '#6b166b', '#a822a8', '#d44ad4', '#f088f0', '#ffccff'] },
+  'magnetic-pendulum':   { bg: '#0a0a0f', colors: ['#0a0a0f', '#0d1a0d', '#163b16', '#226b22', '#22a855', '#4ad488', '#88ffbb', '#ccffee'] },
 };
 
 export function speciesGradient(type: string, steps: number = 8): string[] {
@@ -1467,7 +1581,21 @@ export function render(grid: number[][], palette: string[]): string {
 /** Get the effective color stops for a genome (from colorTheme if present, else species defaults) */
 export function getColorStops(genome: Genome): string[] {
   if (genome.colorTheme?.stops?.length) return genome.colorTheme.stops;
+  if (genome.colorTheme) {
+    const stops = themeToColors(genome.colorTheme);
+    genome.colorTheme.stops = stops;
+    return stops;
+  }
   return getSpeciesColors(genome.type);
+}
+
+/** Ensure a genome has a colorTheme (infer from species if missing) */
+export function ensureColorTheme(genome: Genome): Genome {
+  if (!genome.colorTheme) {
+    const base = SPECIES_THEMES[genome.type] || SPECIES_THEMES["2d"];
+    genome.colorTheme = { ...base, stops: themeToColors(base) };
+  }
+  return genome;
 }
 
 /** Render a grid as a 2D color map: returns hex color per cell for Canvas rendering */
@@ -1489,7 +1617,7 @@ export function score(grid: number[][]): PieceMetrics {
   const height = grid.length;
   const width = grid[0]?.length ?? 0;
   const total = width * height;
-  if (total === 0) return { complexity: 0, symmetry: 0, density: 0, novelty: 0, edgeActivity: 0, structuralInterest: 0, fractalDimension: 0, informationDensity: 0, spatialCoherence: 0 };
+  if (total === 0) return { complexity: 0, symmetry: 0, density: 0, novelty: 0, edgeActivity: 0, structuralInterest: 0, fractalDimension: 0, informationDensity: 0, spatialCoherence: 0, compositionBalance: 0, rhythmicRegularity: 0, aestheticHarmony: 0 };
 
   // Density
   let filled = 0;
@@ -1617,7 +1745,74 @@ export function score(grid: number[][]): PieceMetrics {
     : 0;
   const spatialCoherence = Math.max(0, Math.min(rawCoherence, 1));
 
-  return { complexity, symmetry, density, novelty: 0, edgeActivity, structuralInterest, fractalDimension, informationDensity, spatialCoherence };
+  // Composition balance — visual weight distribution across quadrants
+  // 1.0 = perfectly balanced, 0.0 = all mass in one quadrant
+  const halfH = Math.floor(height / 2);
+  const halfW = Math.floor(width / 2);
+  const quadMass = [0, 0, 0, 0]; // TL, TR, BL, BR
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const qi = (y < halfH ? 0 : 2) + (x < halfW ? 0 : 1);
+      quadMass[qi] += grid[y][x];
+    }
+  }
+  const totalMass = quadMass[0] + quadMass[1] + quadMass[2] + quadMass[3];
+  let compositionBalance = 0;
+  if (totalMass > 0) {
+    const ideal = totalMass / 4;
+    const maxDeviation = ideal * 3;
+    const deviation = quadMass.reduce((s, m) => s + Math.abs(m - ideal), 0);
+    compositionBalance = Math.max(0, 1 - deviation / maxDeviation);
+  }
+
+  // Rhythmic regularity — periodic pattern strength via autocorrelation at multiple scales
+  // High = tile-like repeating patterns, low = aperiodic
+  let rhythmSum = 0;
+  let rhythmCount = 0;
+  const lags = [2, 3, 4, 6, 8];
+  for (const lag of lags) {
+    if (lag >= width && lag >= height) continue;
+    let matchH = 0, pairsH = 0;
+    let matchV = 0, pairsV = 0;
+    if (lag < width) {
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x + lag < width; x++) {
+          pairsH++;
+          if (grid[y][x] === grid[y][x + lag]) matchH++;
+        }
+      }
+    }
+    if (lag < height) {
+      for (let y = 0; y + lag < height; y++) {
+        for (let x = 0; x < width; x++) {
+          pairsV++;
+          if (grid[y][x] === grid[y + lag][x]) matchV++;
+        }
+      }
+    }
+    const hCorr = pairsH > 0 ? matchH / pairsH : 0;
+    const vCorr = pairsV > 0 ? matchV / pairsV : 0;
+    rhythmSum += Math.max(hCorr, vCorr);
+    rhythmCount++;
+  }
+  const rhythmicRegularity = rhythmCount > 0 ? rhythmSum / rhythmCount : 0;
+
+  // Aesthetic harmony: measures how well the metrics work together
+  // High harmony = structured complexity (high complexity + high coherence + moderate density)
+  // Low harmony = noise (high complexity + low coherence) or emptiness (low complexity + low density)
+  const complexityCoherence = Math.min(complexity / 2, 1) * spatialCoherence; // structured complexity > random noise
+  const densityFit = 1 - Math.abs(density - 0.4) * 2; // moderate density is most versatile
+  const balanceStructure = compositionBalance * (structuralInterest * 0.7 + 0.3); // balanced + interesting
+  const edgeFractalSync = edgeActivity * Math.min((fractalDimension ?? 0) / 1.8, 1); // edges that form fractals
+  const aestheticHarmony = Math.max(0, Math.min(1,
+    complexityCoherence * 0.3 +
+    densityFit * 0.15 +
+    balanceStructure * 0.25 +
+    edgeFractalSync * 0.2 +
+    informationDensity * 0.1
+  ));
+
+  return { complexity, symmetry, density, novelty: 0, edgeActivity, structuralInterest, fractalDimension, informationDensity, spatialCoherence, compositionBalance, rhythmicRegularity, aestheticHarmony };
 }
 
 function computeBoxCountingDimension(grid: number[][], width: number, height: number): number {
@@ -1667,7 +1862,7 @@ function computeBoxCountingDimension(grid: number[][], width: number, height: nu
 // Compute novelty: how different is this piece's fingerprint from a set of others?
 export function computeNovelty(metrics: PieceMetrics, population: PieceMetrics[]): number {
   if (population.length === 0) return 1;
-  const keys: (keyof PieceMetrics)[] = ["complexity", "symmetry", "density", "edgeActivity", "structuralInterest", "fractalDimension", "informationDensity", "spatialCoherence", "compositionBalance", "rhythmicRegularity"];
+  const keys: (keyof PieceMetrics)[] = ["complexity", "symmetry", "density", "edgeActivity", "structuralInterest", "fractalDimension", "informationDensity", "spatialCoherence", "compositionBalance", "rhythmicRegularity", "aestheticHarmony"];
   let totalDist = 0;
   for (const other of population) {
     let dist = 0;
@@ -1717,6 +1912,7 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
   const coherenceScore = metrics.spatialCoherence ?? 0;
   const balanceScore = metrics.compositionBalance ?? 0;
   const rhythmScore = metrics.rhythmicRegularity ?? 0;
+  const harmonyScore = metrics.aestheticHarmony ?? 0;
 
   // Base weights — type-aware adjustments blend with epoch modifiers
   let w = getTypeWeights(genomeType);
@@ -1738,6 +1934,7 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
       coherence: w.coherence * 0.6 + ew.coherence * 0.4,
       balance: w.balance * 0.6 + ew.balance * 0.4,
       rhythm: w.rhythm * 0.6 + ew.rhythm * 0.4,
+      harmony: w.harmony * 0.6 + ew.harmony * 0.4,
     };
   }
 
@@ -1752,11 +1949,12 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
     infoDensityScore * w.infoDensity +
     coherenceScore * w.coherence +
     balanceScore * w.balance +
-    rhythmScore * w.rhythm
+    rhythmScore * w.rhythm +
+    harmonyScore * w.harmony
   );
 }
 
-type Weights = { density: number; complexity: number; symmetry: number; edge: number; structure: number; novelty: number; fractal: number; infoDensity: number; coherence: number; balance: number; rhythm: number };
+type Weights = { density: number; complexity: number; symmetry: number; edge: number; structure: number; novelty: number; fractal: number; infoDensity: number; coherence: number; balance: number; rhythm: number; harmony: number };
 
 // Ideal density per type — null means full-coverage (score by state diversity)
 function getIdealDensity(genomeType?: Genome["type"]): number | null {
@@ -1774,6 +1972,9 @@ function getIdealDensity(genomeType?: Genome["type"]): number | null {
     case "flowfield": return 0.3;           // streaming trails — moderate coverage with clear paths
     case "dla": return 0.2;                    // sparse dendritic crystalline growth
     case "fractal-flame": return 0.25;       // organic flame structures with density clusters
+    case "sandpile": return null;              // full coverage — score by state variety
+    case "magnetic-pendulum": return null;    // full coverage — score by basin variety
+    case "particle-life": return 0.3;        // clustered particle density patterns
     default: return 0.4;
   }
 }
@@ -1791,6 +1992,9 @@ function getSymmetryScale(genomeType?: Genome["type"]): number {
     case "noise": return 0.4;              // noise can have emergent symmetry from warping
     case "flowfield": return 0.35;        // flow fields can have emergent swirl symmetry
     case "dla": return 0.35;                 // DLA can have emergent radial symmetry
+    case "sandpile": return 0.15;            // sandpile has inherent 4-fold symmetry
+    case "magnetic-pendulum": return 0.2;    // basin fractals have rotational symmetry
+    case "particle-life": return 0.35;      // emergent cluster symmetry
     default: return 0.3;                  // original scale
   }
 }
@@ -1801,40 +2005,52 @@ function getTypeWeights(genomeType?: Genome["type"]): Weights {
   switch (genomeType) {
     case "1d":
       // 1D automata: complexity classes (Class 3/4) are most interesting
-      return { density: 0.11, complexity: 0.23, symmetry: 0.05, edge: 0.17, structure: 0.11, novelty: 0.13, fractal: 0.08, infoDensity: 0.07, coherence: 0.05, balance: 0.05 };
+      return { density: 0.08, complexity: 0.21, symmetry: 0.05, edge: 0.17, structure: 0.11, novelty: 0.10, fractal: 0.08, infoDensity: 0.07, coherence: 0.05, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
+    case "magnetic-pendulum":
+      // Magnetic pendulum: fractal basin boundaries are the defining aesthetic
+      return { density: 0.06, complexity: 0.16, symmetry: 0.08, edge: 0.15, structure: 0.14, novelty: 0.12, fractal: 0.13, infoDensity: 0.08, coherence: 0.05, balance: 0.06, rhythm: 0.02 };
     case "lsystem":
       // L-systems: fractal dimension is very meaningful here — branching creates self-similarity
-      return { density: 0.07, complexity: 0.18, symmetry: 0.11, edge: 0.07, structure: 0.19, novelty: 0.12, fractal: 0.12, infoDensity: 0.07, coherence: 0.07, balance: 0.05 };
+      return { density: 0.06, complexity: 0.16, symmetry: 0.11, edge: 0.07, structure: 0.19, novelty: 0.10, fractal: 0.12, infoDensity: 0.07, coherence: 0.07, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "reaction-diffusion":
       // RD: organic textures, info density captures Turing pattern richness
-      return { density: 0.11, complexity: 0.18, symmetry: 0.05, edge: 0.19, structure: 0.11, novelty: 0.12, fractal: 0.09, infoDensity: 0.09, coherence: 0.06, balance: 0.05 };
+      return { density: 0.08, complexity: 0.16, symmetry: 0.05, edge: 0.19, structure: 0.11, novelty: 0.10, fractal: 0.09, infoDensity: 0.09, coherence: 0.06, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "voronoi":
       // Voronoi: edge patterns and structural variety matter most
-      return { density: 0.07, complexity: 0.16, symmetry: 0.07, edge: 0.21, structure: 0.16, novelty: 0.12, fractal: 0.08, infoDensity: 0.08, coherence: 0.05, balance: 0.05 };
+      return { density: 0.06, complexity: 0.14, symmetry: 0.07, edge: 0.21, structure: 0.16, novelty: 0.10, fractal: 0.08, infoDensity: 0.08, coherence: 0.05, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "wfc":
       // WFC: constraint-based structure, info density rewards complex tile patterns
-      return { density: 0.07, complexity: 0.19, symmetry: 0.11, edge: 0.16, structure: 0.11, novelty: 0.12, fractal: 0.08, infoDensity: 0.10, coherence: 0.06, balance: 0.05 };
+      return { density: 0.06, complexity: 0.17, symmetry: 0.11, edge: 0.16, structure: 0.11, novelty: 0.10, fractal: 0.08, infoDensity: 0.10, coherence: 0.06, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "spirograph":
       // Spirographs: fractal dimension captures curve complexity well
-      return { density: 0.08, complexity: 0.19, symmetry: 0.16, edge: 0.12, structure: 0.12, novelty: 0.12, fractal: 0.10, infoDensity: 0.07, coherence: 0.04, balance: 0.05 };
+      return { density: 0.07, complexity: 0.17, symmetry: 0.16, edge: 0.12, structure: 0.12, novelty: 0.10, fractal: 0.10, infoDensity: 0.07, coherence: 0.04, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "attractor":
       // Attractors: fractal dimension is core to strange attractor aesthetics
-      return { density: 0.11, complexity: 0.19, symmetry: 0.07, edge: 0.11, structure: 0.14, novelty: 0.12, fractal: 0.13, infoDensity: 0.07, coherence: 0.06, balance: 0.05 };
+      return { density: 0.08, complexity: 0.17, symmetry: 0.07, edge: 0.11, structure: 0.14, novelty: 0.10, fractal: 0.13, infoDensity: 0.07, coherence: 0.06, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "julia":
       // Julia sets: fractal dimension IS the defining quality
-      return { density: 0.07, complexity: 0.19, symmetry: 0.07, edge: 0.14, structure: 0.14, novelty: 0.12, fractal: 0.14, infoDensity: 0.07, coherence: 0.06, balance: 0.05 };
+      return { density: 0.06, complexity: 0.17, symmetry: 0.07, edge: 0.14, structure: 0.14, novelty: 0.10, fractal: 0.14, infoDensity: 0.07, coherence: 0.06, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "noise":
       // Noise: info density captures how much visual variety the warping produces
-      return { density: 0.07, complexity: 0.18, symmetry: 0.07, edge: 0.11, structure: 0.19, novelty: 0.12, fractal: 0.08, infoDensity: 0.11, coherence: 0.07, balance: 0.05 };
+      return { density: 0.06, complexity: 0.16, symmetry: 0.07, edge: 0.11, structure: 0.19, novelty: 0.10, fractal: 0.08, infoDensity: 0.11, coherence: 0.07, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "flowfield":
       // Flow fields: fractal from trail complexity, info density from flow variety
-      return { density: 0.11, complexity: 0.16, symmetry: 0.07, edge: 0.16, structure: 0.16, novelty: 0.12, fractal: 0.08, infoDensity: 0.07, coherence: 0.07, balance: 0.05 };
+      return { density: 0.08, complexity: 0.14, symmetry: 0.07, edge: 0.16, structure: 0.16, novelty: 0.10, fractal: 0.08, infoDensity: 0.07, coherence: 0.07, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "dla":
       // DLA: structural interest and fractal dimension are defining
-      return { density: 0.07, complexity: 0.14, symmetry: 0.07, edge: 0.14, structure: 0.19, novelty: 0.12, fractal: 0.14, infoDensity: 0.06, balance: 0.07 };
+      return { density: 0.06, complexity: 0.12, symmetry: 0.07, edge: 0.14, structure: 0.19, novelty: 0.10, fractal: 0.14, infoDensity: 0.06, balance: 0.07, rhythm: 0.03, harmony: 0.05 };
+    case "sandpile":
+      // Sandpile: fractal dimension is core, symmetry is inherent, structure matters
+      return { density: 0.06, complexity: 0.14, symmetry: 0.05, edge: 0.14, structure: 0.18, novelty: 0.10, fractal: 0.15, infoDensity: 0.08, coherence: 0.05, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
+    case "magnetic-pendulum":
+      // Magnetic pendulum: fractal basin boundaries are the defining aesthetic
+      return { density: 0.06, complexity: 0.16, symmetry: 0.08, edge: 0.15, structure: 0.14, novelty: 0.12, fractal: 0.13, infoDensity: 0.08, coherence: 0.05, balance: 0.06, rhythm: 0.02 };
+    case "particle-life":
+      // Particle life: emergent clustering, structural interest, spatial coherence
+      return { density: 0.10, complexity: 0.14, symmetry: 0.06, edge: 0.12, structure: 0.18, novelty: 0.12, fractal: 0.06, infoDensity: 0.08, coherence: 0.08, balance: 0.06, rhythm: 0.03, harmony: 0.05 };
     case "2d":
     default:
-      return { density: 0.16, complexity: 0.16, symmetry: 0.07, edge: 0.11, structure: 0.11, novelty: 0.16, fractal: 0.08, infoDensity: 0.09, coherence: 0.06, balance: 0.05 };
+      return { density: 0.13, complexity: 0.14, symmetry: 0.07, edge: 0.11, structure: 0.11, novelty: 0.13, fractal: 0.08, infoDensity: 0.09, coherence: 0.06, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
   }
 }
 
@@ -1842,16 +2058,16 @@ function getEpochWeights(epoch: Epoch): Weights {
   switch (epoch) {
     case "emergence":
       // Emergence favors fractal complexity and novel forms
-      return { density: 0.11, complexity: 0.19, symmetry: 0.05, edge: 0.11, structure: 0.16, novelty: 0.16, fractal: 0.09, infoDensity: 0.07, coherence: 0.06, balance: 0.05 };
+      return { density: 0.08, complexity: 0.17, symmetry: 0.05, edge: 0.11, structure: 0.16, novelty: 0.13, fractal: 0.09, infoDensity: 0.07, coherence: 0.06, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "order":
       // Order favors symmetry, structure, info density (efficient patterns)
-      return { density: 0.15, complexity: 0.11, symmetry: 0.18, edge: 0.07, structure: 0.07, novelty: 0.16, fractal: 0.06, infoDensity: 0.11, coherence: 0.09, balance: 0.05 };
+      return { density: 0.12, complexity: 0.09, symmetry: 0.18, edge: 0.07, structure: 0.07, novelty: 0.13, fractal: 0.06, infoDensity: 0.11, coherence: 0.09, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "chaos":
       // Chaos favors fractal dimension, edge activity, complexity
-      return { density: 0.12, complexity: 0.19, symmetry: 0.05, edge: 0.19, structure: 0.08, novelty: 0.16, fractal: 0.12, infoDensity: 0.06, coherence: 0.03, balance: 0.05 };
+      return { density: 0.09, complexity: 0.17, symmetry: 0.05, edge: 0.19, structure: 0.08, novelty: 0.13, fractal: 0.12, infoDensity: 0.06, coherence: 0.03, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "harmony":
       // Harmony: balanced across all dimensions
-      return { density: 0.14, complexity: 0.14, symmetry: 0.07, edge: 0.11, structure: 0.11, novelty: 0.14, fractal: 0.10, infoDensity: 0.12, coherence: 0.07, balance: 0.05 };
+      return { density: 0.11, complexity: 0.12, symmetry: 0.07, edge: 0.11, structure: 0.11, novelty: 0.11, fractal: 0.10, infoDensity: 0.12, coherence: 0.07, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
   }
 }
 
@@ -1864,7 +2080,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield", "dla", "fractal-flame"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield", "dla", "fractal-flame", "sandpile", "magnetic-pendulum"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
@@ -1925,7 +2141,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     } else {
       const keys = Object.keys(rule.rules);
       const key = keys[Math.floor(rng() * keys.length)];
-      const chars = "F+-[]G~!|@{}";
+      const chars = "F+-[]G~!|@{}&%$^";
       const pos = Math.floor(rng() * (rule.rules[key].length + 1));
       const ch = chars[Math.floor(rng() * chars.length)];
       rule.rules[key] =
@@ -1948,11 +2164,34 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     if (rng() < 0.15) {
       rule.widthDecay = Math.max(0.5, Math.min(1.0, (rule.widthDecay ?? 0.85) + (rng() - 0.5) * 0.1));
     }
+    // Mutate botanical decoration parameters (10% chance each)
+    if (rng() < 0.1) {
+      rule.leafSize = Math.max(0.1, Math.min(1.0, (rule.leafSize ?? 0.3) + (rng() - 0.5) * 0.2));
+    }
+    if (rng() < 0.1) {
+      rule.leafAngle = Math.max(10, Math.min(60, (rule.leafAngle ?? 30) + (rng() - 0.5) * 15));
+    }
+    if (rng() < 0.05) {
+      rule.flowerPetals = rule.flowerPetals ? 0 : Math.floor(3 + rng() * 6);
+    }
+    // Mutate new parametric extensions
+    if (rng() < 0.1) {
+      rule.branchProbability = Math.max(0, Math.min(0.5, (rule.branchProbability ?? 0) + (rng() - 0.5) * 0.15));
+    }
+    if (rng() < 0.08) {
+      rule.seasonalPhase = Math.max(0, Math.min(1, (rule.seasonalPhase ?? 0) + (rng() - 0.5) * 0.3));
+    }
+    if (rng() < 0.08) {
+      rule.heliotropism = Math.max(-30, Math.min(30, (rule.heliotropism ?? 0) + (rng() - 0.5) * 15));
+    }
+    if (rng() < 0.1) {
+      rule.stepWave = Math.max(0, Math.min(1, (rule.stepWave ?? 0) + (rng() - 0.5) * 0.3));
+    }
     // 10% chance to add/modify stochastic rule variant
     if (rng() < 0.1) {
       const keys = Object.keys(rule.rules);
       const key = keys[Math.floor(rng() * keys.length)];
-      const chars = "F+-[]G~!|@{}";
+      const chars = "F+-[]G~!|@{}&%$^";
       let variant = "";
       const len = 3 + Math.floor(rng() * 8);
       for (let c = 0; c < len; c++) variant += chars[Math.floor(rng() * chars.length)];
@@ -2238,6 +2477,10 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   } else if (mutated.type === "dla") {
     mutateDLA(mutated.rule as DLARule, rng);
+  } else if (mutated.type === "sandpile") {
+    mutated.rule = mutateSandpile(mutated.rule as SandpileRule, rng);
+  } else if (mutated.type === "magnetic-pendulum") {
+    mutateMagneticPendulum(mutated.rule as MagneticPendulumRule, rng);
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -2433,6 +2676,10 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
   } else if (child.type === "dla") {
     const ra = a.rule as DLARule, rb = b.rule as DLARule;
     crossoverDLA(child.rule as DLARule, rb, rng);
+  } else if (child.type === "sandpile") {
+    child.rule = crossoverSandpile(a.rule as SandpileRule, b.rule as SandpileRule, rng);
+  } else if (child.type === "magnetic-pendulum") {
+    child.rule = crossoverMagneticPendulum(a.rule as MagneticPendulumRule, b.rule as MagneticPendulumRule, rng);
   }
 
   return child;
@@ -2515,6 +2762,36 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       // New: with width reduction (!) for taper
       { F: "F!F[+F!F][-F!F]" },                      // Tapering branches
       { X: "F!F[+X][-X]!F@", F: "F!F" },            // Fruiting taper tree
+      // Classic space-filling curves
+      { X: "X+YF+", Y: "-FX-Y" },                    // Dragon curve
+      { F: "F-G+F+G-F", G: "GG" },                   // Sierpinski triangle
+      { X: "-YF+XFX+FY-", Y: "+XF-YFY-FX+" },       // Hilbert curve
+      { F: "F+F-F-F-G+F+F+F-F", G: "GGG" },         // Quadratic Koch island
+      // Advanced botanical with gravity (&) and leaf polygons
+      { F: "FF&[+F{~F}@][-F{~F}@]" },               // Weeping flower tree
+      { X: "F!F[+X]&[-X]{F-F+F}@", F: "F!F" },      // Gravity-pulled fruiting
+      { F: "F[+F&F][-F&F]F[+F][-F]" },               // Drooping canopy
+      // Multi-symbol botanical ecosystems
+      { X: "F[@]F[+X{FF}][-X{FF}]", F: "F!F" },     // Forest with leaf canopy
+      { X: "~F[+X]~F[-X]@", F: "~F~F!" },            // Coral with polyps
+      // Advanced: branching with pruning (%) and pitch variation (^)
+      { F: "F[+^F][-^F]F%", },                         // Wind-pruned branches
+      { X: "F![$F][+^X][-^X]@", F: "FF" },            // Heliotropic tree
+      { F: "FF^[+F$]^[-F$]F" },                        // Vertical-correcting canopy
+      // Algae / seaweed forms
+      { X: "F[+X]~F~[-X]~F", F: "~F~F" },            // Kelp forest
+      { F: "~F~[+~F~F][-~F~F]~F" },                   // Seaweed fronds
+      // Lichen / moss (dense, low branching)
+      { F: "F[+F][-F][^F]F[+F]" },                    // Dense lichen mat
+      { X: "F^[+X]^[-X]^[+X]F", F: "F!F" },          // Spreading moss
+      // Snowflake / crystalline
+      { F: "F[+F][-F]F[-F]F[+F]F" },                  // Hexagonal crystal
+      { F: "F-F+F+F-F-F+F" },                          // Koch variant snowflake
+      // Penrose-like tiling curves
+      { X: "+YF--XF[---YF--XF]+", Y: "-XF++YF[+++XF++YF]-", F: "F" }, // Penrose L-system
+      // Barnsley fern variants
+      { X: "F-[[X]+X]+F[+FX]-X", F: "FF" },          // Classic Barnsley
+      { X: "F+[[X]-X]-F[-FX]+X", F: "F!F" },         // Inverse Barnsley
     ];
     const template = ruleTemplates[Math.floor(rng() * ruleTemplates.length)];
     const hasX = "X" in template;
@@ -2527,6 +2804,9 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       lengthScale: rng() < 0.5 ? 0.7 + rng() * 0.3 : 1,
       tropism: rng() < 0.3 ? (rng() - 0.5) * 0.2 : 0,
       widthDecay: rng() < 0.4 ? 0.7 + rng() * 0.2 : 0.85,
+      ...(rng() < 0.3 ? { leafSize: 0.15 + rng() * 0.5 } : {}),
+      ...(rng() < 0.3 ? { leafAngle: 15 + rng() * 40 } : {}),
+      ...(rng() < 0.15 ? { flowerPetals: Math.floor(3 + rng() * 6) } : {}),
     };
     return {
       type: "lsystem",
@@ -2796,6 +3076,24 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
     };
   }
+  if (type === "sandpile") {
+    return {
+      type: "sandpile",
+      rule: randomSandpileRule(rng),
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  if (type === "magnetic-pendulum") {
+    return {
+      type: "magnetic-pendulum",
+      rule: randomMagneticPendulumRule(rng),
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  }
   // Default: 2d
   const birthCount = 1 + Math.floor(rng() * 3);
   const surviveCount = 1 + Math.floor(rng() * 3);
@@ -2962,6 +3260,34 @@ export const SEED_GENOMES: Genome[] = [
     height: 36,
     palette: BRAILLE_PALETTE,
     seed: 1001,
+    mutations: 0,
+    lineage: [],
+  },
+  // L-System with botanical decorations (leaf command @)
+  {
+    type: "lsystem",
+    rule: {
+      axiom: "X",
+      rules: { X: "F[@][+X][-X]FX", F: "FF" },
+      angle: 25,
+      iterations: 5,
+      angleJitter: 4,
+      lengthScale: 0.82,
+      tropism: -0.08,
+      widthDecay: 0.78,
+      leafSize: 0.4,
+      leafAngle: 35,
+      stochastic: {
+        X: [
+          { production: "F[@][+X][-X]FX", weight: 0.6 },
+          { production: "F[+X@]F[-X@]+X", weight: 0.4 },
+        ],
+      },
+    },
+    width: 56,
+    height: 40,
+    palette: BOTANICAL_PALETTE,
+    seed: 2026,
     mutations: 0,
     lineage: [],
   },
@@ -3334,9 +3660,50 @@ export const SEED_GENOMES: Genome[] = [
     mutations: 0,
     lineage: [],
   },
+  // Abelian Sandpile — fractal diamond patterns from grain toppling
+  {
+    type: "sandpile",
+    rule: { initialHeight: 10000, threshold: 4, dropPattern: "center", dropCount: 1, boundary: "open", quantize: 4 },
+    width: 52, height: 32, palette: SHADE_PALETTE, seed: 99001, mutations: 0, lineage: [],
+  },
+  {
+    type: "sandpile",
+    rule: { initialHeight: 50000, threshold: 4, dropPattern: "center", dropCount: 1, boundary: "open", quantize: 5 },
+    width: 56, height: 34, palette: GEOMETRIC_PALETTE, seed: 99002, mutations: 0, lineage: [],
+  },
+  {
+    type: "sandpile",
+    rule: { initialHeight: 20000, threshold: 4, dropPattern: "cross", dropCount: 4, boundary: "open", quantize: 6 },
+    width: 48, height: 30, palette: BRAILLE_PALETTE, seed: 99003, mutations: 0, lineage: [],
+  },
 ];
 
 
 // --- Advanced Palette System (appended) ---
 // These functions are imported/mirrored in docs/chromatic.html
 
+
+
+// Magnetic pendulum seed genomes
+SEED_GENOMES.push(
+  {
+    type: "magnetic-pendulum",
+    rule: { magnets: 3, arrangement: "triangle" as const, friction: 0.08, gravity: 0.2, magnetStrength: 1.5, pendulumHeight: 0.3, maxSteps: 1500, dt: 0.01, quantize: 6, zoom: 1.2, centerX: 0, centerY: 0 },
+    width: 52,
+    height: 32,
+    palette: BLOCK_PALETTE,
+    seed: 77001,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "magnetic-pendulum",
+    rule: { magnets: 4, arrangement: "square" as const, friction: 0.05, gravity: 0.15, magnetStrength: 2.0, pendulumHeight: 0.25, maxSteps: 2000, dt: 0.01, quantize: 5, zoom: 1.0, centerX: 0, centerY: 0 },
+    width: 56,
+    height: 34,
+    palette: GEOMETRIC_PALETTE,
+    seed: 77002,
+    mutations: 0,
+    lineage: [],
+  },
+);
