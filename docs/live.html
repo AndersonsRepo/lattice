@@ -191,6 +191,7 @@
     </div>
   </div>
   <canvas id="canvas"></canvas>
+  <script src="lattice-perf.js"></script>
   <div id="overlay">
     <div class="type" id="info-type"></div>
     <div class="score" id="info-score"></div>
@@ -277,37 +278,44 @@ class Life2D {
     this.maxState = Math.max(this.rule.states - 1, 1);
     const rng = mulberry32(genome.seed);
     this.grid = [];
+    this.nextGrid = [];
     for (let y = 0; y < this.h; y++) {
       const row = new Float32Array(this.w);
       for (let x = 0; x < this.w; x++) row[x] = rng() > 0.6 ? this.maxState : 0;
       this.grid.push(row);
+      this.nextGrid.push(new Float32Array(this.w));
     }
+    // Pre-compute birth/survive lookup tables (avoids .includes() per cell)
+    this._birthLUT = new Uint8Array(9);
+    this._surviveLUT = new Uint8Array(9);
+    for (const n of this.rule.birth) this._birthLUT[n] = 1;
+    for (const n of this.rule.survive) this._surviveLUT[n] = 1;
   }
   step() {
-    const { w, h, maxState, rule, grid } = this;
-    const next = [];
+    const { w, h, maxState, grid, nextGrid, _birthLUT, _surviveLUT } = this;
     for (let y = 0; y < h; y++) {
-      const row = new Float32Array(w);
+      const row = nextGrid[y];
+      const ym = (y - 1 + h) % h, yp = (y + 1) % h;
+      const rowAbove = grid[ym], rowCur = grid[y], rowBelow = grid[yp];
       for (let x = 0; x < w; x++) {
-        let neighbors = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            if (grid[(y + dy + h) % h][(x + dx + w) % w] > 0) neighbors++;
-          }
-        }
-        const cell = grid[y][x];
+        const xm = (x - 1 + w) % w, xp = (x + 1) % w;
+        const neighbors = (rowAbove[xm] > 0) + (rowAbove[x] > 0) + (rowAbove[xp] > 0)
+                        + (rowCur[xm] > 0)                        + (rowCur[xp] > 0)
+                        + (rowBelow[xm] > 0) + (rowBelow[x] > 0) + (rowBelow[xp] > 0);
+        const cell = rowCur[x];
         if (cell === maxState) {
-          row[x] = rule.survive.includes(neighbors) ? maxState : Math.max(maxState - 1, 0);
+          row[x] = _surviveLUT[neighbors] ? maxState : Math.max(maxState - 1, 0);
         } else if (cell === 0) {
-          row[x] = rule.birth.includes(neighbors) ? maxState : 0;
+          row[x] = _birthLUT[neighbors] ? maxState : 0;
         } else {
           row[x] = cell - 1;
         }
       }
-      next.push(row);
     }
-    this.grid = next;
+    // Swap buffers — zero allocations
+    const tmp = this.grid;
+    this.grid = this.nextGrid;
+    this.nextGrid = tmp;
   }
   // Returns normalized 0-1 grid
   getValues() {
@@ -331,6 +339,9 @@ class ReactionDiffusion {
 
     this.U = Array.from({ length: h }, () => new Float64Array(w).fill(1.0));
     this.V = Array.from({ length: h }, () => new Float64Array(w).fill(0.0));
+    // Pre-allocate swap buffers — eliminates 2×H allocations per substep
+    this._bufU = Array.from({ length: h }, () => new Float64Array(w));
+    this._bufV = Array.from({ length: h }, () => new Float64Array(w));
 
     const numSeeds = 3 + Math.floor(rng() * 5);
     for (let s = 0; s < numSeeds; s++) {
@@ -351,18 +362,17 @@ class ReactionDiffusion {
     this.warmup = 0;
   }
   step() {
-    const { w, h, rule, U, V } = this;
+    const { w, h, rule } = this;
     const { feed, kill, Du, Dv } = rule;
     // Do multiple substeps per frame for visible movement
     const substeps = this.warmup < 200 ? 20 : 8;
+    let U = this.U, V = this.V, newU = this._bufU, newV = this._bufV;
     for (let sub = 0; sub < substeps; sub++) {
-      const newU = Array.from({ length: h }, () => new Float64Array(w));
-      const newV = Array.from({ length: h }, () => new Float64Array(w));
       for (let y = 0; y < h; y++) {
+        const ym = (y - 1 + h) % h, yp = (y + 1) % h;
         for (let x = 0; x < w; x++) {
           const u = U[y][x], v = V[y][x];
           const xm = (x - 1 + w) % w, xp = (x + 1) % w;
-          const ym = (y - 1 + h) % h, yp = (y + 1) % h;
           const lapU = U[ym][x] + U[yp][x] + U[y][xm] + U[y][xp] - 4 * u;
           const lapV = V[ym][x] + V[yp][x] + V[y][xm] + V[y][xp] - 4 * v;
           const uvv = u * v * v;
@@ -370,13 +380,13 @@ class ReactionDiffusion {
           newV[y][x] = Math.max(0, Math.min(1, v + Dv * lapV + uvv - (feed + kill) * v));
         }
       }
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          U[y][x] = newU[y][x];
-          V[y][x] = newV[y][x];
-        }
-      }
+      // Swap buffers — zero allocations, zero copy
+      const tmpU = U, tmpV = V;
+      U = newU; V = newV;
+      newU = tmpU; newV = tmpV;
     }
+    this.U = U; this.V = V;
+    this._bufU = newU; this._bufV = newV;
     this.warmup += substeps;
   }
   getValues() {
@@ -1009,34 +1019,12 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
-function renderToCanvas(values, simW, simH, lut, alpha) {
-  if (alpha <= 0) return;
-  // Calculate pixel size to fill screen while maintaining aspect ratio
-  const cellW = W / simW;
-  const cellH = H / simH;
-  const cellSize = Math.max(cellW, cellH);
-  const totalW = cellSize * simW;
-  const totalH = cellSize * simH;
-  const offsetX = (W - totalW) / 2;
-  const offsetY = (H - totalH) / 2;
+// Performance: ImageData renderer + monitor (replaces per-pixel fillRect)
+const renderer = new LatticePerf.FastRenderer();
+const perfMon = new LatticePerf.PerfMonitor();
 
-  ctx.globalAlpha = alpha;
-  for (let y = 0; y < simH; y++) {
-    for (let x = 0; x < simW; x++) {
-      const val = values[y * simW + x];
-      const ci = Math.floor(val * 255) * 3;
-      const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
-      if (r === 10 && g === 10 && b === 15 && val < 0.01) continue; // Skip background
-      ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.fillRect(
-        offsetX + x * cellSize,
-        offsetY + y * cellSize,
-        Math.ceil(cellSize),
-        Math.ceil(cellSize)
-      );
-    }
-  }
-  ctx.globalAlpha = 1;
+function renderToCanvas(values, simW, simH, lut, alpha) {
+  renderer.renderCentered(ctx, values, simW, simH, lut, alpha, W, H);
 }
 
 // ============================================================
@@ -1145,8 +1133,9 @@ function loop(time) {
 
   const dt = lastTime ? time - lastTime : 16;
   lastTime = time;
+  perfMon.start('frame');
 
-  if (paused) return;
+  if (paused) { perfMon.end('frame'); return; }
 
   // Clear
   ctx.fillStyle = '#0a0a0f';
@@ -1157,10 +1146,13 @@ function loop(time) {
     // Throttle expensive sims to ~20fps equivalent
     const simType = pieces[currentIdx]?.genome?.type;
     const heavySim = simType === 'julia' || simType === 'reaction-diffusion';
+    perfMon.start('sim');
     if (!heavySim || frameCount % 3 === 0) {
       engine.step();
     }
+    perfMon.end('sim');
 
+    perfMon.start('render');
     const values = engine.getValues();
     const simW = engine.w;
     const simH = engine.h;
@@ -1195,12 +1187,15 @@ function loop(time) {
     nextPiece();
   }
 
-  // Subtle vignette
-  const grad = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.7);
-  grad.addColorStop(0, 'rgba(10,10,15,0)');
-  grad.addColorStop(1, 'rgba(10,10,15,0.5)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
+  // Cached vignette overlay (gradient created once, reused every frame)
+  renderer.drawVignette(ctx, W, H, 0.3, 0.7, 0.5);
+  perfMon.end('render');
+  perfMon.end('frame');
+
+  // Log perf stats periodically (visible in DevTools console)
+  if (frameCount % 300 === 0 && frameCount > 0) {
+    console.log('[lattice perf]', perfMon.formatReport());
+  }
 
   frameCount++;
 }

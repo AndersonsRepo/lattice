@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Performance Benchmark</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --dim: #6e6e82;
+      --accent: #7c6fe0;
+      --green: #4ade80;
+      --red: #f87171;
+      --amber: #fbbf24;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1 {
+      font-size: 1rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      font-size: 0.7rem;
+      color: var(--dim);
+      margin-bottom: 2rem;
+    }
+    .back-link {
+      font-size: 0.65rem;
+      color: var(--dim);
+      text-decoration: none;
+    }
+    .back-link:hover { color: var(--accent); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.7rem;
+      margin-bottom: 2rem;
+    }
+    th {
+      text-align: left;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-size: 0.6rem;
+      font-weight: 400;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid rgba(30, 30, 46, 0.5);
+    }
+    .type-name { color: var(--accent); }
+    .fast { color: var(--green); }
+    .slow { color: var(--red); }
+    .neutral { color: var(--amber); }
+    .speedup { font-weight: bold; }
+    #status {
+      font-size: 0.7rem;
+      color: var(--dim);
+      margin-bottom: 1rem;
+    }
+    .run-btn {
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--accent);
+      font-family: inherit;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 2rem;
+    }
+    .run-btn:hover { background: var(--accent); color: #fff; }
+    .run-btn:disabled { opacity: 0.3; cursor: default; }
+    .section-title {
+      font-size: 0.75rem;
+      color: var(--text);
+      margin: 1.5rem 0 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+    }
+    .note {
+      font-size: 0.65rem;
+      color: var(--dim);
+      margin-top: 0.5rem;
+      line-height: 1.8;
+    }
+    canvas { display: none; }
+  </style>
+</head>
+<body>
+  <a href="index.html" class="back-link">&larr; Back to Gallery</a>
+  <h1>Performance Benchmark</h1>
+  <p class="subtitle">Measures simulation and rendering performance across all engine types</p>
+  <button class="run-btn" id="run-btn" onclick="runBenchmark()">Run Benchmark</button>
+  <div id="status">Click to start. Runs each engine for 100 steps and compares rendering methods.</div>
+
+  <div class="section-title">Simulation Performance</div>
+  <table id="sim-table">
+    <thead>
+      <tr>
+        <th>Engine</th>
+        <th>Grid</th>
+        <th>Avg Step (ms)</th>
+        <th>P95 Step (ms)</th>
+        <th>Steps/sec</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody id="sim-body"></tbody>
+  </table>
+
+  <div class="section-title">Rendering Performance</div>
+  <table id="render-table">
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>Grid</th>
+        <th>Avg Render (ms)</th>
+        <th>P95 Render (ms)</th>
+        <th>Renders/sec</th>
+        <th>Speedup</th>
+      </tr>
+    </thead>
+    <tbody id="render-body"></tbody>
+  </table>
+
+  <div class="section-title">Memory Allocation</div>
+  <table id="alloc-table">
+    <thead>
+      <tr>
+        <th>Engine</th>
+        <th>Before (allocs/frame)</th>
+        <th>After (allocs/frame)</th>
+        <th>Reduction</th>
+      </tr>
+    </thead>
+    <tbody id="alloc-body"></tbody>
+  </table>
+
+  <p class="note">
+    * Simulation benchmarks run 100 steps per engine at the default grid size (100x60 for create, 120x80 for live).<br>
+    * Rendering benchmarks compare fillRect-per-pixel vs ImageData+drawImage for a 120x80 grid scaled to 1920x1080.<br>
+    * Memory allocation counts are analytical (computed from code structure, not runtime measurement).<br>
+    * Results vary by device. Run on the target hardware for accurate numbers.
+  </p>
+
+  <canvas id="bench-canvas" width="1920" height="1080"></canvas>
+
+  <script src="lattice-perf.js"></script>
+  <script>
+// ============================================================
+//  Engine implementations (identical to live.html/create.html)
+// ============================================================
+
+function mulberry32(seed) {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// --- Original engines (unoptimized, for "before" measurement) ---
+
+class Life2D_Old {
+  constructor(w, h, seed) {
+    this.w = w; this.h = h;
+    const rng = mulberry32(seed);
+    this.grid = [];
+    for (let y = 0; y < h; y++) {
+      const row = new Float32Array(w);
+      for (let x = 0; x < w; x++) row[x] = rng() > 0.6 ? 1 : 0;
+      this.grid.push(row);
+    }
+    this.rule = { birth: [3], survive: [2, 3], states: 2 };
+    this.maxState = 1;
+  }
+  step() {
+    const { w, h, maxState, rule, grid } = this;
+    const next = [];
+    for (let y = 0; y < h; y++) {
+      const row = new Float32Array(w);
+      for (let x = 0; x < w; x++) {
+        let neighbors = 0;
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            if (grid[(y + dy + h) % h][(x + dx + w) % w] > 0) neighbors++;
+          }
+        const cell = grid[y][x];
+        if (cell === maxState) row[x] = rule.survive.includes(neighbors) ? maxState : 0;
+        else if (cell === 0) row[x] = rule.birth.includes(neighbors) ? maxState : 0;
+        else row[x] = cell - 1;
+      }
+      next.push(row);
+    }
+    this.grid = next;
+  }
+  getValues() {
+    const { w, h, grid } = this;
+    const vals = new Float32Array(w * h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) vals[y * w + x] = grid[y][x];
+    return vals;
+  }
+}
+
+// --- Optimized engines (for "after" measurement) ---
+
+class Life2D_New {
+  constructor(w, h, seed) {
+    this.w = w; this.h = h;
+    const rng = mulberry32(seed);
+    this.grid = [];
+    this.nextGrid = [];
+    for (let y = 0; y < h; y++) {
+      const row = new Float32Array(w);
+      for (let x = 0; x < w; x++) row[x] = rng() > 0.6 ? 1 : 0;
+      this.grid.push(row);
+      this.nextGrid.push(new Float32Array(w));
+    }
+    this.rule = { birth: [3], survive: [2, 3], states: 2 };
+    this.maxState = 1;
+    // Pre-compute birth/survive lookup
+    this._birthLUT = new Uint8Array(9);
+    this._surviveLUT = new Uint8Array(9);
+    for (const n of this.rule.birth) this._birthLUT[n] = 1;
+    for (const n of this.rule.survive) this._surviveLUT[n] = 1;
+  }
+  step() {
+    const { w, h, maxState, grid, nextGrid, _birthLUT, _surviveLUT } = this;
+    for (let y = 0; y < h; y++) {
+      const row = nextGrid[y];
+      const ym = (y - 1 + h) % h, yp = (y + 1) % h;
+      const rowAbove = grid[ym], rowCur = grid[y], rowBelow = grid[yp];
+      for (let x = 0; x < w; x++) {
+        const xm = (x - 1 + w) % w, xp = (x + 1) % w;
+        const neighbors = (rowAbove[xm] > 0) + (rowAbove[x] > 0) + (rowAbove[xp] > 0)
+                        + (rowCur[xm] > 0)                        + (rowCur[xp] > 0)
+                        + (rowBelow[xm] > 0) + (rowBelow[x] > 0) + (rowBelow[xp] > 0);
+        const cell = rowCur[x];
+        if (cell === maxState) row[x] = _surviveLUT[neighbors] ? maxState : 0;
+        else if (cell === 0)   row[x] = _birthLUT[neighbors] ? maxState : 0;
+        else                   row[x] = cell - 1;
+      }
+    }
+    const tmp = this.grid;
+    this.grid = this.nextGrid;
+    this.nextGrid = tmp;
+  }
+  getValues() {
+    const { w, h, grid } = this;
+    const vals = new Float32Array(w * h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) vals[y * w + x] = grid[y][x];
+    return vals;
+  }
+}
+
+// --- R-D Old ---
+class RD_Old {
+  constructor(w, h, seed) {
+    this.w = w; this.h = h;
+    this.rule = { feed: 0.037, kill: 0.06, Du: 0.21, Dv: 0.105 };
+    const rng = mulberry32(seed);
+    this.U = Array.from({ length: h }, () => new Float64Array(w).fill(1.0));
+    this.V = Array.from({ length: h }, () => new Float64Array(w).fill(0.0));
+    for (let s = 0; s < 5; s++) {
+      const cx = Math.floor(rng() * w), cy = Math.floor(rng() * h), r = 3;
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++)
+          if (dx*dx + dy*dy <= r*r) {
+            const x = ((cx+dx)%w+w)%w, y = ((cy+dy)%h+h)%h;
+            this.U[y][x] = 0.5; this.V[y][x] = 0.25;
+          }
+    }
+  }
+  step() {
+    const { w, h, rule, U, V } = this;
+    const { feed, kill, Du, Dv } = rule;
+    for (let sub = 0; sub < 8; sub++) {
+      const newU = Array.from({ length: h }, () => new Float64Array(w));
+      const newV = Array.from({ length: h }, () => new Float64Array(w));
+      for (let y = 0; y < h; y++)
+        for (let x = 0; x < w; x++) {
+          const u = U[y][x], v = V[y][x];
+          const lapU = U[(y-1+h)%h][x]+U[(y+1)%h][x]+U[y][(x-1+w)%w]+U[y][(x+1)%w]-4*u;
+          const lapV = V[(y-1+h)%h][x]+V[(y+1)%h][x]+V[y][(x-1+w)%w]+V[y][(x+1)%w]-4*v;
+          const uvv = u*v*v;
+          newU[y][x] = Math.max(0, Math.min(1, u+Du*lapU-uvv+feed*(1-u)));
+          newV[y][x] = Math.max(0, Math.min(1, v+Dv*lapV+uvv-(feed+kill)*v));
+        }
+      for (let y = 0; y < h; y++)
+        for (let x = 0; x < w; x++) { U[y][x] = newU[y][x]; V[y][x] = newV[y][x]; }
+    }
+  }
+  getValues() {
+    const { w, h, V } = this;
+    const vals = new Float32Array(w * h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) vals[y*w+x] = Math.min(1, V[y][x]*2.5);
+    return vals;
+  }
+}
+
+// --- R-D New (buffer reuse + swap) ---
+class RD_New {
+  constructor(w, h, seed) {
+    this.w = w; this.h = h;
+    this.rule = { feed: 0.037, kill: 0.06, Du: 0.21, Dv: 0.105 };
+    const rng = mulberry32(seed);
+    this.U = Array.from({ length: h }, () => new Float64Array(w).fill(1.0));
+    this.V = Array.from({ length: h }, () => new Float64Array(w).fill(0.0));
+    this._bufU = Array.from({ length: h }, () => new Float64Array(w));
+    this._bufV = Array.from({ length: h }, () => new Float64Array(w));
+    for (let s = 0; s < 5; s++) {
+      const cx = Math.floor(rng() * w), cy = Math.floor(rng() * h), r = 3;
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++)
+          if (dx*dx + dy*dy <= r*r) {
+            const x = ((cx+dx)%w+w)%w, y = ((cy+dy)%h+h)%h;
+            this.U[y][x] = 0.5; this.V[y][x] = 0.25;
+          }
+    }
+  }
+  step() {
+    const { w, h, rule } = this;
+    const { feed, kill, Du, Dv } = rule;
+    let U = this.U, V = this.V, newU = this._bufU, newV = this._bufV;
+    for (let sub = 0; sub < 8; sub++) {
+      for (let y = 0; y < h; y++) {
+        const ym = (y-1+h)%h, yp = (y+1)%h;
+        for (let x = 0; x < w; x++) {
+          const u = U[y][x], v = V[y][x];
+          const xm = (x-1+w)%w, xp = (x+1)%w;
+          const lapU = U[ym][x]+U[yp][x]+U[y][xm]+U[y][xp]-4*u;
+          const lapV = V[ym][x]+V[yp][x]+V[y][xm]+V[y][xp]-4*v;
+          const uvv = u*v*v;
+          newU[y][x] = Math.max(0, Math.min(1, u+Du*lapU-uvv+feed*(1-u)));
+          newV[y][x] = Math.max(0, Math.min(1, v+Dv*lapV+uvv-(feed+kill)*v));
+        }
+      }
+      // Swap buffers — zero allocations
+      const tmpU = U, tmpV = V;
+      U = newU; V = newV;
+      newU = tmpU; newV = tmpV;
+    }
+    this.U = U; this.V = V;
+    this._bufU = newU; this._bufV = newV;
+  }
+  getValues() {
+    const { w, h, V } = this;
+    const vals = new Float32Array(w * h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) vals[y*w+x] = Math.min(1, V[y][x]*2.5);
+    return vals;
+  }
+}
+
+// --- Julia (same for old/new — pure computation, no allocation savings) ---
+class Julia {
+  constructor(w, h) {
+    this.w = w; this.h = h;
+    this.cReal = -0.7; this.cImag = 0.27;
+    this.time = 0;
+  }
+  step() { this.time += 0.003; }
+  getValues() {
+    const { w, h, cReal, cImag, time } = this;
+    const cr = cReal + Math.sin(time) * 0.015;
+    const ci = cImag + Math.cos(time * 0.7) * 0.015;
+    const vals = new Float32Array(w * h);
+    const maxIter = 80, escSq = 16, aspect = w / h;
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        let zr = (px / w - 0.5) * 4 * aspect, zi = (py / h - 0.5) * 4;
+        let iter = 0;
+        while (iter < maxIter && zr*zr + zi*zi < escSq) {
+          const tmp = zr*zr - zi*zi + cr;
+          zi = 2*zr*zi + ci; zr = tmp; iter++;
+        }
+        vals[py*w+px] = iter === maxIter ? 1 : Math.max(0, Math.min(1, (iter+1-Math.log(Math.log(Math.sqrt(zr*zr+zi*zi)))/Math.log(2)) / maxIter));
+      }
+    }
+    return vals;
+  }
+}
+
+// ============================================================
+//  LUT builder
+// ============================================================
+const GRADIENT = ['#0a0a0f', '#1a1a3e', '#3b2d8b', '#6b4edb', '#9d7af5', '#c8abff', '#e8d8ff', '#ffffff'];
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function buildLUT() {
+  const stops = GRADIENT.map(hexToRgb);
+  const lut = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255 * (stops.length - 1);
+    const idx = Math.floor(t);
+    const frac = t - idx;
+    const a = stops[Math.min(idx, stops.length - 1)];
+    const b = stops[Math.min(idx + 1, stops.length - 1)];
+    lut[i * 3]     = Math.round(a[0] + (b[0] - a[0]) * frac);
+    lut[i * 3 + 1] = Math.round(a[1] + (b[1] - a[1]) * frac);
+    lut[i * 3 + 2] = Math.round(a[2] + (b[2] - a[2]) * frac);
+  }
+  return lut;
+}
+
+// ============================================================
+//  Benchmark runner
+// ============================================================
+
+function benchEngine(engine, steps) {
+  const times = [];
+  for (let i = 0; i < steps; i++) {
+    const t0 = performance.now();
+    engine.step();
+    times.push(performance.now() - t0);
+  }
+  times.sort((a, b) => a - b);
+  return {
+    avg: times.reduce((a, b) => a + b, 0) / times.length,
+    p95: times[Math.floor(times.length * 0.95)] || 0,
+    stepsPerSec: 1000 / (times.reduce((a, b) => a + b, 0) / times.length),
+  };
+}
+
+function benchRender(renderer, ctx, values, simW, simH, lut, targetW, targetH, frames) {
+  const times = [];
+  for (let i = 0; i < frames; i++) {
+    const t0 = performance.now();
+    renderer.render(ctx, values, simW, simH, lut, 1, targetW, targetH);
+    times.push(performance.now() - t0);
+  }
+  times.sort((a, b) => a - b);
+  return {
+    avg: times.reduce((a, b) => a + b, 0) / times.length,
+    p95: times[Math.floor(times.length * 0.95)] || 0,
+    rendersPerSec: 1000 / (times.reduce((a, b) => a + b, 0) / times.length),
+  };
+}
+
+async function runBenchmark() {
+  const btn = document.getElementById('run-btn');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+
+  const simBody = document.getElementById('sim-body');
+  const renderBody = document.getElementById('render-body');
+  const allocBody = document.getElementById('alloc-body');
+  simBody.innerHTML = '';
+  renderBody.innerHTML = '';
+  allocBody.innerHTML = '';
+
+  const W = 120, H = 80;
+  const STEPS = 100;
+  const RENDER_FRAMES = 200;
+  const lut = buildLUT();
+  const canvas = document.getElementById('bench-canvas');
+  const ctx = canvas.getContext('2d');
+
+  // --- Simulation benchmarks ---
+  const simTests = [
+    { name: 'Life2D (old)', factory: () => new Life2D_Old(W, H, 42), grid: `${W}x${H}`, notes: 'Allocates H rows/step' },
+    { name: 'Life2D (new)', factory: () => new Life2D_New(W, H, 42), grid: `${W}x${H}`, notes: 'Double-buffer + LUT' },
+    { name: 'R-D (old)',    factory: () => new RD_Old(W, H, 42),     grid: `${W}x${H}`, notes: '8 substeps, alloc/substep' },
+    { name: 'R-D (new)',    factory: () => new RD_New(W, H, 42),     grid: `${W}x${H}`, notes: '8 substeps, buffer swap' },
+    { name: 'Julia',        factory: () => new Julia(W, H),          grid: `${W}x${H}`, notes: 'Pure computation' },
+  ];
+
+  for (const test of simTests) {
+    status.textContent = `Benchmarking ${test.name}...`;
+    await new Promise(r => setTimeout(r, 10)); // yield to UI
+
+    const engine = test.factory();
+    // Warmup
+    for (let i = 0; i < 5; i++) engine.step();
+    const result = benchEngine(engine, STEPS);
+
+    const isNew = test.name.includes('new');
+    const cls = isNew ? 'fast' : '';
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td class="type-name ${cls}">${test.name}</td>
+      <td>${test.grid}</td>
+      <td class="${cls}">${result.avg.toFixed(2)}</td>
+      <td>${result.p95.toFixed(2)}</td>
+      <td>${result.stepsPerSec.toFixed(0)}</td>
+      <td style="color: var(--dim)">${test.notes}</td>
+    `;
+    simBody.appendChild(row);
+  }
+
+  // --- Rendering benchmarks ---
+  status.textContent = 'Benchmarking rendering...';
+  await new Promise(r => setTimeout(r, 10));
+
+  // Generate test data
+  const testEngine = new Life2D_New(W, H, 42);
+  for (let i = 0; i < 50; i++) testEngine.step();
+  const testValues = testEngine.getValues();
+
+  const legacyRenderer = new LatticePerf.LegacyRenderer();
+  const fastRenderer = new LatticePerf.FastRenderer();
+
+  const legacyResult = benchRender(legacyRenderer, ctx, testValues, W, H, lut, 1920, 1080, RENDER_FRAMES);
+  const fastResult = benchRender(fastRenderer, ctx, testValues, W, H, lut, 1920, 1080, RENDER_FRAMES);
+
+  const speedup = legacyResult.avg / fastResult.avg;
+
+  renderBody.innerHTML = `
+    <tr>
+      <td class="slow">fillRect per-pixel (old)</td>
+      <td>${W}x${H} → 1920x1080</td>
+      <td class="slow">${legacyResult.avg.toFixed(2)}</td>
+      <td>${legacyResult.p95.toFixed(2)}</td>
+      <td>${legacyResult.rendersPerSec.toFixed(0)}</td>
+      <td style="color: var(--dim)">baseline</td>
+    </tr>
+    <tr>
+      <td class="fast">ImageData + drawImage (new)</td>
+      <td>${W}x${H} → 1920x1080</td>
+      <td class="fast">${fastResult.avg.toFixed(2)}</td>
+      <td>${fastResult.p95.toFixed(2)}</td>
+      <td>${fastResult.rendersPerSec.toFixed(0)}</td>
+      <td class="fast speedup">${speedup.toFixed(1)}x faster</td>
+    </tr>
+  `;
+
+  // --- Allocation analysis ---
+  const allocData = [
+    { engine: 'ReactionDiffusion', before: `${2 * H * 8} (2×H per substep × 8 substeps)`, after: '0 (buffer swap)', reduction: '100%' },
+    { engine: 'Life2D', before: `${H} (H rows per step)`, after: '0 (double buffer)', reduction: '100%' },
+    { engine: 'Rendering', before: `${W * H} string allocs (rgb())`, after: '0 (direct ImageData write)', reduction: '100%' },
+    { engine: 'Vignette', before: '1 RadialGradient/frame', after: '0 (cached canvas)', reduction: '100%' },
+  ];
+
+  for (const a of allocData) {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td class="type-name">${a.engine}</td>
+      <td class="slow">${a.before}</td>
+      <td class="fast">${a.after}</td>
+      <td class="fast">${a.reduction}</td>
+    `;
+    allocBody.appendChild(row);
+  }
+
+  status.textContent = `Benchmark complete. Rendering speedup: ${speedup.toFixed(1)}x. ` +
+    `Open browser DevTools → Performance tab for deeper profiling.`;
+  btn.disabled = false;
+}
+  </script>
+</body>
+</html>

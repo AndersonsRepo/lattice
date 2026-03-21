@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lattice — Create</title>
+  <script src="lattice-perf.js"></script>
   <style>
     :root {
       --bg: #0a0a0f;
@@ -438,6 +439,8 @@ class ReactionDiffusion {
     const { width: w, height: h } = genome;
     this.U = Array.from({ length: h }, () => new Float64Array(w).fill(1.0));
     this.V = Array.from({ length: h }, () => new Float64Array(w).fill(0.0));
+    this._bufU = Array.from({ length: h }, () => new Float64Array(w));
+    this._bufV = Array.from({ length: h }, () => new Float64Array(w));
     const numSeeds = 3 + Math.floor(rng() * 5);
     for (let s = 0; s < numSeeds; s++) {
       const cx = Math.floor(rng() * w), cy = Math.floor(rng() * h);
@@ -456,17 +459,16 @@ class ReactionDiffusion {
     this.warmup = 0;
   }
   step() {
-    const { w, h, rule, U, V } = this;
+    const { w, h, rule } = this;
     const { feed, kill, Du, Dv } = rule;
     const substeps = this.warmup < 200 ? 20 : 8;
+    let U = this.U, V = this.V, newU = this._bufU, newV = this._bufV;
     for (let sub = 0; sub < substeps; sub++) {
-      const newU = Array.from({ length: h }, () => new Float64Array(w));
-      const newV = Array.from({ length: h }, () => new Float64Array(w));
       for (let y = 0; y < h; y++) {
+        const ym = (y - 1 + h) % h, yp = (y + 1) % h;
         for (let x = 0; x < w; x++) {
           const u = U[y][x], v = V[y][x];
           const xm = (x - 1 + w) % w, xp = (x + 1) % w;
-          const ym = (y - 1 + h) % h, yp = (y + 1) % h;
           const lapU = U[ym][x] + U[yp][x] + U[y][xm] + U[y][xp] - 4 * u;
           const lapV = V[ym][x] + V[yp][x] + V[y][xm] + V[y][xp] - 4 * v;
           const uvv = u * v * v;
@@ -474,10 +476,12 @@ class ReactionDiffusion {
           newV[y][x] = Math.max(0, Math.min(1, v + Dv * lapV + uvv - (feed + kill) * v));
         }
       }
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) { U[y][x] = newU[y][x]; V[y][x] = newV[y][x]; }
-      }
+      const tmpU = U, tmpV = V;
+      U = newU; V = newV;
+      newU = tmpU; newV = tmpV;
     }
+    this.U = U; this.V = V;
+    this._bufU = newU; this._bufV = newV;
     this.warmup += substeps;
   }
   getValues() {
@@ -710,37 +714,38 @@ class Life2D {
     this.maxState = Math.max(this.rule.states - 1, 1);
     const rng = mulberry32(genome.seed);
     this.grid = [];
+    this.nextGrid = [];
     for (let y = 0; y < this.h; y++) {
       const row = new Float32Array(this.w);
       for (let x = 0; x < this.w; x++) row[x] = rng() > 0.6 ? this.maxState : 0;
       this.grid.push(row);
+      this.nextGrid.push(new Float32Array(this.w));
     }
+    this._birthLUT = new Uint8Array(9);
+    this._surviveLUT = new Uint8Array(9);
+    for (const n of this.rule.birth) this._birthLUT[n] = 1;
+    for (const n of this.rule.survive) this._surviveLUT[n] = 1;
   }
   step() {
-    const { w, h, maxState, rule, grid } = this;
-    const next = [];
+    const { w, h, maxState, grid, nextGrid, _birthLUT, _surviveLUT } = this;
     for (let y = 0; y < h; y++) {
-      const row = new Float32Array(w);
+      const row = nextGrid[y];
+      const ym = (y - 1 + h) % h, yp = (y + 1) % h;
+      const rowAbove = grid[ym], rowCur = grid[y], rowBelow = grid[yp];
       for (let x = 0; x < w; x++) {
-        let neighbors = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            if (grid[(y + dy + h) % h][(x + dx + w) % w] > 0) neighbors++;
-          }
-        }
-        const cell = grid[y][x];
-        if (cell === maxState) {
-          row[x] = rule.survive.includes(neighbors) ? maxState : Math.max(maxState - 1, 0);
-        } else if (cell === 0) {
-          row[x] = rule.birth.includes(neighbors) ? maxState : 0;
-        } else {
-          row[x] = cell - 1;
-        }
+        const xm = (x - 1 + w) % w, xp = (x + 1) % w;
+        const neighbors = (rowAbove[xm] > 0) + (rowAbove[x] > 0) + (rowAbove[xp] > 0)
+                        + (rowCur[xm] > 0)                        + (rowCur[xp] > 0)
+                        + (rowBelow[xm] > 0) + (rowBelow[x] > 0) + (rowBelow[xp] > 0);
+        const cell = rowCur[x];
+        if (cell === maxState) row[x] = _surviveLUT[neighbors] ? maxState : Math.max(maxState - 1, 0);
+        else if (cell === 0) row[x] = _birthLUT[neighbors] ? maxState : 0;
+        else row[x] = cell - 1;
       }
-      next.push(row);
     }
-    this.grid = next;
+    const tmp = this.grid;
+    this.grid = this.nextGrid;
+    this.nextGrid = tmp;
   }
   getValues() {
     const { w, h, maxState, grid } = this;
@@ -1019,36 +1024,21 @@ window.addEventListener('resize', resizeCanvas);
 //  Rendering
 // ============================================================
 
+// Performance: ImageData renderer + cached vignette (replaces per-pixel fillRect)
+const renderer = new LatticePerf.FastRenderer();
+
 function renderToCanvas(values) {
   const cw = parseFloat(canvas.style.width);
   const ch = parseFloat(canvas.style.height);
-  const cellW = cw / SIM_W;
-  const cellH = ch / SIM_H;
-
   ctx.fillStyle = '#0a0a0f';
   ctx.fillRect(0, 0, cw, ch);
-
-  for (let y = 0; y < SIM_H; y++) {
-    for (let x = 0; x < SIM_W; x++) {
-      const val = values[y * SIM_W + x];
-      if (val < 0.01) continue;
-      const ci = Math.floor(val * 255) * 3;
-      const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
-      ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
-    }
-  }
+  renderer.render(ctx, values, SIM_W, SIM_H, lut, 1, cw, ch);
 }
 
-// Soft vignette
 function drawVignette() {
   const cw = parseFloat(canvas.style.width);
   const ch = parseFloat(canvas.style.height);
-  const grad = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.35, cw / 2, ch / 2, Math.max(cw, ch) * 0.7);
-  grad.addColorStop(0, 'rgba(10, 10, 15, 0)');
-  grad.addColorStop(1, 'rgba(10, 10, 15, 0.4)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, cw, ch);
+  renderer.drawVignette(ctx, cw, ch, 0.35, 0.7, 0.4);
 }
 
 // ============================================================
@@ -1254,7 +1244,6 @@ function mutate() {
 }
 
 function downloadPNG() {
-  // Render at higher resolution for export
   const exportScale = 4;
   const ew = SIM_W * exportScale;
   const eh = SIM_H * exportScale;
@@ -1263,25 +1252,14 @@ function downloadPNG() {
   exportCanvas.height = eh;
   const ectx = exportCanvas.getContext('2d');
 
-  // Fill background
   ectx.fillStyle = '#0a0a0f';
   ectx.fillRect(0, 0, ew, eh);
 
-  // Render current values at export resolution
   if (engine) {
     const values = engine.getValues();
-    const cellW = ew / SIM_W;
-    const cellH = eh / SIM_H;
-    for (let y = 0; y < SIM_H; y++) {
-      for (let x = 0; x < SIM_W; x++) {
-        const val = values[y * SIM_W + x];
-        if (val < 0.01) continue;
-        const ci = Math.floor(val * 255) * 3;
-        const r = lut[ci], g = lut[ci + 1], b = lut[ci + 2];
-        ectx.fillStyle = `rgb(${r},${g},${b})`;
-        ectx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
-      }
-    }
+    // Use FastRenderer for export too (ImageData + drawImage scaling)
+    const exportRenderer = new LatticePerf.FastRenderer();
+    exportRenderer.render(ectx, values, SIM_W, SIM_H, lut, 1, ew, eh);
   }
 
   const link = document.createElement('a');
