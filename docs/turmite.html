@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Turmite Explorer</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #f87171;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .canvas-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: var(--bg);
+    }
+
+    canvas {
+      background: var(--bg);
+      image-rendering: pixelated;
+      cursor: crosshair;
+    }
+
+    .canvas-info {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      display: flex;
+      gap: 1.5rem;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .canvas-info .step-count { color: var(--green); }
+    .canvas-info .fps { color: var(--amber); }
+
+    .sidebar {
+      width: 340px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-header h1 {
+      font-size: 1.3rem;
+      font-weight: 400;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      margin-bottom: 0.25rem;
+    }
+
+    .sidebar-header .back {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.75rem;
+    }
+
+    .sidebar-header .back:hover { color: var(--accent); }
+
+    .sidebar-header p {
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      margin-top: 0.5rem;
+      line-height: 1.5;
+    }
+
+    .section {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-title {
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.75rem;
+    }
+
+    /* Preset grid */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .preset-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem 0.6rem;
+      font-family: inherit;
+      font-size: 0.7rem;
+      cursor: pointer;
+      border-radius: 4px;
+      text-align: left;
+      transition: all 0.15s;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--accent);
+      background: #1a1a28;
+    }
+
+    .preset-btn.active {
+      border-color: var(--accent);
+      background: #1a1a28;
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .preset-btn .name {
+      display: block;
+      color: var(--accent);
+      margin-bottom: 0.2rem;
+    }
+
+    .preset-btn .desc {
+      color: var(--text-dim);
+      font-size: 0.6rem;
+    }
+
+    /* Transition table */
+    .transition-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.65rem;
+    }
+
+    .transition-table th {
+      color: var(--text-dim);
+      font-weight: 400;
+      text-align: center;
+      padding: 0.3rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .transition-table td {
+      text-align: center;
+      padding: 0.25rem;
+    }
+
+    .transition-table select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.2rem;
+      font-family: inherit;
+      font-size: 0.6rem;
+      border-radius: 3px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .transition-table select:focus {
+      border-color: var(--accent);
+      outline: none;
+    }
+
+    .color-swatch {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      vertical-align: middle;
+      margin-right: 2px;
+    }
+
+    /* Sliders */
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.6rem;
+    }
+
+    .control-row label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    .control-row .value {
+      font-size: 0.65rem;
+      color: var(--green);
+      min-width: 3rem;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      background: var(--border);
+      height: 3px;
+      border-radius: 2px;
+      width: 120px;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    input[type="checkbox"] {
+      accent-color: var(--accent);
+    }
+
+    /* Actions */
+    .actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem 0.8rem;
+      font-family: inherit;
+      font-size: 0.7rem;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.15s;
+      flex: 1;
+      text-align: center;
+    }
+
+    .btn:hover { border-color: var(--accent); background: #1a1a28; }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: #6b5fd0; }
+
+    .btn-danger {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .btn-danger:hover { background: #2a1a1a; }
+
+    .btn-playing {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    /* Shortcuts */
+    .shortcuts {
+      padding: 1rem 1.25rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      line-height: 2;
+    }
+
+    kbd {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.1rem 0.4rem;
+      font-family: inherit;
+      font-size: 0.6rem;
+      color: var(--text);
+    }
+
+    /* Speed indicator */
+    .speed-bar {
+      display: flex;
+      gap: 0.3rem;
+      align-items: center;
+    }
+
+    .speed-bar .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: background 0.15s;
+    }
+
+    .speed-bar .dot.active { background: var(--green); }
+
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      .sidebar { width: 100%; height: 50vh; border-left: none; border-top: 1px solid var(--border); }
+      .canvas-area { height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas-area">
+    <canvas id="canvas"></canvas>
+    <div class="canvas-info">
+      <span class="step-count" id="info-steps">step 0</span>
+      <span class="fps" id="info-fps">0 fps</span>
+      <span id="info-state"></span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Turmite</h1>
+      <a class="back" href="index.html">&larr; back to gallery</a>
+      <p>
+        Generalized Langton's Ant. A 2D Turing machine walks a grid, reading colors and
+        following state transitions. Simple rules birth chaotic scribbles that crystallize
+        into highways stretching to infinity.
+      </p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Presets</div>
+      <div class="preset-grid" id="presets"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Transition Table</div>
+      <div id="transition-container"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Parameters</div>
+      <div class="control-row">
+        <label>Ants</label>
+        <input type="range" id="ctrl-ants" min="1" max="6" value="1">
+        <span class="value" id="val-ants">1</span>
+      </div>
+      <div class="control-row">
+        <label>Colors</label>
+        <input type="range" id="ctrl-colors" min="2" max="8" value="2">
+        <span class="value" id="val-colors">2</span>
+      </div>
+      <div class="control-row">
+        <label>States</label>
+        <input type="range" id="ctrl-states" min="1" max="4" value="1">
+        <span class="value" id="val-states">1</span>
+      </div>
+      <div class="control-row">
+        <label>Wrap edges</label>
+        <input type="checkbox" id="ctrl-wrap" checked>
+      </div>
+      <div class="control-row">
+        <label>Speed</label>
+        <div class="speed-bar" id="speed-bar">
+          <div class="dot active" data-speed="1"></div>
+          <div class="dot" data-speed="10"></div>
+          <div class="dot" data-speed="100"></div>
+          <div class="dot" data-speed="500"></div>
+          <div class="dot" data-speed="2000"></div>
+        </div>
+        <span class="value" id="val-speed">1/f</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Actions</div>
+      <div class="actions">
+        <button class="btn btn-playing" id="btn-play">Pause</button>
+        <button class="btn" id="btn-step">Step</button>
+        <button class="btn btn-primary" id="btn-reset">Reset</button>
+        <button class="btn" id="btn-download">PNG</button>
+      </div>
+    </div>
+
+    <div class="shortcuts">
+      <kbd>Space</kbd> Play/Pause &nbsp;
+      <kbd>S</kbd> Step &nbsp;
+      <kbd>R</kbd> Reset &nbsp;
+      <kbd>1-5</kbd> Speed &nbsp;
+      <kbd>D</kbd> Download PNG
+    </div>
+  </div>
+
+<script>
+// --- Color palette for cell states ---
+const CELL_COLORS = [
+  '#0a0a0f', // 0: background
+  '#7c6fe0', // 1: accent purple
+  '#4ade80', // 2: green
+  '#fbbf24', // 3: amber
+  '#f87171', // 4: red
+  '#38bdf8', // 5: sky blue
+  '#e879f9', // 6: pink
+  '#fb923c', // 7: orange
+];
+
+const ANT_COLOR = '#ffffff';
+
+// --- Presets ---
+const PRESETS = [
+  {
+    name: "Langton's Ant",
+    desc: 'The classic. Chaos → highway.',
+    colors: 2, states: 1,
+    transitions: [[[1,1,0],[0,3,0]]],
+  },
+  {
+    name: 'RRL',
+    desc: '3-color symmetric builder.',
+    colors: 3, states: 1,
+    transitions: [[[1,1,0],[2,1,0],[0,3,0]]],
+  },
+  {
+    name: 'LLRR',
+    desc: '4-color dense filler.',
+    colors: 4, states: 1,
+    transitions: [[[1,3,0],[2,3,0],[3,1,0],[0,1,0]]],
+  },
+  {
+    name: 'RLLR',
+    desc: 'Chaotic spirals.',
+    colors: 4, states: 1,
+    transitions: [[[1,1,0],[2,3,0],[3,3,0],[0,1,0]]],
+  },
+  {
+    name: 'Spiral',
+    desc: 'RRLL — tight spiraling.',
+    colors: 4, states: 1,
+    transitions: [[[1,1,0],[2,1,0],[3,3,0],[0,3,0]]],
+  },
+  {
+    name: 'Fibonacci',
+    desc: 'LRRRRRLLR — fractal.',
+    colors: 9, states: 1,
+    transitions: [[[1,3,0],[2,1,0],[3,1,0],[4,1,0],[5,1,0],[6,1,0],[7,3,0],[8,3,0],[0,1,0]]],
+  },
+  {
+    name: 'Stateful',
+    desc: '2 states × 3 colors.',
+    colors: 3, states: 2,
+    transitions: [
+      [[1,1,1],[2,3,0],[0,1,0]],
+      [[2,3,1],[0,1,1],[1,1,0]],
+    ],
+  },
+  {
+    name: 'Snowflake',
+    desc: '2 states × 2 colors symmetric.',
+    colors: 2, states: 2,
+    transitions: [
+      [[1,1,1],[0,3,0]],
+      [[1,3,0],[0,1,1]],
+    ],
+  },
+];
+
+// --- State ---
+let gridW, gridH, cellSize;
+let grid, ants, stepCount;
+let playing = true;
+let stepsPerFrame = 1;
+let currentPresetIdx = 0;
+
+// Rule parameters
+let numColors = 2;
+let numStates = 1;
+let transitions = [[[1,1,0],[0,3,0]]];
+let numAnts = 1;
+let wrapEdges = true;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// Direction deltas: up, right, down, left
+const DX = [0, 1, 0, -1];
+const DY = [-1, 0, 1, 0];
+const TURN_NAMES = ['N', 'R', 'U', 'L'];
+
+function initGrid() {
+  // Size canvas to fill available space
+  const area = canvas.parentElement;
+  const w = area.clientWidth;
+  const h = area.clientHeight;
+
+  // Determine cell size for a good balance of detail and performance
+  cellSize = Math.max(2, Math.min(4, Math.floor(Math.min(w, h) / 200)));
+  gridW = Math.floor(w / cellSize);
+  gridH = Math.floor(h / cellSize);
+
+  canvas.width = gridW * cellSize;
+  canvas.height = gridH * cellSize;
+
+  grid = new Uint8Array(gridW * gridH);
+  stepCount = 0;
+
+  // Place ants
+  ants = [];
+  const cx = Math.floor(gridW / 2);
+  const cy = Math.floor(gridH / 2);
+  for (let i = 0; i < numAnts; i++) {
+    const angle = (i / numAnts) * Math.PI * 2;
+    const dist = numAnts > 1 ? Math.floor(Math.min(gridW, gridH) / 6) : 0;
+    ants.push({
+      x: cx + Math.round(dist * Math.cos(angle)),
+      y: cy + Math.round(dist * Math.sin(angle)),
+      dir: i % 4,
+      state: 0,
+    });
+  }
+
+  // Clear canvas
+  ctx.fillStyle = CELL_COLORS[0];
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function step() {
+  for (const ant of ants) {
+    const idx = ant.y * gridW + ant.x;
+    const cellColor = grid[idx] % numColors;
+    const antState = ant.state % numStates;
+
+    const trans = transitions[antState]?.[cellColor];
+    if (!trans) continue;
+
+    const [newColor, turn, newState] = trans;
+
+    // Write new color
+    grid[idx] = newColor % numColors;
+
+    // Draw changed cell
+    ctx.fillStyle = CELL_COLORS[newColor % CELL_COLORS.length];
+    ctx.fillRect(ant.x * cellSize, ant.y * cellSize, cellSize, cellSize);
+
+    // Turn
+    ant.dir = (ant.dir + turn) % 4;
+    ant.state = newState % numStates;
+
+    // Move
+    let nx = ant.x + DX[ant.dir];
+    let ny = ant.y + DY[ant.dir];
+
+    if (wrapEdges) {
+      nx = ((nx % gridW) + gridW) % gridW;
+      ny = ((ny % gridH) + gridH) % gridH;
+    } else {
+      if (nx < 0 || nx >= gridW) {
+        ant.dir = (ant.dir + 2) % 4;
+        nx = Math.max(0, Math.min(gridW - 1, nx));
+      }
+      if (ny < 0 || ny >= gridH) {
+        ant.dir = (ant.dir + 2) % 4;
+        ny = Math.max(0, Math.min(gridH - 1, ny));
+      }
+    }
+
+    ant.x = nx;
+    ant.y = ny;
+  }
+
+  stepCount++;
+}
+
+// --- Rendering loop ---
+let lastTime = 0;
+let frameCount = 0;
+let fpsTime = 0;
+
+function animate(now) {
+  if (playing) {
+    for (let i = 0; i < stepsPerFrame; i++) {
+      step();
+    }
+
+    // Draw ant positions
+    for (const ant of ants) {
+      ctx.fillStyle = ANT_COLOR;
+      ctx.fillRect(ant.x * cellSize, ant.y * cellSize, cellSize, cellSize);
+    }
+  }
+
+  // FPS counter
+  frameCount++;
+  if (now - fpsTime >= 1000) {
+    document.getElementById('info-fps').textContent = frameCount + ' fps';
+    frameCount = 0;
+    fpsTime = now;
+  }
+
+  document.getElementById('info-steps').textContent = 'step ' + stepCount.toLocaleString();
+
+  requestAnimationFrame(animate);
+}
+
+// --- Transition table UI ---
+function buildTransitionTable() {
+  const container = document.getElementById('transition-container');
+  const table = document.createElement('table');
+  table.className = 'transition-table';
+
+  // Header
+  const thead = document.createElement('thead');
+  let headerRow = '<tr><th></th>';
+  for (let c = 0; c < numColors; c++) {
+    headerRow += `<th><span class="color-swatch" style="background:${CELL_COLORS[c]}"></span> ${c}</th>`;
+  }
+  headerRow += '</tr>';
+  thead.innerHTML = headerRow;
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+
+  for (let s = 0; s < numStates; s++) {
+    // Ensure transitions array is big enough
+    if (!transitions[s]) transitions[s] = [];
+
+    // New Color row
+    let row1 = `<tr><td style="color:var(--text-dim)">S${s} &rarr; color</td>`;
+    for (let c = 0; c < numColors; c++) {
+      if (!transitions[s][c]) transitions[s][c] = [0, 1, 0];
+      const cur = transitions[s][c][0];
+      let opts = '';
+      for (let v = 0; v < numColors; v++) {
+        opts += `<option value="${v}" ${v === cur ? 'selected' : ''}>${v}</option>`;
+      }
+      row1 += `<td><select data-s="${s}" data-c="${c}" data-f="0">${opts}</select></td>`;
+    }
+    row1 += '</tr>';
+
+    // Turn row
+    let row2 = `<tr><td style="color:var(--text-dim)">S${s} &rarr; turn</td>`;
+    for (let c = 0; c < numColors; c++) {
+      const cur = transitions[s][c][1];
+      let opts = '';
+      for (let v = 0; v < 4; v++) {
+        opts += `<option value="${v}" ${v === cur ? 'selected' : ''}>${TURN_NAMES[v]}</option>`;
+      }
+      row2 += `<td><select data-s="${s}" data-c="${c}" data-f="1">${opts}</select></td>`;
+    }
+    row2 += '</tr>';
+
+    // Next state row (only show if multiple states)
+    let row3 = '';
+    if (numStates > 1) {
+      row3 = `<tr><td style="color:var(--text-dim)">S${s} &rarr; state</td>`;
+      for (let c = 0; c < numColors; c++) {
+        const cur = transitions[s][c][2];
+        let opts = '';
+        for (let v = 0; v < numStates; v++) {
+          opts += `<option value="${v}" ${v === cur ? 'selected' : ''}>${v}</option>`;
+        }
+        row3 += `<td><select data-s="${s}" data-c="${c}" data-f="2">${opts}</select></td>`;
+      }
+      row3 += '</tr>';
+    }
+
+    tbody.innerHTML += row1 + row2 + row3;
+
+    // Separator between states
+    if (s < numStates - 1) {
+      tbody.innerHTML += `<tr><td colspan="${numColors + 1}" style="border-bottom:1px solid var(--border);height:0.5rem"></td></tr>`;
+    }
+  }
+
+  table.appendChild(tbody);
+  container.innerHTML = '';
+  container.appendChild(table);
+
+  // Event listeners
+  table.querySelectorAll('select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const s = +sel.dataset.s;
+      const c = +sel.dataset.c;
+      const f = +sel.dataset.f;
+      transitions[s][c][f] = +sel.value;
+    });
+  });
+}
+
+// --- Preset buttons ---
+function buildPresets() {
+  const container = document.getElementById('presets');
+  container.innerHTML = '';
+  PRESETS.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn' + (i === currentPresetIdx ? ' active' : '');
+    btn.innerHTML = `<span class="name">${p.name}</span><span class="desc">${p.desc}</span>`;
+    btn.addEventListener('click', () => loadPreset(i));
+    container.appendChild(btn);
+  });
+}
+
+function loadPreset(idx) {
+  currentPresetIdx = idx;
+  const p = PRESETS[idx];
+  numColors = p.colors;
+  numStates = p.states;
+  transitions = JSON.parse(JSON.stringify(p.transitions));
+  numAnts = 1;
+
+  // Update controls
+  document.getElementById('ctrl-colors').value = numColors;
+  document.getElementById('val-colors').textContent = numColors;
+  document.getElementById('ctrl-states').value = numStates;
+  document.getElementById('val-states').textContent = numStates;
+  document.getElementById('ctrl-ants').value = numAnts;
+  document.getElementById('val-ants').textContent = numAnts;
+
+  buildTransitionTable();
+  buildPresets();
+  initGrid();
+}
+
+// --- Speed control ---
+function setSpeed(sPerFrame) {
+  stepsPerFrame = sPerFrame;
+  document.querySelectorAll('#speed-bar .dot').forEach(d => {
+    d.classList.toggle('active', +d.dataset.speed <= sPerFrame);
+  });
+  const labels = {1: '1/f', 10: '10/f', 100: '100/f', 500: '500/f', 2000: '2k/f'};
+  document.getElementById('val-speed').textContent = labels[sPerFrame] || sPerFrame + '/f';
+}
+
+// --- Controls ---
+document.getElementById('ctrl-ants').addEventListener('input', e => {
+  numAnts = +e.target.value;
+  document.getElementById('val-ants').textContent = numAnts;
+  initGrid();
+});
+
+document.getElementById('ctrl-colors').addEventListener('input', e => {
+  numColors = +e.target.value;
+  document.getElementById('val-colors').textContent = numColors;
+  // Clamp existing transitions
+  for (let s = 0; s < numStates; s++) {
+    if (!transitions[s]) transitions[s] = [];
+    while (transitions[s].length < numColors) {
+      transitions[s].push([Math.floor(Math.random() * numColors), Math.floor(Math.random() * 4), 0]);
+    }
+    transitions[s] = transitions[s].slice(0, numColors);
+    for (const t of transitions[s]) {
+      t[0] = t[0] % numColors;
+    }
+  }
+  buildTransitionTable();
+  initGrid();
+});
+
+document.getElementById('ctrl-states').addEventListener('input', e => {
+  numStates = +e.target.value;
+  document.getElementById('val-states').textContent = numStates;
+  while (transitions.length < numStates) {
+    const row = [];
+    for (let c = 0; c < numColors; c++) {
+      row.push([Math.floor(Math.random() * numColors), Math.floor(Math.random() * 4), 0]);
+    }
+    transitions.push(row);
+  }
+  transitions = transitions.slice(0, numStates);
+  for (const row of transitions) {
+    for (const t of row) {
+      t[2] = t[2] % numStates;
+    }
+  }
+  buildTransitionTable();
+  initGrid();
+});
+
+document.getElementById('ctrl-wrap').addEventListener('change', e => {
+  wrapEdges = e.target.checked;
+});
+
+document.querySelectorAll('#speed-bar .dot').forEach(d => {
+  d.addEventListener('click', () => setSpeed(+d.dataset.speed));
+});
+
+document.getElementById('btn-play').addEventListener('click', () => {
+  playing = !playing;
+  const btn = document.getElementById('btn-play');
+  btn.textContent = playing ? 'Pause' : 'Play';
+  btn.className = playing ? 'btn btn-playing' : 'btn';
+});
+
+document.getElementById('btn-step').addEventListener('click', () => {
+  playing = false;
+  const btn = document.getElementById('btn-play');
+  btn.textContent = 'Play';
+  btn.className = 'btn';
+  for (let i = 0; i < stepsPerFrame; i++) step();
+  for (const ant of ants) {
+    ctx.fillStyle = ANT_COLOR;
+    ctx.fillRect(ant.x * cellSize, ant.y * cellSize, cellSize, cellSize);
+  }
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => initGrid());
+
+document.getElementById('btn-download').addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = `turmite-${stepCount}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  switch (e.key.toLowerCase()) {
+    case ' ':
+      e.preventDefault();
+      document.getElementById('btn-play').click();
+      break;
+    case 's':
+      document.getElementById('btn-step').click();
+      break;
+    case 'r':
+      initGrid();
+      break;
+    case 'd':
+      document.getElementById('btn-download').click();
+      break;
+    case '1': setSpeed(1); break;
+    case '2': setSpeed(10); break;
+    case '3': setSpeed(100); break;
+    case '4': setSpeed(500); break;
+    case '5': setSpeed(2000); break;
+  }
+});
+
+// Click to place ant
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cellSize);
+  const y = Math.floor((e.clientY - rect.top) / cellSize);
+  if (x >= 0 && x < gridW && y >= 0 && y < gridH) {
+    ants.push({ x, y, dir: Math.floor(Math.random() * 4), state: 0 });
+    numAnts = ants.length;
+    document.getElementById('ctrl-ants').value = Math.min(6, numAnts);
+    document.getElementById('val-ants').textContent = numAnts;
+  }
+});
+
+// Resize handler
+window.addEventListener('resize', () => {
+  // Save state
+  const savedGrid = grid ? new Uint8Array(grid) : null;
+  const savedAnts = ants ? ants.map(a => ({...a})) : null;
+  const savedStep = stepCount;
+
+  initGrid();
+
+  // Restore what fits
+  if (savedGrid && savedAnts) {
+    const oldW = Math.sqrt(savedGrid.length * (gridW / gridH)) | 0;
+    stepCount = savedStep;
+    ants = savedAnts.filter(a => a.x < gridW && a.y < gridH);
+    if (ants.length === 0) {
+      ants = [{ x: Math.floor(gridW/2), y: Math.floor(gridH/2), dir: 0, state: 0 }];
+    }
+  }
+});
+
+// --- Init ---
+buildPresets();
+buildTransitionTable();
+initGrid();
+setSpeed(10);
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
