@@ -4,6 +4,18 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Palette Lab / Color System
+- **What**: Sophisticated color/palette system built on OKLAB perceptual color space, with interactive exploration page (`docs/palette.html`)
+- **Details**:
+  - Added full OKLAB color science to `src/automata.ts`: `hexToOklab`, `oklabToHex`, `oklabToOklch`, `oklchToOklab`, `perceptualGradient`, `colorHarmony` (5 rules), `speciesGradient`, `extractDominantColors`, and canonical `SPECIES_COLORS` definition
+  - **Species Chromatics**: All 11 species shown as 8-stop perceptual gradient strips, clickable to explore
+  - **OKLAB Gamut Wheel**: Full hue/chroma wheel rendered at L=0.7, species accent colors plotted as dots, click anywhere to select
+  - **Harmony Engine**: Complementary, analogous, triadic, split-complementary, and tetradic rules via OKLCH hue rotation
+  - **Gradient Lab**: Side-by-side comparison of OKLAB perceptual vs naive RGB interpolation, with lightness curve chart
+  - **Hall of Fame Color Map**: Top 64 HoF pieces rendered as pixel chips using species color palettes
+  - **Palette DNA**: All 9 Unicode character palettes shown with species-colored intensity mapping
+- **Pages**: `docs/palette.html` (new), `docs/index.html` (added Palette button + footer link), `src/automata.ts` (color system module)
+
 ### 2026-03-14 — Live Mode (manual session)
 - **What**: Full-screen meditative Canvas experience (`docs/live.html`)
 - **Details**: Ported all 11 generative engines to browser JS. 2D life pulses, reaction-diffusion morphs, Julia sets breathe (c parameter orbits), flow field particles stream, L-systems grow stroke by stroke. Auto-cycles through hall-of-fame pieces with 2s crossfade. Vignette overlay. Frosted-glass menu pill with controls.

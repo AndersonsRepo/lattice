@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Field — Lattice</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --text: #c8c8d4;
+    --text-dim: #6e6e82;
+    --accent: #7c6fe0;
+    --accent-glow: #7c6fe040;
+    --green: #4ade80;
+    --amber: #fbbf24;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+
+  canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+  }
+
+  /* --- HUD --- */
+  .hud { position: fixed; z-index: 10; pointer-events: none; }
+  .hud > * { pointer-events: auto; }
+
+  /* Title pill */
+  .title-pill {
+    position: fixed; top: 16px; left: 16px; z-index: 20;
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px;
+    background: rgba(18,18,26,0.8);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(124,111,224,0.15);
+    border-radius: 20px;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .title-pill:hover { border-color: var(--accent); color: var(--text); }
+  .title-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Back link */
+  .back-link {
+    position: fixed; top: 16px; right: 16px; z-index: 20;
+    padding: 6px 14px;
+    background: rgba(18,18,26,0.8);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(124,111,224,0.15);
+    border-radius: 20px;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: all 0.3s;
+  }
+  .back-link:hover { border-color: var(--accent); color: var(--text); }
+
+  /* Control panel */
+  .panel {
+    position: fixed; right: 16px; top: 50%; z-index: 20;
+    transform: translateY(-50%);
+    width: 260px;
+    max-height: 80vh;
+    overflow-y: auto;
+    background: rgba(18,18,26,0.88);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(124,111,224,0.12);
+    border-radius: 12px;
+    padding: 16px;
+    transition: opacity 0.4s, transform 0.4s;
+  }
+  .panel.hidden {
+    opacity: 0; pointer-events: none;
+    transform: translateY(-50%) translateX(20px);
+  }
+  .panel::-webkit-scrollbar { width: 4px; }
+  .panel::-webkit-scrollbar-track { background: transparent; }
+  .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .panel-section { margin-bottom: 14px; }
+  .panel-section:last-child { margin-bottom: 0; }
+
+  .section-label {
+    font-size: 0.55rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  /* Field type selector */
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+  .field-btn {
+    background: rgba(124,111,224,0.06);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    padding: 6px 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .field-btn:hover { border-color: var(--accent); color: var(--text); }
+  .field-btn.active {
+    background: rgba(124,111,224,0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+
+  /* Sliders */
+  .slider-row {
+    display: flex; align-items: center;
+    gap: 8px; margin-bottom: 6px;
+  }
+  .slider-label {
+    font-size: 0.55rem;
+    color: var(--text-dim);
+    min-width: 56px;
+    letter-spacing: 0.05em;
+  }
+  .slider-val {
+    font-size: 0.55rem;
+    color: var(--accent);
+    min-width: 32px;
+    text-align: right;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    transition: box-shadow 0.2s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 10px var(--accent);
+  }
+
+  /* Toggle buttons */
+  .toggle-row {
+    display: flex; gap: 4px; flex-wrap: wrap;
+  }
+  .toggle-btn {
+    background: rgba(124,111,224,0.06);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 0.55rem;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .toggle-btn:hover { border-color: var(--accent); color: var(--text); }
+  .toggle-btn.active {
+    background: rgba(124,111,224,0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Action buttons */
+  .action-row {
+    display: flex; gap: 4px;
+  }
+  .action-btn {
+    flex: 1;
+    background: rgba(124,111,224,0.08);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .action-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  /* FPS counter */
+  .fps {
+    position: fixed; bottom: 16px; left: 16px; z-index: 20;
+    font-size: 0.55rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+
+  /* Mic indicator */
+  .mic-indicator {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    margin-left: 4px;
+    vertical-align: middle;
+    transition: all 0.3s;
+  }
+  .mic-indicator.active {
+    background: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
+    animation: pulse-dot 1s ease-in-out infinite;
+  }
+
+  /* Keyboard hints */
+  .hints {
+    position: fixed; bottom: 16px; right: 16px; z-index: 20;
+    font-size: 0.5rem;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-align: right;
+    opacity: 0.6;
+    line-height: 1.6;
+  }
+
+  /* Intro overlay */
+  .intro-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px;
+    cursor: pointer;
+    transition: opacity 0.8s;
+  }
+  .intro-overlay.fade { opacity: 0; pointer-events: none; }
+  .intro-title {
+    font-size: 1.2rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-shadow: 0 0 30px var(--accent-glow);
+  }
+  .intro-sub {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div class="intro-overlay" id="intro">
+  <div class="intro-title">Field</div>
+  <div class="intro-sub">click to enter</div>
+</div>
+
+<div class="title-pill" id="togglePanel">
+  <div class="dot"></div>
+  <span>Field</span>
+</div>
+
+<a class="back-link" href="/">Gallery</a>
+
+<div class="panel" id="panel">
+  <div class="panel-section">
+    <div class="section-label">Field Type</div>
+    <div class="field-grid" id="fieldGrid">
+      <button class="field-btn active" data-field="julia">Julia</button>
+      <button class="field-btn" data-field="rdiff">R-Diff</button>
+      <button class="field-btn" data-field="flow">Flow</button>
+      <button class="field-btn" data-field="noise">Noise</button>
+      <button class="field-btn" data-field="voronoi">Voronoi</button>
+      <button class="field-btn" data-field="pendulum">Pendulum</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Parameters</div>
+    <div id="sliders"></div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Feedback</div>
+    <div class="slider-row">
+      <span class="slider-label">Mix</span>
+      <input type="range" id="feedback" min="0" max="100" value="20">
+      <span class="slider-val" id="feedbackVal">0.20</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Zoom</span>
+      <input type="range" id="fbZoom" min="95" max="105" value="100">
+      <span class="slider-val" id="fbZoomVal">1.00</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Rotate</span>
+      <input type="range" id="fbRotate" min="-50" max="50" value="0">
+      <span class="slider-val" id="fbRotateVal">0.00</span>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Color</div>
+    <div class="toggle-row" id="paletteRow">
+      <button class="toggle-btn active" data-palette="0">Void</button>
+      <button class="toggle-btn" data-palette="1">Ember</button>
+      <button class="toggle-btn" data-palette="2">Ocean</button>
+      <button class="toggle-btn" data-palette="3">Acid</button>
+      <button class="toggle-btn" data-palette="4">Mono</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Audio</div>
+    <div class="toggle-row">
+      <button class="toggle-btn" id="micBtn">Mic <span class="mic-indicator" id="micDot"></span></button>
+    </div>
+    <div class="slider-row" style="margin-top:6px">
+      <span class="slider-label">Sens</span>
+      <input type="range" id="audioSens" min="0" max="100" value="50">
+      <span class="slider-val" id="audioSensVal">0.50</span>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Mouse</div>
+    <div class="slider-row">
+      <span class="slider-label">Radius</span>
+      <input type="range" id="mouseRadius" min="1" max="100" value="30">
+      <span class="slider-val" id="mouseRadiusVal">0.30</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Force</span>
+      <input type="range" id="mouseForce" min="0" max="100" value="50">
+      <span class="slider-val" id="mouseForceVal">0.50</span>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="action-row">
+      <button class="action-btn" id="resetBtn">Reset</button>
+      <button class="action-btn" id="randomBtn">Random</button>
+      <button class="action-btn" id="saveBtn">Save PNG</button>
+    </div>
+  </div>
+</div>
+
+<div class="fps" id="fps">-- fps</div>
+<div class="hints" id="hints">
+  H toggle panel &middot; R random<br>
+  1-6 fields &middot; Space reset<br>
+  Click warp &middot; Scroll zoom
+</div>
+
+<!-- ===================== GLSL SHADERS ===================== -->
+
+<!-- Vertex shader (shared) -->
+<script id="vs" type="x-shader/x-vertex">
+attribute vec2 a_pos;
+void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
+</script>
+
+<!-- Julia set -->
+<script id="fs-julia" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 u_res;
+uniform float u_time;
+uniform vec2 u_mouse;
+uniform float u_mouseDown;
+uniform float u_mouseRadius;
+uniform float u_mouseForce;
+uniform float u_audio;
+uniform float u_audioBass;
+uniform float u_audioTreble;
+uniform int u_palette;
+uniform float u_feedback;
+uniform sampler2D u_prev;
+uniform float u_fbZoom;
+uniform float u_fbRotate;
+// params: cReal, cImag, zoom, iterations
+uniform float u_p0, u_p1, u_p2, u_p3;
+
+vec3 palette(float t, int pal) {
+  if (pal == 1) return mix(vec3(0.1,0.0,0.0), vec3(1.0,0.4,0.1), t); // ember
+  if (pal == 2) return mix(vec3(0.0,0.05,0.15), vec3(0.2,0.6,1.0), t); // ocean
+  if (pal == 3) return mix(vec3(0.0,0.1,0.0), vec3(0.3,1.0,0.5), t); // acid
+  if (pal == 4) return vec3(t); // mono
+  // void (default)
+  return mix(vec3(0.04,0.03,0.08), vec3(0.49,0.44,0.88), t);
+}
+
+void main() {
+  vec2 uv = (gl_FragCoord.xy - 0.5 * u_res) / min(u_res.x, u_res.y);
+  float zoom = u_p2 + u_audio * 0.3;
+  uv /= zoom;
+
+  // Mouse warp
+  vec2 mpos = (u_mouse - 0.5 * u_res) / min(u_res.x, u_res.y) / zoom;
+  float md = length(uv - mpos);
+  float mr = u_mouseRadius;
+  float mf = u_mouseForce * (1.0 + u_mouseDown * 2.0);
+  if (md < mr) {
+    vec2 dir = normalize(uv - mpos);
+    float strength = (1.0 - md / mr) * mf * 0.5;
+    uv += dir * strength;
+  }
+
+  vec2 c = vec2(u_p0 + u_audioBass * 0.1, u_p1 + u_audioTreble * 0.1);
+  vec2 z = uv;
+  float iter = 0.0;
+  float maxIter = u_p3;
+
+  for (float i = 0.0; i < 300.0; i++) {
+    if (i >= maxIter) break;
+    float x = z.x * z.x - z.y * z.y + c.x;
+    float y = 2.0 * z.x * z.y + c.y;
+    z = vec2(x, y);
+    if (dot(z, z) > 4.0) break;
+    iter += 1.0;
+  }
+
+  float t = iter / maxIter;
+  // Smooth coloring
+  if (iter < maxIter) {
+    float sl = iter - log2(log2(dot(z,z))) + 4.0;
+    t = sl / maxIter;
+  }
+
+  vec3 col = palette(t, u_palette);
+
+  // Feedback
+  vec2 fbUv = gl_FragCoord.xy / u_res;
+  float angle = u_fbRotate;
+  vec2 center = vec2(0.5);
+  fbUv -= center;
+  fbUv *= u_fbZoom;
+  fbUv = vec2(fbUv.x * cos(angle) - fbUv.y * sin(angle),
+              fbUv.x * sin(angle) + fbUv.y * cos(angle));
+  fbUv += center;
+  vec3 prev = texture2D(u_prev, fbUv).rgb;
+  col = mix(col, max(col, prev * 0.98), u_feedback);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<!-- Reaction-Diffusion -->
+<script id="fs-rdiff" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 u_res;
+uniform float u_time;
+uniform vec2 u_mouse;
+uniform float u_mouseDown;
+uniform float u_mouseRadius;
+uniform float u_mouseForce;
+uniform float u_audio;
+uniform float u_audioBass;
+uniform float u_audioTreble;
+uniform int u_palette;
+uniform float u_feedback;
+uniform sampler2D u_prev;
+uniform float u_fbZoom;
+uniform float u_fbRotate;
+uniform float u_p0, u_p1, u_p2, u_p3;
+
+vec3 palette(float t, int pal) {
+  if (pal == 1) return mix(vec3(0.1,0.0,0.0), vec3(1.0,0.4,0.1), t);
+  if (pal == 2) return mix(vec3(0.0,0.05,0.15), vec3(0.2,0.6,1.0), t);
+  if (pal == 3) return mix(vec3(0.0,0.1,0.0), vec3(0.3,1.0,0.5), t);
+  if (pal == 4) return vec3(t);
+  return mix(vec3(0.04,0.03,0.08), vec3(0.49,0.44,0.88), t);
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_res;
+  vec2 px = 1.0 / u_res;
+
+  // Read previous frame as RD state (R=U, G=V)
+  vec4 state = texture2D(u_prev, uv);
+  float U = state.r;
+  float V = state.g;
+
+  // Initialize on first frame
+  if (u_time < 0.05) {
+    U = 1.0;
+    V = 0.0;
+    // Seed spots
+    vec2 c = uv - 0.5;
+    if (length(c) < 0.05) V = 1.0;
+    if (length(c - vec2(0.15, 0.1)) < 0.03) V = 1.0;
+    if (length(c - vec2(-0.1, -0.15)) < 0.04) V = 1.0;
+    // Random seed points based on position
+    float h = fract(sin(dot(floor(uv * 30.0), vec2(127.1, 311.7))) * 43758.5453);
+    if (h > 0.97) V = 1.0;
+  }
+
+  // Laplacian
+  float lu = -U * 4.0;
+  float lv = -V * 4.0;
+  lu += texture2D(u_prev, uv + vec2(px.x, 0)).r;
+  lu += texture2D(u_prev, uv - vec2(px.x, 0)).r;
+  lu += texture2D(u_prev, uv + vec2(0, px.y)).r;
+  lu += texture2D(u_prev, uv - vec2(0, px.y)).r;
+  lv += texture2D(u_prev, uv + vec2(px.x, 0)).g;
+  lv += texture2D(u_prev, uv - vec2(px.x, 0)).g;
+  lv += texture2D(u_prev, uv + vec2(0, px.y)).g;
+  lv += texture2D(u_prev, uv - vec2(0, px.y)).g;
+
+  float feed = u_p0 + u_audioBass * 0.01;
+  float kill = u_p1 + u_audioTreble * 0.005;
+  float Du = u_p2;
+  float Dv = u_p3;
+  float dt = 1.0;
+
+  float uvv = U * V * V;
+  float newU = U + dt * (Du * lu - uvv + feed * (1.0 - U));
+  float newV = V + dt * (Dv * lv + uvv - (feed + kill) * V);
+
+  // Mouse seeds catalyst
+  vec2 mpos = u_mouse / u_res;
+  float md = length(uv - mpos);
+  if (md < u_mouseRadius * 0.3 && u_mouseDown > 0.5) {
+    newV = mix(newV, 1.0, (1.0 - md / (u_mouseRadius * 0.3)) * u_mouseForce);
+  }
+
+  newU = clamp(newU, 0.0, 1.0);
+  newV = clamp(newV, 0.0, 1.0);
+
+  // Visualization
+  float vis = newV * 2.5;
+  vec3 col = palette(vis, u_palette);
+
+  // Feedback blend
+  float fb = u_feedback * 0.3; // lighter feedback for RD
+  vec2 fbUv = uv;
+  vec2 center = vec2(0.5);
+  fbUv -= center;
+  fbUv *= u_fbZoom;
+  float angle = u_fbRotate;
+  fbUv = vec2(fbUv.x*cos(angle)-fbUv.y*sin(angle), fbUv.x*sin(angle)+fbUv.y*cos(angle));
+  fbUv += center;
+
+  // Store simulation state in RGB: R=U, G=V, B=visualization
+  // Actually we need to store U,V for simulation continuity
+  // Use a trick: store U in R, V in G, but output visual color
+  // We'll blend visual with stored state
+  gl_FragColor = vec4(newU, newV, vis, 1.0);
+}
+</script>
+
+<!-- Flow field -->
+<script id="fs-flow" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 u_res;
+uniform float u_time;
+uniform vec2 u_mouse;
+uniform float u_mouseDown;
+uniform float u_mouseRadius;
+uniform float u_mouseForce;
+uniform float u_audio;
+uniform float u_audioBass;
+uniform float u_audioTreble;
+uniform int u_palette;
+uniform float u_feedback;
+uniform sampler2D u_prev;
+uniform float u_fbZoom;
+uniform float u_fbRotate;
+uniform float u_p0, u_p1, u_p2, u_p3;
+
+vec3 palette(float t, int pal) {
+  if (pal == 1) return mix(vec3(0.1,0.0,0.0), vec3(1.0,0.4,0.1), t);
+  if (pal == 2) return mix(vec3(0.0,0.05,0.15), vec3(0.2,0.6,1.0), t);
+  if (pal == 3) return mix(vec3(0.0,0.1,0.0), vec3(0.3,1.0,0.5), t);
+  if (pal == 4) return vec3(t);
+  return mix(vec3(0.04,0.03,0.08), vec3(0.49,0.44,0.88), t);
+}
+
+// Simplex-like noise
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+float noise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p);
+  f = f*f*(3.0-2.0*f);
+  return mix(mix(hash(i), hash(i+vec2(1,0)), f.x),
+             mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
+}
+float fbm(vec2 p, float oct) {
+  float v = 0.0, a = 0.5;
+  for (float i = 0.0; i < 6.0; i++) {
+    if (i >= oct) break;
+    v += a * noise(p); p *= 2.0; a *= 0.5;
+  }
+  return v;
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_res;
+  vec2 p = uv * u_p0; // scale
+  float t = u_time * u_p1; // speed
+
+  // Domain warping
+  float warp = u_p2;
+  vec2 q = vec2(fbm(p + t * 0.1, u_p3), fbm(p + vec2(5.2, 1.3) + t * 0.12, u_p3));
+  vec2 r = vec2(fbm(p + warp * q + vec2(1.7, 9.2) + t * 0.08, u_p3),
+                fbm(p + warp * q + vec2(8.3, 2.8) + t * 0.1, u_p3));
+  float f = fbm(p + warp * r, u_p3);
+
+  // Audio modulation
+  f += u_audio * 0.15;
+  float flow = f * 0.5 + 0.5;
+
+  // Mouse interaction — create vortex
+  vec2 mpos = u_mouse / u_res;
+  float md = length(uv - mpos);
+  if (md < u_mouseRadius) {
+    float s = (1.0 - md / u_mouseRadius) * u_mouseForce;
+    vec2 dir = uv - mpos;
+    // Curl effect
+    float curl = atan(dir.y, dir.x) + s * 3.14159;
+    flow += sin(curl * 3.0 + t * 2.0) * s * 0.3;
+    if (u_mouseDown > 0.5) flow += s * 0.5;
+  }
+
+  // Color with banding
+  float bands = sin(flow * 12.0 + t) * 0.5 + 0.5;
+  vec3 col = palette(bands, u_palette);
+  col *= 0.7 + flow * 0.6;
+
+  // Feedback
+  vec2 fbUv = uv;
+  vec2 center = vec2(0.5);
+  fbUv -= center; fbUv *= u_fbZoom;
+  float angle = u_fbRotate;
+  fbUv = vec2(fbUv.x*cos(angle)-fbUv.y*sin(angle), fbUv.x*sin(angle)+fbUv.y*cos(angle));
+  fbUv += center;
+  vec3 prev = texture2D(u_prev, fbUv).rgb;
+  col = mix(col, max(col, prev * 0.97), u_feedback);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<!-- Fractal noise -->
+<script id="fs-noise" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 u_res;
+uniform float u_time;
+uniform vec2 u_mouse;
+uniform float u_mouseDown;
+uniform float u_mouseRadius;
+uniform float u_mouseForce;
+uniform float u_audio;
+uniform float u_audioBass;
+uniform float u_audioTreble;
+uniform int u_palette;
+uniform float u_feedback;
+uniform sampler2D u_prev;
+uniform float u_fbZoom;
+uniform float u_fbRotate;
+uniform float u_p0, u_p1, u_p2, u_p3;
+
+vec3 palette(float t, int pal) {
+  if (pal == 1) return mix(vec3(0.1,0.0,0.0), vec3(1.0,0.4,0.1), t);
+  if (pal == 2) return mix(vec3(0.0,0.05,0.15), vec3(0.2,0.6,1.0), t);
+  if (pal == 3) return mix(vec3(0.0,0.1,0.0), vec3(0.3,1.0,0.5), t);
+  if (pal == 4) return vec3(t);
+  return mix(vec3(0.04,0.03,0.08), vec3(0.49,0.44,0.88), t);
+}
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+float noise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p);
+  f = f*f*(3.0-2.0*f);
+  return mix(mix(hash(i), hash(i+vec2(1,0)), f.x),
+             mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_res;
+  vec2 p = uv * u_p0; // scale
+  float t = u_time * 0.15;
+
+  // Mouse distortion
+  vec2 mpos = u_mouse / u_res;
+  float md = length(uv - mpos);
+  if (md < u_mouseRadius) {
+    float s = (1.0 - md / u_mouseRadius) * u_mouseForce;
+    vec2 dir = normalize(uv - mpos);
+    p += dir * s * u_p0 * 0.5;
+    if (u_mouseDown > 0.5) p += dir * s * u_p0;
+  }
+
+  // Multi-octave ridged noise
+  float lacunarity = u_p1;
+  float persistence = u_p2;
+  float octaves = u_p3;
+  float val = 0.0, amp = 1.0, freq = 1.0, maxAmp = 0.0;
+
+  for (float i = 0.0; i < 8.0; i++) {
+    if (i >= octaves) break;
+    float n = noise(p * freq + t * (i + 1.0) * 0.3);
+    // Ridged: fold the noise
+    n = 1.0 - abs(n * 2.0 - 1.0);
+    n = n * n; // sharpen ridges
+    val += n * amp;
+    maxAmp += amp;
+    freq *= lacunarity;
+    amp *= persistence;
+  }
+  val /= maxAmp;
+  val += u_audio * 0.2;
+
+  // Contour lines
+  float contours = sin(val * 20.0) * 0.5 + 0.5;
+  float blend = mix(val, contours, 0.3);
+
+  vec3 col = palette(blend, u_palette);
+  col *= 0.5 + val;
+
+  // Feedback
+  vec2 fbUv = uv;
+  vec2 center = vec2(0.5);
+  fbUv -= center; fbUv *= u_fbZoom;
+  float angle = u_fbRotate;
+  fbUv = vec2(fbUv.x*cos(angle)-fbUv.y*sin(angle), fbUv.x*sin(angle)+fbUv.y*cos(angle));
+  fbUv += center;
+  vec3 prev = texture2D(u_prev, fbUv).rgb;
+  col = mix(col, max(col, prev * 0.97), u_feedback);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<!-- Voronoi -->
+<script id="fs-voronoi" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 u_res;
+uniform float u_time;
+uniform vec2 u_mouse;
+uniform float u_mouseDown;
+uniform float u_mouseRadius;
+uniform float u_mouseForce;
+uniform float u_audio;
+uniform float u_audioBass;
+uniform float u_audioTreble;
+uniform int u_palette;
+uniform float u_feedback;
+uniform sampler2D u_prev;
+uniform float u_fbZoom;
+uniform float u_fbRotate;
+uniform float u_p0, u_p1, u_p2, u_p3;
+
+vec3 palette(float t, int pal) {
+  if (pal == 1) return mix(vec3(0.1,0.0,0.0), vec3(1.0,0.4,0.1), t);
+  if (pal == 2) return mix(vec3(0.0,0.05,0.15), vec3(0.2,0.6,1.0), t);
+  if (pal == 3) return mix(vec3(0.0,0.1,0.0), vec3(0.3,1.0,0.5), t);
+  if (pal == 4) return vec3(t);
+  return mix(vec3(0.04,0.03,0.08), vec3(0.49,0.44,0.88), t);
+}
+
+vec2 hash2(vec2 p) {
+  p = vec2(dot(p, vec2(127.1,311.7)), dot(p, vec2(269.5,183.3)));
+  return fract(sin(p) * 43758.5453);
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_res;
+  float aspect = u_res.x / u_res.y;
+  vec2 p = vec2(uv.x * aspect, uv.y) * u_p0;
+
+  // Mouse warp
+  vec2 mpos = vec2(u_mouse.x / u_res.x * aspect, u_mouse.y / u_res.y);
+  vec2 mp = mpos * u_p0;
+  float md = length(p - mp);
+  float mr = u_mouseRadius * u_p0;
+  if (md < mr) {
+    float s = (1.0 - md / mr) * u_mouseForce;
+    vec2 dir = normalize(p - mp);
+    p += dir * s * 2.0;
+    if (u_mouseDown > 0.5) p -= dir * s * 3.0; // attract on click
+  }
+
+  float t = u_time * u_p1;
+
+  // Voronoi
+  vec2 n = floor(p);
+  vec2 f = fract(p);
+  float d1 = 8.0, d2 = 8.0;
+  vec2 nearestId = vec2(0.0);
+
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 g = vec2(float(x), float(y));
+      vec2 o = hash2(n + g);
+      o = 0.5 + 0.5 * sin(t + 6.2831 * o + u_audio * 2.0);
+      vec2 diff = g + o - f;
+      float d = length(diff);
+      if (d < d1) { d2 = d1; d1 = d; nearestId = n + g; }
+      else if (d < d2) { d2 = d; }
+    }
+  }
+
+  float edge = d2 - d1;
+  float edgeWidth = u_p2;
+  float cellColor = fract(sin(dot(nearestId, vec2(127.1, 311.7))) * 43758.5453);
+
+  float vis;
+  // Mode: u_p3 < 0.33 = cells, < 0.66 = edges, else = gradient
+  if (u_p3 < 0.33) {
+    vis = cellColor;
+  } else if (u_p3 < 0.66) {
+    vis = smoothstep(edgeWidth, edgeWidth + 0.02, edge) * cellColor;
+    vis += (1.0 - smoothstep(0.0, edgeWidth, edge)) * 0.8;
+  } else {
+    vis = mix(d1, cellColor, 0.5);
+  }
+
+  vec3 col = palette(vis, u_palette);
+
+  // Edge highlight
+  float edgeGlow = 1.0 - smoothstep(0.0, 0.05, edge);
+  col += vec3(0.49, 0.44, 0.88) * edgeGlow * 0.4;
+
+  // Feedback
+  vec2 fbUv = gl_FragCoord.xy / u_res;
+  vec2 center = vec2(0.5);
+  fbUv -= center; fbUv *= u_fbZoom;
+  float angle = u_fbRotate;
+  fbUv = vec2(fbUv.x*cos(angle)-fbUv.y*sin(angle), fbUv.x*sin(angle)+fbUv.y*cos(angle));
+  fbUv += center;
+  vec3 prev = texture2D(u_prev, fbUv).rgb;
+  col = mix(col, max(col, prev * 0.97), u_feedback);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<!-- Magnetic pendulum -->
+<script id="fs-pendulum" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 u_res;
+uniform float u_time;
+uniform vec2 u_mouse;
+uniform float u_mouseDown;
+uniform float u_mouseRadius;
+uniform float u_mouseForce;
+uniform float u_audio;
+uniform float u_audioBass;
+uniform float u_audioTreble;
+uniform int u_palette;
+uniform float u_feedback;
+uniform sampler2D u_prev;
+uniform float u_fbZoom;
+uniform float u_fbRotate;
+uniform float u_p0, u_p1, u_p2, u_p3;
+
+vec3 palette(float t, int pal) {
+  if (pal == 1) return mix(vec3(0.1,0.0,0.0), vec3(1.0,0.4,0.1), t);
+  if (pal == 2) return mix(vec3(0.0,0.05,0.15), vec3(0.2,0.6,1.0), t);
+  if (pal == 3) return mix(vec3(0.0,0.1,0.0), vec3(0.3,1.0,0.5), t);
+  if (pal == 4) return vec3(t);
+  return mix(vec3(0.04,0.03,0.08), vec3(0.49,0.44,0.88), t);
+}
+
+vec3 magnetColor(int idx) {
+  if (idx == 0) return vec3(0.49, 0.44, 0.88); // purple
+  if (idx == 1) return vec3(0.29, 0.87, 0.50); // green
+  if (idx == 2) return vec3(0.98, 0.75, 0.14); // amber
+  if (idx == 3) return vec3(0.94, 0.27, 0.27); // red
+  return vec3(0.3, 0.7, 1.0); // blue
+}
+
+void main() {
+  vec2 uv = (gl_FragCoord.xy - 0.5 * u_res) / min(u_res.x, u_res.y);
+  uv *= u_p0; // zoom
+
+  // Mouse as extra attractor
+  vec2 mpos = (u_mouse - 0.5 * u_res) / min(u_res.x, u_res.y) * u_p0;
+
+  int numMagnets = int(u_p1);
+  float strength = u_p2 + u_audio * 0.5;
+  float friction = u_p3;
+  float height = 0.3;
+
+  // Simulate pendulum
+  vec2 pos = uv;
+  vec2 vel = vec2(0.0);
+  float dt = 0.008;
+  int settled = -1;
+
+  for (int step = 0; step < 200; step++) {
+    vec2 force = -pos * 0.5; // gravity toward center
+    force -= vel * friction; // damping
+
+    // Magnet forces
+    for (int m = 0; m < 5; m++) {
+      if (m >= numMagnets) break;
+      float angle = 6.2831 * float(m) / float(numMagnets);
+      vec2 magPos = vec2(cos(angle), sin(angle)) * 0.7;
+      vec2 diff = magPos - pos;
+      float dist2 = dot(diff, diff) + height * height;
+      float dist3 = dist2 * sqrt(dist2);
+      force += diff * strength / dist3;
+    }
+
+    // Mouse force
+    if (u_mouseDown > 0.5) {
+      vec2 diff = mpos - pos;
+      float dist2 = dot(diff, diff) + 0.01;
+      force += diff * u_mouseForce * 2.0 / (dist2 * sqrt(dist2) + 0.5);
+    }
+
+    vel += force * dt;
+    pos += vel * dt;
+
+    if (dot(vel, vel) < 0.0001) {
+      // Find nearest magnet
+      float minD = 100.0;
+      for (int m = 0; m < 5; m++) {
+        if (m >= numMagnets) break;
+        float a = 6.2831 * float(m) / float(numMagnets);
+        vec2 mp = vec2(cos(a), sin(a)) * 0.7;
+        float d = length(pos - mp);
+        if (d < minD) { minD = d; settled = m; }
+      }
+      break;
+    }
+  }
+
+  // Fallback
+  if (settled < 0) {
+    float minD = 100.0;
+    for (int m = 0; m < 5; m++) {
+      if (m >= numMagnets) break;
+      float a = 6.2831 * float(m) / float(numMagnets);
+      vec2 mp = vec2(cos(a), sin(a)) * 0.7;
+      float d = length(pos - mp);
+      if (d < minD) { minD = d; settled = m; }
+    }
+  }
+
+  vec3 col = magnetColor(settled);
+
+  // Distance shading
+  float a = 6.2831 * float(settled) / u_p1;
+  vec2 mp = vec2(cos(a), sin(a)) * 0.7;
+  float dist = length(uv - mp);
+  col *= 0.5 + 0.5 * exp(-dist * 2.0);
+
+  // Feedback
+  vec2 fbUv = gl_FragCoord.xy / u_res;
+  vec2 center = vec2(0.5);
+  fbUv -= center; fbUv *= u_fbZoom;
+  float angle2 = u_fbRotate;
+  fbUv = vec2(fbUv.x*cos(angle2)-fbUv.y*sin(angle2), fbUv.x*sin(angle2)+fbUv.y*cos(angle2));
+  fbUv += center;
+  vec3 prev = texture2D(u_prev, fbUv).rgb;
+  col = mix(col, max(col, prev * 0.97), u_feedback);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<!-- Render-to-screen (for RD which stores simulation state) -->
+<script id="fs-display" type="x-shader/x-fragment">
+precision highp float;
+uniform sampler2D u_tex;
+uniform vec2 u_res;
+uniform int u_mode; // 0=passthrough, 1=RD visualization
+uniform int u_palette;
+
+vec3 palette(float t, int pal) {
+  if (pal == 1) return mix(vec3(0.1,0.0,0.0), vec3(1.0,0.4,0.1), t);
+  if (pal == 2) return mix(vec3(0.0,0.05,0.15), vec3(0.2,0.6,1.0), t);
+  if (pal == 3) return mix(vec3(0.0,0.1,0.0), vec3(0.3,1.0,0.5), t);
+  if (pal == 4) return vec3(t);
+  return mix(vec3(0.04,0.03,0.08), vec3(0.49,0.44,0.88), t);
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_res;
+  vec4 tex = texture2D(u_tex, uv);
+  if (u_mode == 1) {
+    // RD: V channel is the catalyst, visualize it
+    float v = tex.g * 2.5;
+    vec3 col = palette(v, u_palette);
+    // Add edge detection for structure
+    float U = tex.r;
+    float edge = 1.0 - smoothstep(0.3, 0.7, U);
+    col += vec3(0.49, 0.44, 0.88) * edge * 0.15;
+    gl_FragColor = vec4(col, 1.0);
+  } else {
+    gl_FragColor = tex;
+  }
+}
+</script>
+
+<!-- ===================== JAVASCRIPT ===================== -->
+<script>
+'use strict';
+
+const FIELDS = {
+  julia: {
+    shader: 'fs-julia',
+    params: [
+      { name: 'C Real', min: -1.5, max: 1.5, default: -0.7, step: 0.001 },
+      { name: 'C Imag', min: -1.5, max: 1.5, default: 0.27, step: 0.001 },
+      { name: 'Zoom', min: 0.2, max: 5.0, default: 1.0, step: 0.01 },
+      { name: 'Iters', min: 20, max: 300, default: 120, step: 1 },
+    ],
+    rdSim: false,
+  },
+  rdiff: {
+    shader: 'fs-rdiff',
+    params: [
+      { name: 'Feed', min: 0.01, max: 0.08, default: 0.037, step: 0.001 },
+      { name: 'Kill', min: 0.04, max: 0.075, default: 0.06, step: 0.001 },
+      { name: 'D(U)', min: 0.1, max: 0.5, default: 0.21, step: 0.01 },
+      { name: 'D(V)', min: 0.01, max: 0.2, default: 0.105, step: 0.005 },
+    ],
+    rdSim: true,
+  },
+  flow: {
+    shader: 'fs-flow',
+    params: [
+      { name: 'Scale', min: 1, max: 20, default: 6, step: 0.1 },
+      { name: 'Speed', min: 0.01, max: 1.0, default: 0.2, step: 0.01 },
+      { name: 'Warp', min: 0, max: 5, default: 2.0, step: 0.1 },
+      { name: 'Octaves', min: 1, max: 6, default: 4, step: 1 },
+    ],
+    rdSim: false,
+  },
+  noise: {
+    shader: 'fs-noise',
+    params: [
+      { name: 'Scale', min: 1, max: 20, default: 5, step: 0.1 },
+      { name: 'Lacunar', min: 1.5, max: 4, default: 2.0, step: 0.1 },
+      { name: 'Persist', min: 0.1, max: 0.9, default: 0.5, step: 0.01 },
+      { name: 'Octaves', min: 1, max: 8, default: 5, step: 1 },
+    ],
+    rdSim: false,
+  },
+  voronoi: {
+    shader: 'fs-voronoi',
+    params: [
+      { name: 'Cells', min: 2, max: 20, default: 8, step: 0.1 },
+      { name: 'Speed', min: 0, max: 2, default: 0.3, step: 0.01 },
+      { name: 'Edge W', min: 0.01, max: 0.2, default: 0.05, step: 0.005 },
+      { name: 'Mode', min: 0, max: 1, default: 0.5, step: 0.01 },
+    ],
+    rdSim: false,
+  },
+  pendulum: {
+    shader: 'fs-pendulum',
+    params: [
+      { name: 'Zoom', min: 0.5, max: 4, default: 1.5, step: 0.01 },
+      { name: 'Magnets', min: 3, max: 5, default: 3, step: 1 },
+      { name: 'Strength', min: 0.5, max: 5, default: 2.0, step: 0.1 },
+      { name: 'Friction', min: 0.05, max: 1, default: 0.3, step: 0.01 },
+    ],
+    rdSim: false,
+  },
+};
+
+// ---- WebGL setup ----
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true, antialias: false });
+if (!gl) document.body.innerHTML = '<p style="color:#ef4444;padding:2rem">WebGL not supported</p>';
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  // Recreate framebuffers at new size
+  createFramebuffers();
+}
+
+// Fullscreen quad
+const quadBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+
+// Compile shader
+function compileShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(s));
+    return null;
+  }
+  return s;
+}
+
+function createProgram(vsId, fsId) {
+  const vs = compileShader(gl.VERTEX_SHADER, document.getElementById(vsId).textContent);
+  const fs = compileShader(gl.FRAGMENT_SHADER, document.getElementById(fsId).textContent);
+  if (!vs || !fs) return null;
+  const p = gl.createProgram();
+  gl.attachShader(p, vs); gl.attachShader(p, fs);
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(p));
+    return null;
+  }
+  return p;
+}
+
+// Build all programs
+const programs = {};
+for (const [name, field] of Object.entries(FIELDS)) {
+  programs[name] = createProgram('vs', field.shader);
+}
+const displayProg = createProgram('vs', 'fs-display');
+
+// Uniform cache
+function getUniforms(prog) {
+  const u = {};
+  const names = ['u_res','u_time','u_mouse','u_mouseDown','u_mouseRadius','u_mouseForce',
+    'u_audio','u_audioBass','u_audioTreble','u_palette','u_feedback','u_prev',
+    'u_fbZoom','u_fbRotate','u_p0','u_p1','u_p2','u_p3'];
+  for (const n of names) u[n] = gl.getUniformLocation(prog, n);
+  u.a_pos = gl.getAttribLocation(prog, 'a_pos');
+  return u;
+}
+
+const uniforms = {};
+for (const [name, prog] of Object.entries(programs)) {
+  if (prog) uniforms[name] = getUniforms(prog);
+}
+const displayUniforms = {
+  u_tex: gl.getUniformLocation(displayProg, 'u_tex'),
+  u_res: gl.getUniformLocation(displayProg, 'u_res'),
+  u_mode: gl.getUniformLocation(displayProg, 'u_mode'),
+  u_palette: gl.getUniformLocation(displayProg, 'u_palette'),
+  a_pos: gl.getAttribLocation(displayProg, 'a_pos'),
+};
+
+// Framebuffers for ping-pong feedback
+let fbos = [null, null];
+let textures = [null, null];
+let currentFBO = 0;
+
+function createFramebuffers() {
+  for (let i = 0; i < 2; i++) {
+    if (textures[i]) gl.deleteTexture(textures[i]);
+    if (fbos[i]) gl.deleteFramebuffer(fbos[i]);
+    textures[i] = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, textures[i]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    fbos[i] = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[i]);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures[i], 0);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+// ---- State ----
+let state = {
+  field: 'julia',
+  params: FIELDS.julia.params.map(p => p.default),
+  palette: 0,
+  feedback: 0.2,
+  fbZoom: 1.0,
+  fbRotate: 0.0,
+  mouseRadius: 0.3,
+  mouseForce: 0.5,
+  audioSens: 0.5,
+  mouse: [0, 0],
+  mouseDown: 0,
+  audio: 0,
+  audioBass: 0,
+  audioTreble: 0,
+  micActive: false,
+  panelVisible: true,
+  startTime: performance.now(),
+};
+
+// ---- UI ----
+const panel = document.getElementById('panel');
+const slidersDiv = document.getElementById('sliders');
+const fpsEl = document.getElementById('fps');
+
+function buildSliders() {
+  const field = FIELDS[state.field];
+  slidersDiv.innerHTML = '';
+  field.params.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+    const val = state.params[i];
+    row.innerHTML = `
+      <span class="slider-label">${p.name}</span>
+      <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${val}" data-idx="${i}">
+      <span class="slider-val" id="pval${i}">${val.toFixed(p.step < 0.01 ? 3 : p.step < 1 ? 2 : 0)}</span>
+    `;
+    slidersDiv.appendChild(row);
+  });
+
+  slidersDiv.querySelectorAll('input[type="range"]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const idx = parseInt(inp.dataset.idx);
+      const p = FIELDS[state.field].params[idx];
+      state.params[idx] = parseFloat(inp.value);
+      document.getElementById(`pval${idx}`).textContent =
+        state.params[idx].toFixed(p.step < 0.01 ? 3 : p.step < 1 ? 2 : 0);
+    });
+  });
+}
+
+// Field selector
+document.getElementById('fieldGrid').addEventListener('click', e => {
+  const btn = e.target.closest('.field-btn');
+  if (!btn) return;
+  const f = btn.dataset.field;
+  if (f === state.field) return;
+  state.field = f;
+  state.params = FIELDS[f].params.map(p => p.default);
+  state.startTime = performance.now();
+  document.querySelectorAll('.field-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildSliders();
+  // Clear framebuffers on field change
+  clearFramebuffers();
+});
+
+function clearFramebuffers() {
+  for (let i = 0; i < 2; i++) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbos[i]);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+// Palette selector
+document.getElementById('paletteRow').addEventListener('click', e => {
+  const btn = e.target.closest('.toggle-btn');
+  if (!btn) return;
+  state.palette = parseInt(btn.dataset.palette);
+  document.querySelectorAll('#paletteRow .toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+});
+
+// Feedback sliders
+function bindSlider(id, prop, scale, decimals) {
+  const inp = document.getElementById(id);
+  const val = document.getElementById(id + 'Val');
+  inp.addEventListener('input', () => {
+    state[prop] = parseFloat(inp.value) * scale;
+    val.textContent = state[prop].toFixed(decimals);
+  });
+}
+bindSlider('feedback', 'feedback', 0.01, 2);
+bindSlider('fbZoom', 'fbZoom', 0.01, 2);
+bindSlider('fbRotate', 'fbRotate', 0.001, 3);
+bindSlider('mouseRadius', 'mouseRadius', 0.01, 2);
+bindSlider('mouseForce', 'mouseForce', 0.01, 2);
+bindSlider('audioSens', 'audioSens', 0.01, 2);
+
+// Panel toggle
+document.getElementById('togglePanel').addEventListener('click', () => {
+  state.panelVisible = !state.panelVisible;
+  panel.classList.toggle('hidden', !state.panelVisible);
+});
+
+// Action buttons
+document.getElementById('resetBtn').addEventListener('click', () => {
+  state.params = FIELDS[state.field].params.map(p => p.default);
+  state.startTime = performance.now();
+  buildSliders();
+  clearFramebuffers();
+});
+
+document.getElementById('randomBtn').addEventListener('click', randomize);
+
+function randomize() {
+  const field = FIELDS[state.field];
+  state.params = field.params.map(p => {
+    const range = p.max - p.min;
+    return p.min + Math.random() * range;
+  });
+  buildSliders();
+}
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = `lattice-field-${state.field}-${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+
+// ---- Mouse ----
+const dpr = () => Math.min(window.devicePixelRatio, 2);
+
+canvas.addEventListener('mousemove', e => {
+  state.mouse = [e.clientX * dpr(), (window.innerHeight - e.clientY) * dpr()];
+});
+canvas.addEventListener('mousedown', e => {
+  if (e.target === canvas) state.mouseDown = 1;
+});
+canvas.addEventListener('mouseup', () => { state.mouseDown = 0; });
+canvas.addEventListener('mouseleave', () => { state.mouseDown = 0; });
+
+// Touch
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  state.mouse = [t.clientX * dpr(), (window.innerHeight - t.clientY) * dpr()];
+}, { passive: false });
+canvas.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  state.mouse = [t.clientX * dpr(), (window.innerHeight - t.clientY) * dpr()];
+  state.mouseDown = 1;
+});
+canvas.addEventListener('touchend', () => { state.mouseDown = 0; });
+
+// Scroll to zoom (Julia zoom param)
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (state.field === 'julia') {
+    state.params[2] *= e.deltaY > 0 ? 0.95 : 1.05;
+    state.params[2] = Math.max(0.2, Math.min(5.0, state.params[2]));
+    buildSliders();
+  }
+}, { passive: false });
+
+// ---- Keyboard ----
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const fieldKeys = ['julia','rdiff','flow','noise','voronoi','pendulum'];
+  if (e.key >= '1' && e.key <= '6') {
+    const f = fieldKeys[parseInt(e.key) - 1];
+    if (f) {
+      state.field = f;
+      state.params = FIELDS[f].params.map(p => p.default);
+      state.startTime = performance.now();
+      document.querySelectorAll('.field-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.field === f));
+      buildSliders();
+      clearFramebuffers();
+    }
+  }
+  if (e.key === 'h' || e.key === 'H') {
+    state.panelVisible = !state.panelVisible;
+    panel.classList.toggle('hidden', !state.panelVisible);
+  }
+  if (e.key === 'r' || e.key === 'R') randomize();
+  if (e.key === ' ') { e.preventDefault(); resetBtn.click(); }
+});
+
+// ---- Audio ----
+let audioCtx, analyser, audioData;
+
+document.getElementById('micBtn').addEventListener('click', async () => {
+  if (state.micActive) {
+    state.micActive = false;
+    document.getElementById('micDot').classList.remove('active');
+    return;
+  }
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    audioData = new Uint8Array(analyser.frequencyBinCount);
+    state.micActive = true;
+    document.getElementById('micDot').classList.add('active');
+  } catch (err) {
+    console.warn('Mic access denied', err);
+  }
+});
+
+function updateAudio() {
+  if (!state.micActive || !analyser) {
+    state.audio = state.audio * 0.95;
+    state.audioBass = state.audioBass * 0.95;
+    state.audioTreble = state.audioTreble * 0.95;
+    return;
+  }
+  analyser.getByteFrequencyData(audioData);
+  const len = audioData.length;
+  let sum = 0, bassSum = 0, trebleSum = 0;
+  const bassEnd = Math.floor(len * 0.15);
+  const trebleStart = Math.floor(len * 0.6);
+  for (let i = 0; i < len; i++) {
+    const v = audioData[i] / 255;
+    sum += v;
+    if (i < bassEnd) bassSum += v;
+    if (i >= trebleStart) trebleSum += v;
+  }
+  const sens = state.audioSens * 2;
+  const targetAudio = (sum / len) * sens;
+  const targetBass = (bassSum / bassEnd) * sens;
+  const targetTreble = (trebleSum / (len - trebleStart)) * sens;
+  // Smooth
+  state.audio += (targetAudio - state.audio) * 0.3;
+  state.audioBass += (targetBass - state.audioBass) * 0.3;
+  state.audioTreble += (targetTreble - state.audioTreble) * 0.3;
+}
+
+// ---- Render loop ----
+let frameCount = 0, lastFpsTime = performance.now();
+
+function render() {
+  requestAnimationFrame(render);
+  updateAudio();
+
+  const time = (performance.now() - state.startTime) / 1000;
+  const field = FIELDS[state.field];
+  const prog = programs[state.field];
+  const u = uniforms[state.field];
+  if (!prog || !u) return;
+
+  // For RD: run multiple simulation steps per frame
+  const steps = field.rdSim ? 8 : 1;
+
+  for (let step = 0; step < steps; step++) {
+    const readTex = textures[currentFBO];
+    const writeFBO = fbos[1 - currentFBO];
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, writeFBO);
+    gl.useProgram(prog);
+
+    // Bind previous frame
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, readTex);
+    gl.uniform1i(u.u_prev, 0);
+
+    // Uniforms
+    gl.uniform2f(u.u_res, canvas.width, canvas.height);
+    gl.uniform1f(u.u_time, time + step * 0.016);
+    gl.uniform2f(u.u_mouse, state.mouse[0], state.mouse[1]);
+    gl.uniform1f(u.u_mouseDown, state.mouseDown);
+    gl.uniform1f(u.u_mouseRadius, state.mouseRadius);
+    gl.uniform1f(u.u_mouseForce, state.mouseForce);
+    gl.uniform1f(u.u_audio, state.audio);
+    gl.uniform1f(u.u_audioBass, state.audioBass);
+    gl.uniform1f(u.u_audioTreble, state.audioTreble);
+    gl.uniform1i(u.u_palette, state.palette);
+    gl.uniform1f(u.u_feedback, state.feedback);
+    gl.uniform1f(u.u_fbZoom, state.fbZoom);
+    gl.uniform1f(u.u_fbRotate, state.fbRotate);
+    gl.uniform1f(u.u_p0, state.params[0]);
+    gl.uniform1f(u.u_p1, state.params[1]);
+    gl.uniform1f(u.u_p2, state.params[2]);
+    gl.uniform1f(u.u_p3, state.params[3]);
+
+    // Draw
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+    gl.enableVertexAttribArray(u.a_pos);
+    gl.vertexAttribPointer(u.a_pos, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    currentFBO = 1 - currentFBO;
+  }
+
+  // Display pass: render to screen
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.useProgram(displayProg);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, textures[currentFBO]);
+  gl.uniform1i(displayUniforms.u_tex, 0);
+  gl.uniform2f(displayUniforms.u_res, canvas.width, canvas.height);
+  gl.uniform1i(displayUniforms.u_mode, field.rdSim ? 1 : 0);
+  gl.uniform1i(displayUniforms.u_palette, state.palette);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  gl.enableVertexAttribArray(displayUniforms.a_pos);
+  gl.vertexAttribPointer(displayUniforms.a_pos, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  // FPS
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime > 500) {
+    fpsEl.textContent = Math.round(frameCount / ((now - lastFpsTime) / 1000)) + ' fps';
+    frameCount = 0;
+    lastFpsTime = now;
+  }
+}
+
+// ---- Intro ----
+document.getElementById('intro').addEventListener('click', () => {
+  document.getElementById('intro').classList.add('fade');
+  setTimeout(() => document.getElementById('intro').style.display = 'none', 800);
+});
+
+// ---- Init ----
+window.addEventListener('resize', resize);
+resize();
+buildSliders();
+render();
+</script>
+</body>
+</html>
