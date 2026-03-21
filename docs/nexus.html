@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Nexus</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    /* --- Start overlay --- */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.6s;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-overlay h1 {
+      font-size: 2.5rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+      margin-bottom: 1rem;
+    }
+    .start-overlay p {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.4rem;
+    }
+    .start-overlay .hint {
+      color: var(--accent);
+      font-size: 0.65rem;
+      margin-top: 1.5rem;
+      animation: pulse-hint 2s ease-in-out infinite;
+    }
+    @keyframes pulse-hint {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* --- HUD --- */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title { pointer-events: auto; }
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+    .hud-title .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .hud-title .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    /* --- Panel --- */
+    .panel {
+      position: absolute;
+      right: 1.25rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 220px;
+      background: rgba(18, 18, 26, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 1rem;
+      pointer-events: auto;
+      z-index: 20;
+      max-height: 80vh;
+      overflow-y: auto;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .panel.collapsed {
+      opacity: 0;
+      transform: translateY(-50%) translateX(240px);
+      pointer-events: none;
+    }
+    .panel::-webkit-scrollbar { width: 3px; }
+    .panel::-webkit-scrollbar-track { background: transparent; }
+    .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .panel-section {
+      margin-bottom: 0.85rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+    .section-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.5rem;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
+    }
+    .slider-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      width: 68px;
+      flex-shrink: 0;
+    }
+    .slider-val {
+      font-size: 0.55rem;
+      color: var(--accent);
+      width: 32px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      flex: 1;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .toggle-row {
+      display: flex;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+    }
+    .toggle-btn {
+      padding: 0.3rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.5rem;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .toggle-btn:hover { border-color: var(--accent); color: var(--text); }
+    .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .action-row {
+      display: flex;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+    }
+    .action-btn {
+      flex: 1;
+      padding: 0.4rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.5rem;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .action-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* --- Vignette --- */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 5;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(10, 10, 15, 0.7) 100%);
+    }
+
+    /* --- Keyboard hint --- */
+    .kb-hint {
+      position: fixed;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      opacity: 0.6;
+      z-index: 10;
+    }
+    .kb-hint kbd {
+      display: inline-block;
+      padding: 0.1rem 0.35rem;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.5rem;
+      margin: 0 0.1rem;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+<div class="vignette"></div>
+
+<!-- Start overlay -->
+<div class="start-overlay" id="start">
+  <h1>Nexus</h1>
+  <p>a self-organizing neural network</p>
+  <p style="color: var(--text-dim); font-size: 0.65rem; max-width: 400px; text-align: center; line-height: 1.7; margin-top: 0.5rem;">
+    Click to plant neurons. Watch signals propagate through<br>
+    emergent synaptic connections. Your cursor excites the network.
+  </p>
+  <span class="hint">click anywhere to begin</span>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud">
+  <div class="hud-top">
+    <div class="hud-title">
+      <h1>Nexus</h1>
+      <a href="index.html" class="back-link">&larr; lattice</a>
+    </div>
+    <div class="hud-stats" id="stats">
+      <div>neurons <span class="val" id="stat-neurons">0</span></div>
+      <div>synapses <span class="val" id="stat-synapses">0</span></div>
+      <div>signals <span class="val" id="stat-signals">0</span></div>
+      <div>fires/s <span class="val" id="stat-fires">0</span></div>
+      <div><span class="val" id="stat-fps">60</span> fps</div>
+    </div>
+  </div>
+</div>
+
+<!-- Control panel -->
+<div class="panel" id="panel">
+  <div class="panel-section">
+    <div class="section-label">Network</div>
+    <div class="slider-row">
+      <span class="slider-label">Reach</span>
+      <input type="range" id="sl-reach" min="40" max="300" value="140">
+      <span class="slider-val" id="sv-reach">140</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Threshold</span>
+      <input type="range" id="sl-threshold" min="1" max="20" value="5">
+      <span class="slider-val" id="sv-threshold">5</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Signal Spd</span>
+      <input type="range" id="sl-speed" min="1" max="15" value="5">
+      <span class="slider-val" id="sv-speed">5</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Decay</span>
+      <input type="range" id="sl-decay" min="1" max="30" value="12">
+      <span class="slider-val" id="sv-decay">12</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Refract</span>
+      <input type="range" id="sl-refractory" min="5" max="60" value="20">
+      <span class="slider-val" id="sv-refractory">20</span>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Interaction</div>
+    <div class="slider-row">
+      <span class="slider-label">Excitation</span>
+      <input type="range" id="sl-excitation" min="0" max="100" value="60">
+      <span class="slider-val" id="sv-excitation">60</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Cursor R</span>
+      <input type="range" id="sl-cursor" min="30" max="300" value="120">
+      <span class="slider-val" id="sv-cursor">120</span>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Visual</div>
+    <div class="slider-row">
+      <span class="slider-label">Trail</span>
+      <input type="range" id="sl-trail" min="1" max="50" value="15">
+      <span class="slider-val" id="sv-trail">15</span>
+    </div>
+    <div class="toggle-row">
+      <button class="toggle-btn active" id="tog-glow">Glow</button>
+      <button class="toggle-btn active" id="tog-signals">Signals</button>
+      <button class="toggle-btn" id="tog-heatmap">Heatmap</button>
+      <button class="toggle-btn active" id="tog-synapses">Synapses</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Audio</div>
+    <div class="toggle-row">
+      <button class="toggle-btn" id="tog-mic">&#127908; Mic</button>
+      <button class="toggle-btn" id="tog-sonify">&#9835; Sonify</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Actions</div>
+    <div class="action-row">
+      <button class="action-btn" id="btn-seed">Seed</button>
+      <button class="action-btn" id="btn-burst">Burst</button>
+      <button class="action-btn" id="btn-clear">Clear</button>
+      <button class="action-btn" id="btn-save">PNG</button>
+    </div>
+    <div class="action-row" style="margin-top: 0.3rem;">
+      <button class="action-btn" id="btn-cascade">Cascade</button>
+      <button class="action-btn" id="btn-prune">Prune</button>
+    </div>
+  </div>
+</div>
+
+<div class="kb-hint">
+  <kbd>Tab</kbd> panel &nbsp;
+  <kbd>S</kbd> seed &nbsp;
+  <kbd>B</kbd> burst &nbsp;
+  <kbd>C</kbd> clear &nbsp;
+  <kbd>M</kbd> mic &nbsp;
+  <kbd>Space</kbd> cascade
+</div>
+
+<script>
+// ─── Canvas Setup ───────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── State ──────────────────────────────────────────────────────
+const neurons = [];
+const signals = [];
+let mouseX = W / 2, mouseY = H / 2;
+let mouseDown = false;
+let spawnTimer = 0;
+let started = false;
+let fireCount = 0;
+let fireCountPerSec = 0;
+let lastFireReset = performance.now();
+
+// Audio state
+let audioCtx = null;
+let analyser = null;
+let micStream = null;
+let micActive = false;
+let sonifyActive = false;
+let freqData = null;
+let masterGain = null;
+
+// ─── Parameters ─────────────────────────────────────────────────
+const P = {
+  reach: 140,
+  threshold: 5,
+  signalSpeed: 5,
+  decay: 12,
+  refractory: 20,
+  excitation: 60,
+  cursorRadius: 120,
+  trail: 15,
+  showGlow: true,
+  showSignals: true,
+  showHeatmap: false,
+  showSynapses: true,
+};
+
+// ─── Neuron ─────────────────────────────────────────────────────
+class Neuron {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.potential = 0;       // 0-1, fires at threshold
+    this.fired = false;
+    this.refractoryTimer = 0; // frames until can fire again
+    this.totalFires = 0;
+    this.lastFireTime = 0;
+    this.connections = [];    // indices into neurons[]
+    this.weights = [];        // connection weights (0-1)
+    this.hue = 260 + Math.random() * 40; // purple range
+    this.radius = 3 + Math.random() * 2;
+    this.pulsePhase = Math.random() * Math.PI * 2;
+    this.age = 0;
+  }
+}
+
+// ─── Signal (traveling pulse along a synapse) ───────────────────
+class Signal {
+  constructor(from, to, strength) {
+    this.fromIdx = from;
+    this.toIdx = to;
+    this.progress = 0;  // 0 to 1
+    this.strength = strength;
+    this.alive = true;
+  }
+}
+
+// ─── Build Connections ──────────────────────────────────────────
+function rebuildConnections() {
+  const reach = P.reach;
+  const reachSq = reach * reach;
+  for (let i = 0; i < neurons.length; i++) {
+    const n = neurons[i];
+    n.connections = [];
+    n.weights = [];
+    for (let j = 0; j < neurons.length; j++) {
+      if (i === j) continue;
+      const m = neurons[j];
+      const dx = n.x - m.x;
+      const dy = n.y - m.y;
+      const dSq = dx * dx + dy * dy;
+      if (dSq < reachSq) {
+        n.connections.push(j);
+        // weight inversely proportional to distance
+        n.weights.push(1 - Math.sqrt(dSq) / reach);
+      }
+    }
+  }
+}
+
+function addNeuron(x, y) {
+  if (neurons.length >= 500) return; // cap for performance
+  const n = new Neuron(x, y);
+  const idx = neurons.length;
+  neurons.push(n);
+  // connect to nearby existing neurons
+  const reach = P.reach;
+  const reachSq = reach * reach;
+  for (let j = 0; j < neurons.length - 1; j++) {
+    const m = neurons[j];
+    const dx = n.x - m.x;
+    const dy = n.y - m.y;
+    const dSq = dx * dx + dy * dy;
+    if (dSq < reachSq) {
+      const w = 1 - Math.sqrt(dSq) / reach;
+      n.connections.push(j);
+      n.weights.push(w);
+      m.connections.push(idx);
+      m.weights.push(w);
+    }
+  }
+}
+
+// ─── Seed network ───────────────────────────────────────────────
+function seedNetwork(count = 60) {
+  const cx = W / 2, cy = H / 2;
+  const spread = Math.min(W, H) * 0.35;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.random() * spread;
+    addNeuron(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+  }
+}
+
+// ─── Fire a neuron ──────────────────────────────────────────────
+function fireNeuron(idx) {
+  const n = neurons[idx];
+  if (n.refractoryTimer > 0) return;
+  n.fired = true;
+  n.potential = 1;
+  n.refractoryTimer = P.refractory;
+  n.totalFires++;
+  n.lastFireTime = performance.now();
+  fireCount++;
+
+  // send signals along connections
+  for (let c = 0; c < n.connections.length; c++) {
+    signals.push(new Signal(idx, n.connections[c], n.weights[c]));
+  }
+
+  // sonification
+  if (sonifyActive && audioCtx) {
+    playSynapse(n);
+  }
+}
+
+// ─── Update ─────────────────────────────────────────────────────
+function update(dt) {
+  const now = performance.now();
+  if (now - lastFireReset > 1000) {
+    fireCountPerSec = fireCount;
+    fireCount = 0;
+    lastFireReset = now;
+  }
+
+  // mic data
+  let micLevel = 0;
+  let micBands = null;
+  if (micActive && analyser && freqData) {
+    analyser.getByteFrequencyData(freqData);
+    let sum = 0;
+    for (let i = 0; i < freqData.length; i++) sum += freqData[i];
+    micLevel = sum / (freqData.length * 255);
+    // 4 bands
+    const bSize = Math.floor(freqData.length / 4);
+    micBands = [0, 0, 0, 0];
+    for (let b = 0; b < 4; b++) {
+      let s = 0;
+      for (let i = b * bSize; i < (b + 1) * bSize; i++) s += freqData[i];
+      micBands[b] = s / (bSize * 255);
+    }
+  }
+
+  // Spawn neurons while mouse is held
+  if (mouseDown && started) {
+    spawnTimer += dt;
+    if (spawnTimer > 80) {
+      spawnTimer = 0;
+      addNeuron(
+        mouseX + (Math.random() - 0.5) * 30,
+        mouseY + (Math.random() - 0.5) * 30
+      );
+    }
+  }
+
+  const decayRate = P.decay / 1000;
+  const thresholdNorm = P.threshold / 20;
+  const exciteStr = P.excitation / 100;
+  const cursorR = P.cursorRadius;
+  const cursorRSq = cursorR * cursorR;
+
+  // Update neurons
+  for (let i = 0; i < neurons.length; i++) {
+    const n = neurons[i];
+    n.age++;
+
+    // decay potential
+    if (!n.fired) {
+      n.potential -= decayRate * dt / 16;
+      if (n.potential < 0) n.potential = 0;
+    } else {
+      n.fired = false;
+    }
+
+    // refractory cooldown
+    if (n.refractoryTimer > 0) {
+      n.refractoryTimer -= dt / 16;
+    }
+
+    // mouse proximity excitation
+    const dx = n.x - mouseX;
+    const dy = n.y - mouseY;
+    const dSq = dx * dx + dy * dy;
+    if (dSq < cursorRSq) {
+      const proximity = 1 - Math.sqrt(dSq) / cursorR;
+      n.potential += proximity * exciteStr * 0.02 * (dt / 16);
+    }
+
+    // mic excitation
+    if (micLevel > 0) {
+      n.potential += micLevel * 0.04 * (dt / 16);
+    }
+
+    // pulse phase
+    n.pulsePhase += 0.03 * (dt / 16);
+
+    // fire check
+    if (n.potential >= thresholdNorm && n.refractoryTimer <= 0) {
+      fireNeuron(i);
+    }
+  }
+
+  // Update signals
+  const speedMult = P.signalSpeed / 5;
+  for (let i = signals.length - 1; i >= 0; i--) {
+    const s = signals[i];
+    s.progress += 0.02 * speedMult * (dt / 16);
+    if (s.progress >= 1) {
+      // arrive at target neuron
+      const target = neurons[s.toIdx];
+      if (target) {
+        target.potential += s.strength * 0.3;
+      }
+      s.alive = false;
+    }
+  }
+
+  // Remove dead signals
+  for (let i = signals.length - 1; i >= 0; i--) {
+    if (!signals[i].alive) signals.splice(i, 1);
+  }
+}
+
+// ─── Render ─────────────────────────────────────────────────────
+function render() {
+  // Fade trail
+  const alpha = P.trail / 100;
+  ctx.fillStyle = `rgba(10, 10, 15, ${alpha})`;
+  ctx.fillRect(0, 0, W, H);
+
+  const now = performance.now();
+
+  // Heatmap layer
+  if (P.showHeatmap) {
+    for (let i = 0; i < neurons.length; i++) {
+      const n = neurons[i];
+      if (n.totalFires > 0) {
+        const intensity = Math.min(n.totalFires / 50, 1);
+        const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 40);
+        grad.addColorStop(0, `rgba(124, 111, 224, ${intensity * 0.15})`);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.fillRect(n.x - 40, n.y - 40, 80, 80);
+      }
+    }
+  }
+
+  // Draw synapses (connections)
+  if (P.showSynapses) {
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i < neurons.length; i++) {
+      const n = neurons[i];
+      for (let c = 0; c < n.connections.length; c++) {
+        const j = n.connections[c];
+        if (j <= i) continue; // draw each connection once
+        const m = neurons[j];
+        const w = n.weights[c];
+        // brighter if either neuron recently fired
+        const aFire = Math.max(0, 1 - (now - n.lastFireTime) / 300);
+        const bFire = Math.max(0, 1 - (now - m.lastFireTime) / 300);
+        const brightness = Math.max(w * 0.12, Math.max(aFire, bFire) * 0.6);
+        ctx.strokeStyle = `rgba(124, 111, 224, ${brightness})`;
+        ctx.beginPath();
+        ctx.moveTo(n.x, n.y);
+        ctx.lineTo(m.x, m.y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Draw traveling signals
+  if (P.showSignals) {
+    for (let i = 0; i < signals.length; i++) {
+      const s = signals[i];
+      const from = neurons[s.fromIdx];
+      const to = neurons[s.toIdx];
+      if (!from || !to) continue;
+      const x = from.x + (to.x - from.x) * s.progress;
+      const y = from.y + (to.y - from.y) * s.progress;
+      const r = 2 + s.strength * 2;
+
+      if (P.showGlow) {
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
+        grad.addColorStop(0, `rgba(74, 222, 128, ${0.6 * s.strength})`);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.fillRect(x - r * 4, y - r * 4, r * 8, r * 8);
+      }
+
+      ctx.fillStyle = `rgba(74, 222, 128, ${0.9 * s.strength})`;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Draw neurons
+  for (let i = 0; i < neurons.length; i++) {
+    const n = neurons[i];
+    const timeSinceFire = now - n.lastFireTime;
+    const fireGlow = Math.max(0, 1 - timeSinceFire / 500);
+    const basePulse = 0.3 + 0.15 * Math.sin(n.pulsePhase);
+    const brightness = Math.max(basePulse, n.potential, fireGlow);
+    const r = n.radius * (1 + fireGlow * 0.8);
+
+    // Glow
+    if (P.showGlow && brightness > 0.3) {
+      const glowR = r * (3 + fireGlow * 5);
+      const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, glowR);
+      const h = fireGlow > 0.3 ? 142 : n.hue; // green flash on fire
+      grad.addColorStop(0, `hsla(${h}, 70%, 65%, ${brightness * 0.4})`);
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fillRect(n.x - glowR, n.y - glowR, glowR * 2, glowR * 2);
+    }
+
+    // Core
+    const h = fireGlow > 0.3 ? 142 : n.hue;
+    const l = 40 + brightness * 35;
+    ctx.fillStyle = `hsla(${h}, 70%, ${l}%, ${0.7 + brightness * 0.3})`;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Refractory ring
+    if (n.refractoryTimer > 0) {
+      const refractPct = n.refractoryTimer / P.refractory;
+      ctx.strokeStyle = `rgba(251, 191, 36, ${refractPct * 0.5})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2 * refractPct);
+      ctx.stroke();
+    }
+  }
+
+  // Cursor influence ring
+  ctx.strokeStyle = `rgba(124, 111, 224, 0.15)`;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 8]);
+  ctx.beginPath();
+  ctx.arc(mouseX, mouseY, P.cursorRadius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Mic visualizer
+  if (micActive && analyser && freqData) {
+    analyser.getByteFrequencyData(freqData);
+    const bands = 32;
+    const bSize = Math.floor(freqData.length / bands);
+    const barW = 3;
+    const startX = W - 20 - bands * (barW + 1);
+    const baseY = H - 20;
+    for (let b = 0; b < bands; b++) {
+      let sum = 0;
+      for (let i = b * bSize; i < (b + 1) * bSize; i++) sum += freqData[i];
+      const val = sum / (bSize * 255);
+      const barH = val * 40;
+      const hue = 260 + (b / bands) * 80;
+      ctx.fillStyle = `hsla(${hue}, 60%, 55%, 0.6)`;
+      ctx.fillRect(startX + b * (barW + 1), baseY - barH, barW, barH);
+    }
+  }
+}
+
+// ─── Audio ──────────────────────────────────────────────────────
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.15;
+  masterGain.connect(audioCtx.destination);
+}
+
+async function toggleMic() {
+  initAudio();
+  if (micActive) {
+    if (micStream) {
+      micStream.getTracks().forEach(t => t.stop());
+      micStream = null;
+    }
+    micActive = false;
+    document.getElementById('tog-mic').classList.remove('active');
+    return;
+  }
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    source.connect(analyser);
+    micActive = true;
+    document.getElementById('tog-mic').classList.add('active');
+  } catch (e) {
+    console.warn('Mic access denied:', e);
+  }
+}
+
+function toggleSonify() {
+  initAudio();
+  sonifyActive = !sonifyActive;
+  document.getElementById('tog-sonify').classList.toggle('active', sonifyActive);
+}
+
+// Pentatonic scale for synapse sounds
+const PENTATONIC = [0, 2, 4, 7, 9]; // semitone offsets
+function playSynapse(neuron) {
+  if (!audioCtx || !masterGain) return;
+  const note = PENTATONIC[Math.floor(Math.random() * PENTATONIC.length)];
+  const octave = 3 + Math.floor(neuron.y / H * 3); // higher neurons = higher pitch
+  const freq = 440 * Math.pow(2, (note + (octave - 4) * 12 - 9) / 12);
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.08 * neuron.connections.length / 10, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+  osc.connect(gain);
+  gain.connect(masterGain);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.3);
+}
+
+// ─── Slider Wiring ──────────────────────────────────────────────
+const sliders = [
+  ['reach', 'sl-reach', 'sv-reach'],
+  ['threshold', 'sl-threshold', 'sv-threshold'],
+  ['signalSpeed', 'sl-speed', 'sv-speed'],
+  ['decay', 'sl-decay', 'sv-decay'],
+  ['refractory', 'sl-refractory', 'sv-refractory'],
+  ['excitation', 'sl-excitation', 'sv-excitation'],
+  ['cursorRadius', 'sl-cursor', 'sv-cursor'],
+  ['trail', 'sl-trail', 'sv-trail'],
+];
+
+sliders.forEach(([key, sliderId, valId]) => {
+  const sl = document.getElementById(sliderId);
+  const sv = document.getElementById(valId);
+  sl.addEventListener('input', () => {
+    P[key] = parseFloat(sl.value);
+    sv.textContent = sl.value;
+    if (key === 'reach') rebuildConnections();
+  });
+});
+
+// ─── Toggle Wiring ──────────────────────────────────────────────
+function wireToggle(id, key) {
+  document.getElementById(id).addEventListener('click', () => {
+    P[key] = !P[key];
+    document.getElementById(id).classList.toggle('active', P[key]);
+  });
+}
+wireToggle('tog-glow', 'showGlow');
+wireToggle('tog-signals', 'showSignals');
+wireToggle('tog-heatmap', 'showHeatmap');
+wireToggle('tog-synapses', 'showSynapses');
+
+document.getElementById('tog-mic').addEventListener('click', toggleMic);
+document.getElementById('tog-sonify').addEventListener('click', toggleSonify);
+
+// ─── Actions ────────────────────────────────────────────────────
+document.getElementById('btn-seed').addEventListener('click', () => seedNetwork(40));
+document.getElementById('btn-burst').addEventListener('click', () => {
+  // Fire all neurons at once
+  for (let i = 0; i < neurons.length; i++) {
+    neurons[i].refractoryTimer = 0;
+    fireNeuron(i);
+  }
+});
+document.getElementById('btn-clear').addEventListener('click', () => {
+  neurons.length = 0;
+  signals.length = 0;
+});
+document.getElementById('btn-save').addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = `nexus-${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+document.getElementById('btn-cascade').addEventListener('click', () => {
+  // Fire a wave from center outward
+  const cx = W / 2, cy = H / 2;
+  const sorted = neurons.map((n, i) => ({
+    i,
+    d: Math.hypot(n.x - cx, n.y - cy)
+  })).sort((a, b) => a.d - b.d);
+  sorted.forEach((entry, idx) => {
+    setTimeout(() => {
+      neurons[entry.i].refractoryTimer = 0;
+      fireNeuron(entry.i);
+    }, idx * 30);
+  });
+});
+document.getElementById('btn-prune').addEventListener('click', () => {
+  // Remove neurons with 0 connections
+  for (let i = neurons.length - 1; i >= 0; i--) {
+    if (neurons[i].connections.length === 0) {
+      neurons.splice(i, 1);
+    }
+  }
+  rebuildConnections();
+});
+
+// ─── Mouse / Touch ──────────────────────────────────────────────
+canvas.addEventListener('mousemove', e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+});
+
+canvas.addEventListener('mousedown', e => {
+  if (!started) {
+    started = true;
+    document.getElementById('start').classList.add('hidden');
+    seedNetwork(50);
+    return;
+  }
+  mouseDown = true;
+  spawnTimer = 100; // spawn immediately
+  addNeuron(e.clientX + (Math.random() - 0.5) * 10, e.clientY + (Math.random() - 0.5) * 10);
+});
+
+canvas.addEventListener('mouseup', () => { mouseDown = false; });
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouseX = t.clientX;
+  mouseY = t.clientY;
+  if (!started) {
+    started = true;
+    document.getElementById('start').classList.add('hidden');
+    seedNetwork(50);
+    return;
+  }
+  mouseDown = true;
+  addNeuron(t.clientX, t.clientY);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouseX = t.clientX;
+  mouseY = t.clientY;
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => { mouseDown = false; });
+
+// ─── Keyboard ───────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const key = e.key.toLowerCase();
+  if (key === 'tab') {
+    e.preventDefault();
+    document.getElementById('panel').classList.toggle('collapsed');
+  } else if (key === 's') {
+    seedNetwork(40);
+  } else if (key === 'b') {
+    document.getElementById('btn-burst').click();
+  } else if (key === 'c') {
+    document.getElementById('btn-clear').click();
+  } else if (key === 'm') {
+    toggleMic();
+  } else if (key === ' ') {
+    e.preventDefault();
+    document.getElementById('btn-cascade').click();
+  } else if (key === 'p') {
+    document.getElementById('btn-save').click();
+  }
+});
+
+// ─── Stats Update ───────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stat-neurons').textContent = neurons.length;
+  let totalSynapses = 0;
+  for (let i = 0; i < neurons.length; i++) totalSynapses += neurons[i].connections.length;
+  document.getElementById('stat-synapses').textContent = Math.floor(totalSynapses / 2);
+  document.getElementById('stat-signals').textContent = signals.length;
+  document.getElementById('stat-fires').textContent = fireCountPerSec;
+}
+
+// ─── Main Loop ──────────────────────────────────────────────────
+let lastTime = performance.now();
+let frameCount = 0;
+let lastFpsTime = performance.now();
+
+function loop(time) {
+  const dt = Math.min(time - lastTime, 50); // cap dt to prevent spiral
+  lastTime = time;
+
+  frameCount++;
+  if (time - lastFpsTime > 1000) {
+    document.getElementById('stat-fps').textContent = frameCount;
+    frameCount = 0;
+    lastFpsTime = time;
+  }
+
+  if (started) {
+    update(dt);
+    render();
+    updateStats();
+  }
+
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
