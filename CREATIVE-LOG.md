@@ -260,6 +260,12 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Origin visualization**: Metric radar chart (R key), species timeline stacked area chart (S key), richer narrative events (regime changes, extinctions, regressions, diversity blooms)
 - **Pages modified**: `src/evolve.ts`, `docs/origin.html`
 
+### 2026-03-21 — Cipher / Grid Step Sequencer (autonomous session)
+- **What**: Interactive grid-as-score instrument (`docs/cipher.html`) — every piece's ASCII art becomes a playable step sequencer
+- **Details**: Loads archive pieces from gallery.json. Each piece's rendered grid is parsed into a binary matrix (non-space = active cell). Rows map to notes in a musical scale (top = high, bottom = low), columns map to time steps. A green playhead sweeps left-to-right, triggering Web Audio API oscillators for every active cell in the current column. Cells colored by species type. **Editing**: click cells to toggle — edits in amber with preview tone. **Layers**: add multiple pieces as overlapping voices. **6 scales**, **4 timbres**, attack/release/reverb/octave/volume/swing controls. Dynamics compressor. Spectrum visualizer. Transport: play/pause/stop/loop, BPM 40-300. Keyboard shortcuts (Space, C, R, L, arrows).
+- **Pages**: `docs/cipher.html` (new), `docs/index.html` (Cipher button already present)
+- **How it differs**: Listen scans passively. Synth sonifies live algorithm steps. Membrane triggers ripple waves. Cipher treats pieces as *musical scores*: rows = notes, columns = beats, the art IS the composition. Edit cells to rewrite the score, layer pieces to orchestrate.
+
 ## In Progress
 
 (nothing currently)
