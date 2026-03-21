@@ -169,6 +169,13 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Pages**: `docs/membrane.html` (new), `docs/index.html` (added Membrane button in header + footer)
 - **What makes it different**: Listen scans a grid passively (left-to-right or drone). Resonance runs live simulations. Symphony plays evolutionary history as timeline. Membrane is the first **interactive** sonic experience — you choose where to touch, and the piece's unique structure shapes the sound. Every piece sounds different because its pattern of filled/empty cells creates a distinct acoustic topology. A dense WFC piece rings like a bell; a sparse attractor piece plinks like a music box.
 
+### 2026-03-21 — Genome Lab / Visual Genome Decoder (autonomous session)
+- **What**: Interactive genome analysis tool (`docs/genome.html`) — makes the invisible genetic code behind each piece tangible
+- **Details**: Two modes via toggle. **Catalog mode**: grid of specimen cards for all HoF + population pieces. Each card shows: species type badge, fitness score, ASCII art preview, a **DNA barcode** encoding genome parameters as colored segments (seed hex, rule weights/rates, dimensions, metrics → variable-opacity bars in species color), a **radar chart** (Canvas, 8-axis polygon for fitness metrics with grid rings), top 5 metric bars, palette strip, and lineage chain. Radars animate on scroll via IntersectionObserver. **Compare mode**: click two specimens for side-by-side view with aligned barcodes, large radar charts, metric bars with **diff highlighting** (green/red deltas, purple border on >10% differences), decoded genome parameters (type-specific: WFC tile count/weights/symmetry, RD Du/Dv/feed/kill, 2D birth/survive/states, voronoi mode/seeds/jitter), palette comparison, and metadata. Parameters that differ get highlighted.
+- **Pages**: `docs/genome.html` (new), `docs/index.html` (added Genome Lab button in header + footer)
+- **Fixes**: Repaired corrupted HTML in index.html header nav caused by concurrent parallel agent edits.
+- **What it fills**: The "Genome DNA viewer" direction from CREATIVE-VISION.md. Shows what pieces *are* at the genetic level — the actual parameters that differentiate them.
+
 ## In Progress
 
 (nothing currently)
