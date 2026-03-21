@@ -4,6 +4,11 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Emerge / Generative Sonification Laboratory (autonomous session)
+- **What**: Watch and hear art being born step-by-step (`docs/emerge.html`) — sonifies the creation process itself
+- **Details**: Five generative engines run in real-time on a 64x64 grid, with each computational step producing sound. **1D Wolfram**: rows cascade downward, alive cells trigger pentatonic tones panned by X position. **2D Life**: each generation plays a chord sampled from living cells; births sparkle as bells, deaths rumble as noise. **L-system**: turtle commands become melody — F draws trigger sawtooth tones, branch returns ring bells. **Reaction-diffusion**: Gray-Scott chemicals sing as sine tones mapped from V concentration. **Flow field**: particles trace paths as glissando tones with periodic whoosh noise. **Audio**: Web Audio API with pentatonic C3 scale (3 octaves), algorithmic reverb, sub-bass drone, dynamic compressor, adjustable speed/volume/reverb. **Visuals**: pixelated grid canvas, scan line, frequency spectrum analyzer, live metrics (density, symmetry, complexity, fitness). Keyboard shortcuts (Space, N, 1-5).
+- **Pages**: `docs/emerge.html` (new), `docs/index.html` (Emerge button in nav)
+- **What makes it different**: Listen sonifies finished pieces. Symphony maps evolutionary history. Resonance plays the timeline. Emerge sonifies the **act of creation** — you hear every cell placed, every generation tick, every branch grown. The music IS the algorithm running.
 ### 2026-03-21 — Warp / Mathematical Pattern Generator (autonomous session)
 - **What**: Hypnotic mathematical pattern explorer (`docs/warp.html`) — mouse-driven interference patterns with real-time parameter control
 - **Details**: Full-screen Canvas 2D with 6 pattern modes: Moiré (concentric circle interference), Interference (trigonometric wave grids), Spiral (logarithmic spirals centered on mouse), Lissajous (parametric curves as additive light), Mandala (radial symmetry with configurable folds), Ripple (wave propagation from animated sources). Per-pixel rendering at reduced res, scaled up for 60fps. 5 sliders (Scale, Speed, Complexity, Layers 1-8, Bloom). 6 palettes. Mouse position = 2 free parameters in every mode. Audio reactivity: mic bass/mid/treble modulate pattern params. Spectrum bar. Frosted-glass panel. Keyboard shortcuts (arrows, C, R, Space, M, F, S, ?). Touch support.
@@ -237,6 +242,12 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Details**: Full-screen Canvas cellular automaton running live, with Web Audio API sonifying every birth and death in real time. Pieces from the gallery archive seed the initial grid state. Three CA rulesets: **Life** (B3/S23), **Seeds** (B2/S — explosive), **1D** (Wolfram Rule 110). Cell births produce bell-like sine tones (Y=pitch, X=pan). Deaths produce filtered whispers routed to reverb. Sub-bass drone modulated by density. Convolver reverb (4s IR). Interactive drawing mode. Stats HUD. Extinction auto-reseed. 20 pieces from archive.
 - **Pages**: `docs/breath.html` (new), `docs/index.html` (added Breath button in header + footer)
 - **How it differs**: Listen/Symphony/Resonance play back static data. Breath runs CA live and sonifies each state transition as it happens — computation itself as sound.
+### 2026-03-21 — Taxonomy / Species Field Guide (autonomous session)
+- **What**: Interactive field guide to all 11 species of digital life (`docs/taxonomy.html`) — a naturalist's catalog of the Lattice ecosystem
+- **Details**: Hero with drifting species icons on background Canvas, global stats from gallery.json. Eleven expandable species cards with pseudo-Latin binomial, algorithm summary, detailed description, **live Canvas algorithm demo** (1D automaton cascading Rule 110, Game of Life evolving, L-system branching, RD spots forming, Voronoi tessellation with moving seeds, WFC constraint collapse, spirograph curves, Clifford attractor density, Julia set animation, noise scrolling, flow field particles). Per-species stats from archive: specimen count, peak/avg score, first generation, population share bar. Hall of Fame specimen previews (up to 5) showing ASCII art in species color. Expandable accordion. Responsive layout.
+- **Pages**: `docs/taxonomy.html` (new), `docs/index.html` (added Taxonomy button in header + footer)
+- **What makes it different from About**: About explains the *process* — evolution loop, scoring, epochs. Taxonomy catalogs the *species*. Each card is a self-contained exhibit: live demo, stats, real specimens. A field guide to digital life.
+
 ## In Progress
 
 (nothing currently)

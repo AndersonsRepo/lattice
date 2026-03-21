@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Harmonia</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+
+    .start-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .start-overlay h1 {
+      font-size: 2.5rem;
+      font-weight: 300;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+      margin-bottom: 1rem;
+    }
+
+    .start-overlay .sub {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      margin-bottom: 2rem;
+    }
+
+    .start-overlay .prompt {
+      color: var(--accent);
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      animation: breathe 2s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    /* Main layout */
+    .main {
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Canvas area */
+    .canvas-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bg-glow {
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 500px; height: 500px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.3;
+      pointer-events: none;
+      transition: background 2s ease;
+    }
+
+    #mainCanvas {
+      position: relative;
+      z-index: 1;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      image-rendering: pixelated;
+    }
+
+    /* Vignette */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+    }
+
+    /* Spectrum visualizer */
+    #spectrumCanvas {
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 300px;
+      min-width: 300px;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(20px);
+      border-left: 1px solid var(--border);
+      padding: 1.5rem;
+      overflow-y: auto;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+      transition: transform 0.3s ease;
+    }
+
+    .sidebar.collapsed {
+      transform: translateX(300px);
+    }
+
+    .sidebar h2 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.3rem;
+    }
+
+    .sidebar .section {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+    }
+
+    .sidebar .section:last-child {
+      border-bottom: none;
+    }
+
+    /* Algorithm selector */
+    .algo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .algo-btn {
+      padding: 0.5rem 0.3rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.65rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .algo-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .algo-btn.active {
+      border-color: var(--accent);
+      background: rgba(124, 111, 224, 0.15);
+      color: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    .algo-btn .icon {
+      display: block;
+      font-size: 1.2rem;
+      margin-bottom: 0.2rem;
+    }
+
+    /* Sliders */
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .slider-row label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      min-width: 60px;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    .slider-row .val {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      min-width: 30px;
+      text-align: right;
+    }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 0.4rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.65rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+      background: rgba(124, 111, 224, 0.1);
+    }
+
+    .btn.active {
+      border-color: var(--green);
+      color: var(--green);
+      background: rgba(74, 222, 128, 0.1);
+    }
+
+    /* Status bar */
+    .status-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 50px;
+      background: rgba(18, 18, 26, 0.9);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      z-index: 10;
+      padding: 0 1.5rem;
+    }
+
+    .status-item {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+    }
+
+    .status-item .label { color: var(--text-dim); }
+    .status-item .value { color: var(--green); }
+
+    /* Step indicator */
+    .step-indicator {
+      position: fixed;
+      top: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Note flash */
+    .note-flash {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 3rem;
+      color: var(--accent);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 4;
+      text-shadow: 0 0 40px var(--accent-glow);
+      transition: opacity 0.15s ease;
+    }
+
+    .note-flash.show {
+      opacity: 0.6;
+    }
+
+    /* Back link */
+    .back-link {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 10;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      transition: color 0.2s;
+    }
+
+    .back-link:hover { color: var(--accent); }
+
+    /* Toggle panel button */
+    .toggle-panel {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 10;
+      background: rgba(18, 18, 26, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.65rem;
+      padding: 0.3rem 0.6rem;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .toggle-panel:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* Description text */
+    .desc {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      line-height: 1.5;
+      letter-spacing: 0.02em;
+    }
+
+    /* Scale indicator */
+    .scale-display {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      padding: 0.3rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      text-align: center;
+    }
+
+    .scale-display .note {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed;
+        right: 0;
+        top: 0;
+        bottom: 50px;
+        z-index: 20;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Start overlay -->
+  <div class="start-overlay" id="startOverlay">
+    <h1>Harmonia</h1>
+    <div class="sub">hear the algorithms think</div>
+    <div class="prompt">click to begin</div>
+  </div>
+
+  <!-- Back link -->
+  <a href="index.html" class="back-link">&larr; Lattice</a>
+  <button class="toggle-panel" id="togglePanel">Tab &#9654;</button>
+
+  <!-- Main layout -->
+  <div class="main">
+    <div class="canvas-area">
+      <div class="bg-glow" id="bgGlow"></div>
+      <canvas id="mainCanvas" width="600" height="400"></canvas>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+      <div class="section">
+        <h2>Algorithm</h2>
+        <div class="algo-grid">
+          <button class="algo-btn active" data-algo="automaton1d">
+            <span class="icon">&#9638;</span>Automaton
+          </button>
+          <button class="algo-btn" data-algo="life2d">
+            <span class="icon">&#9641;</span>Life
+          </button>
+          <button class="algo-btn" data-algo="lsystem">
+            <span class="icon">&#10040;</span>L-System
+          </button>
+          <button class="algo-btn" data-algo="rd">
+            <span class="icon">&#8734;</span>Chemistry
+          </button>
+          <button class="algo-btn" data-algo="flowfield">
+            <span class="icon">&#8605;</span>Flow Field
+          </button>
+          <button class="algo-btn" data-algo="julia">
+            <span class="icon">&#9830;</span>Julia Set
+          </button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Sound Mapping</h2>
+        <div class="desc" id="algoDesc">Each row of the 1D automaton plays as a chord. Active cells select notes from the pentatonic scale.</div>
+        <div class="scale-display" id="scaleDisplay" style="margin-top: 0.5rem;">
+          Scale: <span class="note">C</span> pentatonic
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Controls</h2>
+        <div class="slider-group">
+          <div class="slider-row">
+            <label>Tempo</label>
+            <input type="range" id="tempo" min="40" max="300" value="120">
+            <span class="val" id="tempoVal">120</span>
+          </div>
+          <div class="slider-row">
+            <label>Volume</label>
+            <input type="range" id="volume" min="0" max="100" value="60">
+            <span class="val" id="volumeVal">60</span>
+          </div>
+          <div class="slider-row">
+            <label>Reverb</label>
+            <input type="range" id="reverb" min="0" max="100" value="50">
+            <span class="val" id="reverbVal">50</span>
+          </div>
+          <div class="slider-row">
+            <label>Octave</label>
+            <input type="range" id="octave" min="2" max="6" value="3" step="1">
+            <span class="val" id="octaveVal">3</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Parameters</h2>
+        <div class="slider-group" id="paramSliders">
+          <!-- Filled dynamically per algorithm -->
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="btn-row">
+          <button class="btn active" id="playBtn">&#9654; Play</button>
+          <button class="btn" id="resetBtn">&#8634; Reset</button>
+          <button class="btn" id="randomBtn">&#9736; Random</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Keyboard</h2>
+        <div class="desc">
+          Space &mdash; play/pause<br>
+          R &mdash; randomize<br>
+          1-6 &mdash; select algorithm<br>
+          &uarr;/&darr; &mdash; tempo<br>
+          Tab &mdash; toggle panel
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spectrum visualizer -->
+  <canvas id="spectrumCanvas" width="400" height="60"></canvas>
+
+  <!-- Step indicator -->
+  <div class="step-indicator" id="stepIndicator">Step 0</div>
+
+  <!-- Note flash -->
+  <div class="note-flash" id="noteFlash">&#9835;</div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div class="status-item"><span class="label">Step </span><span class="value" id="statusStep">0</span></div>
+    <div class="status-item"><span class="label">Voices </span><span class="value" id="statusVoices">0</span></div>
+    <div class="status-item"><span class="label">Note </span><span class="value" id="statusNote">&mdash;</span></div>
+    <div class="status-item"><span class="label">Density </span><span class="value" id="statusDensity">0%</span></div>
+    <div class="status-item"><span class="label">FPS </span><span class="value" id="statusFps">0</span></div>
+  </div>
+
+  <div class="vignette"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ---- Audio Context & Nodes ----
+  let actx = null;
+  let masterGain = null;
+  let reverbNode = null;
+  let dryGain = null;
+  let wetGain = null;
+  let analyser = null;
+  let compressor = null;
+
+  // ---- State ----
+  let playing = true;
+  let currentAlgo = 'automaton1d';
+  let step = 0;
+  let grid = [];
+  let animFrame = null;
+  let lastStepTime = 0;
+  let sidebarVisible = true;
+
+  // Audio params
+  let tempo = 120;
+  let volume = 0.6;
+  let reverbMix = 0.5;
+  let baseOctave = 3;
+
+  // Per-algorithm params
+  const algoParams = {
+    automaton1d: { rule: 110, width: 64, density: 0.5 },
+    life2d: { width: 48, height: 32, density: 0.3, birthMin: 3, birthMax: 3, surviveMin: 2, surviveMax: 3 },
+    lsystem: { axiom: 0, angle: 25, iterations: 5 },
+    rd: { feed: 0.037, kill: 0.06, Du: 0.2, Dv: 0.05 },
+    flowfield: { scale: 0.06, particles: 80, curl: 0.5, speed: 1.0 },
+    julia: { cReal: -0.7, cImag: 0.27, zoom: 1.5, maxIter: 40 }
+  };
+
+  // Pentatonic scale intervals (semitones from root)
+  const PENTATONIC = [0, 2, 4, 7, 9];
+  const DORIAN = [0, 2, 3, 5, 7, 9, 10];
+  const PHRYGIAN = [0, 1, 3, 5, 7, 8, 10];
+  const SCALES = {
+    pentatonic: PENTATONIC,
+    dorian: DORIAN,
+    phrygian: PHRYGIAN
+  };
+
+  let currentScale = PENTATONIC;
+  let currentScaleName = 'C pentatonic';
+
+  // Note names
+  const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+  function midiToFreq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+  function noteToMidi(note, octave) { return 12 * (octave + 1) + note; }
+
+  // Algo colors
+  const ALGO_COLORS = {
+    automaton1d: '#7c6fe0',
+    life2d: '#4ade80',
+    lsystem: '#fbbf24',
+    rd: '#e879f9',
+    flowfield: '#22d3ee',
+    julia: '#ef4444'
+  };
+
+  // ---- Canvas ----
+  const canvas = document.getElementById('mainCanvas');
+  const ctx = canvas.getContext('2d');
+  const specCanvas = document.getElementById('spectrumCanvas');
+  const specCtx = specCanvas.getContext('2d');
+
+  function resizeCanvas() {
+    const area = document.querySelector('.canvas-area');
+    const w = area.clientWidth - 40;
+    const h = area.clientHeight - 100;
+    const size = Math.min(w, h, 600);
+    canvas.style.width = size + 'px';
+    canvas.style.height = (size * 0.67) + 'px';
+  }
+
+  // ---- Audio Init ----
+  function initAudio() {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    compressor = actx.createDynamicsCompressor();
+    compressor.threshold.value = -24;
+    compressor.knee.value = 12;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.15;
+
+    masterGain = actx.createGain();
+    masterGain.gain.value = volume;
+
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 256;
+
+    // Reverb via convolver
+    reverbNode = actx.createConvolver();
+    const len = actx.sampleRate * 3;
+    const impulse = actx.createBuffer(2, len, actx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = impulse.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+      }
+    }
+    reverbNode.buffer = impulse;
+
+    dryGain = actx.createGain();
+    wetGain = actx.createGain();
+    dryGain.gain.value = 1 - reverbMix;
+    wetGain.gain.value = reverbMix;
+
+    masterGain.connect(dryGain);
+    masterGain.connect(reverbNode);
+    reverbNode.connect(wetGain);
+    dryGain.connect(compressor);
+    wetGain.connect(compressor);
+    compressor.connect(analyser);
+    analyser.connect(actx.destination);
+  }
+
+  // ---- Sound Generators ----
+  let activeOscs = [];
+
+  function stopAllOscs() {
+    activeOscs.forEach(o => {
+      try { o.gain.gain.linearRampToValueAtTime(0, actx.currentTime + 0.05); o.osc.stop(actx.currentTime + 0.1); } catch(e) {}
+    });
+    activeOscs = [];
+  }
+
+  function playNote(freq, duration, waveform, vol, pan) {
+    if (!actx || !playing) return;
+    const osc = actx.createOscillator();
+    osc.type = waveform || 'sine';
+    osc.frequency.value = freq;
+
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(vol * 0.15, actx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + duration);
+
+    const panner = actx.createStereoPanner();
+    panner.pan.value = pan || 0;
+
+    osc.connect(gain);
+    gain.connect(panner);
+    panner.connect(masterGain);
+
+    osc.start(actx.currentTime);
+    osc.stop(actx.currentTime + duration);
+
+    activeOscs.push({ osc, gain });
+    setTimeout(() => {
+      const idx = activeOscs.findIndex(a => a.osc === osc);
+      if (idx >= 0) activeOscs.splice(idx, 1);
+    }, duration * 1000 + 100);
+
+    return osc;
+  }
+
+  function playChord(notes, duration, waveform, vol) {
+    notes.forEach((n, i) => {
+      const pan = notes.length > 1 ? -1 + (2 * i / (notes.length - 1)) : 0;
+      playNote(n, duration, waveform, vol, pan);
+    });
+  }
+
+  function playBell(freq, vol) {
+    if (!actx || !playing) return;
+    const partials = [1, 2.76, 4.07, 5.2, 6.98];
+    partials.forEach((p, i) => {
+      const osc = actx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq * p;
+      const gain = actx.createGain();
+      const v = vol * 0.08 / (i + 1);
+      gain.gain.setValueAtTime(v, actx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 1.5 / (i + 1));
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(actx.currentTime);
+      osc.stop(actx.currentTime + 2);
+    });
+  }
+
+  // ---- Seeded RNG ----
+  let rngSeed = 42;
+  function seededRandom() {
+    rngSeed = (rngSeed * 16807 + 0) % 2147483647;
+    return (rngSeed - 1) / 2147483646;
+  }
+
+  // ---- Algorithm Implementations ----
+
+  // 1D Wolfram Automaton
+  const automaton1d = {
+    state: null,
+    row: 0,
+    init(params) {
+      const w = params.width;
+      this.state = new Uint8Array(w);
+      // Random initial row
+      for (let i = 0; i < w; i++) this.state[i] = seededRandom() < params.density ? 1 : 0;
+      this.row = 0;
+      grid = [];
+      grid.push(Array.from(this.state));
+    },
+    step(params) {
+      const w = params.width;
+      const rule = params.rule;
+      const next = new Uint8Array(w);
+      for (let i = 0; i < w; i++) {
+        const l = this.state[(i - 1 + w) % w];
+        const c = this.state[i];
+        const r = this.state[(i + 1) % w];
+        const idx = (l << 2) | (c << 1) | r;
+        next[i] = (rule >> idx) & 1;
+      }
+      this.state = next;
+      this.row++;
+      grid.push(Array.from(this.state));
+      if (grid.length > 64) grid.shift();
+      return { row: Array.from(this.state), rowIdx: this.row };
+    },
+    sonify(result, params) {
+      const row = result.row;
+      const activeIndices = [];
+      for (let i = 0; i < row.length; i++) {
+        if (row[i]) activeIndices.push(i);
+      }
+      if (activeIndices.length === 0) return;
+
+      // Map active cells to scale notes
+      const notes = activeIndices.slice(0, 8).map(i => {
+        const scaleIdx = i % currentScale.length;
+        const octShift = Math.floor(i / currentScale.length) % 3;
+        const midi = noteToMidi(currentScale[scaleIdx], baseOctave + octShift);
+        return midiToFreq(midi);
+      });
+
+      const density = activeIndices.length / row.length;
+      const dur = 60 / tempo;
+      playChord(notes, dur * 1.5, 'sine', density * 0.8);
+
+      const mid = notes[Math.floor(notes.length / 2)];
+      showNoteFlash(freqToNoteName(mid));
+      return { voiceCount: notes.length, density, note: freqToNoteName(mid) };
+    },
+    render() {
+      const w = canvas.width, h = canvas.height;
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, w, h);
+
+      const rows = grid.length;
+      const cols = grid[0] ? grid[0].length : 0;
+      if (!cols) return;
+
+      const cellW = w / cols;
+      const cellH = h / rows;
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (grid[r][c]) {
+            const age = (rows - r) / rows;
+            const alpha = 0.3 + 0.7 * (1 - age * 0.5);
+            ctx.fillStyle = hexWithAlpha(ALGO_COLORS.automaton1d, alpha);
+            ctx.fillRect(c * cellW, r * cellH, cellW - 0.5, cellH - 0.5);
+          }
+        }
+      }
+
+      // Highlight current row
+      const lastR = rows - 1;
+      ctx.strokeStyle = ALGO_COLORS.automaton1d;
+      ctx.lineWidth = 1;
+      ctx.shadowColor = ALGO_COLORS.automaton1d;
+      ctx.shadowBlur = 8;
+      ctx.strokeRect(0, lastR * cellH, w, cellH);
+      ctx.shadowBlur = 0;
+    }
+  };
+
+  // 2D Game of Life
+  const life2d = {
+    gridA: null,
+    gridB: null,
+    w: 0, h: 0,
+    gen: 0,
+    births: 0,
+    deaths: 0,
+    init(params) {
+      this.w = params.width;
+      this.h = params.height;
+      this.gridA = new Uint8Array(this.w * this.h);
+      this.gridB = new Uint8Array(this.w * this.h);
+      for (let i = 0; i < this.w * this.h; i++) {
+        this.gridA[i] = seededRandom() < params.density ? 1 : 0;
+      }
+      this.gen = 0;
+      this.births = 0;
+      this.deaths = 0;
+    },
+    step(params) {
+      const w = this.w, h = this.h;
+      this.births = 0;
+      this.deaths = 0;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          let neighbors = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = (x + dx + w) % w;
+              const ny = (y + dy + h) % h;
+              neighbors += this.gridA[ny * w + nx];
+            }
+          }
+          const alive = this.gridA[y * w + x];
+          let next = 0;
+          if (alive) {
+            next = (neighbors >= params.surviveMin && neighbors <= params.surviveMax) ? 1 : 0;
+          } else {
+            next = (neighbors >= params.birthMin && neighbors <= params.birthMax) ? 1 : 0;
+          }
+          this.gridB[y * w + x] = next;
+          if (!alive && next) this.births++;
+          if (alive && !next) this.deaths++;
+        }
+      }
+      [this.gridA, this.gridB] = [this.gridB, this.gridA];
+      this.gen++;
+
+      let pop = 0;
+      for (let i = 0; i < w * h; i++) pop += this.gridA[i];
+      return { pop, births: this.births, deaths: this.deaths, total: w * h };
+    },
+    sonify(result, params) {
+      const density = result.pop / result.total;
+      const dur = 60 / tempo;
+
+      // Births → ascending bell tones
+      if (result.births > 0) {
+        const intensity = Math.min(result.births / 20, 1);
+        const birthNote = currentScale[Math.floor(intensity * (currentScale.length - 1))];
+        const midi = noteToMidi(birthNote, baseOctave + 1);
+        playBell(midiToFreq(midi), intensity * 0.7);
+      }
+
+      // Deaths → low descending tone
+      if (result.deaths > 0) {
+        const intensity = Math.min(result.deaths / 20, 1);
+        const deathNote = currentScale[currentScale.length - 1 - Math.floor(intensity * (currentScale.length - 1))];
+        const midi = noteToMidi(deathNote, baseOctave - 1);
+        playNote(midiToFreq(midi), dur * 2, 'triangle', intensity * 0.3, 0);
+      }
+
+      // Population density → ambient drone modulation
+      const droneMidi = noteToMidi(0, baseOctave);
+      playNote(midiToFreq(droneMidi) * (1 + density * 0.5), dur, 'sine', density * 0.15, 0);
+
+      const note = freqToNoteName(midiToFreq(noteToMidi(currentScale[0], baseOctave)));
+      showNoteFlash(result.births > result.deaths ? '↑' : '↓');
+      return { voiceCount: (result.births > 0 ? 1 : 0) + (result.deaths > 0 ? 1 : 0) + 1, density, note };
+    },
+    render() {
+      const cw = canvas.width, ch = canvas.height;
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, cw, ch);
+
+      const w = this.w, h = this.h;
+      const cellW = cw / w, cellH = ch / h;
+      const color = ALGO_COLORS.life2d;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (this.gridA[y * w + x]) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * cellW, y * cellH, cellW - 0.5, cellH - 0.5);
+          }
+        }
+      }
+    }
+  };
+
+  // L-System
+  const lsystem = {
+    axioms: [
+      { axiom: 'F', rules: { F: 'F[+F]F[-F]F' }, name: 'Bush' },
+      { axiom: 'F', rules: { F: 'FF+[+F-F-F]-[-F+F+F]' }, name: 'Tree' },
+      { axiom: 'F-F-F-F', rules: { F: 'FF-F-F-F-FF' }, name: 'Koch' },
+      { axiom: 'FX', rules: { X: 'X+YF+', Y: '-FX-Y' }, name: 'Dragon' },
+      { axiom: 'X', rules: { X: 'F+[[X]-X]-F[-FX]+X', F: 'FF' }, name: 'Plant' }
+    ],
+    commands: [],
+    cmdIdx: 0,
+    turtleStack: [],
+    turtle: { x: 0, y: 0, angle: 0 },
+    segments: [],
+    init(params) {
+      const preset = this.axioms[params.axiom % this.axioms.length];
+      let str = preset.axiom;
+      for (let i = 0; i < Math.min(params.iterations, 6); i++) {
+        let next = '';
+        for (const ch of str) {
+          next += preset.rules[ch] || ch;
+        }
+        str = next;
+        if (str.length > 5000) break;
+      }
+      this.commands = str.split('');
+      this.cmdIdx = 0;
+      this.segments = [];
+      this.turtleStack = [];
+      this.turtle = { x: canvas.width / 2, y: canvas.height * 0.85, angle: -90 };
+    },
+    step(params) {
+      const batchSize = Math.max(1, Math.floor(this.commands.length / 120));
+      const batch = [];
+      for (let b = 0; b < batchSize && this.cmdIdx < this.commands.length; b++) {
+        const cmd = this.commands[this.cmdIdx++];
+        batch.push(cmd);
+
+        const angle = params.angle;
+        const stepLen = Math.max(2, 200 / Math.sqrt(this.commands.length));
+
+        if (cmd === 'F') {
+          const x0 = this.turtle.x, y0 = this.turtle.y;
+          this.turtle.x += Math.cos(this.turtle.angle * Math.PI / 180) * stepLen;
+          this.turtle.y += Math.sin(this.turtle.angle * Math.PI / 180) * stepLen;
+          this.segments.push({ x0, y0, x1: this.turtle.x, y1: this.turtle.y, depth: this.turtleStack.length });
+        } else if (cmd === '+') {
+          this.turtle.angle += angle;
+        } else if (cmd === '-') {
+          this.turtle.angle -= angle;
+        } else if (cmd === '[') {
+          this.turtleStack.push({ ...this.turtle });
+        } else if (cmd === ']') {
+          if (this.turtleStack.length > 0) {
+            this.turtle = this.turtleStack.pop();
+          }
+        }
+      }
+      const done = this.cmdIdx >= this.commands.length;
+      if (done) {
+        this.cmdIdx = 0;
+        this.segments = [];
+        this.turtleStack = [];
+        this.turtle = { x: canvas.width / 2, y: canvas.height * 0.85, angle: -90 };
+      }
+      return { batch, depth: this.turtleStack.length, progress: this.cmdIdx / this.commands.length, done };
+    },
+    sonify(result, params) {
+      const dur = 60 / tempo;
+      let voiceCount = 0;
+      let lastNote = '';
+
+      for (const cmd of result.batch) {
+        if (cmd === 'F') {
+          // Forward → base note at current depth octave
+          const scaleIdx = result.depth % currentScale.length;
+          const octShift = Math.min(Math.floor(result.depth / currentScale.length), 2);
+          const midi = noteToMidi(currentScale[scaleIdx], baseOctave + octShift);
+          const freq = midiToFreq(midi);
+          playNote(freq, dur * 0.8, 'triangle', 0.5, (result.depth % 2 === 0 ? -0.3 : 0.3));
+          lastNote = freqToNoteName(freq);
+          voiceCount++;
+        } else if (cmd === '+') {
+          // Turn right → ascending arpeggio step
+          const midi = noteToMidi(currentScale[(result.depth + 1) % currentScale.length], baseOctave + 2);
+          playNote(midiToFreq(midi), dur * 0.3, 'sine', 0.2, 0.5);
+        } else if (cmd === '-') {
+          // Turn left → descending step
+          const midi = noteToMidi(currentScale[Math.abs(result.depth - 1) % currentScale.length], baseOctave + 2);
+          playNote(midiToFreq(midi), dur * 0.3, 'sine', 0.2, -0.5);
+        } else if (cmd === '[') {
+          // Branch push → bell
+          playBell(midiToFreq(noteToMidi(currentScale[0], baseOctave + 2)), 0.3);
+        } else if (cmd === ']') {
+          // Branch pop → low thud
+          playNote(midiToFreq(noteToMidi(0, baseOctave - 1)), dur * 0.5, 'sine', 0.2, 0);
+        }
+      }
+
+      showNoteFlash(lastNote || '~');
+      return { voiceCount, density: result.progress, note: lastNote };
+    },
+    render() {
+      const cw = canvas.width, ch = canvas.height;
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, cw, ch);
+
+      // Auto-fit segments into canvas
+      if (this.segments.length === 0) return;
+
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      this.segments.forEach(s => {
+        minX = Math.min(minX, s.x0, s.x1);
+        maxX = Math.max(maxX, s.x0, s.x1);
+        minY = Math.min(minY, s.y0, s.y1);
+        maxY = Math.max(maxY, s.y0, s.y1);
+      });
+
+      const rangeX = maxX - minX || 1;
+      const rangeY = maxY - minY || 1;
+      const scaleX = (cw - 40) / rangeX;
+      const scaleY = (ch - 40) / rangeY;
+      const scale = Math.min(scaleX, scaleY);
+      const offX = (cw - rangeX * scale) / 2 - minX * scale;
+      const offY = (ch - rangeY * scale) / 2 - minY * scale;
+
+      const color = ALGO_COLORS.lsystem;
+      const total = this.segments.length;
+
+      this.segments.forEach((s, i) => {
+        const alpha = 0.3 + 0.7 * (i / total);
+        const width = Math.max(0.5, 3 - s.depth * 0.5);
+        ctx.beginPath();
+        ctx.moveTo(s.x0 * scale + offX, s.y0 * scale + offY);
+        ctx.lineTo(s.x1 * scale + offX, s.y1 * scale + offY);
+        ctx.strokeStyle = hexWithAlpha(color, alpha);
+        ctx.lineWidth = width;
+        ctx.stroke();
+      });
+    }
+  };
+
+  // Reaction-Diffusion
+  const rd = {
+    u: null, v: null,
+    uNext: null, vNext: null,
+    w: 64, h: 64,
+    gen: 0,
+    init(params) {
+      const w = this.w, h = this.h;
+      this.u = new Float32Array(w * h);
+      this.v = new Float32Array(w * h);
+      this.uNext = new Float32Array(w * h);
+      this.vNext = new Float32Array(w * h);
+      this.u.fill(1.0);
+      this.v.fill(0.0);
+      // Seed some V spots
+      for (let i = 0; i < 5; i++) {
+        const cx = Math.floor(seededRandom() * w);
+        const cy = Math.floor(seededRandom() * h);
+        for (let dy = -3; dy <= 3; dy++) {
+          for (let dx = -3; dx <= 3; dx++) {
+            const nx = (cx + dx + w) % w;
+            const ny = (cy + dy + h) % h;
+            this.v[ny * w + nx] = 1.0;
+            this.u[ny * w + nx] = 0.5;
+          }
+        }
+      }
+      this.gen = 0;
+    },
+    step(params) {
+      const w = this.w, h = this.h;
+      const f = params.feed, k = params.kill, Du = params.Du, Dv = params.Dv;
+      const dt = 1.0;
+
+      // Run 10 simulation substeps per audio step
+      for (let s = 0; s < 10; s++) {
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const idx = y * w + x;
+            const u = this.u[idx], v = this.v[idx];
+            // Laplacian
+            const lu = this.u[((y-1+h)%h)*w+x] + this.u[((y+1)%h)*w+x]
+                      + this.u[y*w+(x-1+w)%w] + this.u[y*w+(x+1)%w] - 4*u;
+            const lv = this.v[((y-1+h)%h)*w+x] + this.v[((y+1)%h)*w+x]
+                      + this.v[y*w+(x-1+w)%w] + this.v[y*w+(x+1)%w] - 4*v;
+            const uvv = u * v * v;
+            this.uNext[idx] = u + dt * (Du * lu - uvv + f * (1 - u));
+            this.vNext[idx] = v + dt * (Dv * lv + uvv - (f + k) * v);
+          }
+        }
+        [this.u, this.uNext] = [this.uNext, this.u];
+        [this.v, this.vNext] = [this.vNext, this.v];
+      }
+      this.gen++;
+
+      // Compute average concentrations
+      let avgU = 0, avgV = 0;
+      for (let i = 0; i < w * h; i++) {
+        avgU += this.u[i];
+        avgV += this.v[i];
+      }
+      avgU /= (w * h);
+      avgV /= (w * h);
+      return { avgU, avgV, gen: this.gen };
+    },
+    sonify(result, params) {
+      const dur = 60 / tempo;
+
+      // Chemical U → low sine frequency
+      const uFreq = midiToFreq(noteToMidi(currentScale[0], baseOctave)) * (0.5 + result.avgU);
+      playNote(uFreq, dur * 1.5, 'sine', result.avgU * 0.4, -0.3);
+
+      // Chemical V → higher triangle frequency
+      const vScaleIdx = Math.floor(result.avgV * (currentScale.length - 1) * 3) % currentScale.length;
+      const vFreq = midiToFreq(noteToMidi(currentScale[vScaleIdx], baseOctave + 2));
+      playNote(vFreq, dur * 1.2, 'triangle', result.avgV * 0.6, 0.3);
+
+      // Cross-reaction → filter-like sweep
+      const crossFreq = midiToFreq(noteToMidi(currentScale[Math.floor(result.avgU * result.avgV * 10) % currentScale.length], baseOctave + 1));
+      playNote(crossFreq, dur * 0.8, 'sawtooth', 0.1, 0);
+
+      const note = freqToNoteName(vFreq);
+      showNoteFlash('∞');
+      return { voiceCount: 3, density: result.avgV, note };
+    },
+    render() {
+      const cw = canvas.width, ch = canvas.height;
+      const w = this.w, h = this.h;
+      const imgData = ctx.createImageData(cw, ch);
+      const color = hexToRgb(ALGO_COLORS.rd);
+
+      for (let py = 0; py < ch; py++) {
+        for (let px = 0; px < cw; px++) {
+          const sx = Math.floor(px / cw * w);
+          const sy = Math.floor(py / ch * h);
+          const v = this.v[sy * w + sx];
+          const u = this.u[sy * w + sx];
+          const idx = (py * cw + px) * 4;
+          const bright = v * 2;
+          imgData.data[idx]     = Math.floor(color.r * bright * 0.8 + u * 20);
+          imgData.data[idx + 1] = Math.floor(color.g * bright * 0.5);
+          imgData.data[idx + 2] = Math.floor(color.b * bright + u * 30);
+          imgData.data[idx + 3] = 255;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+  };
+
+  // Flow Field
+  const flowfield = {
+    particles: [],
+    trails: [],
+    w: 0, h: 0,
+    gen: 0,
+    fieldCache: null,
+    init(params) {
+      this.w = canvas.width;
+      this.h = canvas.height;
+      this.particles = [];
+      this.trails = [];
+      this.fieldCache = null;
+      for (let i = 0; i < params.particles; i++) {
+        this.particles.push({
+          x: seededRandom() * this.w,
+          y: seededRandom() * this.h,
+          vx: 0, vy: 0,
+          life: 100 + seededRandom() * 200
+        });
+      }
+      this.gen = 0;
+    },
+    noise2d(x, y) {
+      // Simple value noise
+      const ix = Math.floor(x), iy = Math.floor(y);
+      const fx = x - ix, fy = y - iy;
+      const h00 = this.hash2(ix, iy);
+      const h10 = this.hash2(ix + 1, iy);
+      const h01 = this.hash2(ix, iy + 1);
+      const h11 = this.hash2(ix + 1, iy + 1);
+      const u = fx * fx * (3 - 2 * fx);
+      const v = fy * fy * (3 - 2 * fy);
+      return h00 * (1-u) * (1-v) + h10 * u * (1-v) + h01 * (1-u) * v + h11 * u * v;
+    },
+    hash2(x, y) {
+      let h = (x * 374761393 + y * 668265263 + rngSeed) & 0xFFFFFFFF;
+      h = (h ^ (h >> 13)) * 1274126177;
+      h = h ^ (h >> 16);
+      return (h & 0xFFFF) / 0xFFFF;
+    },
+    step(params) {
+      const scale = params.scale;
+      const curl = params.curl;
+      const speed = params.speed;
+      let avgVx = 0, avgVy = 0, alive = 0;
+
+      this.particles.forEach(p => {
+        if (p.life <= 0) return;
+        const n = this.noise2d(p.x * scale, p.y * scale);
+        const angle = n * Math.PI * 4 + curl * Math.PI;
+        p.vx = p.vx * 0.9 + Math.cos(angle) * speed * 2;
+        p.vy = p.vy * 0.9 + Math.sin(angle) * speed * 2;
+        const x0 = p.x, y0 = p.y;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+
+        // Wrap
+        if (p.x < 0) p.x += this.w;
+        if (p.x >= this.w) p.x -= this.w;
+        if (p.y < 0) p.y += this.h;
+        if (p.y >= this.h) p.y -= this.h;
+
+        this.trails.push({ x0, y0, x1: p.x, y1: p.y, age: 0 });
+        avgVx += p.vx;
+        avgVy += p.vy;
+        alive++;
+
+        // Respawn dead particles
+        if (p.life <= 0) {
+          p.x = seededRandom() * this.w;
+          p.y = seededRandom() * this.h;
+          p.vx = 0; p.vy = 0;
+          p.life = 100 + seededRandom() * 200;
+        }
+      });
+
+      // Age trails
+      this.trails.forEach(t => t.age++);
+      this.trails = this.trails.filter(t => t.age < 40);
+
+      this.gen++;
+      if (alive > 0) { avgVx /= alive; avgVy /= alive; }
+      const avgSpeed = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
+      const avgAngle = Math.atan2(avgVy, avgVx);
+      return { avgSpeed, avgAngle, alive, gen: this.gen };
+    },
+    sonify(result, params) {
+      const dur = 60 / tempo;
+
+      // Average velocity → pitch
+      const speedNorm = Math.min(result.avgSpeed / 5, 1);
+      const scaleIdx = Math.floor(speedNorm * (currentScale.length - 1));
+      const midi = noteToMidi(currentScale[scaleIdx], baseOctave + 1);
+      const freq = midiToFreq(midi);
+
+      // Direction → stereo pan
+      const pan = Math.cos(result.avgAngle);
+      playNote(freq, dur, 'sine', speedNorm * 0.5, pan);
+
+      // Particle density → ambient pad
+      const densityNote = currentScale[result.gen % currentScale.length];
+      const padFreq = midiToFreq(noteToMidi(densityNote, baseOctave));
+      playNote(padFreq, dur * 2, 'triangle', 0.15, -pan);
+
+      const note = freqToNoteName(freq);
+      showNoteFlash('~');
+      return { voiceCount: 2, density: speedNorm, note };
+    },
+    render() {
+      const cw = canvas.width, ch = canvas.height;
+      ctx.fillStyle = 'rgba(10, 10, 15, 0.15)';
+      ctx.fillRect(0, 0, cw, ch);
+
+      const color = hexToRgb(ALGO_COLORS.flowfield);
+      this.trails.forEach(t => {
+        const alpha = Math.max(0, 1 - t.age / 40);
+        ctx.beginPath();
+        ctx.moveTo(t.x0, t.y0);
+        ctx.lineTo(t.x1, t.y1);
+        ctx.strokeStyle = `rgba(${color.r},${color.g},${color.b},${alpha * 0.6})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+
+      // Particle heads
+      this.particles.forEach(p => {
+        if (p.life <= 0) return;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = ALGO_COLORS.flowfield;
+        ctx.fill();
+      });
+    }
+  };
+
+  // Julia Set (iterative reveal)
+  const julia = {
+    imgData: null,
+    px: 0, py: 0,
+    w: 0, h: 0,
+    init(params) {
+      this.w = canvas.width;
+      this.h = canvas.height;
+      this.imgData = ctx.createImageData(this.w, this.h);
+      for (let i = 3; i < this.imgData.data.length; i += 4) this.imgData.data[i] = 255;
+      this.px = 0;
+      this.py = 0;
+    },
+    step(params) {
+      const w = this.w, h = this.h;
+      const zoom = params.zoom;
+      const cR = params.cReal, cI = params.cImag;
+      const maxIter = params.maxIter;
+      const color = hexToRgb(ALGO_COLORS.julia);
+
+      // Compute a batch of rows
+      const rowsPerStep = Math.max(1, Math.floor(h / 60));
+      let totalIter = 0;
+      let pixelsComputed = 0;
+
+      for (let r = 0; r < rowsPerStep && this.py < h; r++) {
+        const y = this.py;
+        for (let x = 0; x < w; x++) {
+          let zr = (x - w / 2) / (w / 4) / zoom;
+          let zi = (y - h / 2) / (h / 4) / zoom;
+          let iter = 0;
+          while (zr * zr + zi * zi < 4 && iter < maxIter) {
+            const tmp = zr * zr - zi * zi + cR;
+            zi = 2 * zr * zi + cI;
+            zr = tmp;
+            iter++;
+          }
+          totalIter += iter;
+          pixelsComputed++;
+
+          const idx = (y * w + x) * 4;
+          if (iter === maxIter) {
+            this.imgData.data[idx] = 10;
+            this.imgData.data[idx+1] = 10;
+            this.imgData.data[idx+2] = 15;
+          } else {
+            const t = iter / maxIter;
+            this.imgData.data[idx]     = Math.floor(color.r * t * 1.5);
+            this.imgData.data[idx + 1] = Math.floor(color.g * t * 0.5 + t * 80);
+            this.imgData.data[idx + 2] = Math.floor(color.b * t * 0.3 + t * 120);
+          }
+        }
+        this.py++;
+      }
+
+      const done = this.py >= h;
+      if (done) { this.py = 0; }
+
+      const avgIter = pixelsComputed > 0 ? totalIter / pixelsComputed : 0;
+      return { avgIter, maxIter, progress: this.py / h, done, row: this.py };
+    },
+    sonify(result, params) {
+      const dur = 60 / tempo;
+
+      // Average iteration depth → pitch (deeper = more complex = higher)
+      const complexity = result.avgIter / result.maxIter;
+      const scaleIdx = Math.floor(complexity * (currentScale.length * 2)) % currentScale.length;
+      const octShift = Math.floor(complexity * 3);
+      const midi = noteToMidi(currentScale[scaleIdx], baseOctave + octShift);
+      const freq = midiToFreq(midi);
+
+      playNote(freq, dur * 1.5, 'sine', complexity * 0.4, 0);
+
+      // Harmonic based on row position
+      const rowPan = (result.row / canvas.height) * 2 - 1;
+      const harmonicIdx = (scaleIdx + 2) % currentScale.length;
+      const hFreq = midiToFreq(noteToMidi(currentScale[harmonicIdx], baseOctave + 1));
+      playNote(hFreq, dur * 0.8, 'triangle', 0.15, rowPan);
+
+      const note = freqToNoteName(freq);
+      showNoteFlash('◇');
+      return { voiceCount: 2, density: complexity, note };
+    },
+    render() {
+      ctx.putImageData(this.imgData, 0, 0);
+
+      // Scan line
+      if (this.py > 0 && this.py < this.h) {
+        ctx.strokeStyle = ALGO_COLORS.julia;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = ALGO_COLORS.julia;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(0, this.py);
+        ctx.lineTo(this.w, this.py);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+    }
+  };
+
+  // ---- Algorithm Registry ----
+  const algorithms = {
+    automaton1d: automaton1d,
+    life2d: life2d,
+    lsystem: lsystem,
+    rd: rd,
+    flowfield: flowfield,
+    julia: julia
+  };
+
+  const algoDescriptions = {
+    automaton1d: 'Each row of the 1D automaton plays as a chord. Active cells select notes from the scale. The cascade of generations produces a melody of evolving harmony.',
+    life2d: 'Cell births ring as ascending bells. Deaths descend as low tones. Population density modulates a continuous drone. You hear life emerge and collapse.',
+    lsystem: 'Each turtle command becomes a note. F draws and sounds the base. Turns shift pitch. Branch push rings a bell; pop thuds low. Growth becomes melody.',
+    rd: 'Two chemicals sing at different frequencies. U drones low; V climbs high. Their reaction cross-modulates a third voice. You hear Gray-Scott chemistry.',
+    flowfield: 'Particle velocity maps to pitch. Flow direction pans across stereo. Fast swarms sing high; calm fields hum low. The vector field becomes a wind instrument.',
+    julia: 'Iteration depth at each pixel determines pitch. The fractal boundary — where computation is deepest — sings highest. The set\'s interior is silence.'
+  };
+
+  // ---- Parameter UI ----
+  function buildParamSliders(algo) {
+    const container = document.getElementById('paramSliders');
+    container.innerHTML = '';
+    const params = algoParams[algo];
+    const configs = {
+      automaton1d: [
+        { key: 'rule', label: 'Rule', min: 0, max: 255, step: 1 },
+        { key: 'width', label: 'Width', min: 16, max: 128, step: 8 },
+        { key: 'density', label: 'Density', min: 0.1, max: 0.9, step: 0.05 }
+      ],
+      life2d: [
+        { key: 'width', label: 'Width', min: 16, max: 80, step: 8 },
+        { key: 'height', label: 'Height', min: 16, max: 60, step: 8 },
+        { key: 'density', label: 'Density', min: 0.1, max: 0.6, step: 0.05 }
+      ],
+      lsystem: [
+        { key: 'axiom', label: 'Preset', min: 0, max: 4, step: 1 },
+        { key: 'angle', label: 'Angle', min: 10, max: 90, step: 5 },
+        { key: 'iterations', label: 'Depth', min: 2, max: 6, step: 1 }
+      ],
+      rd: [
+        { key: 'feed', label: 'Feed', min: 0.01, max: 0.08, step: 0.002 },
+        { key: 'kill', label: 'Kill', min: 0.04, max: 0.07, step: 0.002 },
+        { key: 'Du', label: 'Diff U', min: 0.1, max: 0.3, step: 0.02 },
+        { key: 'Dv', label: 'Diff V', min: 0.02, max: 0.1, step: 0.005 }
+      ],
+      flowfield: [
+        { key: 'scale', label: 'Scale', min: 0.01, max: 0.15, step: 0.005 },
+        { key: 'particles', label: 'Parts', min: 20, max: 200, step: 10 },
+        { key: 'curl', label: 'Curl', min: 0, max: 1, step: 0.05 },
+        { key: 'speed', label: 'Speed', min: 0.2, max: 3, step: 0.1 }
+      ],
+      julia: [
+        { key: 'cReal', label: 'C real', min: -2, max: 2, step: 0.01 },
+        { key: 'cImag', label: 'C imag', min: -2, max: 2, step: 0.01 },
+        { key: 'zoom', label: 'Zoom', min: 0.5, max: 4, step: 0.1 },
+        { key: 'maxIter', label: 'Iters', min: 10, max: 80, step: 5 }
+      ]
+    };
+
+    (configs[algo] || []).forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'slider-row';
+      const val = params[c.key];
+      row.innerHTML = `
+        <label>${c.label}</label>
+        <input type="range" data-key="${c.key}" min="${c.min}" max="${c.max}" step="${c.step}" value="${val}">
+        <span class="val">${typeof val === 'number' && val < 1 ? val.toFixed(3) : val}</span>
+      `;
+      container.appendChild(row);
+      row.querySelector('input').addEventListener('input', e => {
+        const v = parseFloat(e.target.value);
+        params[c.key] = v;
+        row.querySelector('.val').textContent = v < 1 && v > 0 ? v.toFixed(3) : v;
+        resetAlgo();
+      });
+    });
+  }
+
+  // ---- Helpers ----
+  function hexWithAlpha(hex, alpha) {
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  function hexToRgb(hex) {
+    return {
+      r: parseInt(hex.slice(1,3), 16),
+      g: parseInt(hex.slice(3,5), 16),
+      b: parseInt(hex.slice(5,7), 16)
+    };
+  }
+
+  function freqToNoteName(freq) {
+    const midi = Math.round(12 * Math.log2(freq / 440) + 69);
+    const note = NOTE_NAMES[((midi % 12) + 12) % 12];
+    const oct = Math.floor(midi / 12) - 1;
+    return note + oct;
+  }
+
+  function showNoteFlash(text) {
+    const el = document.getElementById('noteFlash');
+    el.textContent = text;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 150);
+  }
+
+  // ---- Main Loop ----
+  function resetAlgo() {
+    step = 0;
+    rngSeed = Math.floor(Math.random() * 2147483647);
+    const algo = algorithms[currentAlgo];
+    algo.init(algoParams[currentAlgo]);
+    algo.render();
+  }
+
+  function switchAlgo(name) {
+    currentAlgo = name;
+    document.querySelectorAll('.algo-btn').forEach(b => b.classList.toggle('active', b.dataset.algo === name));
+    document.getElementById('algoDesc').textContent = algoDescriptions[name];
+    document.getElementById('bgGlow').style.background = `radial-gradient(circle, ${hexWithAlpha(ALGO_COLORS[name], 0.25)} 0%, transparent 70%)`;
+    buildParamSliders(name);
+    resetAlgo();
+  }
+
+  function tick(timestamp) {
+    animFrame = requestAnimationFrame(tick);
+
+    // FPS
+    const fps = lastStepTime > 0 ? Math.round(1000 / (timestamp - lastStepTime)) : 0;
+    document.getElementById('statusFps').textContent = fps;
+
+    if (!playing) return;
+
+    const interval = (60 / tempo) * 1000; // ms per step
+    if (timestamp - lastStepTime < interval) return;
+    lastStepTime = timestamp;
+
+    const algo = algorithms[currentAlgo];
+    const params = algoParams[currentAlgo];
+    const result = algo.step(params);
+    step++;
+
+    // Sonify
+    const stats = algo.sonify(result, params);
+
+    // Render
+    algo.render();
+
+    // Update status
+    document.getElementById('statusStep').textContent = step;
+    document.getElementById('stepIndicator').textContent = `Step ${step}`;
+    if (stats) {
+      document.getElementById('statusVoices').textContent = stats.voiceCount;
+      document.getElementById('statusNote').textContent = stats.note || '—';
+      document.getElementById('statusDensity').textContent = Math.round((stats.density || 0) * 100) + '%';
+    }
+
+    // Spectrum
+    drawSpectrum();
+  }
+
+  function drawSpectrum() {
+    if (!analyser) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    const w = specCanvas.width, h = specCanvas.height;
+    specCtx.fillStyle = 'rgba(10, 10, 15, 0.5)';
+    specCtx.fillRect(0, 0, w, h);
+
+    const barW = w / data.length;
+    const color = ALGO_COLORS[currentAlgo];
+    const rgb = hexToRgb(color);
+
+    for (let i = 0; i < data.length; i++) {
+      const val = data[i] / 255;
+      const barH = val * h;
+      specCtx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${0.3 + val * 0.7})`;
+      specCtx.fillRect(i * barW, h - barH, barW - 1, barH);
+    }
+  }
+
+  // ---- UI Bindings ----
+  document.getElementById('startOverlay').addEventListener('click', () => {
+    document.getElementById('startOverlay').classList.add('hidden');
+    initAudio();
+    resizeCanvas();
+    switchAlgo('automaton1d');
+    animFrame = requestAnimationFrame(tick);
+  });
+
+  document.querySelectorAll('.algo-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchAlgo(btn.dataset.algo));
+  });
+
+  document.getElementById('playBtn').addEventListener('click', () => {
+    playing = !playing;
+    const btn = document.getElementById('playBtn');
+    btn.textContent = playing ? '⏸ Pause' : '▶ Play';
+    btn.classList.toggle('active', playing);
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', resetAlgo);
+
+  document.getElementById('randomBtn').addEventListener('click', () => {
+    const params = algoParams[currentAlgo];
+    // Randomize based on algo
+    if (currentAlgo === 'automaton1d') {
+      params.rule = Math.floor(Math.random() * 256);
+    } else if (currentAlgo === 'life2d') {
+      params.density = 0.15 + Math.random() * 0.35;
+    } else if (currentAlgo === 'lsystem') {
+      params.axiom = Math.floor(Math.random() * 5);
+      params.angle = 15 + Math.floor(Math.random() * 60);
+    } else if (currentAlgo === 'rd') {
+      const presets = [
+        { feed: 0.037, kill: 0.06 },
+        { feed: 0.03, kill: 0.062 },
+        { feed: 0.025, kill: 0.06 },
+        { feed: 0.04, kill: 0.06 },
+        { feed: 0.012, kill: 0.05 }
+      ];
+      const p = presets[Math.floor(Math.random() * presets.length)];
+      params.feed = p.feed;
+      params.kill = p.kill;
+    } else if (currentAlgo === 'flowfield') {
+      params.scale = 0.02 + Math.random() * 0.1;
+      params.curl = Math.random();
+    } else if (currentAlgo === 'julia') {
+      const cs = [[-0.7, 0.27015], [-0.8, 0.156], [0.285, 0.01], [-0.4, 0.6], [0.355, 0.355], [-0.54, 0.54]];
+      const c = cs[Math.floor(Math.random() * cs.length)];
+      params.cReal = c[0] + (Math.random() - 0.5) * 0.1;
+      params.cImag = c[1] + (Math.random() - 0.5) * 0.1;
+    }
+    buildParamSliders(currentAlgo);
+    resetAlgo();
+  });
+
+  // Sliders
+  document.getElementById('tempo').addEventListener('input', e => {
+    tempo = parseInt(e.target.value);
+    document.getElementById('tempoVal').textContent = tempo;
+  });
+
+  document.getElementById('volume').addEventListener('input', e => {
+    volume = parseInt(e.target.value) / 100;
+    document.getElementById('volumeVal').textContent = e.target.value;
+    if (masterGain) masterGain.gain.value = volume;
+  });
+
+  document.getElementById('reverb').addEventListener('input', e => {
+    reverbMix = parseInt(e.target.value) / 100;
+    document.getElementById('reverbVal').textContent = e.target.value;
+    if (dryGain) dryGain.gain.value = 1 - reverbMix;
+    if (wetGain) wetGain.gain.value = reverbMix;
+  });
+
+  document.getElementById('octave').addEventListener('input', e => {
+    baseOctave = parseInt(e.target.value);
+    document.getElementById('octaveVal').textContent = baseOctave;
+  });
+
+  // Toggle panel
+  document.getElementById('togglePanel').addEventListener('click', () => {
+    sidebarVisible = !sidebarVisible;
+    document.getElementById('sidebar').classList.toggle('collapsed', !sidebarVisible);
+    setTimeout(resizeCanvas, 350);
+  });
+
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (e.key === ' ') {
+      e.preventDefault();
+      document.getElementById('playBtn').click();
+    } else if (e.key === 'r' || e.key === 'R') {
+      document.getElementById('randomBtn').click();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      document.getElementById('togglePanel').click();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      tempo = Math.min(300, tempo + 10);
+      document.getElementById('tempo').value = tempo;
+      document.getElementById('tempoVal').textContent = tempo;
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      tempo = Math.max(40, tempo - 10);
+      document.getElementById('tempo').value = tempo;
+      document.getElementById('tempoVal').textContent = tempo;
+    } else if (e.key >= '1' && e.key <= '6') {
+      const algos = ['automaton1d', 'life2d', 'lsystem', 'rd', 'flowfield', 'julia'];
+      switchAlgo(algos[parseInt(e.key) - 1]);
+    }
+  });
+
+  window.addEventListener('resize', resizeCanvas);
+})();
+</script>
+</body>
+</html>
