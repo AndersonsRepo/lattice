@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Echo — Lattice</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;
+  --text:#c8c8d4;--dim:#6e6e82;--accent:#7c6fe0;--green:#4ade80;--amber:#fbbf24;--red:#f87171;
+  --font:'SF Mono','Fira Code','Cascadia Code','Consolas',monospace;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;cursor:crosshair}
+canvas{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
+#vignette{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.55) 100%);z-index:1}
+
+.hud{position:fixed;z-index:10;pointer-events:none}
+.hud *{pointer-events:auto}
+#top-left{top:16px;left:16px;display:flex;gap:8px;align-items:center}
+#top-right{top:16px;right:16px;text-align:right}
+a.back{color:var(--dim);text-decoration:none;font-size:11px;letter-spacing:.15em;text-transform:uppercase;transition:color .2s}
+a.back:hover{color:var(--accent)}
+.stats{font-size:11px;color:var(--dim);line-height:1.7;letter-spacing:.04em}
+.stats .val{color:var(--text)}
+
+.pill{background:rgba(18,18,26,.85);backdrop-filter:blur(14px);border:1px solid var(--border);
+  border-radius:10px;padding:10px 14px;font-size:11px;letter-spacing:.06em;color:var(--dim)}
+
+#panel{position:fixed;right:14px;top:50%;transform:translateY(-50%);z-index:10;
+  background:rgba(18,18,26,.88);backdrop-filter:blur(14px);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px;width:210px;transition:opacity .3s,transform .3s}
+#panel.hidden{opacity:0;pointer-events:none;transform:translateY(-50%) translateX(20px)}
+.panel-label{font-size:9px;text-transform:uppercase;letter-spacing:.25em;color:var(--accent);margin-bottom:10px}
+
+.slider-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.slider-row label{font-size:10px;color:var(--dim);min-width:60px;letter-spacing:.04em}
+.slider-row input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:var(--border);border-radius:2px;outline:none}
+.slider-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:var(--accent);cursor:pointer}
+.slider-row .sv{font-size:10px;color:var(--dim);min-width:24px;text-align:right}
+
+.mode-row{display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap}
+.mode-btn{background:var(--surface);color:var(--dim);border:1px solid var(--border);border-radius:6px;
+  padding:3px 8px;font-family:var(--font);font-size:9px;cursor:pointer;letter-spacing:.06em;transition:all .2s}
+.mode-btn.active{border-color:var(--accent);color:var(--accent)}
+.mode-btn:hover{border-color:var(--accent);color:var(--text)}
+
+.btn-row{display:flex;gap:6px;margin-top:10px}
+.btn{background:var(--surface);color:var(--dim);border:1px solid var(--border);border-radius:6px;
+  padding:4px 10px;font-family:var(--font);font-size:10px;cursor:pointer;letter-spacing:.06em;transition:all .2s}
+.btn:hover{border-color:var(--accent);color:var(--text)}
+
+#start-overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:50;
+  background:rgba(10,10,15,.92);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:opacity .5s}
+#start-overlay.gone{opacity:0;pointer-events:none}
+#start-overlay .inner{text-align:center}
+#start-overlay h2{font-size:24px;font-weight:300;letter-spacing:.3em;text-transform:uppercase;color:var(--accent);
+  text-shadow:0 0 30px rgba(124,111,224,.3);margin-bottom:12px}
+#start-overlay p{font-size:12px;color:var(--dim);letter-spacing:.1em;line-height:1.8}
+
+#info{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:20;
+  background:rgba(10,10,15,.95);backdrop-filter:blur(20px);border:1px solid var(--border);
+  border-radius:14px;padding:28px 34px;max-width:420px;text-align:center;display:none}
+#info h2{font-size:14px;color:var(--accent);letter-spacing:.2em;text-transform:uppercase;margin-bottom:12px;font-weight:400}
+#info p{font-size:11px;color:var(--dim);line-height:1.8;margin-bottom:8px}
+#info kbd{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:10px;color:var(--text)}
+
+@media(max-width:700px){
+  #panel{width:170px;padding:10px 12px;right:8px}
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+
+<div id="start-overlay" onclick="begin()">
+  <div class="inner">
+    <h2>Echo</h2>
+    <p>click to seed life<br>each click spawns a colony with unique rules<br>watch them grow, compete, and fade</p>
+    <p style="margin-top:16px;font-size:10px;color:var(--accent)">click anywhere to begin</p>
+  </div>
+</div>
+
+<div class="hud" id="top-left">
+  <div class="pill" style="cursor:pointer" onclick="toggleInfo()" title="Info (I)">?</div>
+</div>
+
+<div class="hud" id="top-right">
+  <a href="index.html" class="back">back to gallery</a>
+  <div class="stats" style="margin-top:8px">
+    <span class="val" id="fps">0</span> fps &nbsp;
+    <span class="val" id="colony-count">0</span> colonies &nbsp;
+    <span class="val" id="cell-count">0</span> cells
+  </div>
+</div>
+
+<div id="panel">
+  <div class="panel-label">Echo Controls</div>
+
+  <div style="font-size:9px;color:var(--dim);letter-spacing:.1em;margin-bottom:6px">COLONY TYPE</div>
+  <div class="mode-row" id="type-row">
+    <button class="mode-btn active" data-type="life">Life</button>
+    <button class="mode-btn" data-type="wolfram">Wolfram</button>
+    <button class="mode-btn" data-type="rd">React-Diff</button>
+    <button class="mode-btn" data-type="noise">Noise</button>
+    <button class="mode-btn" data-type="random">Random</button>
+  </div>
+
+  <div style="font-size:9px;color:var(--dim);letter-spacing:.1em;margin-bottom:6px">INTERACTION</div>
+  <div class="mode-row" id="interact-row">
+    <button class="mode-btn active" data-mode="compete">Compete</button>
+    <button class="mode-btn" data-mode="merge">Merge</button>
+    <button class="mode-btn" data-mode="ignore">Ignore</button>
+  </div>
+
+  <div class="slider-row"><label>Lifespan</label><input type="range" id="sl-life" min="100" max="1200" value="500"><span class="sv" id="sv-life">500</span></div>
+  <div class="slider-row"><label>Growth</label><input type="range" id="sl-growth" min="1" max="10" value="4"><span class="sv" id="sv-growth">4</span></div>
+  <div class="slider-row"><label>Max Col.</label><input type="range" id="sl-max" min="3" max="40" value="20"><span class="sv" id="sv-max">20</span></div>
+  <div class="slider-row"><label>Trail</label><input type="range" id="sl-trail" min="0" max="100" value="85"><span class="sv" id="sv-trail">85</span></div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="clearAll()">Clear (C)</button>
+    <button class="btn" onclick="burst()">Burst (B)</button>
+    <button class="btn" onclick="saveImage()">Save (S)</button>
+  </div>
+  <div style="font-size:9px;color:var(--dim);margin-top:8px;letter-spacing:.06em">
+    <kbd>M</kbd> mic &nbsp; <kbd>Tab</kbd> panel &nbsp; <kbd>Space</kbd> pause
+  </div>
+</div>
+
+<div id="info">
+  <h2>Echo</h2>
+  <p>An ecosystem of competing cellular automata. Each click spawns a colony with unique rules and color. Colonies grow outward, compete for territory at their borders, and eventually fade.</p>
+  <p><kbd>Click</kbd> spawn colony &nbsp; <kbd>Drag</kbd> paint colonies<br>
+  <kbd>1-5</kbd> colony type &nbsp; <kbd>Q/W/E</kbd> interaction mode<br>
+  <kbd>Space</kbd> pause &nbsp; <kbd>Tab</kbd> panel &nbsp; <kbd>R</kbd> randomize rules<br>
+  <kbd>M</kbd> mic (auto-spawn) &nbsp; <kbd>S</kbd> save PNG &nbsp; <kbd>F</kbd> fullscreen<br>
+  <kbd>C</kbd> clear &nbsp; <kbd>B</kbd> burst &nbsp; <kbd>I</kbd> this help</p>
+  <button class="btn" onclick="toggleInfo()" style="margin-top:10px">Close</button>
+</div>
+
+<script>
+// --- Canvas Setup ---
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, gw, gh;
+const CELL = 3;
+let grid, ownership; // grid: cell value 0-1; ownership: colony index or -1
+let colonies = [];
+let nextId = 0;
+let paused = false, started = false, panelVisible = true;
+let mouseX = -1, mouseY = -1, mouseDown = false;
+let spawnType = 'life', interactMode = 'compete';
+let micActive = false, micLevel = 0, micStream = null, analyser = null;
+let frameCount = 0, lastFpsTime = performance.now();
+
+// Sliders
+const sliders = {};
+['life','growth','max','trail'].forEach(k => {
+  const sl = document.getElementById('sl-' + k);
+  const sv = document.getElementById('sv-' + k);
+  sliders[k] = { el: sl, val: () => parseFloat(sl.value) };
+  sl.addEventListener('input', () => sv.textContent = sl.value);
+});
+
+// Colony palette — 16 distinct colors
+const PALETTE = [
+  [124,111,224],[74,222,128],[251,191,36],[248,113,113],
+  [34,211,238],[232,121,249],[255,107,53],[5,150,105],
+  [200,171,255],[96,165,250],[244,63,94],[52,211,153],
+  [168,85,247],[251,146,60],[34,197,94],[147,51,234]
+];
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  gw = Math.ceil(W / CELL);
+  gh = Math.ceil(H / CELL);
+  grid = new Float32Array(gw * gh);
+  ownership = new Int16Array(gw * gh).fill(-1);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Colony ---
+function createColony(cx, cy, type) {
+  if (type === 'random') type = ['life','wolfram','rd','noise'][Math.floor(Math.random() * 4)];
+  const maxCol = sliders.max.val();
+  if (colonies.length >= maxCol) {
+    // Remove oldest
+    const oldest = colonies.reduce((a, b) => a.age > b.age ? a : b);
+    removeColony(oldest.id);
+  }
+
+  const col = PALETTE[nextId % PALETTE.length];
+  const id = nextId++;
+  const colony = {
+    id, cx, cy, type, color: col,
+    age: 0, maxAge: sliders.life.val(),
+    radius: 1, // current growth radius in cells
+    alive: true,
+    // Type-specific rules
+    rule: Math.floor(Math.random() * 256), // wolfram
+    birth: 3, survive: [2, 3], // life
+    feed: 0.02 + Math.random() * 0.04, kill: 0.05 + Math.random() * 0.02, // rd
+    noisePhase: Math.random() * 100,
+    density: 0, // measured live cells
+  };
+
+  // Randomize life rules slightly
+  if (type === 'life') {
+    colony.birth = 2 + Math.floor(Math.random() * 3); // 2-4
+    const lo = 1 + Math.floor(Math.random() * 3);
+    colony.survive = [];
+    for (let n = lo; n <= lo + 1 + Math.floor(Math.random() * 2); n++) colony.survive.push(n);
+  }
+
+  colonies.push(colony);
+
+  // Seed initial cells
+  const r = 3;
+  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    if (dx * dx + dy * dy > r * r) continue;
+    const gx = cx + dx, gy = cy + dy;
+    if (gx < 0 || gx >= gw || gy < 0 || gy >= gh) continue;
+    const idx = gy * gw + gx;
+    if (ownership[idx] === -1 || interactMode !== 'ignore') {
+      grid[idx] = type === 'rd' ? 0.5 + Math.random() * 0.5 : (Math.random() < 0.6 ? 1 : 0);
+      ownership[idx] = id;
+    }
+  }
+  return colony;
+}
+
+function removeColony(id) {
+  const idx = colonies.findIndex(c => c.id === id);
+  if (idx !== -1) colonies.splice(idx, 1);
+  // Fade ownership cells
+  for (let i = 0; i < ownership.length; i++) {
+    if (ownership[i] === id) {
+      grid[i] *= 0.3;
+      ownership[i] = -1;
+    }
+  }
+}
+
+// --- Simulation ---
+function stepColonies() {
+  const growthSpeed = sliders.growth.val();
+  const next = new Float32Array(grid.length);
+  const nextOwn = new Int16Array(ownership.length).fill(-1);
+
+  // Build colony map for fast lookup
+  const colonyMap = new Map();
+  colonies.forEach(c => colonyMap.set(c.id, c));
+
+  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+    const i = y * gw + x;
+    const oid = ownership[i];
+    if (oid === -1) {
+      // Empty cell — can be claimed by neighboring colonies
+      next[i] = grid[i] * 0.95; // slight fade
+      continue;
+    }
+
+    const col = colonyMap.get(oid);
+    if (!col || !col.alive) {
+      next[i] = grid[i] * 0.9;
+      continue;
+    }
+
+    // Distance from colony center
+    const dx = x - col.cx, dy = y - col.cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Only simulate within growth radius
+    if (dist > col.radius + 2) {
+      next[i] = grid[i];
+      nextOwn[i] = oid;
+      continue;
+    }
+
+    // Apply rules by type
+    let newVal = grid[i];
+
+    if (col.type === 'life') {
+      let neighbors = 0;
+      for (let ny = -1; ny <= 1; ny++) for (let nx = -1; nx <= 1; nx++) {
+        if (nx === 0 && ny === 0) continue;
+        const gx = (x + nx + gw) % gw, gy = (y + ny + gh) % gh;
+        if (grid[gy * gw + gx] > 0.5) neighbors++;
+      }
+      const alive = grid[i] > 0.5;
+      if (alive) newVal = col.survive.includes(neighbors) ? 1 : 0;
+      else newVal = (neighbors === col.birth) ? 1 : 0;
+    }
+    else if (col.type === 'wolfram') {
+      // Wolfram: use row below current cell as "previous generation"
+      const above = y > 0 ? y - 1 : gh - 1;
+      const l = grid[above * gw + ((x - 1 + gw) % gw)] > 0.5 ? 1 : 0;
+      const c2 = grid[above * gw + x] > 0.5 ? 1 : 0;
+      const r = grid[above * gw + ((x + 1) % gw)] > 0.5 ? 1 : 0;
+      const bits = (l << 2) | (c2 << 1) | r;
+      newVal = (col.rule >> bits) & 1;
+    }
+    else if (col.type === 'rd') {
+      // Simplified reaction-diffusion
+      let lap = 0;
+      for (let ny = -1; ny <= 1; ny++) for (let nx = -1; nx <= 1; nx++) {
+        if (nx === 0 && ny === 0) continue;
+        const gx = (x + nx + gw) % gw, gy = (y + ny + gh) % gh;
+        const w = (nx === 0 || ny === 0) ? 0.2 : 0.05;
+        lap += (grid[gy * gw + gx] - grid[i]) * w;
+      }
+      const v = grid[i];
+      newVal = v + 0.1 * lap + col.feed * (1 - v) - col.kill * v * v;
+      newVal = Math.max(0, Math.min(1, newVal));
+    }
+    else if (col.type === 'noise') {
+      // Animated noise pattern
+      const scale = 0.08;
+      const t = col.noisePhase + col.age * 0.02;
+      newVal = (simplexNoise2D(x * scale + t, y * scale + t * 0.6) + 1) * 0.5;
+    }
+
+    next[i] = newVal;
+    nextOwn[i] = oid;
+  }
+
+  // Growth: expand colony borders
+  for (const col of colonies) {
+    col.age++;
+    col.radius += growthSpeed * 0.3;
+
+    // Fade and die
+    if (col.age > col.maxAge) {
+      col.alive = false;
+      removeColony(col.id);
+      continue;
+    }
+
+    // Grow into empty neighboring cells at the frontier
+    const r = Math.ceil(col.radius);
+    const frontier = Math.max(0, r - 2);
+    for (let angle = 0; angle < 24; angle++) {
+      const a = (angle / 24) * Math.PI * 2;
+      for (let d = frontier; d <= r; d++) {
+        const gx = Math.round(col.cx + Math.cos(a) * d);
+        const gy = Math.round(col.cy + Math.sin(a) * d);
+        if (gx < 0 || gx >= gw || gy < 0 || gy >= gh) continue;
+        const idx = gy * gw + gx;
+        if (nextOwn[idx] === -1) {
+          // Claim empty cell
+          next[idx] = Math.random() < 0.4 ? 1 : 0;
+          nextOwn[idx] = col.id;
+        } else if (nextOwn[idx] !== col.id && interactMode === 'compete') {
+          // Competition: stronger colony (higher density) wins
+          const other = colonyMap.get(nextOwn[idx]);
+          if (other && col.density > other.density && Math.random() < 0.15) {
+            next[idx] = Math.random() < 0.5 ? 1 : 0;
+            nextOwn[idx] = col.id;
+          }
+        } else if (nextOwn[idx] !== col.id && interactMode === 'merge') {
+          // Merge: blend values
+          next[idx] = (next[idx] + grid[idx]) * 0.5;
+        }
+      }
+    }
+
+    // Measure density
+    let count = 0, total = 0;
+    for (let i = 0; i < nextOwn.length; i++) {
+      if (nextOwn[i] === col.id) { total++; if (next[i] > 0.3) count++; }
+    }
+    col.density = total > 0 ? count / total : 0;
+  }
+
+  // Apply trail fade to unclaimed cells
+  const trailFade = sliders.trail.val() / 100;
+  for (let i = 0; i < next.length; i++) {
+    if (nextOwn[i] === -1) next[i] *= trailFade;
+  }
+
+  grid = next;
+  ownership = nextOwn;
+}
+
+// --- Simple 2D noise (value noise with smoothing) ---
+const NOISE_SIZE = 256;
+const noiseTable = new Float32Array(NOISE_SIZE * NOISE_SIZE);
+for (let i = 0; i < noiseTable.length; i++) noiseTable[i] = Math.random();
+
+function simplexNoise2D(x, y) {
+  const xi = Math.floor(x) & (NOISE_SIZE - 1);
+  const yi = Math.floor(y) & (NOISE_SIZE - 1);
+  const xf = x - Math.floor(x);
+  const yf = y - Math.floor(y);
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const xi1 = (xi + 1) & (NOISE_SIZE - 1);
+  const yi1 = (yi + 1) & (NOISE_SIZE - 1);
+  const a = noiseTable[yi * NOISE_SIZE + xi];
+  const b = noiseTable[yi * NOISE_SIZE + xi1];
+  const c = noiseTable[yi1 * NOISE_SIZE + xi];
+  const d = noiseTable[yi1 * NOISE_SIZE + xi1];
+  return (a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v) * 2 - 1;
+}
+
+// --- Rendering ---
+function render() {
+  const trail = sliders.trail.val() / 100;
+  // Fade-to-black instead of full clear for trails
+  ctx.fillStyle = `rgba(10, 10, 15, ${1 - trail * 0.02})`;
+  ctx.fillRect(0, 0, W, H);
+
+  // Build colony color map
+  const colMap = new Map();
+  colonies.forEach(c => colMap.set(c.id, c));
+
+  // ImageData rendering for speed
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const imgW = Math.ceil(W * dpr), imgH = Math.ceil(H * dpr);
+  const img = ctx.createImageData(imgW, imgH);
+  const data = img.data;
+
+  let totalCells = 0;
+
+  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+    const i = y * gw + x;
+    const val = grid[i];
+    if (val < 0.02) continue;
+
+    const oid = ownership[i];
+    const col = oid !== -1 ? colMap.get(oid) : null;
+    let r, g, b;
+
+    if (col) {
+      // Age-based fade: full brightness until 70% of life, then fade
+      const ageFade = col.age < col.maxAge * 0.7 ? 1 : 1 - (col.age - col.maxAge * 0.7) / (col.maxAge * 0.3);
+      const v = val * Math.max(0.1, ageFade);
+      r = col.color[0] * v;
+      g = col.color[1] * v;
+      b = col.color[2] * v;
+
+      // Growth frontier glow
+      const dx = x - col.cx, dy = y - col.cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > col.radius - 2 && dist < col.radius + 1) {
+        r = Math.min(255, r + 40);
+        g = Math.min(255, g + 40);
+        b = Math.min(255, b + 40);
+      }
+      totalCells++;
+    } else {
+      // Orphaned cell: dim white trail
+      r = g = b = val * 40;
+    }
+
+    // Paint pixels
+    const px0 = Math.floor(x * CELL * dpr);
+    const py0 = Math.floor(y * CELL * dpr);
+    const px1 = Math.min(Math.floor((x + 1) * CELL * dpr), imgW);
+    const py1 = Math.min(Math.floor((y + 1) * CELL * dpr), imgH);
+    const ri = Math.min(255, Math.floor(r));
+    const gi = Math.min(255, Math.floor(g));
+    const bi = Math.min(255, Math.floor(b));
+    for (let py = py0; py < py1; py++) {
+      const rowOff = py * imgW * 4;
+      for (let px = px0; px < px1; px++) {
+        const off = rowOff + px * 4;
+        // Additive blend with existing
+        data[off] = Math.min(255, data[off] + ri);
+        data[off + 1] = Math.min(255, data[off + 1] + gi);
+        data[off + 2] = Math.min(255, data[off + 2] + bi);
+        data[off + 3] = 255;
+      }
+    }
+  }
+
+  ctx.putImageData(img, 0, 0);
+
+  // Mouse cursor ring
+  if (mouseX >= 0 && mouseY >= 0) {
+    ctx.beginPath();
+    ctx.arc(mouseX, mouseY, 12, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(124, 111, 224, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Update stats
+  document.getElementById('colony-count').textContent = colonies.length;
+  document.getElementById('cell-count').textContent = totalCells;
+}
+
+// --- Mic ---
+async function toggleMic() {
+  if (micActive) {
+    micActive = false;
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    return;
+  }
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const ac = new AudioContext();
+    const src = ac.createMediaStreamSource(micStream);
+    analyser = ac.createAnalyser();
+    analyser.fftSize = 256;
+    src.connect(analyser);
+    micActive = true;
+  } catch(e) { console.warn('Mic unavailable:', e); }
+}
+
+function readMic() {
+  if (!micActive || !analyser) { micLevel = 0; return; }
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) sum += buf[i];
+  micLevel = sum / (buf.length * 255);
+}
+
+// --- UI Handlers ---
+document.querySelectorAll('#type-row .mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#type-row .mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    spawnType = btn.dataset.type;
+  });
+});
+
+document.querySelectorAll('#interact-row .mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#interact-row .mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    interactMode = btn.dataset.mode;
+  });
+});
+
+function clearAll() {
+  colonies = [];
+  grid.fill(0);
+  ownership.fill(-1);
+}
+
+function burst() {
+  const types = ['life','wolfram','rd','noise'];
+  for (let i = 0; i < 8; i++) {
+    const x = Math.floor(Math.random() * gw);
+    const y = Math.floor(Math.random() * gh);
+    createColony(x, y, types[Math.floor(Math.random() * types.length)]);
+  }
+}
+
+function saveImage() {
+  const link = document.createElement('a');
+  link.download = `echo-${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+function toggleInfo() {
+  const el = document.getElementById('info');
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+function togglePanel() {
+  panelVisible = !panelVisible;
+  document.getElementById('panel').classList.toggle('hidden', !panelVisible);
+}
+
+function begin() {
+  started = true;
+  document.getElementById('start-overlay').classList.add('gone');
+}
+
+// --- Events ---
+canvas.addEventListener('mousedown', e => { mouseDown = true; spawnAtMouse(e); });
+canvas.addEventListener('mouseup', () => mouseDown = false);
+canvas.addEventListener('mousemove', e => {
+  mouseX = e.clientX; mouseY = e.clientY;
+  if (mouseDown) spawnAtMouse(e);
+});
+canvas.addEventListener('mouseleave', () => { mouseX = -1; mouseY = -1; mouseDown = false; });
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouseX = t.clientX; mouseY = t.clientY;
+  spawnAtMouse({ clientX: t.clientX, clientY: t.clientY });
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  const t = e.touches[0];
+  mouseX = t.clientX; mouseY = t.clientY;
+  spawnAtMouse({ clientX: t.clientX, clientY: t.clientY });
+}, { passive: true });
+
+let lastSpawnTime = 0;
+function spawnAtMouse(e) {
+  if (!started) return;
+  const now = performance.now();
+  if (now - lastSpawnTime < 200) return; // throttle
+  lastSpawnTime = now;
+  const gx = Math.floor(e.clientX / CELL);
+  const gy = Math.floor(e.clientY / CELL);
+  createColony(gx, gy, spawnType);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key) {
+    case ' ': e.preventDefault(); paused = !paused; break;
+    case 'Tab': e.preventDefault(); togglePanel(); break;
+    case 'c': case 'C': clearAll(); break;
+    case 'b': case 'B': burst(); break;
+    case 'r': case 'R':
+      // Randomize all living colony rules
+      colonies.forEach(c => {
+        c.rule = Math.floor(Math.random() * 256);
+        c.birth = 2 + Math.floor(Math.random() * 3);
+        const lo = 1 + Math.floor(Math.random() * 3);
+        c.survive = [];
+        for (let n = lo; n <= lo + 1 + Math.floor(Math.random() * 2); n++) c.survive.push(n);
+        c.feed = 0.02 + Math.random() * 0.04;
+        c.kill = 0.05 + Math.random() * 0.02;
+      });
+      break;
+    case 'm': case 'M': toggleMic(); break;
+    case 's': case 'S': saveImage(); break;
+    case 'f': case 'F': document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); break;
+    case 'i': case 'I': toggleInfo(); break;
+    case '1': setType('life'); break;
+    case '2': setType('wolfram'); break;
+    case '3': setType('rd'); break;
+    case '4': setType('noise'); break;
+    case '5': setType('random'); break;
+    case 'q': case 'Q': setInteract('compete'); break;
+    case 'w': case 'W': setInteract('merge'); break;
+    case 'e': case 'E': setInteract('ignore'); break;
+  }
+});
+
+function setType(t) {
+  spawnType = t;
+  document.querySelectorAll('#type-row .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.type === t));
+}
+function setInteract(m) {
+  interactMode = m;
+  document.querySelectorAll('#interact-row .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+}
+
+// --- Main Loop ---
+let micSpawnTimer = 0;
+function loop(ts) {
+  requestAnimationFrame(loop);
+
+  // FPS
+  frameCount++;
+  if (ts - lastFpsTime >= 500) {
+    document.getElementById('fps').textContent = Math.round(frameCount / ((ts - lastFpsTime) / 1000));
+    frameCount = 0;
+    lastFpsTime = ts;
+  }
+
+  if (!started || paused) { render(); return; }
+
+  readMic();
+
+  // Mic auto-spawn
+  if (micActive && micLevel > 0.3) {
+    micSpawnTimer++;
+    if (micSpawnTimer > 15) {
+      const gx = Math.floor(Math.random() * gw);
+      const gy = Math.floor(Math.random() * gh);
+      createColony(gx, gy, 'random');
+      micSpawnTimer = 0;
+    }
+  }
+
+  stepColonies();
+  render();
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

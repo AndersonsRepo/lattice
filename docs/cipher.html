@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Cipher</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .bg-glow {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 800px; height: 800px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.2;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .back-link {
+      position: fixed;
+      top: 1.2rem; left: 1.2rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      z-index: 20;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed; inset: 0;
+      background: rgba(10, 10, 15, 0.94);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 100; cursor: pointer;
+      transition: opacity 0.6s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 3rem; color: var(--accent);
+      margin-bottom: 1.2rem;
+      text-shadow: 0 0 40px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-text {
+      font-size: 0.85rem; color: var(--text-dim);
+      letter-spacing: 0.15em; text-transform: uppercase;
+    }
+    .start-sub {
+      font-size: 0.6rem; color: var(--text-dim);
+      letter-spacing: 0.08em; margin-top: 1.2rem;
+      opacity: 0.5; max-width: 420px;
+      text-align: center; line-height: 1.7;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* Main layout */
+    .main {
+      position: relative; z-index: 1;
+      display: grid;
+      grid-template-columns: 1fr 220px;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
+    }
+
+    /* Top bar */
+    .top-bar {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; justify-content: center;
+      gap: 1rem; padding: 0.6rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .top-bar h1 {
+      font-size: 1rem; font-weight: 300;
+      letter-spacing: 0.3em; text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+    .top-bar .sub {
+      color: var(--text-dim); font-size: 0.55rem;
+      letter-spacing: 0.08em;
+    }
+
+    /* Canvas area */
+    .canvas-area {
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; background: var(--bg);
+    }
+    #gridCanvas {
+      image-rendering: pixelated;
+      cursor: crosshair;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      grid-row: 2 / 4;
+      border-left: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 0.8rem;
+      display: flex; flex-direction: column;
+      gap: 0.6rem;
+      overflow-y: auto;
+      font-size: 0.6rem;
+    }
+
+    .sidebar h3 {
+      font-size: 0.6rem; font-weight: 600;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 0.2rem;
+    }
+
+    .piece-selector {
+      display: flex; flex-wrap: wrap; gap: 3px;
+      max-height: 80px; overflow-y: auto;
+    }
+    .piece-dot {
+      width: 14px; height: 14px;
+      border-radius: 3px; border: 1px solid var(--border);
+      cursor: pointer; transition: all 0.2s;
+      position: relative;
+    }
+    .piece-dot:hover { border-color: var(--accent); transform: scale(1.2); }
+    .piece-dot.active { border-color: var(--green); box-shadow: 0 0 6px var(--green); }
+    .piece-dot .tooltip {
+      display: none; position: absolute;
+      bottom: 120%; left: 50%; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 2px 6px; border-radius: 4px;
+      white-space: nowrap; font-size: 0.5rem;
+      color: var(--text); z-index: 30;
+    }
+    .piece-dot:hover .tooltip { display: block; }
+
+    .piece-info {
+      background: var(--surface); border-radius: 6px;
+      padding: 0.5rem; border: 1px solid var(--border);
+      line-height: 1.6;
+    }
+    .piece-info .label { color: var(--text-dim); }
+    .piece-info .value { color: var(--text); }
+    .piece-info .score { color: var(--green); font-weight: 600; }
+
+    /* Controls */
+    .ctrl-group {
+      display: flex; flex-direction: column; gap: 0.3rem;
+    }
+    .ctrl-row {
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+    .ctrl-label {
+      color: var(--text-dim); min-width: 50px;
+    }
+    .ctrl-value {
+      color: var(--accent); min-width: 28px; text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      flex: 1; height: 3px; border-radius: 2px;
+      background: var(--border); outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent); cursor: pointer;
+    }
+
+    .btn {
+      padding: 0.35rem 0.6rem; border-radius: 4px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); cursor: pointer; font-family: inherit;
+      font-size: 0.55rem; letter-spacing: 0.05em;
+      transition: all 0.2s; text-transform: uppercase;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.active { border-color: var(--green); color: var(--green); background: rgba(74, 222, 128, 0.08); }
+    .btn.play { border-color: var(--green); color: var(--green); }
+    .btn.play.active { background: rgba(74, 222, 128, 0.15); }
+
+    .btn-row { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+
+    .scale-btn, .wave-btn {
+      padding: 0.25rem 0.5rem; border-radius: 3px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-dim); cursor: pointer; font-family: inherit;
+      font-size: 0.5rem; letter-spacing: 0.05em;
+      transition: all 0.2s;
+    }
+    .scale-btn:hover, .wave-btn:hover { border-color: var(--accent); color: var(--text); }
+    .scale-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(124, 111, 224, 0.1); }
+    .wave-btn.active { border-color: var(--amber); color: var(--amber); background: rgba(251, 191, 36, 0.1); }
+
+    /* Spectrum */
+    #specCanvas {
+      width: 100%; height: 40px; border-radius: 4px;
+      background: var(--surface); border: 1px solid var(--border);
+    }
+
+    /* Bottom bar */
+    .bottom-bar {
+      grid-column: 1 / 2;
+      display: flex; align-items: center;
+      gap: 1rem; padding: 0.5rem 1rem;
+      border-top: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.6);
+      font-size: 0.55rem; color: var(--text-dim);
+    }
+    .bottom-bar .gen-badge {
+      padding: 0.15rem 0.5rem; border-radius: 8px;
+      border: 1px solid var(--border); color: var(--text);
+    }
+    .bottom-bar .edit-badge {
+      color: var(--amber);
+    }
+
+    .kbd {
+      display: inline-block; padding: 0.1rem 0.3rem;
+      border-radius: 2px; border: 1px solid var(--border);
+      background: var(--surface); font-size: 0.45rem;
+      color: var(--text-dim); margin: 0 0.1rem;
+    }
+
+    /* Layer pills */
+    .layer-pill {
+      display: flex; align-items: center; gap: 0.3rem;
+      padding: 0.25rem 0.4rem; border-radius: 4px;
+      border: 1px solid var(--border); background: var(--surface);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .layer-pill:hover { border-color: var(--accent); }
+    .layer-pill.active { border-color: var(--green); }
+    .layer-pill .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+    }
+    .layer-pill .name {
+      color: var(--text); font-size: 0.5rem;
+    }
+    .layer-remove {
+      margin-left: auto; color: var(--text-dim);
+      cursor: pointer; font-size: 0.6rem;
+    }
+    .layer-remove:hover { color: #ef4444; }
+
+    @media (max-width: 700px) {
+      .main { grid-template-columns: 1fr; }
+      .sidebar {
+        position: fixed; right: 0; top: 0; bottom: 0;
+        width: 220px; z-index: 15;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+      }
+      .sidebar.open { transform: translateX(0); }
+      .bottom-bar { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow"></div>
+  <a href="index.html" class="back-link">&larr; LATTICE</a>
+
+  <!-- Start overlay -->
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">&#9833;</div>
+    <div class="start-text">Cipher</div>
+    <div class="start-sub">
+      Every piece is a musical score. Its grid becomes a step sequencer &mdash;
+      rows are notes, columns are beats. Click cells to compose. Layer pieces to orchestrate.
+      The art plays itself.
+    </div>
+    <div class="start-sub" style="margin-top: 0.8rem; opacity: 0.35;">click anywhere to begin</div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main" id="mainContent" style="opacity: 0; transition: opacity 0.5s;">
+    <div class="top-bar">
+      <h1>Cipher</h1>
+      <span class="sub">grid &rarr; score &rarr; sound</span>
+    </div>
+
+    <div class="canvas-area" id="canvasArea">
+      <canvas id="gridCanvas"></canvas>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+      <h3>Piece</h3>
+      <div class="piece-selector" id="pieceSelector"></div>
+      <div class="piece-info" id="pieceInfo">
+        <span class="label">select a piece</span>
+      </div>
+
+      <h3>Layers</h3>
+      <div id="layerList"></div>
+      <div class="btn-row">
+        <button class="btn" id="addLayerBtn" title="Add current piece as new layer">+ Layer</button>
+        <button class="btn" id="clearLayersBtn">Clear</button>
+      </div>
+
+      <h3>Transport</h3>
+      <div class="btn-row">
+        <button class="btn play" id="playBtn">&#9654; Play</button>
+        <button class="btn" id="stopBtn">&#9632; Stop</button>
+        <button class="btn" id="loopBtn active">&#8634; Loop</button>
+      </div>
+
+      <h3>Tempo</h3>
+      <div class="ctrl-group">
+        <div class="ctrl-row">
+          <span class="ctrl-label">BPM</span>
+          <input type="range" id="bpmSlider" min="40" max="300" value="120">
+          <span class="ctrl-value" id="bpmVal">120</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Swing</span>
+          <input type="range" id="swingSlider" min="0" max="80" value="0">
+          <span class="ctrl-value" id="swingVal">0%</span>
+        </div>
+      </div>
+
+      <h3>Scale</h3>
+      <div class="btn-row">
+        <button class="scale-btn active" data-scale="pentatonic">Penta</button>
+        <button class="scale-btn" data-scale="minor">Minor</button>
+        <button class="scale-btn" data-scale="major">Major</button>
+        <button class="scale-btn" data-scale="dorian">Dorian</button>
+        <button class="scale-btn" data-scale="chromatic">Chroma</button>
+        <button class="scale-btn" data-scale="blues">Blues</button>
+      </div>
+
+      <h3>Timbre</h3>
+      <div class="btn-row">
+        <button class="wave-btn active" data-wave="sine">Sine</button>
+        <button class="wave-btn" data-wave="triangle">Triangle</button>
+        <button class="wave-btn" data-wave="sawtooth">Saw</button>
+        <button class="wave-btn" data-wave="square">Square</button>
+      </div>
+
+      <h3>Sound</h3>
+      <div class="ctrl-group">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Volume</span>
+          <input type="range" id="volSlider" min="0" max="100" value="60">
+          <span class="ctrl-value" id="volVal">60</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Attack</span>
+          <input type="range" id="attackSlider" min="1" max="200" value="10">
+          <span class="ctrl-value" id="attackVal">10</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Release</span>
+          <input type="range" id="releaseSlider" min="10" max="500" value="150">
+          <span class="ctrl-value" id="releaseVal">150</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Reverb</span>
+          <input type="range" id="reverbSlider" min="0" max="100" value="40">
+          <span class="ctrl-value" id="reverbVal">40</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Octave</span>
+          <input type="range" id="octaveSlider" min="1" max="6" value="3">
+          <span class="ctrl-value" id="octaveVal">3</span>
+        </div>
+      </div>
+
+      <h3>Spectrum</h3>
+      <canvas id="specCanvas" width="200" height="40"></canvas>
+
+      <div style="margin-top: auto; font-size: 0.45rem; color: var(--text-dim); line-height: 1.5;">
+        <kbd class="kbd">Space</kbd> play/pause
+        <kbd class="kbd">C</kbd> clear edits
+        <kbd class="kbd">R</kbd> random piece
+        <kbd class="kbd">L</kbd> add layer
+        <kbd class="kbd">&larr;&rarr;</kbd> prev/next piece
+      </div>
+    </div>
+
+    <div class="bottom-bar" id="bottomBar">
+      <span id="statusText">Ready</span>
+      <span class="gen-badge" id="genBadge"></span>
+      <span class="edit-badge" id="editBadge"></span>
+      <span style="margin-left: auto;" id="colIndicator">col 0 / 0</span>
+    </div>
+  </div>
+
+  <script>
+    // ===================== CONFIG =====================
+    const SCALES = {
+      pentatonic: [0, 2, 4, 7, 9],
+      minor:      [0, 2, 3, 5, 7, 8, 10],
+      major:      [0, 2, 4, 5, 7, 9, 11],
+      dorian:     [0, 2, 3, 5, 7, 9, 10],
+      chromatic:  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+      blues:      [0, 3, 5, 6, 7, 10],
+    };
+
+    const TYPE_COLORS = {
+      '1d':       '#7c6fe0',
+      'life2d':   '#4ade80',
+      'lsystem':  '#fbbf24',
+      'rd':       '#e879f9',
+      'voronoi':  '#38bdf8',
+      'wfc':      '#f87171',
+      'spirograph':'#fb923c',
+      'attractor':'#facc15',
+      'julia':    '#a78bfa',
+      'noise':    '#34d399',
+      'flowfield':'#22d3ee',
+    };
+
+    // ===================== STATE =====================
+    const state = {
+      pieces: [],
+      currentIdx: 0,
+      grid: [],         // 2D boolean array [row][col]
+      editGrid: null,   // user edits overlay (null = no edits)
+      rows: 0,
+      cols: 0,
+      playing: false,
+      loop: true,
+      playCol: 0,
+      bpm: 120,
+      swing: 0,
+      scale: 'pentatonic',
+      waveform: 'sine',
+      volume: 0.6,
+      attack: 0.01,
+      release: 0.15,
+      reverb: 0.4,
+      octave: 3,
+      layers: [],       // [{pieceIdx, grid, color, muted}]
+      activeLayer: -1,
+      editsCount: 0,
+    };
+
+    // ===================== AUDIO ENGINE =====================
+    const audio = {
+      ctx: null,
+      masterGain: null,
+      reverbGain: null,
+      dryGain: null,
+      convolver: null,
+      analyser: null,
+      compressor: null,
+
+      init() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Compressor
+        this.compressor = this.ctx.createDynamicsCompressor();
+        this.compressor.threshold.value = -20;
+        this.compressor.knee.value = 10;
+        this.compressor.ratio.value = 8;
+        this.compressor.connect(this.ctx.destination);
+
+        // Master gain
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = state.volume;
+
+        // Dry path
+        this.dryGain = this.ctx.createGain();
+        this.dryGain.gain.value = 1 - state.reverb;
+
+        // Reverb path
+        this.reverbGain = this.ctx.createGain();
+        this.reverbGain.gain.value = state.reverb;
+        this.convolver = this.ctx.createConvolver();
+        this._buildIR();
+
+        // Analyser
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 256;
+
+        // Routing: masterGain -> dry + reverb -> compressor
+        this.masterGain.connect(this.dryGain);
+        this.masterGain.connect(this.reverbGain);
+        this.dryGain.connect(this.compressor);
+        this.reverbGain.connect(this.convolver);
+        this.convolver.connect(this.compressor);
+        this.masterGain.connect(this.analyser);
+      },
+
+      _buildIR() {
+        const rate = this.ctx.sampleRate;
+        const len = rate * 3;
+        const buf = this.ctx.createBuffer(2, len, rate);
+        for (let ch = 0; ch < 2; ch++) {
+          const data = buf.getChannelData(ch);
+          for (let i = 0; i < len; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (rate * 0.8));
+          }
+        }
+        this.convolver.buffer = buf;
+      },
+
+      setVolume(v) {
+        state.volume = v;
+        if (this.masterGain) this.masterGain.gain.value = v;
+      },
+
+      setReverb(v) {
+        state.reverb = v;
+        if (this.dryGain) this.dryGain.gain.value = 1 - v;
+        if (this.reverbGain) this.reverbGain.gain.value = v;
+      },
+
+      // Play a single note
+      ping(freq, duration, waveform, velocity, pan) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+
+        const osc = this.ctx.createOscillator();
+        osc.type = waveform;
+        osc.frequency.value = freq;
+
+        const env = this.ctx.createGain();
+        env.gain.value = 0;
+        env.gain.linearRampToValueAtTime(velocity, now + state.attack);
+        env.gain.linearRampToValueAtTime(0, now + duration + state.release);
+
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.value = pan;
+
+        osc.connect(env);
+        env.connect(panner);
+        panner.connect(this.masterGain);
+
+        osc.start(now);
+        osc.stop(now + duration + state.release + 0.05);
+      },
+
+      resume() {
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+      }
+    };
+
+    // ===================== SCALE HELPERS =====================
+    function scaleFreq(baseHz, scaleName, degree) {
+      const intervals = SCALES[scaleName];
+      const len = intervals.length;
+      const octave = Math.floor(degree / len);
+      const idx = ((degree % len) + len) % len;
+      return baseHz * Math.pow(2, octave + intervals[idx] / 12);
+    }
+
+    function baseFreqForOctave(oct) {
+      // C in the given octave
+      return 16.352 * Math.pow(2, oct);
+    }
+
+    // ===================== GRID PARSING =====================
+    function parseRendered(rendered) {
+      if (!rendered) return { grid: [], rows: 0, cols: 0 };
+      const lines = rendered.split('\n');
+      const rows = lines.length;
+      const cols = Math.max(...lines.map(l => [...l].length));
+      const grid = [];
+      for (let r = 0; r < rows; r++) {
+        const chars = [...(lines[r] || '')];
+        const row = new Uint8Array(cols);
+        for (let c = 0; c < cols; c++) {
+          const ch = chars[c] || ' ';
+          row[c] = (ch !== ' ' && ch !== '') ? 1 : 0;
+        }
+        grid.push(row);
+      }
+      return { grid, rows, cols };
+    }
+
+    // Get effective grid (original + edits)
+    function effectiveGrid() {
+      if (!state.editGrid) return state.grid;
+      const result = [];
+      for (let r = 0; r < state.rows; r++) {
+        const row = new Uint8Array(state.cols);
+        for (let c = 0; c < state.cols; c++) {
+          row[c] = state.editGrid[r][c] !== -1 ? state.editGrid[r][c] : state.grid[r][c];
+        }
+        result.push(row);
+      }
+      return result;
+    }
+
+    // ===================== DATA LOADING =====================
+    async function loadPieces() {
+      try {
+        const resp = await fetch('gallery.json');
+        const data = await resp.json();
+        const archive = data.archive || [];
+        // Deduplicate by id, keep first occurrence
+        const seen = new Set();
+        state.pieces = archive.filter(p => {
+          if (!p.rendered || seen.has(p.id)) return false;
+          seen.add(p.id);
+          return true;
+        }).slice(0, 60); // limit for perf
+        buildPieceSelector();
+        if (state.pieces.length > 0) loadPiece(0);
+      } catch (e) {
+        console.error('Failed to load gallery.json:', e);
+      }
+    }
+
+    function buildPieceSelector() {
+      const el = document.getElementById('pieceSelector');
+      el.innerHTML = '';
+      state.pieces.forEach((p, i) => {
+        const dot = document.createElement('div');
+        dot.className = 'piece-dot' + (i === state.currentIdx ? ' active' : '');
+        const type = p.genome?.type || 'unknown';
+        dot.style.background = TYPE_COLORS[type] || '#6e6e82';
+        dot.dataset.idx = i;
+
+        const tip = document.createElement('span');
+        tip.className = 'tooltip';
+        tip.textContent = `${type} — ${(p.score * 100).toFixed(1)}%`;
+        dot.appendChild(tip);
+
+        dot.addEventListener('click', () => loadPiece(i));
+        el.appendChild(dot);
+      });
+    }
+
+    function loadPiece(idx) {
+      state.currentIdx = idx;
+      const piece = state.pieces[idx];
+      const { grid, rows, cols } = parseRendered(piece.rendered);
+      state.grid = grid;
+      state.rows = rows;
+      state.cols = cols;
+      state.editGrid = null;
+      state.editsCount = 0;
+      state.playCol = 0;
+
+      // Update selector highlights
+      document.querySelectorAll('.piece-dot').forEach((d, i) => {
+        d.classList.toggle('active', i === idx);
+      });
+
+      // Update info panel
+      const type = piece.genome?.type || '?';
+      const color = TYPE_COLORS[type] || '#6e6e82';
+      document.getElementById('pieceInfo').innerHTML = `
+        <div><span class="label">Type:</span> <span class="value" style="color:${color}">${type}</span></div>
+        <div><span class="label">Score:</span> <span class="score">${(piece.score * 100).toFixed(1)}%</span></div>
+        <div><span class="label">Gen:</span> <span class="value">${piece.generation}</span></div>
+        <div><span class="label">Grid:</span> <span class="value">${cols} &times; ${rows}</span></div>
+        <div><span class="label">Epoch:</span> <span class="value">${piece.epoch}</span></div>
+      `;
+
+      document.getElementById('genBadge').textContent = `gen ${piece.generation} — ${type}`;
+      document.getElementById('editBadge').textContent = '';
+      updateColIndicator();
+      renderGrid();
+    }
+
+    // ===================== RENDERING =====================
+    const canvas = document.getElementById('gridCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      const area = document.getElementById('canvasArea');
+      const w = area.clientWidth;
+      const h = area.clientHeight;
+      canvas.width = w;
+      canvas.height = h;
+      renderGrid();
+    }
+
+    function renderGrid() {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, w, h);
+
+      if (state.rows === 0 || state.cols === 0) return;
+
+      const grid = effectiveGrid();
+      const cellW = w / state.cols;
+      const cellH = h / state.rows;
+
+      const piece = state.pieces[state.currentIdx];
+      const type = piece?.genome?.type || 'life2d';
+      const baseColor = TYPE_COLORS[type] || '#7c6fe0';
+
+      // Parse base color to RGB
+      const r0 = parseInt(baseColor.slice(1, 3), 16);
+      const g0 = parseInt(baseColor.slice(3, 5), 16);
+      const b0 = parseInt(baseColor.slice(5, 7), 16);
+
+      // Draw cells
+      for (let row = 0; row < state.rows; row++) {
+        for (let col = 0; col < state.cols; col++) {
+          if (grid[row][col]) {
+            const x = col * cellW;
+            const y = row * cellH;
+            // Brightness varies by row position (pitch mapping hint)
+            const bright = 0.4 + (1 - row / state.rows) * 0.6;
+            const alpha = bright * 0.85;
+
+            // Check if this is an edit
+            const isEdit = state.editGrid && state.editGrid[row][col] !== -1;
+
+            if (isEdit) {
+              ctx.fillStyle = `rgba(251, 191, 36, ${alpha})`;
+            } else {
+              ctx.fillStyle = `rgba(${r0}, ${g0}, ${b0}, ${alpha})`;
+            }
+            ctx.fillRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
+          }
+        }
+      }
+
+      // Draw layers (dimmer, behind)
+      for (const layer of state.layers) {
+        if (layer.muted || layer.pieceIdx === state.currentIdx) continue;
+        const lr = parseInt(layer.color.slice(1, 3), 16);
+        const lg = parseInt(layer.color.slice(3, 5), 16);
+        const lb = parseInt(layer.color.slice(5, 7), 16);
+        for (let row = 0; row < Math.min(layer.grid.length, state.rows); row++) {
+          for (let col = 0; col < Math.min(layer.grid[row]?.length || 0, state.cols); col++) {
+            if (layer.grid[row][col]) {
+              const x = col * cellW;
+              const y = row * cellH;
+              ctx.fillStyle = `rgba(${lr}, ${lg}, ${lb}, 0.15)`;
+              ctx.fillRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
+            }
+          }
+        }
+      }
+
+      // Draw playhead
+      if (state.playing || state.playCol > 0) {
+        const px = state.playCol * cellW;
+        // Scan line
+        ctx.fillStyle = 'rgba(74, 222, 128, 0.12)';
+        ctx.fillRect(px, 0, cellW, h);
+        // Bright line
+        ctx.fillStyle = 'rgba(74, 222, 128, 0.6)';
+        ctx.fillRect(px, 0, 1.5, h);
+
+        // Highlight active cells in playhead column
+        for (let row = 0; row < state.rows; row++) {
+          if (grid[row][state.playCol]) {
+            const y = row * cellH;
+            ctx.fillStyle = 'rgba(74, 222, 128, 0.5)';
+            ctx.shadowColor = '#4ade80';
+            ctx.shadowBlur = 6;
+            ctx.fillRect(state.playCol * cellW + 0.5, y + 0.5, cellW - 1, cellH - 1);
+          }
+        }
+        ctx.shadowBlur = 0;
+      }
+
+      // Grid lines (very subtle)
+      if (cellW > 4) {
+        ctx.strokeStyle = 'rgba(30, 30, 46, 0.3)';
+        ctx.lineWidth = 0.5;
+        for (let c = 0; c <= state.cols; c++) {
+          ctx.beginPath();
+          ctx.moveTo(c * cellW, 0);
+          ctx.lineTo(c * cellW, h);
+          ctx.stroke();
+        }
+        for (let r = 0; r <= state.rows; r++) {
+          ctx.beginPath();
+          ctx.moveTo(0, r * cellH);
+          ctx.lineTo(w, r * cellH);
+          ctx.stroke();
+        }
+      }
+
+      // Vignette
+      const vg = ctx.createRadialGradient(w / 2, h / 2, w * 0.3, w / 2, h / 2, w * 0.7);
+      vg.addColorStop(0, 'transparent');
+      vg.addColorStop(1, 'rgba(10, 10, 15, 0.4)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // ===================== SPECTRUM VISUALIZER =====================
+    const specCanvas = document.getElementById('specCanvas');
+    const specCtx = specCanvas.getContext('2d');
+
+    function drawSpectrum() {
+      if (!audio.analyser) {
+        requestAnimationFrame(drawSpectrum);
+        return;
+      }
+      const bufLen = audio.analyser.frequencyBinCount;
+      const data = new Uint8Array(bufLen);
+      audio.analyser.getByteFrequencyData(data);
+
+      const w = specCanvas.width;
+      const h = specCanvas.height;
+      specCtx.fillStyle = '#12121a';
+      specCtx.fillRect(0, 0, w, h);
+
+      const barW = w / bufLen;
+      const piece = state.pieces[state.currentIdx];
+      const type = piece?.genome?.type || 'life2d';
+      const color = TYPE_COLORS[type] || '#7c6fe0';
+
+      for (let i = 0; i < bufLen; i++) {
+        const v = data[i] / 255;
+        const barH = v * h * 0.9;
+        specCtx.fillStyle = color;
+        specCtx.globalAlpha = 0.3 + v * 0.7;
+        specCtx.fillRect(i * barW, h - barH, Math.max(barW - 0.5, 1), barH);
+      }
+      specCtx.globalAlpha = 1;
+
+      if (state.playing) requestAnimationFrame(drawSpectrum);
+    }
+
+    // ===================== PLAYBACK =====================
+    let playTimer = null;
+
+    function startPlayback() {
+      audio.init();
+      audio.resume();
+      state.playing = true;
+      document.getElementById('playBtn').classList.add('active');
+      document.getElementById('playBtn').innerHTML = '&#10074;&#10074; Pause';
+      document.getElementById('statusText').textContent = 'Playing';
+      scheduleNext();
+      drawSpectrum();
+    }
+
+    function stopPlayback() {
+      state.playing = false;
+      if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+      document.getElementById('playBtn').classList.remove('active');
+      document.getElementById('playBtn').innerHTML = '&#9654; Play';
+      document.getElementById('statusText').textContent = 'Paused';
+      renderGrid();
+    }
+
+    function resetPlayhead() {
+      state.playCol = 0;
+      updateColIndicator();
+      renderGrid();
+    }
+
+    function scheduleNext() {
+      if (!state.playing) return;
+
+      const beatMs = (60000 / state.bpm);
+      // Swing: offset even beats
+      const isEven = state.playCol % 2 === 0;
+      const swingMs = isEven ? 0 : beatMs * (state.swing / 100) * 0.5;
+
+      playTimer = setTimeout(() => {
+        if (!state.playing) return;
+        playColumn(state.playCol);
+        state.playCol++;
+
+        if (state.playCol >= state.cols) {
+          if (state.loop) {
+            state.playCol = 0;
+          } else {
+            stopPlayback();
+            return;
+          }
+        }
+
+        updateColIndicator();
+        renderGrid();
+        scheduleNext();
+      }, beatMs + swingMs);
+    }
+
+    function playColumn(col) {
+      const grid = effectiveGrid();
+      const baseHz = baseFreqForOctave(state.octave);
+      const beatDur = 60 / state.bpm;
+      const noteDur = beatDur * 0.7;
+
+      // Count active cells for velocity scaling
+      let activeCount = 0;
+      for (let r = 0; r < state.rows; r++) {
+        if (grid[r][col]) activeCount++;
+      }
+      const velScale = activeCount > 8 ? 8 / activeCount : 1;
+
+      // Play notes for active cells — rows mapped to scale degrees (top = high, bottom = low)
+      for (let r = 0; r < state.rows; r++) {
+        if (!grid[r][col]) continue;
+
+        // Map row to degree: top row = highest note, bottom = lowest
+        const degree = state.rows - 1 - r;
+        const freq = scaleFreq(baseHz, state.scale, degree);
+
+        // Stereo position from column
+        const pan = state.cols > 1 ? (col / (state.cols - 1)) * 2 - 1 : 0;
+
+        // Velocity from row brightness
+        const vel = (0.2 + (1 - r / state.rows) * 0.4) * velScale;
+
+        audio.ping(freq, noteDur, state.waveform, vel, pan * 0.5);
+      }
+
+      // Play layer notes too
+      for (const layer of state.layers) {
+        if (layer.muted) continue;
+        const lg = layer.grid;
+        for (let r = 0; r < Math.min(lg.length, state.rows); r++) {
+          if (col >= (lg[r]?.length || 0)) continue;
+          if (!lg[r][col]) continue;
+          const degree = state.rows - 1 - r;
+          const freq = scaleFreq(baseHz * 0.5, state.scale, degree); // layers one octave lower
+          const pan = state.cols > 1 ? (col / (state.cols - 1)) * 2 - 1 : 0;
+          audio.ping(freq, noteDur * 0.8, 'triangle', 0.15, pan * 0.3);
+        }
+      }
+    }
+
+    function updateColIndicator() {
+      document.getElementById('colIndicator').textContent =
+        `col ${state.playCol + 1} / ${state.cols}`;
+    }
+
+    // ===================== CELL EDITING =====================
+    function initEditGrid() {
+      if (state.editGrid) return;
+      state.editGrid = [];
+      for (let r = 0; r < state.rows; r++) {
+        state.editGrid.push(new Int8Array(state.cols).fill(-1)); // -1 = no edit
+      }
+    }
+
+    function toggleCell(row, col) {
+      initEditGrid();
+      const current = effectiveGrid();
+      const newVal = current[row][col] ? 0 : 1;
+      state.editGrid[row][col] = newVal;
+      state.editsCount++;
+      document.getElementById('editBadge').textContent = `${state.editsCount} edits`;
+
+      // Play a preview tone
+      audio.init();
+      audio.resume();
+      const baseHz = baseFreqForOctave(state.octave);
+      const degree = state.rows - 1 - row;
+      const freq = scaleFreq(baseHz, state.scale, degree);
+      const pan = state.cols > 1 ? (col / (state.cols - 1)) * 2 - 1 : 0;
+      if (newVal) {
+        audio.ping(freq, 0.2, state.waveform, 0.4, pan * 0.5);
+      }
+
+      renderGrid();
+    }
+
+    function clearEdits() {
+      state.editGrid = null;
+      state.editsCount = 0;
+      document.getElementById('editBadge').textContent = '';
+      renderGrid();
+    }
+
+    // Canvas click → cell toggle
+    canvas.addEventListener('click', (e) => {
+      if (state.rows === 0 || state.cols === 0) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const col = Math.floor(x / (canvas.width / state.cols));
+      const row = Math.floor(y / (canvas.height / state.rows));
+      if (row >= 0 && row < state.rows && col >= 0 && col < state.cols) {
+        toggleCell(row, col);
+      }
+    });
+
+    // ===================== LAYERS =====================
+    function addLayer() {
+      const piece = state.pieces[state.currentIdx];
+      if (!piece) return;
+      // Don't add duplicate
+      if (state.layers.find(l => l.pieceIdx === state.currentIdx)) return;
+
+      const { grid } = parseRendered(piece.rendered);
+      const type = piece.genome?.type || 'life2d';
+      state.layers.push({
+        pieceIdx: state.currentIdx,
+        grid,
+        color: TYPE_COLORS[type] || '#6e6e82',
+        muted: false,
+        name: `${type} #${piece.generation}`,
+      });
+      updateLayerList();
+      renderGrid();
+    }
+
+    function removeLayer(idx) {
+      state.layers.splice(idx, 1);
+      updateLayerList();
+      renderGrid();
+    }
+
+    function updateLayerList() {
+      const el = document.getElementById('layerList');
+      el.innerHTML = '';
+      state.layers.forEach((layer, i) => {
+        const pill = document.createElement('div');
+        pill.className = 'layer-pill' + (layer.muted ? '' : ' active');
+        pill.innerHTML = `
+          <span class="dot" style="background: ${layer.color}"></span>
+          <span class="name">${layer.name}</span>
+          <span class="layer-remove" data-idx="${i}">&times;</span>
+        `;
+        pill.addEventListener('click', (e) => {
+          if (e.target.classList.contains('layer-remove')) {
+            removeLayer(parseInt(e.target.dataset.idx));
+          } else {
+            layer.muted = !layer.muted;
+            updateLayerList();
+            renderGrid();
+          }
+        });
+        el.appendChild(pill);
+      });
+    }
+
+    // ===================== EVENT HANDLERS =====================
+
+    // Start
+    document.getElementById('startOverlay').addEventListener('click', () => {
+      audio.init();
+      document.getElementById('startOverlay').classList.add('hidden');
+      document.getElementById('mainContent').style.opacity = '1';
+      resizeCanvas();
+      loadPieces();
+    });
+
+    // Transport
+    document.getElementById('playBtn').addEventListener('click', () => {
+      state.playing ? stopPlayback() : startPlayback();
+    });
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      stopPlayback();
+      resetPlayhead();
+    });
+    document.getElementById('loopBtn active').addEventListener('click', (e) => {
+      // Fix the id issue
+    });
+    // Loop button by querying
+    document.querySelectorAll('.btn').forEach(btn => {
+      if (btn.textContent.includes('Loop')) {
+        btn.addEventListener('click', () => {
+          state.loop = !state.loop;
+          btn.classList.toggle('active', state.loop);
+        });
+        btn.classList.toggle('active', state.loop);
+      }
+    });
+
+    // Layers
+    document.getElementById('addLayerBtn').addEventListener('click', addLayer);
+    document.getElementById('clearLayersBtn').addEventListener('click', () => {
+      state.layers = [];
+      updateLayerList();
+      renderGrid();
+    });
+
+    // Sliders
+    document.getElementById('bpmSlider').addEventListener('input', e => {
+      state.bpm = parseInt(e.target.value);
+      document.getElementById('bpmVal').textContent = state.bpm;
+    });
+    document.getElementById('swingSlider').addEventListener('input', e => {
+      state.swing = parseInt(e.target.value);
+      document.getElementById('swingVal').textContent = state.swing + '%';
+    });
+    document.getElementById('volSlider').addEventListener('input', e => {
+      audio.init();
+      audio.setVolume(parseInt(e.target.value) / 100);
+      document.getElementById('volVal').textContent = e.target.value;
+    });
+    document.getElementById('attackSlider').addEventListener('input', e => {
+      state.attack = parseInt(e.target.value) / 1000;
+      document.getElementById('attackVal').textContent = e.target.value;
+    });
+    document.getElementById('releaseSlider').addEventListener('input', e => {
+      state.release = parseInt(e.target.value) / 1000;
+      document.getElementById('releaseVal').textContent = e.target.value;
+    });
+    document.getElementById('reverbSlider').addEventListener('input', e => {
+      audio.init();
+      audio.setReverb(parseInt(e.target.value) / 100);
+      document.getElementById('reverbVal').textContent = e.target.value;
+    });
+    document.getElementById('octaveSlider').addEventListener('input', e => {
+      state.octave = parseInt(e.target.value);
+      document.getElementById('octaveVal').textContent = state.octave;
+    });
+
+    // Scale buttons
+    document.querySelectorAll('.scale-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.scale = btn.dataset.scale;
+      });
+    });
+
+    // Wave buttons
+    document.querySelectorAll('.wave-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.wave-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.waveform = btn.dataset.wave;
+      });
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT') return;
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          state.playing ? stopPlayback() : startPlayback();
+          break;
+        case 'c': case 'C':
+          clearEdits();
+          break;
+        case 'r': case 'R':
+          loadPiece(Math.floor(Math.random() * state.pieces.length));
+          break;
+        case 'l': case 'L':
+          addLayer();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (state.currentIdx > 0) loadPiece(state.currentIdx - 1);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (state.currentIdx < state.pieces.length - 1) loadPiece(state.currentIdx + 1);
+          break;
+      }
+    });
+
+    // Resize
+    window.addEventListener('resize', resizeCanvas);
+
+    // Initial render
+    resizeCanvas();
+  </script>
+</body>
+</html>
