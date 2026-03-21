@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Murmur</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    .bg-glow {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 800px; height: 800px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.2;
+      pointer-events: none;
+      transition: opacity 2s ease;
+      z-index: 0;
+    }
+
+    .back-link {
+      position: fixed;
+      top: 1.5rem;
+      left: 1.5rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      z-index: 20;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.94);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 3.5rem;
+      color: var(--accent);
+      margin-bottom: 1.5rem;
+      text-shadow: 0 0 40px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-text {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-sub {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      margin-top: 1rem;
+      opacity: 0.4;
+      max-width: 320px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* Main layout */
+    .main {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* Top info bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      padding: 1rem 2rem;
+      flex-shrink: 0;
+    }
+    .top-bar h1 {
+      font-size: 1.1rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+    .piece-label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+    }
+    .piece-label .type-tag {
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .piece-label .score-tag {
+      color: var(--green);
+    }
+
+    /* Canvas area */
+    .canvas-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      min-height: 0;
+    }
+
+    canvas#main-canvas {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: border-color 0.5s ease;
+    }
+    canvas#main-canvas.active {
+      border-color: rgba(124, 111, 224, 0.4);
+      box-shadow: 0 0 40px var(--accent-glow);
+    }
+
+    /* Cursor info tooltip */
+    .cursor-info {
+      position: fixed;
+      pointer-events: none;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      z-index: 15;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      white-space: nowrap;
+    }
+    .cursor-info.visible { opacity: 1; }
+    .cursor-info .freq { color: var(--green); }
+    .cursor-info .cell { color: var(--accent); }
+
+    /* Bottom panel */
+    .bottom-panel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      padding: 0.8rem 2rem;
+      flex-shrink: 0;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.6rem 1.2rem;
+      background: rgba(18, 18, 26, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+    }
+
+    .ctrl-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 0.25rem 0.4rem;
+      font-size: 0.9rem;
+      transition: color 0.2s, transform 0.15s;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .ctrl-btn:hover { color: var(--text); transform: scale(1.1); }
+    .ctrl-btn.active { color: var(--green); }
+
+    .volume-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 70px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .mode-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.6rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mode-btn:hover { color: var(--text); }
+    .mode-btn.active { background: var(--accent); color: #fff; }
+
+    /* Piece selector dots */
+    .selector {
+      display: flex;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 500px;
+    }
+    .sel-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.3s;
+      padding: 0;
+    }
+    .sel-dot:hover { border-color: var(--accent); transform: scale(1.3); }
+    .sel-dot.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    /* Waveform bar */
+    .waveform-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 40px;
+      z-index: 5;
+      pointer-events: none;
+    }
+    .waveform-bar canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Shortcuts hint */
+    .shortcuts {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      opacity: 0.5;
+      text-align: center;
+      padding: 0.3rem;
+    }
+    .shortcuts kbd {
+      display: inline-block;
+      padding: 0.08rem 0.3rem;
+      border-radius: 3px;
+      background: rgba(124, 111, 224, 0.1);
+      border: 1px solid rgba(124, 111, 224, 0.2);
+      font-family: inherit;
+      font-size: 0.5rem;
+      color: var(--text);
+      margin: 0 0.1rem;
+    }
+
+    /* Synthesis type label */
+    .synth-label {
+      font-size: 0.5rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow" id="bgGlow"></div>
+  <a href="index.html" class="back-link">&larr; Gallery</a>
+
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">&#10043;</div>
+    <div class="start-text">Click to enter</div>
+    <div class="start-sub">
+      Move your cursor across each piece to hear its hidden sound.
+      Every cell is a voice. Every pattern, a song.
+    </div>
+  </div>
+
+  <div class="main" id="mainContent" style="opacity: 0; transition: opacity 0.8s ease;">
+    <div class="top-bar">
+      <h1>Murmur</h1>
+      <div class="piece-label" id="pieceLabel">
+        <span class="type-tag">—</span>
+        <span class="score-tag"></span>
+      </div>
+      <span class="synth-label" id="synthLabel">—</span>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="main-canvas" width="800" height="500"></canvas>
+    </div>
+
+    <div class="cursor-info" id="cursorInfo">
+      <span class="cell">cell 0</span> &middot; <span class="freq">220 Hz</span>
+    </div>
+
+    <div class="bottom-panel">
+      <div class="controls">
+        <button class="ctrl-btn" id="prevBtn" title="Previous">&#9664;</button>
+        <button class="ctrl-btn" id="nextBtn" title="Next">&#9654;</button>
+
+        <div style="width: 1px; height: 16px; background: var(--border);"></div>
+
+        <div class="mode-toggle">
+          <button class="mode-btn active" data-mode="touch" title="Explore with cursor">Touch</button>
+          <button class="mode-btn" data-mode="wander" title="Auto-wander">Wander</button>
+          <button class="mode-btn" data-mode="rain" title="Rain of sound">Rain</button>
+        </div>
+
+        <div style="width: 1px; height: 16px; background: var(--border);"></div>
+
+        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50" title="Volume">
+      </div>
+
+      <div class="selector" id="selector"></div>
+    </div>
+
+    <div class="shortcuts">
+      <kbd>&#8592;&#8593;</kbd> navigate &nbsp;
+      <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> mode &nbsp;
+      <kbd>Space</kbd> toggle wander
+    </div>
+  </div>
+
+  <div class="waveform-bar">
+    <canvas id="waveformCanvas"></canvas>
+  </div>
+
+  <script>
+    // ============================================================
+    //  Murmur — Spatial sonic exploration of generative art
+    //  Each piece's grid becomes a 2D sound field.
+    //  Cursor position maps to synthesis parameters.
+    //  Type-specific synthesis: granular, FM, additive, filtered.
+    // ============================================================
+
+    // --- Type-specific color schemes ---
+    const TYPE_COLORS = {
+      '1d':                  { h: 260, s: 70, base: '#6b4edb' },
+      '2d':                  { h: 145, s: 70, base: '#4ade80' },
+      'lsystem':             { h: 35,  s: 80, base: '#f5b84a' },
+      'reaction-diffusion':  { h: 290, s: 70, base: '#d44af5' },
+      'voronoi':             { h: 195, s: 70, base: '#4ad4f5' },
+      'wfc':                 { h: 330, s: 70, base: '#f54a9d' },
+      'spirograph':          { h: 75,  s: 70, base: '#d4f54a' },
+      'attractor':           { h: 20,  s: 70, base: '#f59d6b' },
+      'julia':               { h: 165, s: 70, base: '#4af5d4' },
+      'noise':               { h: 55,  s: 50, base: '#d4d44a' },
+      'flowfield':           { h: 185, s: 60, base: '#4ad4d4' },
+      'magnetic-pendulum':   { h: 220, s: 60, base: '#6ba8f5' },
+    };
+
+    // Synthesis type label per genome type
+    const SYNTH_TYPES = {
+      '1d':                  'granular · pulse train',
+      '2d':                  'additive · harmonic cluster',
+      'lsystem':             'FM · branching harmonics',
+      'reaction-diffusion':  'subtractive · resonant filter',
+      'voronoi':             'bell · struck membrane',
+      'wfc':                 'wavetable · tile chords',
+      'spirograph':          'phase · rotating harmonics',
+      'attractor':           'noise · chaotic modulation',
+      'julia':               'FM · fractal overtones',
+      'noise':               'subtractive · filtered wash',
+      'flowfield':           'granular · streaming particles',
+      'magnetic-pendulum':   'physical · pendulum resonance',
+    };
+
+    // Pentatonic scale intervals for musical mapping
+    const PENTA = [0, 3, 5, 7, 10];
+
+    function pentaFreq(baseHz, degree) {
+      const oct = Math.floor(degree / PENTA.length);
+      const idx = ((degree % PENTA.length) + PENTA.length) % PENTA.length;
+      return baseHz * Math.pow(2, (PENTA[idx] + oct * 12) / 12);
+    }
+
+    // Character intensity (0-7) from rendered ASCII
+    function charIntensity(ch) {
+      if (ch === ' ') return 0;
+      const light = '\u00B7.:~\u2801';
+      const med1  = '\u2591\u2022\u2248\u2803\u25B3\u25BD\u2726';
+      const med2  = '\u2592\u25CB\u223F\u2807\u25C7\u2727\u2766';
+      const med3  = '\u2593\u25CF\u224B\u280F\u25C8\u2605\u273F';
+      const heavy = '\u2588\u25C6\u2307\u281F\u2B21\u2736\u2740\u2741';
+      const max   = '\u2573\u25D0\u25D1\u25D2\u25D3\u2301\u283F\u28FF\u2B22\u2739\u273A';
+      if (light.includes(ch)) return 1;
+      if (med1.includes(ch))  return 2;
+      if (med2.includes(ch))  return 3;
+      if (med3.includes(ch))  return 4;
+      if (heavy.includes(ch)) return 5;
+      if (max.includes(ch))   return 6;
+      return 3;
+    }
+
+    function parseGrid(rendered) {
+      if (!rendered) return [];
+      return rendered.split('\n').filter(l => l.length > 0)
+        .map(line => [...line].map(ch => charIntensity(ch) / 6));
+    }
+
+    // ==================== Spatial Audio Engine ====================
+
+    class MurmurAudio {
+      constructor() {
+        this.ctx = null;
+        this.master = null;
+        this.compressor = null;
+        this.reverb = null;
+        this.reverbSend = null;
+        this.analyser = null;
+        this.volume = 0.5;
+        // Active voices for the current touch point
+        this.voices = [];
+        this.droneVoices = [];
+      }
+
+      init() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+        this.compressor = this.ctx.createDynamicsCompressor();
+        this.compressor.threshold.value = -18;
+        this.compressor.ratio.value = 8;
+        this.compressor.attack.value = 0.003;
+        this.compressor.release.value = 0.1;
+        this.compressor.connect(this.ctx.destination);
+
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 512;
+        this.analyser.smoothingTimeConstant = 0.85;
+        this.analyser.connect(this.compressor);
+
+        this.master = this.ctx.createGain();
+        this.master.gain.value = this.volume * 0.1;
+        this.master.connect(this.analyser);
+
+        // Algorithmic reverb (stereo convolution)
+        this.reverb = this.ctx.createConvolver();
+        this.reverb.buffer = this._makeIR(4.0, 3.0);
+        this.reverb.connect(this.compressor);
+
+        this.reverbSend = this.ctx.createGain();
+        this.reverbSend.gain.value = 0.45;
+        this.master.connect(this.reverbSend);
+        this.reverbSend.connect(this.reverb);
+
+        // Sub-bass drone foundation
+        this._startDrone();
+      }
+
+      _makeIR(dur, decay) {
+        const rate = this.ctx.sampleRate;
+        const len = rate * dur;
+        const buf = this.ctx.createBuffer(2, len, rate);
+        for (let ch = 0; ch < 2; ch++) {
+          const d = buf.getChannelData(ch);
+          for (let i = 0; i < len; i++) {
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+          }
+        }
+        return buf;
+      }
+
+      _startDrone() {
+        // Very low sub-bass pad
+        const now = this.ctx.currentTime;
+        const freqs = [32.7, 49.0]; // C1 and G1
+        for (const f of freqs) {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = f;
+          gain.gain.value = 0;
+          gain.gain.setTargetAtTime(0.03, now, 2.0);
+          osc.connect(gain);
+          gain.connect(this.master);
+          osc.start();
+          this.droneVoices.push({ osc, gain });
+        }
+      }
+
+      setVolume(v) {
+        this.volume = v;
+        if (this.master) {
+          this.master.gain.setTargetAtTime(v * 0.1, this.ctx.currentTime, 0.05);
+        }
+      }
+
+      resume() {
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+      }
+
+      // --- Type-specific synthesis for cursor position ---
+
+      // Granular pulse: short percussive grains (1D, flowfield)
+      grain(freq, intensity, pan, dur = 0.08) {
+        if (!this.ctx || intensity < 0.05) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const panner = this.ctx.createStereoPanner();
+
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        osc.detune.value = (Math.random() - 0.5) * 12;
+
+        panner.pan.value = Math.max(-1, Math.min(1, pan));
+
+        const amp = intensity * 0.6;
+        gain.gain.value = 0;
+        gain.gain.setTargetAtTime(amp, now, 0.003);
+        gain.gain.setTargetAtTime(0, now + dur * 0.3, dur * 0.5);
+
+        osc.connect(gain);
+        gain.connect(panner);
+        panner.connect(this.master);
+        osc.start(now);
+        osc.stop(now + dur + 0.1);
+      }
+
+      // Additive harmonic cluster (2D life)
+      harmonicCluster(baseFreq, intensity, pan, partials = 4) {
+        if (!this.ctx || intensity < 0.05) return;
+        const now = this.ctx.currentTime;
+        const dur = 0.3 + intensity * 0.4;
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.value = Math.max(-1, Math.min(1, pan));
+        panner.connect(this.master);
+
+        for (let p = 1; p <= partials; p++) {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = p === 1 ? 'sine' : 'triangle';
+          osc.frequency.value = baseFreq * p;
+          osc.detune.value = (Math.random() - 0.5) * 8;
+
+          const amp = (intensity * 0.35) / (p * p);
+          gain.gain.value = 0;
+          gain.gain.setTargetAtTime(amp, now, 0.01);
+          gain.gain.setTargetAtTime(0, now + dur * 0.4, dur * 0.4);
+
+          osc.connect(gain);
+          gain.connect(panner);
+          osc.start(now);
+          osc.stop(now + dur + 0.2);
+        }
+      }
+
+      // FM synthesis (lsystem, julia)
+      fmTone(carrierFreq, modRatio, modDepth, intensity, pan) {
+        if (!this.ctx || intensity < 0.05) return;
+        const now = this.ctx.currentTime;
+        const dur = 0.2 + intensity * 0.5;
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.value = Math.max(-1, Math.min(1, pan));
+        panner.connect(this.master);
+
+        const modOsc = this.ctx.createOscillator();
+        const modGain = this.ctx.createGain();
+        const carrier = this.ctx.createOscillator();
+        const carrGain = this.ctx.createGain();
+
+        modOsc.type = 'sine';
+        modOsc.frequency.value = carrierFreq * modRatio;
+        modGain.gain.value = modDepth * intensity * carrierFreq;
+
+        carrier.type = 'sine';
+        carrier.frequency.value = carrierFreq;
+
+        const amp = intensity * 0.4;
+        carrGain.gain.value = 0;
+        carrGain.gain.setTargetAtTime(amp, now, 0.008);
+        carrGain.gain.setTargetAtTime(0, now + dur * 0.3, dur * 0.5);
+
+        modOsc.connect(modGain);
+        modGain.connect(carrier.frequency);
+        carrier.connect(carrGain);
+        carrGain.connect(panner);
+
+        modOsc.start(now);
+        carrier.start(now);
+        modOsc.stop(now + dur + 0.2);
+        carrier.stop(now + dur + 0.2);
+      }
+
+      // Filtered noise (reaction-diffusion, noise)
+      filteredNoise(centerFreq, intensity, pan, q = 8) {
+        if (!this.ctx || intensity < 0.05) return;
+        const now = this.ctx.currentTime;
+        const dur = 0.15 + intensity * 0.35;
+
+        const bufSize = this.ctx.sampleRate * dur;
+        const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = centerFreq;
+        filter.Q.value = q;
+
+        const gain = this.ctx.createGain();
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.value = Math.max(-1, Math.min(1, pan));
+
+        const amp = intensity * 0.5;
+        gain.gain.value = 0;
+        gain.gain.setTargetAtTime(amp, now, 0.005);
+        gain.gain.setTargetAtTime(0, now + dur * 0.4, dur * 0.4);
+
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(panner);
+        panner.connect(this.master);
+        src.start(now);
+      }
+
+      // Bell tone (voronoi)
+      bell(freq, intensity, pan) {
+        if (!this.ctx || intensity < 0.05) return;
+        const now = this.ctx.currentTime;
+        const dur = 0.8 + intensity * 1.2;
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.value = Math.max(-1, Math.min(1, pan));
+        panner.connect(this.master);
+
+        // Inharmonic partials like a struck bell
+        const partials = [1, 2.4, 3.8, 5.1, 6.7];
+        const decays = [1.0, 0.6, 0.4, 0.3, 0.2];
+
+        for (let i = 0; i < partials.length; i++) {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq * partials[i];
+
+          const amp = (intensity * 0.25) * decays[i];
+          gain.gain.value = amp;
+          gain.gain.setTargetAtTime(0, now, dur * decays[i] * 0.4);
+
+          osc.connect(gain);
+          gain.connect(panner);
+          osc.start(now);
+          osc.stop(now + dur + 0.3);
+        }
+      }
+
+      // Synthesize based on genome type + cursor position
+      sonifyCell(genomeType, baseFreq, intensity, pan, cellVal, rowNorm, colNorm) {
+        switch (genomeType) {
+          case '1d':
+          case 'flowfield':
+            this.grain(baseFreq, intensity, pan, 0.05 + cellVal * 0.12);
+            break;
+
+          case '2d':
+            this.harmonicCluster(baseFreq, intensity, pan, 2 + Math.floor(cellVal * 4));
+            break;
+
+          case 'lsystem':
+            this.fmTone(baseFreq, 1 + cellVal * 3, 0.5 + cellVal * 2, intensity, pan);
+            break;
+
+          case 'reaction-diffusion':
+          case 'noise':
+            this.filteredNoise(baseFreq * (1 + cellVal * 4), intensity, pan, 4 + cellVal * 16);
+            break;
+
+          case 'voronoi':
+            this.bell(baseFreq, intensity, pan);
+            break;
+
+          case 'wfc':
+            // Tile chords: play 2-3 harmonic tones
+            this.harmonicCluster(baseFreq, intensity, pan, 3);
+            if (cellVal > 0.4) this.grain(baseFreq * 2, intensity * 0.5, pan, 0.1);
+            break;
+
+          case 'spirograph':
+            // Rotating harmonics: FM with slow modulator
+            this.fmTone(baseFreq, 0.5 + colNorm * 2, 0.3 + rowNorm, intensity, pan);
+            break;
+
+          case 'attractor':
+            // Chaotic: mix of noise and grain
+            this.filteredNoise(baseFreq * 2, intensity * 0.6, pan, 3);
+            this.grain(baseFreq, intensity * 0.4, pan, 0.06);
+            break;
+
+          case 'julia':
+            // Fractal overtones: FM with higher ratio for deeper cells
+            this.fmTone(baseFreq, 2 + cellVal * 5, cellVal * 3, intensity, pan);
+            break;
+
+          case 'magnetic-pendulum':
+            // Physical resonance: bell + filtered
+            this.bell(baseFreq, intensity * 0.7, pan);
+            this.filteredNoise(baseFreq * 1.5, intensity * 0.3, pan, 6);
+            break;
+
+          default:
+            this.harmonicCluster(baseFreq, intensity, pan, 3);
+        }
+      }
+
+      getFrequencyData() {
+        if (!this.analyser) return new Uint8Array(0);
+        const data = new Uint8Array(this.analyser.frequencyBinCount);
+        this.analyser.getByteFrequencyData(data);
+        return data;
+      }
+
+      destroy() {
+        this.droneVoices.forEach(v => {
+          v.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.5);
+          v.osc.stop(this.ctx.currentTime + 2);
+        });
+        this.droneVoices = [];
+      }
+    }
+
+    // ==================== Visual Renderer ====================
+
+    class MurmurRenderer {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx2d = canvas.getContext('2d');
+        this.grid = [];
+        this.typeColor = { h: 260, s: 70 };
+        this.cellW = 1;
+        this.cellH = 1;
+        this.cols = 0;
+        this.rows = 0;
+        // Glow state: recent sonified cells glow brighter
+        this.glowMap = null;
+      }
+
+      loadGrid(grid, genomeType) {
+        this.grid = grid;
+        this.rows = grid.length;
+        this.cols = grid[0]?.length || 0;
+        this.typeColor = TYPE_COLORS[genomeType] || TYPE_COLORS['2d'];
+
+        if (this.rows === 0 || this.cols === 0) return;
+
+        // Size canvas to fit nicely
+        const wrap = document.getElementById('canvasWrap');
+        const maxW = Math.min(900, wrap.clientWidth - 40);
+        const maxH = Math.min(560, wrap.clientHeight - 40);
+        this.cellW = Math.max(2, Math.min(12, Math.floor(maxW / this.cols)));
+        this.cellH = Math.max(2, Math.min(12, Math.floor(maxH / this.rows)));
+        // Keep square-ish
+        const cell = Math.min(this.cellW, this.cellH);
+        this.cellW = cell;
+        this.cellH = cell;
+
+        this.canvas.width = this.cols * this.cellW;
+        this.canvas.height = this.rows * this.cellH;
+        this.canvas.style.width = this.canvas.width + 'px';
+        this.canvas.style.height = this.canvas.height + 'px';
+
+        this.glowMap = new Float32Array(this.rows * this.cols);
+      }
+
+      // Mark a cell as recently sonified
+      triggerGlow(row, col) {
+        if (row >= 0 && row < this.rows && col >= 0 && col < this.cols) {
+          this.glowMap[row * this.cols + col] = 1.0;
+        }
+      }
+
+      // Mark a radius of cells
+      triggerGlowRadius(row, col, radius) {
+        for (let dy = -radius; dy <= radius; dy++) {
+          for (let dx = -radius; dx <= radius; dx++) {
+            const r = row + dy, c = col + dx;
+            if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) {
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist <= radius) {
+                const falloff = 1 - dist / (radius + 1);
+                const idx = r * this.cols + c;
+                this.glowMap[idx] = Math.max(this.glowMap[idx], falloff);
+              }
+            }
+          }
+        }
+      }
+
+      render(cursorRow, cursorCol) {
+        const { ctx2d: ctx, grid, canvas, cellW, cellH, rows, cols, glowMap } = this;
+        if (rows === 0) return;
+
+        const { h, s } = this.typeColor;
+
+        ctx.fillStyle = '#0a0a0f';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Decay glow
+        for (let i = 0; i < glowMap.length; i++) {
+          glowMap[i] *= 0.92;
+          if (glowMap[i] < 0.01) glowMap[i] = 0;
+        }
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const val = grid[r][c];
+            const glow = glowMap[r * cols + c];
+            const x = c * cellW;
+            const y = r * cellH;
+
+            if (val === 0 && glow < 0.01) continue;
+
+            let lightness = 8 + val * 45;
+            let saturation = s;
+
+            // Glow from sonification
+            if (glow > 0.01) {
+              lightness += glow * 40;
+              saturation = Math.min(100, s + glow * 20);
+            }
+
+            // Cursor proximity glow
+            if (cursorRow >= 0 && cursorCol >= 0) {
+              const dist = Math.sqrt((r - cursorRow) ** 2 + (c - cursorCol) ** 2);
+              if (dist < 5) {
+                const prox = 1 - dist / 5;
+                lightness += prox * 20;
+              }
+            }
+
+            const gap = cellW > 4 ? 1 : 0;
+            ctx.fillStyle = `hsl(${h}, ${saturation}%, ${Math.min(lightness, 92)}%)`;
+            ctx.fillRect(x, y, cellW - gap, cellH - gap);
+          }
+        }
+
+        // Draw cursor crosshair if active
+        if (cursorRow >= 0 && cursorCol >= 0) {
+          const cx = cursorCol * cellW + cellW / 2;
+          const cy = cursorRow * cellH + cellH / 2;
+          ctx.strokeStyle = `hsla(${h}, 80%, 70%, 0.3)`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+
+          ctx.beginPath();
+          ctx.moveTo(cx, 0);
+          ctx.lineTo(cx, canvas.height);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(0, cy);
+          ctx.lineTo(canvas.width, cy);
+          ctx.stroke();
+
+          ctx.setLineDash([]);
+
+          // Cursor dot
+          ctx.beginPath();
+          ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${h}, 90%, 80%, 0.8)`;
+          ctx.fill();
+        }
+      }
+
+      // Convert pixel coords to grid coords
+      pixelToGrid(px, py) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = px - rect.left;
+        const y = py - rect.top;
+        const col = Math.floor(x / this.cellW);
+        const row = Math.floor(y / this.cellH);
+        return {
+          row: Math.max(0, Math.min(this.rows - 1, row)),
+          col: Math.max(0, Math.min(this.cols - 1, col)),
+          inBounds: col >= 0 && col < this.cols && row >= 0 && row < this.rows
+        };
+      }
+    }
+
+    // ==================== Waveform Visualizer ====================
+
+    class WaveformVis {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx2d = canvas.getContext('2d');
+      }
+
+      render(freqData, hue) {
+        const { ctx2d: ctx, canvas } = this;
+        const w = canvas.width = canvas.parentElement.clientWidth;
+        const h = canvas.height = 40;
+
+        ctx.fillStyle = 'rgba(10, 10, 15, 0.6)';
+        ctx.fillRect(0, 0, w, h);
+
+        if (!freqData || freqData.length === 0) return;
+
+        const barCount = Math.min(128, freqData.length);
+        const barW = w / barCount;
+
+        for (let i = 0; i < barCount; i++) {
+          const val = freqData[i] / 255;
+          const barH = val * h * 0.85;
+          const lightness = 15 + val * 45;
+          ctx.fillStyle = `hsl(${hue}, 60%, ${lightness}%)`;
+          ctx.fillRect(i * barW, h - barH, barW - 0.5, barH);
+        }
+      }
+    }
+
+    // ==================== Wander / Rain Modes ====================
+
+    class WanderCursor {
+      constructor() {
+        this.x = 0.5; // normalized 0-1
+        this.y = 0.5;
+        this.vx = 0;
+        this.vy = 0;
+        this.targetX = 0.5;
+        this.targetY = 0.5;
+        this.timer = 0;
+      }
+
+      update(dt) {
+        this.timer -= dt;
+        if (this.timer <= 0) {
+          // Pick a new target
+          this.targetX = 0.05 + Math.random() * 0.9;
+          this.targetY = 0.05 + Math.random() * 0.9;
+          this.timer = 1.5 + Math.random() * 3;
+        }
+
+        // Smooth follow
+        const dx = this.targetX - this.x;
+        const dy = this.targetY - this.y;
+        this.vx += dx * 0.8 * dt;
+        this.vy += dy * 0.8 * dt;
+        this.vx *= 0.95;
+        this.vy *= 0.95;
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.x = Math.max(0, Math.min(1, this.x));
+        this.y = Math.max(0, Math.min(1, this.y));
+      }
+    }
+
+    class RainMode {
+      constructor() {
+        this.drops = [];
+        this.timer = 0;
+      }
+
+      update(dt, rows, cols) {
+        this.timer -= dt;
+        if (this.timer <= 0) {
+          // Spawn a raindrop at random column
+          this.drops.push({
+            col: Math.floor(Math.random() * cols),
+            row: 0,
+            speed: 8 + Math.random() * 20, // rows per second
+          });
+          this.timer = 0.05 + Math.random() * 0.15;
+        }
+
+        // Update drops
+        for (const drop of this.drops) {
+          drop.row += drop.speed * dt;
+        }
+        // Remove off-screen drops
+        this.drops = this.drops.filter(d => d.row < rows);
+      }
+    }
+
+    // ==================== Main App ====================
+
+    let audio = null;
+    let renderer = null;
+    let waveVis = null;
+    let pieces = [];
+    let currentIdx = 0;
+    let currentGrid = [];
+    let currentType = '2d';
+    let mode = 'touch'; // 'touch', 'wander', 'rain'
+    let cursorRow = -1, cursorCol = -1;
+    let isOverCanvas = false;
+    let wanderer = new WanderCursor();
+    let rain = new RainMode();
+    let lastTime = 0;
+    let sonifyThrottle = 0;
+    let started = false;
+
+    const mainCanvas = document.getElementById('main-canvas');
+    const waveCanvas = document.getElementById('waveformCanvas');
+    const startOverlay = document.getElementById('startOverlay');
+    const mainContent = document.getElementById('mainContent');
+    const pieceLabel = document.getElementById('pieceLabel');
+    const synthLabel = document.getElementById('synthLabel');
+    const cursorInfo = document.getElementById('cursorInfo');
+    const selectorDiv = document.getElementById('selector');
+    const bgGlow = document.getElementById('bgGlow');
+
+    // --- Load gallery ---
+    async function loadGallery() {
+      try {
+        const resp = await fetch('gallery.json');
+        const data = await resp.json();
+        pieces = (data.archive || []).filter(p => p.rendered);
+        if (pieces.length === 0) return;
+
+        // Build selector dots
+        selectorDiv.innerHTML = '';
+        pieces.forEach((p, i) => {
+          const dot = document.createElement('button');
+          dot.className = 'sel-dot';
+          dot.title = `${p.genome.type} — ${(p.score * 100).toFixed(0)}%`;
+          dot.addEventListener('click', () => selectPiece(i));
+          selectorDiv.appendChild(dot);
+        });
+      } catch (e) {
+        console.error('Failed to load gallery:', e);
+      }
+    }
+
+    function selectPiece(idx) {
+      currentIdx = idx;
+      const piece = pieces[idx];
+      if (!piece) return;
+
+      currentType = piece.genome.type;
+      currentGrid = parseGrid(piece.rendered);
+
+      // Update UI
+      pieceLabel.innerHTML = `<span class="type-tag">${currentType}</span> <span class="score-tag">${(piece.score * 100).toFixed(0)}%</span> <span style="opacity:0.4">${piece.id}</span>`;
+      synthLabel.textContent = SYNTH_TYPES[currentType] || '—';
+
+      const tc = TYPE_COLORS[currentType] || TYPE_COLORS['2d'];
+      bgGlow.style.background = `radial-gradient(circle, ${tc.base}20 0%, transparent 70%)`;
+
+      renderer.loadGrid(currentGrid, currentType);
+
+      // Update selector dots
+      selectorDiv.querySelectorAll('.sel-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === idx);
+      });
+
+      // Reset wander
+      wanderer = new WanderCursor();
+      rain = new RainMode();
+    }
+
+    function sonifyAtPosition(row, col) {
+      if (!audio || !audio.ctx || currentGrid.length === 0) return;
+
+      const rows = currentGrid.length;
+      const cols = currentGrid[0]?.length || 1;
+
+      // Sample a small neighborhood (3x3)
+      let sumVal = 0, count = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const r = row + dy, c = col + dx;
+          if (r >= 0 && r < rows && c >= 0 && c < cols) {
+            sumVal += currentGrid[r][c];
+            count++;
+          }
+        }
+      }
+      const avgVal = count > 0 ? sumVal / count : 0;
+      const cellVal = currentGrid[row]?.[col] || 0;
+
+      // Map row to pitch (lower rows = lower pitch)
+      const rowNorm = row / Math.max(rows - 1, 1);
+      const colNorm = col / Math.max(cols - 1, 1);
+      const degree = Math.floor((1 - rowNorm) * PENTA.length * 3); // 3 octaves
+      const baseFreq = pentaFreq(110, degree); // A2 base
+
+      // Pan from stereo position
+      const pan = colNorm * 2 - 1;
+
+      // Intensity from cell value + neighborhood
+      const intensity = avgVal * 0.7 + cellVal * 0.3;
+
+      audio.sonifyCell(currentType, baseFreq, intensity, pan, cellVal, rowNorm, colNorm);
+
+      // Visual feedback
+      renderer.triggerGlowRadius(row, col, 2);
+    }
+
+    // --- Animation loop ---
+    function animate(timestamp) {
+      requestAnimationFrame(animate);
+      if (!started) return;
+
+      const dt = Math.min(0.1, (timestamp - lastTime) / 1000);
+      lastTime = timestamp;
+      sonifyThrottle -= dt;
+
+      const rows = currentGrid.length;
+      const cols = currentGrid[0]?.length || 1;
+
+      if (mode === 'wander') {
+        wanderer.update(dt);
+        cursorRow = Math.floor(wanderer.y * (rows - 1));
+        cursorCol = Math.floor(wanderer.x * (cols - 1));
+        isOverCanvas = true;
+
+        if (sonifyThrottle <= 0) {
+          sonifyAtPosition(cursorRow, cursorCol);
+          sonifyThrottle = 0.08;
+        }
+      } else if (mode === 'rain') {
+        rain.update(dt, rows, cols);
+        // Sonify each drop that crosses a new row
+        for (const drop of rain.drops) {
+          const r = Math.floor(drop.row);
+          if (r >= 0 && r < rows && r !== drop._lastRow) {
+            drop._lastRow = r;
+            sonifyAtPosition(r, drop.col);
+          }
+        }
+        cursorRow = -1;
+        cursorCol = -1;
+      }
+
+      // Render
+      renderer.render(
+        isOverCanvas || mode === 'wander' ? cursorRow : -1,
+        isOverCanvas || mode === 'wander' ? cursorCol : -1
+      );
+
+      // Waveform
+      const freqData = audio ? audio.getFrequencyData() : null;
+      const hue = (TYPE_COLORS[currentType] || TYPE_COLORS['2d']).h;
+      waveVis.render(freqData, hue);
+
+      // Update cursor info
+      if ((isOverCanvas || mode === 'wander') && cursorRow >= 0) {
+        const cellVal = currentGrid[cursorRow]?.[cursorCol] || 0;
+        const rowNorm = cursorRow / Math.max(rows - 1, 1);
+        const degree = Math.floor((1 - rowNorm) * PENTA.length * 3);
+        const freq = pentaFreq(110, degree);
+        cursorInfo.querySelector('.cell').textContent = `cell [${cursorRow},${cursorCol}] = ${cellVal.toFixed(2)}`;
+        cursorInfo.querySelector('.freq').textContent = `${freq.toFixed(0)} Hz`;
+        cursorInfo.classList.add('visible');
+      } else if (mode !== 'wander') {
+        cursorInfo.classList.remove('visible');
+      }
+    }
+
+    // --- Event handlers ---
+
+    mainCanvas.addEventListener('mousemove', (e) => {
+      if (mode !== 'touch') return;
+      const pos = renderer.pixelToGrid(e.clientX, e.clientY);
+      if (!pos.inBounds) return;
+
+      cursorRow = pos.row;
+      cursorCol = pos.col;
+      isOverCanvas = true;
+
+      // Position cursor info tooltip
+      cursorInfo.style.left = (e.clientX + 15) + 'px';
+      cursorInfo.style.top = (e.clientY - 25) + 'px';
+
+      if (sonifyThrottle <= 0) {
+        sonifyAtPosition(cursorRow, cursorCol);
+        sonifyThrottle = 0.06;
+      }
+    });
+
+    mainCanvas.addEventListener('mouseenter', () => {
+      if (mode === 'touch') {
+        isOverCanvas = true;
+        mainCanvas.classList.add('active');
+      }
+    });
+
+    mainCanvas.addEventListener('mouseleave', () => {
+      isOverCanvas = false;
+      cursorRow = -1;
+      cursorCol = -1;
+      mainCanvas.classList.remove('active');
+      cursorInfo.classList.remove('visible');
+    });
+
+    // Touch support
+    mainCanvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (mode !== 'touch') return;
+      const touch = e.touches[0];
+      const pos = renderer.pixelToGrid(touch.clientX, touch.clientY);
+      if (!pos.inBounds) return;
+
+      cursorRow = pos.row;
+      cursorCol = pos.col;
+      isOverCanvas = true;
+      mainCanvas.classList.add('active');
+
+      if (sonifyThrottle <= 0) {
+        sonifyAtPosition(cursorRow, cursorCol);
+        sonifyThrottle = 0.06;
+      }
+    }, { passive: false });
+
+    mainCanvas.addEventListener('touchend', () => {
+      isOverCanvas = false;
+      cursorRow = -1;
+      cursorCol = -1;
+      mainCanvas.classList.remove('active');
+    });
+
+    // Navigation
+    document.getElementById('prevBtn').addEventListener('click', () => {
+      selectPiece((currentIdx - 1 + pieces.length) % pieces.length);
+    });
+    document.getElementById('nextBtn').addEventListener('click', () => {
+      selectPiece((currentIdx + 1) % pieces.length);
+    });
+
+    // Volume
+    document.getElementById('volumeSlider').addEventListener('input', (e) => {
+      if (audio) audio.setVolume(e.target.value / 100);
+    });
+
+    // Mode toggle
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        mode = btn.dataset.mode;
+
+        if (mode === 'wander') {
+          mainCanvas.classList.add('active');
+        } else if (mode === 'rain') {
+          mainCanvas.classList.add('active');
+          rain = new RainMode();
+        } else {
+          if (!isOverCanvas) mainCanvas.classList.remove('active');
+        }
+      });
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') {
+        selectPiece((currentIdx - 1 + pieces.length) % pieces.length);
+      } else if (e.key === 'ArrowRight') {
+        selectPiece((currentIdx + 1) % pieces.length);
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        // Toggle wander
+        const wanderBtn = document.querySelector('.mode-btn[data-mode="wander"]');
+        const touchBtn = document.querySelector('.mode-btn[data-mode="touch"]');
+        if (mode === 'wander') {
+          touchBtn.click();
+        } else {
+          wanderBtn.click();
+        }
+      } else if (e.key === '1') {
+        document.querySelector('.mode-btn[data-mode="touch"]').click();
+      } else if (e.key === '2') {
+        document.querySelector('.mode-btn[data-mode="wander"]').click();
+      } else if (e.key === '3') {
+        document.querySelector('.mode-btn[data-mode="rain"]').click();
+      }
+    });
+
+    // --- Start ---
+    startOverlay.addEventListener('click', () => {
+      startOverlay.classList.add('hidden');
+      mainContent.style.opacity = '1';
+
+      audio = new MurmurAudio();
+      audio.init();
+      audio.setVolume(document.getElementById('volumeSlider').value / 100);
+
+      renderer = new MurmurRenderer(mainCanvas);
+      waveVis = new WaveformVis(waveCanvas);
+
+      started = true;
+      lastTime = performance.now();
+
+      if (pieces.length > 0) {
+        selectPiece(0);
+      }
+
+      requestAnimationFrame(animate);
+    });
+
+    // --- Init ---
+    renderer = new MurmurRenderer(mainCanvas);
+    waveVis = new WaveformVis(waveCanvas);
+    loadGallery();
+  </script>
+</body>
+</html>
