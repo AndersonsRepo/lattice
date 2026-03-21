@@ -335,12 +335,146 @@
     }
     #kb-hint.show { opacity: 1; }
     #kb-hint div { margin-bottom: 0.2rem; }
+    #radar-wrap { position:fixed; top:3.5rem; right:1.5rem; width:140px; height:140px; opacity:0; transition:opacity 0.5s ease; pointer-events:none; z-index:10; }
+    #radar-wrap.show { opacity:0.85; }
+    #species-timeline { position:fixed; bottom:4.5rem; left:1.5rem; right:1.5rem; height:0; overflow:hidden; transition:height 0.3s ease, opacity 0.3s ease; opacity:0; z-index:9; }
+    #species-timeline.show { height:60px; opacity:1; }
+    .ctrl-btn.toggle-active { color: var(--accent); }
+
+    /* Fitness landscape — mountain silhouette behind the art */
+    #fitness-landscape {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 45%;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+    }
+    #fitness-landscape.show { opacity: 1; }
+
+    /* Lineage depth indicator */
+    #lineage-depth {
+      position: fixed;
+      top: 3.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+      z-index: 10;
+      text-align: center;
+    }
+    #lineage-depth.show { opacity: 0.7; }
+    #lineage-depth .depth-bar {
+      display: inline-block;
+      height: 3px;
+      background: var(--accent);
+      border-radius: 2px;
+      margin-top: 3px;
+      transition: width 0.4s ease;
+      opacity: 0.5;
+    }
+
+    /* Niche pressure indicators on timeline */
+    .niche-marker {
+      position: absolute;
+      bottom: -8px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    /* Metrics panel */
+    #metrics-panel {
+      position: fixed;
+      top: 3.5rem;
+      left: 1.5rem;
+      width: 200px;
+      background: rgba(18,18,26,0.92);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      opacity: 0;
+      transform: translateX(-10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: none;
+      z-index: 10;
+      backdrop-filter: blur(6px);
+    }
+    #metrics-panel.show {
+      opacity: 1;
+      transform: translateX(0);
+      pointer-events: auto;
+    }
+    .mp-header {
+      font-size: 0.55rem;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+    #sparkline {
+      width: 100%;
+      height: 30px;
+      margin-bottom: 0.5rem;
+      border-radius: 4px;
+    }
+    .metric-bar {
+      display: flex;
+      align-items: center;
+      margin-bottom: 3px;
+      font-size: 0.55rem;
+    }
+    .metric-bar .mb-label {
+      width: 55px;
+      color: var(--text-dim);
+      letter-spacing: 0.03em;
+      flex-shrink: 0;
+    }
+    .metric-bar .mb-track {
+      flex: 1;
+      height: 4px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .metric-bar .mb-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+    .metric-bar .mb-val {
+      width: 28px;
+      text-align: right;
+      color: var(--text-dim);
+      margin-left: 4px;
+    }
+    #evo-telemetry {
+      margin-top: 0.5rem;
+      padding-top: 0.4rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.52rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .evo-label { color: var(--text-dim); }
+    .evo-val { color: var(--text); }
+    .evo-extinction { color: var(--red); font-weight: bold; }
   </style>
 </head>
 <body>
 
 <canvas id="canvas"></canvas>
+<canvas id="fitness-landscape"></canvas>
 <div id="epoch-flash"></div>
+<div id="lineage-depth"><span id="lineage-label"></span><br><span class="depth-bar" id="depth-bar"></span></div>
+<div id="radar-wrap"><canvas id="radar-canvas" width="280" height="280" style="width:100%;height:100%"></canvas></div>
+<div id="species-timeline"><canvas id="species-canvas"></canvas></div>
 
 <!-- Back link -->
 <a href="index.html" id="back-btn">← Lattice</a>
@@ -379,7 +513,20 @@
       <button class="speed-btn" data-speed="2">2×</button>
       <button class="speed-btn" data-speed="4">4×</button>
     </div>
+    <div class="ctrl-sep"></div>
+    <button class="ctrl-btn" id="btn-landscape" title="Fitness Landscape (L)">▲</button>
+    <button class="ctrl-btn" id="btn-radar" title="Species Radar (R)">◎</button>
+    <button class="ctrl-btn" id="btn-strata" title="Species Timeline (S)">▤</button>
+    <button class="ctrl-btn" id="btn-metrics" title="Metrics Panel (M)">☰</button>
   </div>
+</div>
+
+<!-- Metrics panel -->
+<div id="metrics-panel">
+  <div class="mp-header">METRICS</div>
+  <canvas id="sparkline" width="320" height="60"></canvas>
+  <div id="metric-bars"></div>
+  <div id="evo-telemetry"></div>
 </div>
 
 <!-- Keyboard hints -->
@@ -387,6 +534,9 @@
   <div>Space — play / pause</div>
   <div>← → — step frame</div>
   <div>1–4 — jump to epoch</div>
+  <div>R — species radar</div>
+  <div>S — species strata</div>
+  <div>M — metrics panel</div>
 </div>
 
 <!-- Start overlay -->
@@ -585,6 +735,20 @@ function computeEvents(data, sortedArchive) {
     }
   }
 
+  // Extinction events
+  for (const h of data.history || []) {
+    if (h.extinctionEvent && !ev[h.generation]) {
+      ev[h.generation] = `☄ extinction event — the slate is wiped, survivors adapt`;
+    }
+  }
+
+  // Diversity milestones
+  for (const h of data.history || []) {
+    if (h.diversityIndex !== undefined && h.diversityIndex > 0.85 && !ev[h.generation]) {
+      ev[h.generation] = `peak diversity — ${Object.keys(h.speciesCounts || {}).length} species coexist`;
+    }
+  }
+
   // HoF induction (use generation from HoF pieces)
   for (const p of (data.hallOfFame || [])) {
     const gen = p.generation;
@@ -694,6 +858,11 @@ function updateHUD() {
   // Epoch flash on transitions
   const isEpochEvent = ev && ev.includes('epoch shift');
   if (isEpochEvent) triggerEpochFlash(epochColor);
+
+  // Update panels
+  if (radarVisible) drawRadar();
+  if (strataVisible) drawSpeciesTimeline();
+  if (metricsVisible) updateMetricsPanel();
 }
 
 let narrativeTimeout = null;
@@ -844,8 +1013,301 @@ window.addEventListener('keydown', e => {
   } else if (e.key === 'k') {
     const hint = document.getElementById('kb-hint');
     hint.classList.toggle('show');
+  } else if (e.key === 'r' || e.key === 'R') {
+    document.getElementById('btn-radar').click();
+  } else if (e.key === 's' && !e.ctrlKey && !e.metaKey) {
+    document.getElementById('btn-strata').click();
+  } else if (e.key === 'm' || e.key === 'M') {
+    document.getElementById('btn-metrics').click();
   }
 });
+
+// ── Toggle panels ────────────────────────────────────────────────────────────
+let radarVisible = false, strataVisible = false, metricsVisible = false;
+
+document.getElementById('btn-radar').addEventListener('click', () => {
+  radarVisible = !radarVisible;
+  document.getElementById('radar-wrap').classList.toggle('show', radarVisible);
+  document.getElementById('btn-radar').classList.toggle('toggle-active', radarVisible);
+  if (radarVisible && archive.length > 0) drawRadar();
+});
+
+document.getElementById('btn-strata').addEventListener('click', () => {
+  strataVisible = !strataVisible;
+  document.getElementById('species-timeline').classList.toggle('show', strataVisible);
+  document.getElementById('btn-strata').classList.toggle('toggle-active', strataVisible);
+  if (strataVisible) drawSpeciesTimeline();
+});
+
+document.getElementById('btn-metrics').addEventListener('click', () => {
+  metricsVisible = !metricsVisible;
+  document.getElementById('metrics-panel').classList.toggle('show', metricsVisible);
+  document.getElementById('btn-metrics').classList.toggle('toggle-active', metricsVisible);
+  if (metricsVisible && archive.length > 0) updateMetricsPanel();
+});
+
+// ── Species Radar Chart ─────────────────────────────────────────────────────
+let historyData = [];
+
+function drawRadar() {
+  const rc = document.getElementById('radar-canvas');
+  const rctx = rc.getContext('2d');
+  const W = rc.width, H = rc.height;
+  rctx.clearRect(0, 0, W, H);
+
+  if (archive.length === 0) return;
+  const piece = archive[currentIndex];
+  const gen = piece.generation;
+
+  // Find history entry closest to this generation
+  const histEntry = historyData.find(h => h.generation === gen) || historyData[historyData.length - 1];
+  if (!histEntry || !histEntry.speciesCounts) return;
+
+  const species = Object.keys(TYPE_COLORS);
+  const counts = species.map(s => histEntry.speciesCounts[s] || 0);
+  const maxCount = Math.max(...counts, 1);
+  const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.38;
+
+  // Draw rings
+  for (let r = 0.25; r <= 1; r += 0.25) {
+    rctx.beginPath();
+    rctx.arc(cx, cy, R * r, 0, Math.PI * 2);
+    rctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    rctx.stroke();
+  }
+
+  // Draw spokes + labels
+  const n = species.length;
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const x = cx + Math.cos(angle) * R;
+    const y = cy + Math.sin(angle) * R;
+    rctx.beginPath();
+    rctx.moveTo(cx, cy);
+    rctx.lineTo(x, y);
+    rctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    rctx.stroke();
+
+    // Species label
+    const lx = cx + Math.cos(angle) * (R + 12);
+    const ly = cy + Math.sin(angle) * (R + 12);
+    rctx.fillStyle = (TYPE_COLORS[species[i]]?.colors[4]) || '#666';
+    rctx.font = '14px monospace';
+    rctx.textAlign = 'center';
+    rctx.textBaseline = 'middle';
+    rctx.fillText(species[i].slice(0, 3), lx, ly);
+  }
+
+  // Draw filled polygon
+  rctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const r = (counts[i] / maxCount) * R;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    if (i === 0) rctx.moveTo(x, y);
+    else rctx.lineTo(x, y);
+  }
+  rctx.closePath();
+  rctx.fillStyle = 'rgba(124,111,224,0.15)';
+  rctx.fill();
+  rctx.strokeStyle = 'rgba(124,111,224,0.6)';
+  rctx.lineWidth = 1.5;
+  rctx.stroke();
+
+  // Draw dots at vertices
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const r = (counts[i] / maxCount) * R;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    if (counts[i] > 0) {
+      rctx.beginPath();
+      rctx.arc(x, y, 3, 0, Math.PI * 2);
+      rctx.fillStyle = (TYPE_COLORS[species[i]]?.colors[5]) || '#7c6fe0';
+      rctx.fill();
+    }
+  }
+}
+
+// ── Species Stacked Timeline ────────────────────────────────────────────────
+function drawSpeciesTimeline() {
+  const sc = document.getElementById('species-canvas');
+  const wrap = document.getElementById('species-timeline');
+  sc.width = wrap.clientWidth * devicePixelRatio;
+  sc.height = 50 * devicePixelRatio;
+  sc.style.width = wrap.clientWidth + 'px';
+  sc.style.height = '50px';
+  const sctx = sc.getContext('2d');
+  sctx.clearRect(0, 0, sc.width, sc.height);
+
+  if (historyData.length === 0) return;
+
+  const species = Object.keys(TYPE_COLORS);
+  const W = sc.width, H = sc.height;
+
+  // For each generation in history, stack species counts
+  for (let gi = 0; gi < historyData.length; gi++) {
+    const h = historyData[gi];
+    const x = (gi / Math.max(historyData.length - 1, 1)) * W;
+    const barW = Math.max(W / historyData.length, 1.5);
+    const total = Object.values(h.speciesCounts || {}).reduce((s, v) => s + v, 0) || 1;
+    let yOff = 0;
+    for (const sp of species) {
+      const count = (h.speciesCounts || {})[sp] || 0;
+      const segH = (count / total) * H;
+      if (segH > 0) {
+        sctx.fillStyle = (TYPE_COLORS[sp]?.colors[4]) || '#444';
+        sctx.globalAlpha = 0.7;
+        sctx.fillRect(x, yOff, barW, segH);
+        yOff += segH;
+      }
+    }
+  }
+  sctx.globalAlpha = 1;
+
+  // Draw playhead
+  const playX = (currentIndex / Math.max(archive.length - 1, 1)) * W;
+  sctx.fillStyle = '#fff';
+  sctx.fillRect(playX - 1, 0, 2, H);
+}
+
+// ── Fitness Sparkline ───────────────────────────────────────────────────────
+function drawSparkline() {
+  const sl = document.getElementById('sparkline');
+  const slctx = sl.getContext('2d');
+  const W = sl.width, H = sl.height;
+  slctx.clearRect(0, 0, W, H);
+
+  if (historyData.length < 2) return;
+
+  const scores = historyData.map(h => h.bestScore);
+  const minS = Math.min(...scores) * 0.95;
+  const maxS = Math.max(...scores) * 1.02;
+  const range = Math.max(maxS - minS, 0.01);
+
+  // Area fill
+  slctx.beginPath();
+  slctx.moveTo(0, H);
+  for (let i = 0; i < scores.length; i++) {
+    const x = (i / (scores.length - 1)) * W;
+    const y = H - ((scores[i] - minS) / range) * H;
+    slctx.lineTo(x, y);
+  }
+  slctx.lineTo(W, H);
+  slctx.closePath();
+  const grad = slctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(124,111,224,0.25)');
+  grad.addColorStop(1, 'rgba(124,111,224,0.02)');
+  slctx.fillStyle = grad;
+  slctx.fill();
+
+  // Line
+  slctx.beginPath();
+  for (let i = 0; i < scores.length; i++) {
+    const x = (i / (scores.length - 1)) * W;
+    const y = H - ((scores[i] - minS) / range) * H;
+    if (i === 0) slctx.moveTo(x, y);
+    else slctx.lineTo(x, y);
+  }
+  slctx.strokeStyle = '#7c6fe0';
+  slctx.lineWidth = 1.5;
+  slctx.stroke();
+
+  // Avg line
+  const avgScores = historyData.map(h => h.avgScore);
+  slctx.beginPath();
+  for (let i = 0; i < avgScores.length; i++) {
+    const x = (i / (avgScores.length - 1)) * W;
+    const y = H - ((avgScores[i] - minS) / range) * H;
+    if (i === 0) slctx.moveTo(x, y);
+    else slctx.lineTo(x, y);
+  }
+  slctx.strokeStyle = 'rgba(74,222,128,0.4)';
+  slctx.lineWidth = 1;
+  slctx.stroke();
+
+  // Current position marker
+  const curHistIdx = historyData.findIndex(h => h.generation === archive[currentIndex]?.generation);
+  if (curHistIdx >= 0) {
+    const x = (curHistIdx / (scores.length - 1)) * W;
+    const y = H - ((scores[curHistIdx] - minS) / range) * H;
+    slctx.beginPath();
+    slctx.arc(x, y, 3, 0, Math.PI * 2);
+    slctx.fillStyle = '#fff';
+    slctx.fill();
+  }
+
+  // Extinction markers
+  for (let i = 0; i < historyData.length; i++) {
+    if (historyData[i].extinctionEvent) {
+      const x = (i / (scores.length - 1)) * W;
+      slctx.fillStyle = 'rgba(239,68,68,0.6)';
+      slctx.fillRect(x - 1, 0, 2, H);
+      slctx.font = '16px monospace';
+      slctx.fillText('☄', x - 5, 12);
+    }
+  }
+}
+
+// ── Metrics Panel Update ────────────────────────────────────────────────────
+function updateMetricsPanel() {
+  if (!metricsVisible || archive.length === 0) return;
+  const piece = archive[currentIndex];
+  const m = piece.metrics || {};
+
+  drawSparkline();
+
+  // Metric bars
+  const bars = [
+    { label: 'complex', val: m.complexity || 0, max: 3, color: '#7c6fe0' },
+    { label: 'symmetry', val: m.symmetry || 0, max: 1, color: '#4ade80' },
+    { label: 'density', val: m.density || 0, max: 1, color: '#fbbf24' },
+    { label: 'edge', val: m.edgeActivity || 0, max: 1, color: '#ef4444' },
+    { label: 'fractal', val: m.fractalDimension || 0, max: 2, color: '#22d3ee' },
+    { label: 'info', val: m.informationDensity || 0, max: 1, color: '#a78bfa' },
+    { label: 'struct', val: m.structuralInterest || 0, max: 1, color: '#fb923c' },
+    { label: 'cohere', val: m.spatialCoherence || 0, max: 1, color: '#34d399' },
+  ];
+
+  const barsEl = document.getElementById('metric-bars');
+  barsEl.innerHTML = bars.map(b => {
+    const pct = Math.min((b.val / b.max) * 100, 100);
+    const display = b.max > 1 ? b.val.toFixed(2) : (b.val * 100).toFixed(0) + '%';
+    return `<div class="metric-bar">
+      <span class="mb-label">${b.label}</span>
+      <div class="mb-track"><div class="mb-fill" style="width:${pct}%;background:${b.color}"></div></div>
+      <span class="mb-val">${display}</span>
+    </div>`;
+  }).join('');
+
+  // Evolution telemetry
+  const histEntry = historyData.find(h => h.generation === piece.generation);
+  const telEl = document.getElementById('evo-telemetry');
+  if (histEntry) {
+    const lines = [];
+    if (histEntry.diversityIndex !== undefined) {
+      lines.push(`<span class="evo-label">diversity</span> <span class="evo-val">${(histEntry.diversityIndex * 100).toFixed(0)}%</span>`);
+    }
+    if (histEntry.crossoverRate !== undefined) {
+      lines.push(`<span class="evo-label">crossover</span> <span class="evo-val">${(histEntry.crossoverRate * 100).toFixed(0)}%</span>`);
+    }
+    if (histEntry.extinctionEvent) {
+      lines.push(`<span class="evo-extinction">☄ EXTINCTION</span>`);
+    }
+    // Species momentum
+    if (histEntry.speciesMomentum) {
+      const sorted = Object.entries(histEntry.speciesMomentum).sort((a, b) => b[1] - a[1]);
+      const top = sorted[0];
+      if (top && top[1] > 0) {
+        lines.push(`<span class="evo-label">trending</span> <span class="evo-val">↑ ${top[0]}</span>`);
+      }
+    }
+    telEl.innerHTML = lines.join('<br>');
+  } else {
+    telEl.innerHTML = '';
+  }
+}
 
 // ── Start overlay ─────────────────────────────────────────────────────────────
 document.getElementById('start-overlay').addEventListener('click', () => {
@@ -866,6 +1328,7 @@ async function init() {
 
   // Sort archive by generation ascending
   archive = [...(data.archive || [])].sort((a, b) => a.generation - b.generation);
+  historyData = (data.history || []).sort((a, b) => a.generation - b.generation);
 
   if (archive.length === 0) {
     document.getElementById('start-overlay').innerHTML =
@@ -888,6 +1351,7 @@ async function init() {
   const lastGen  = archive[archive.length - 1].generation;
   const typeSet  = new Set(archive.map(p => p.genome.type));
   const bestScore = Math.max(...archive.map(p => p.score));
+  const extinctions = historyData.filter(h => h.extinctionEvent).length;
   document.getElementById('start-stats').innerHTML = `
     <div class="start-stat">
       <div class="start-stat-val">${archive.length}</div>
@@ -905,6 +1369,10 @@ async function init() {
       <div class="start-stat-val">${(bestScore * 100).toFixed(1)}%</div>
       <div class="start-stat-label">peak fitness</div>
     </div>
+    ${extinctions > 0 ? `<div class="start-stat">
+      <div class="start-stat-val">${extinctions}</div>
+      <div class="start-stat-label">extinctions</div>
+    </div>` : ''}
   `;
 
   // Initial draw and HUD

@@ -64,6 +64,11 @@ const NOTIFY_FILE = join(
 const POPULATION_SIZE = 14;
 const OFFSPRING_PER_RUN = 8; // more offspring = more exploration
 const HALL_OF_FAME_THRESHOLD = 0.55;
+const ELITE_COUNT = 2; // top N pieces survive unmutated (elitism)
+const EXTINCTION_INTERVAL = 50; // every N generations, trigger extinction event
+const EXTINCTION_SURVIVAL_RATE = 0.4; // fraction that survive extinction
+const STAGNATION_EXTINCTION_GENS = 25; // trigger extinction after N generations of stagnation
+const NICHE_BONUS_WEIGHT = 0.08; // scoring bonus for species underrepresented in hall of fame
 
 // Speciation: minimum slots per genome type (1 per type with 9 types)
 const MIN_SLOTS_PER_TYPE = 1;
@@ -84,6 +89,16 @@ interface GenerationRecord {
     score: number;
     metrics: PieceMetrics;
   };
+  // Evolution telemetry
+  extinctionEvent?: boolean;
+  extinctionTrigger?: "periodic" | "stagnation"; // what caused the extinction
+  eliteSurvivors?: number;
+  crossoverRate?: number;
+  diversityIndex?: number; // Simpson's diversity index
+  speciesMomentum?: Record<string, number>; // score delta per species vs previous gen
+  nicheBonus?: Record<string, number>; // niche pressure bonus per species
+  maxLineageDepth?: number; // deepest mutation chain in population
+  stagnationStreak?: number; // consecutive generations without improvement
 }
 
 interface Population {
@@ -400,7 +415,101 @@ async function run(): Promise<void> {
   if (existsSync(HISTORY_FILE)) { try { history = JSON.parse(readFileSync(HISTORY_FILE, "utf-8")); } catch {} }
   const recentBest = history.slice(-15).map(h => h.bestScore);
   const isStagnant = recentBest.length >= 15 && (Math.max(...recentBest) - Math.min(...recentBest)) < 0.005;
-  if (isStagnant) console.log("  Stagnation detected");
+  if (isStagnant) {
+    console.log("  Stagnation detected — injecting immigrants");
+    // Immigration: add 2 fresh random genomes to break local optima
+    const immigrantTypes = GENOME_TYPES.filter(() => rng() < 0.3).slice(0, 2);
+    if (immigrantTypes.length === 0) immigrantTypes.push(GENOME_TYPES[Math.floor(rng() * GENOME_TYPES.length)]);
+    for (const type of immigrantTypes) {
+      const seeds = SEED_GENOMES.filter(g => g.type === type);
+      if (seeds.length > 0) {
+        const seed = seeds[Math.floor(rng() * seeds.length)];
+        const immigrant = generatePiece({ ...seed, seed: Math.floor(rng() * 2 ** 32) }, gen, popMetrics);
+        pop.pieces.push(immigrant);
+        console.log(`  ✈ Immigrant ${immigrant.id}: ${type} → ${(immigrant.score*100).toFixed(1)}%`);
+      }
+    }
+  }
+
+  // Count consecutive stagnant generations for adaptive extinction
+  let stagnationStreak = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].stagnationStreak !== undefined) {
+      stagnationStreak = isStagnant ? (history[i].stagnationStreak ?? 0) + 1 : 0;
+      break;
+    }
+    // Fallback: check if this gen was stagnant too
+    if (i > 14) {
+      const slice = history.slice(i - 14, i + 1).map(h => h.bestScore);
+      if ((Math.max(...slice) - Math.min(...slice)) < 0.005) {
+        stagnationStreak++;
+      } else break;
+    } else break;
+  }
+  if (isStagnant && stagnationStreak === 0) stagnationStreak = 1;
+
+  // Niche pressure — bonus for species underrepresented in hall of fame
+  const hofTypeCounts: Record<string, number> = {};
+  for (const p of pop.hallOfFame) {
+    hofTypeCounts[p.genome.type] = (hofTypeCounts[p.genome.type] || 0) + 1;
+  }
+  const hofTotal = Math.max(pop.hallOfFame.length, 1);
+  const nicheBonus: Record<string, number> = {};
+  for (const type of GENOME_TYPES) {
+    const hofFraction = (hofTypeCounts[type] || 0) / hofTotal;
+    // Species with 0 HoF entries get full bonus, well-represented ones get none
+    nicheBonus[type] = NICHE_BONUS_WEIGHT * Math.max(0, 1 - hofFraction * GENOME_TYPES.length);
+  }
+  const hasNicheBonus = Object.values(nicheBonus).some(v => v > 0.01);
+  if (hasNicheBonus) {
+    console.log(`  Niche pressure: ${Object.entries(nicheBonus).filter(([,v]) => v > 0.01).map(([t,v]) => `${t}=+${(v*100).toFixed(1)}%`).join(", ")}`);
+  }
+
+  // Extinction event — periodic OR triggered by prolonged stagnation
+  const periodicExtinction = gen > 1 && gen % EXTINCTION_INTERVAL === 0;
+  const stagnationExtinction = stagnationStreak >= STAGNATION_EXTINCTION_GENS;
+  const isExtinction = periodicExtinction || stagnationExtinction;
+  const extinctionTrigger: "periodic" | "stagnation" | undefined = periodicExtinction ? "periodic" : stagnationExtinction ? "stagnation" : undefined;
+  if (isExtinction) {
+    const surviveCount = Math.max(3, Math.ceil(pop.pieces.length * EXTINCTION_SURVIVAL_RATE));
+    // Keep best piece per species + random survivors
+    const extinctionSurvivors: Piece[] = [];
+    const seenTypes = new Set<string>();
+    for (const p of pop.pieces) {
+      if (!seenTypes.has(p.genome.type)) {
+        extinctionSurvivors.push(p);
+        seenTypes.add(p.genome.type);
+      }
+    }
+    // Fill remaining with random picks
+    const remaining = pop.pieces.filter(p => !extinctionSurvivors.includes(p));
+    while (extinctionSurvivors.length < surviveCount && remaining.length > 0) {
+      const idx = Math.floor(rng() * remaining.length);
+      extinctionSurvivors.push(remaining.splice(idx, 1)[0]);
+    }
+    const culledCount = pop.pieces.length - extinctionSurvivors.length;
+    pop.pieces = extinctionSurvivors;
+    console.log(`  ☄ EXTINCTION EVENT (${extinctionTrigger}) — culled ${culledCount} pieces, ${extinctionSurvivors.length} survive`);
+  }
+
+  // Diversity measurement — Simpson's diversity index
+  const speciesForDiversity: Record<string, number> = {};
+  for (const p of pop.pieces) {
+    speciesForDiversity[p.genome.type] = (speciesForDiversity[p.genome.type] || 0) + 1;
+  }
+  const totalForDiversity = pop.pieces.length;
+  let simpsonSum = 0;
+  for (const count of Object.values(speciesForDiversity)) {
+    simpsonSum += (count / totalForDiversity) ** 2;
+  }
+  const diversityIndex = 1 - simpsonSum; // 0 = monoculture, 1 = max diversity
+
+  // Adaptive crossover rate — increase when diversity is low
+  const baseCrossoverRate = 0.3;
+  const crossoverRate = diversityIndex < 0.5
+    ? baseCrossoverRate + (0.5 - diversityIndex) * 0.4 // up to 0.5 when monoculture
+    : baseCrossoverRate;
+  console.log(`  Diversity: ${(diversityIndex * 100).toFixed(1)}% | Crossover rate: ${(crossoverRate * 100).toFixed(0)}%`);
 
   function adaptiveMutate(genome: Genome, parentScore: number): Genome {
     const best = pop.pieces[0]?.score ?? 0.5, worst = pop.pieces[pop.pieces.length-1]?.score ?? 0;
@@ -412,14 +521,19 @@ async function run(): Promise<void> {
   }
 
   const offspring: Piece[] = [];
-  const effOff = isStagnant ? OFFSPRING_PER_RUN + 4 : OFFSPRING_PER_RUN;
+  const effOff = isStagnant ? OFFSPRING_PER_RUN + 4 : (isExtinction ? OFFSPRING_PER_RUN + 6 : OFFSPRING_PER_RUN);
   for (let i = 0; i < effOff; i++) {
     let childGenome: Genome;
     const parent = tournamentSelect(pop.pieces);
-    if (rng() < 0.3 && pop.pieces.length >= 2) {
+    if (rng() < crossoverRate && pop.pieces.length >= 2) {
+      // Prefer inter-species crossover when diversity is low
       let other = tournamentSelect(pop.pieces);
       let att = 0;
-      while (other.id === parent.id && att < 5) { other = tournamentSelect(pop.pieces); att++; }
+      const preferInterSpecies = diversityIndex < 0.5;
+      while (att < 8 && (other.id === parent.id || (preferInterSpecies && other.genome.type === parent.genome.type && att < 5))) {
+        other = tournamentSelect(pop.pieces);
+        att++;
+      }
       childGenome = crossoverGenomes(parent.genome, other.genome, rng);
       if (rng() < 0.5) childGenome = mutateGenome(childGenome, rng);
       console.log(`  Crossover ${parent.genome.type}\u00d7${other.genome.type} \u2192 ${childGenome.type}`);
@@ -431,7 +545,7 @@ async function run(): Promise<void> {
     console.log(`  Offspring ${child.id}: ${child.genome.type} \u2192 ${(child.score*100).toFixed(1)}% (novelty: ${(child.metrics.novelty*100).toFixed(0)}%)`);
   }
 
-  // Fitness sharing
+  // Fitness sharing + niche pressure
   const allPieces = [...pop.pieces, ...offspring];
   const SHARING_RADIUS = 0.15;
   const sharedScores = new Map<string, number>();
@@ -439,17 +553,29 @@ async function run(): Promise<void> {
     const sameType = allPieces.filter(p => p.genome.type === piece.genome.type);
     let nc = 0;
     for (const o of sameType) { const d = metricDistance(piece.metrics, o.metrics); if (d < SHARING_RADIUS) nc += 1 - d/SHARING_RADIUS; }
-    sharedScores.set(piece.id, piece.score / Math.max(nc, 1));
+    // Apply niche bonus: underrepresented species get a scoring uplift
+    const bonus = nicheBonus[piece.genome.type] ?? 0;
+    sharedScores.set(piece.id, (piece.score + bonus) / Math.max(nc, 1));
   }
   allPieces.sort((a, b) => (sharedScores.get(b.id) ?? b.score) - (sharedScores.get(a.id) ?? a.score));
 
-    // Speciation-aware selection
+    // Elitism: top N pieces survive unchanged (prevents regression)
+  const elites = allPieces.slice(0, ELITE_COUNT);
+  console.log(`  Elites preserved: ${elites.map(e => `${e.genome.type}@${(e.score*100).toFixed(1)}%`).join(", ")}`);
+
+  // Speciation-aware selection
   const survivors: Piece[] = [];
   const reserved = new Set<string>();
 
-  // First pass: reserve top pieces per type
+  // Elite pieces are always included
+  for (const p of elites) {
+    survivors.push(p);
+    reserved.add(p.id);
+  }
+
+  // Second pass: reserve top pieces per type (that aren't already elite)
   for (const type of GENOME_TYPES) {
-    const ofType = allPieces.filter((p) => p.genome.type === type);
+    const ofType = allPieces.filter((p) => p.genome.type === type && !reserved.has(p.id));
     const toReserve = ofType.slice(0, MIN_SLOTS_PER_TYPE);
     for (const p of toReserve) {
       survivors.push(p);
@@ -505,6 +631,26 @@ async function run(): Promise<void> {
   // Save population to both Supabase and JSON
   await savePop(pop);
 
+  // Compute species momentum (avg score change vs previous generation)
+  const speciesMomentum: Record<string, number> = {};
+  const prevGen = history[history.length - 1];
+  if (prevGen) {
+    for (const type of Object.keys(typeCounts)) {
+      const currentAvg = survivors.filter(s => s.genome.type === type)
+        .reduce((s, p) => s + p.score, 0) / (typeCounts[type] || 1);
+      // Compare against previous generation's best score as a proxy
+      const prevSpeciesCount = prevGen.speciesCounts?.[type] ?? 0;
+      if (prevSpeciesCount > 0) {
+        speciesMomentum[type] = +(currentAvg - prevGen.avgScore).toFixed(4);
+      } else {
+        speciesMomentum[type] = 0; // new species, no delta
+      }
+    }
+  }
+
+  // Compute max lineage depth (longest mutation chain in population)
+  const maxLineageDepth = Math.max(...survivors.map(s => s.genome.mutations), 0);
+
   const genRecord: GenerationRecord = {
     generation: gen,
     bestScore: bestScore,
@@ -519,6 +665,15 @@ async function run(): Promise<void> {
       score: survivors[0].score,
       metrics: survivors[0].metrics,
     } : undefined,
+    extinctionEvent: isExtinction,
+    extinctionTrigger: isExtinction ? extinctionTrigger : undefined,
+    eliteSurvivors: ELITE_COUNT,
+    crossoverRate,
+    diversityIndex,
+    speciesMomentum,
+    nicheBonus: hasNicheBonus ? nicheBonus : undefined,
+    maxLineageDepth,
+    stagnationStreak: isStagnant ? stagnationStreak : 0,
   };
   history.push(genRecord);
   writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
