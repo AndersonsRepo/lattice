@@ -4,6 +4,26 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Branching: L-System Laboratory + Engine Expansion
+- **What**: Interactive L-system laboratory (`docs/branching.html`) with 25+ curated presets and major engine enhancements to `src/automata.ts`.
+- **Engine additions**:
+  - 15 new production rule templates: Gosper flowsnake, Lévy C curve, Peano curve, rosette/succulent forms, staghorn coral, golden spiral branch, climbing vine, flowering vine, dense understory, seasonal fruiting tree, and more
+  - 5 new L-system seed genomes using the full parametric feature set (Gosper, Lévy C, stochastic seasonal tree, climbing vine, rosette succulent)
+  - Random genome generation now includes `branchProbability`, `seasonalPhase`, `heliotropism`, and `stepWave` parameters
+- **Page features**:
+  - 4 preset categories (Botanical, Fractal, Organic, Stochastic) with 25+ presets total
+  - Full parametric sliders: angle, iterations, jitter, length scale, tropism, width decay, leaf size, flower petals, pruning, season, heliotropism, step wave
+  - Editable grammar: axiom, deterministic rules, stochastic variant rules
+  - 11 color themes with gradient-based depth coloring
+  - Smooth anti-aliased line rendering with glow effects and flower/petal decorations
+  - Animated growth (iteration-by-iteration)
+  - 3×3 variation grid showing parameter-space neighbors
+  - Mutation engine for exploring nearby forms
+  - Keyboard shortcuts (R/M/A/V/S/1-9)
+  - PNG export, responsive layout
+- **How it differs**: Flora is a general L-system studio. Branching is a focused laboratory organized by morphological category — fractal curves, organic coral/moss/lichen, stochastic wildflowers — with a variation grid for systematic parameter exploration. Uses all parametric extensions (seasonal, pruning, heliotropism, step wave) that Flora doesn't expose.
+- **Pages**: `docs/branching.html` (new), `docs/index.html` (added button), `docs/map.html` (added entry), `src/automata.ts` (engine expansion)
+
 ### 2026-03-21 — Particle Life Engine + Interactive Showcase
 - **What**: New generative engine — Particle Life (artificial ecology). N species of particles interact via an attraction/repulsion matrix. Simple rules produce emergent swarms, hunters, orbits, symbiosis, and chains.
 - **Engine** (`src/particle-life.ts`):
