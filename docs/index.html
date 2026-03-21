@@ -1,589 +1,64 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lattice — Self-Evolving Generative Art</title>
-  <style>
-    :root {
-      --bg: #0a0a0f;
-      --surface: #12121a;
-      --border: #1e1e2e;
-      --text: #c8c8d4;
-      --text-dim: #6e6e82;
-      --accent: #7c6fe0;
-      --accent-glow: #7c6fe040;
-      --green: #4ade80;
-      --amber: #fbbf24;
-    }
-
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    .container {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
-
-    header {
-      text-align: center;
-      padding: 3rem 0 2rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 2rem;
-    }
-
-    h1 {
-      font-size: 2.5rem;
-      font-weight: 300;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: var(--accent);
-      text-shadow: 0 0 30px var(--accent-glow);
-      margin-bottom: 0.5rem;
-    }
-
-    .subtitle {
-      color: var(--text-dim);
-      font-size: 0.85rem;
-      letter-spacing: 0.1em;
-    }
-
-    .epoch-badge {
-      display: inline-block;
-      margin-top: 0.75rem;
-      padding: 0.3rem 1rem;
-      border-radius: 12px;
-      font-size: 0.7rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      border: 1px solid var(--accent);
-      color: var(--accent);
-    }
-
-    .live-button {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.6rem;
-      margin-top: 1.25rem;
-      padding: 0.6rem 1.6rem;
-      border-radius: 24px;
-      font-family: inherit;
-      font-size: 0.75rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      text-decoration: none;
-      color: #fff;
-      background: linear-gradient(135deg, #7c6fe0 0%, #4ade80 100%);
-      border: none;
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.3s ease;
-      box-shadow: 0 0 20px #7c6fe030;
-    }
-    .live-button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 0 30px #7c6fe060, 0 0 60px #4ade8020;
-    }
-    .live-button .pulse {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      background: #fff;
-      border-radius: 50%;
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    .stats-bar {
-      display: flex;
-      justify-content: center;
-      gap: 2rem;
-      padding: 1.5rem 0;
-      flex-wrap: wrap;
-    }
-
-    .stat {
-      text-align: center;
-    }
-
-    .stat-value {
-      font-size: 1.8rem;
-      font-weight: 600;
-      color: var(--accent);
-    }
-
-    .stat-label {
-      font-size: 0.7rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      margin-top: 0.25rem;
-    }
-
-    .piece-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin-bottom: 1.5rem;
-      overflow: hidden;
-    }
-
-    .piece-card:hover {
-      border-color: var(--accent);
-    }
-
-    .piece-card.featured {
-      border-color: var(--accent);
-      box-shadow: 0 0 20px var(--accent-glow);
-    }
-
-    .piece-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1rem 1.25rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .piece-type {
-      font-size: 0.75rem;
-      color: var(--accent);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-    }
-
-    .piece-score {
-      font-size: 0.8rem;
-    }
-
-    .score-bar {
-      display: inline-block;
-      width: 60px;
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-      margin-left: 0.5rem;
-      vertical-align: middle;
-    }
-
-    .score-fill {
-      height: 100%;
-      border-radius: 2px;
-      background: var(--green);
-    }
-
-    .piece-art {
-      padding: 1.25rem;
-      overflow-x: auto;
-      font-size: 0.65rem;
-      line-height: 1.15;
-      white-space: pre;
-      background: var(--bg);
-      margin: 0 1rem;
-      border-radius: 4px;
-    }
-
-    .piece-art .art-line {
-      opacity: 0;
-      transition: opacity 0.15s ease;
-    }
-
-    .piece-art.animating .art-line {
-      opacity: 0;
-    }
-
-    .piece-art .art-line.revealed {
-      opacity: 1;
-    }
-
-    .piece-art.done .art-line {
-      opacity: 1;
-      transition: none;
-    }
-
-    .piece-actions {
-      display: flex;
-      gap: 0.5rem;
-      padding: 0 1.25rem 0.5rem;
-      justify-content: flex-end;
-    }
-
-    .piece-action-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      padding: 0.3rem 0.7rem;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      background: transparent;
-      color: var(--text-dim);
-      font-family: inherit;
-      font-size: 0.6rem;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.2s;
-    }
-
-    .piece-action-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    .piece-meta {
-      display: flex;
-      align-items: center;
-      padding: 0.75rem 1.25rem;
-      font-size: 0.7rem;
-      color: var(--text-dim);
-      border-top: 1px solid var(--border);
-      gap: 1rem;
-    }
-
-    .radar-chart {
-      flex-shrink: 0;
-    }
-
-    .radar-chart .radar-grid { stroke: var(--border); fill: none; stroke-width: 0.5; }
-    .radar-chart .radar-axis { stroke: var(--border); stroke-width: 0.3; }
-    .radar-chart .radar-shape { stroke-width: 1.5; fill-opacity: 0.15; }
-    .radar-chart .radar-label { font-size: 3.5px; fill: var(--text-dim); }
-    .radar-chart .radar-dot { r: 1.5; }
-
-    .metrics-text {
-      display: flex;
-      flex-direction: column;
-      gap: 0.15rem;
-      flex: 1;
-      min-width: 0;
-    }
-
-    .metrics-row {
-      display: flex;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
-
-    .metric {
-      display: flex;
-      align-items: center;
-      gap: 0.3rem;
-    }
-
-    .metric-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-    }
-
-    footer {
-      text-align: center;
-      padding: 3rem 0 2rem;
-      border-top: 1px solid var(--border);
-      margin-top: 2rem;
-      color: var(--text-dim);
-      font-size: 0.75rem;
-    }
-
-    footer a {
-      color: var(--accent);
-      text-decoration: none;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 4rem 0;
-      color: var(--text-dim);
-    }
-
-    .loading { opacity: 0.5; }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 0.4; }
-      50% { opacity: 1; }
-    }
-
-    .live-dot {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      background: var(--green);
-      border-radius: 50%;
-      animation: pulse 2s ease-in-out infinite;
-      margin-right: 0.5rem;
-    }
-
-    /* Type filter tabs */
-    /* Evolution timeline chart */
-    .timeline {
-      margin: 1.5rem 0;
-      padding: 1rem 1.25rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-    }
-
-    .timeline-header {
-      font-size: 0.7rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      margin-bottom: 0.75rem;
-    }
-
-    .timeline svg {
-      width: 100%;
-      height: 120px;
-      display: block;
-    }
-
-    .timeline .grid-line { stroke: var(--border); stroke-width: 0.5; }
-    .timeline .grid-label { font-size: 9px; fill: var(--text-dim); font-family: inherit; }
-    .timeline .best-line { stroke: var(--green); stroke-width: 1.5; fill: none; }
-    .timeline .avg-line { stroke: var(--accent); stroke-width: 1.5; fill: none; stroke-dasharray: 4 2; }
-    .timeline .avg-fill { fill: var(--accent); opacity: 0.08; }
-    .timeline .epoch-band { opacity: 0.06; }
-    .timeline .epoch-label { font-size: 8px; fill: var(--text-dim); font-family: inherit; text-transform: uppercase; letter-spacing: 0.1em; }
-    .timeline .dot { r: 2.5; fill: var(--green); }
-    .timeline .dot:hover { r: 4; }
-    .timeline .legend { font-size: 9px; fill: var(--text-dim); font-family: inherit; }
-
-    .filter-bar {
-      display: flex;
-      justify-content: center;
-      gap: 0.5rem;
-      padding: 1rem 0 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .filter-tab {
-      padding: 0.35rem 0.9rem;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      background: transparent;
-      color: var(--text-dim);
-      font-family: inherit;
-      font-size: 0.7rem;
-      letter-spacing: 0.05em;
-      cursor: pointer;
-      transition: all 0.25s;
-    }
-
-    .filter-tab:hover {
-      border-color: var(--accent);
-      color: var(--text);
-    }
-
-    .filter-tab.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-    }
-
-    .filter-tab .count {
-      opacity: 0.6;
-      margin-left: 0.3rem;
-    }
-
-    /* Scroll reveal */
-    .piece-card {
-      opacity: 0;
-      transform: translateY(12px);
-      transition: opacity 0.4s ease, transform 0.4s ease, border-color 0.3s;
-    }
-
-    .piece-card.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .piece-card.hidden-filter {
-      display: none;
-    }
-
-    /* Section headers */
-    .section-header {
-      font-size: 0.75rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      padding: 1.5rem 0 0.75rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 1rem;
-    }
-
-    .section-header.hidden-filter {
-      display: none;
-    }
-
-    /* Realtime live indicator */
-    .realtime-indicator {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      margin-left: 0.75rem;
-      font-size: 0.65rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-      vertical-align: middle;
-      opacity: 0;
-      transition: opacity 0.4s ease;
-    }
-
-    .realtime-indicator.connected {
-      opacity: 1;
-      color: var(--green);
-    }
-
-    .realtime-indicator.reconnecting {
-      opacity: 1;
-      color: var(--amber);
-    }
-
-    .realtime-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--green);
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    .realtime-indicator.reconnecting .realtime-dot {
-      background: var(--amber);
-      animation: pulse 1s ease-in-out infinite;
-    }
-
-    /* Toast notification */
-    .toast-container {
-      position: fixed;
-      top: 1.5rem;
-      right: 1.5rem;
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      pointer-events: none;
-    }
-
-    .toast {
-      background: var(--surface);
-      border: 1px solid var(--accent);
-      border-radius: 8px;
-      padding: 0.75rem 1.25rem;
-      font-family: inherit;
-      font-size: 0.75rem;
-      color: var(--text);
-      box-shadow: 0 0 20px var(--accent-glow), 0 4px 12px rgba(0,0,0,0.4);
-      animation: toastIn 0.35s ease forwards;
-      pointer-events: auto;
-    }
-
-    .toast.dismiss {
-      animation: toastOut 0.3s ease forwards;
-    }
-
-    @keyframes toastIn {
-      from { opacity: 0; transform: translateX(30px); }
-      to   { opacity: 1; transform: translateX(0); }
-    }
-
-    @keyframes toastOut {
-      from { opacity: 1; transform: translateX(0); }
-      to   { opacity: 0; transform: translateX(30px); }
-    }
-
-    /* New piece entrance animation */
-    .piece-card.realtime-new {
-      animation: realtimeEntrance 0.6s ease forwards;
-      border-color: var(--accent) !important;
-      box-shadow: 0 0 25px var(--accent-glow), 0 0 50px rgba(124,111,224,0.15);
-    }
-
-    .piece-card.realtime-new.settle {
-      transition: border-color 1.5s ease, box-shadow 1.5s ease;
-      border-color: var(--border) !important;
-      box-shadow: none;
-    }
-
-    @keyframes realtimeEntrance {
-      from { opacity: 0; transform: translateY(20px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Hall of fame highlight */
-    .piece-card.hof-new {
-      animation: hofGlow 2s ease forwards;
-    }
-
-    @keyframes hofGlow {
-      0%   { box-shadow: 0 0 0px var(--green); border-color: var(--green); }
-      50%  { box-shadow: 0 0 40px rgba(74,222,128,0.3); border-color: var(--green); }
-      100% { box-shadow: 0 0 20px var(--accent-glow); border-color: var(--accent); }
-    }
-
-    /* Vote buttons */
-    .vote-controls {
-      display: flex;
-      align-items: center;
-      gap: 0.15rem;
-      margin-left: auto;
-      flex-shrink: 0;
-    }
-
-    .vote-btn {
-      background: none;
-      border: 1px solid transparent;
-      color: var(--text-dim);
-      font-size: 0.75rem;
-      cursor: pointer;
-      padding: 0.2rem 0.35rem;
-      border-radius: 4px;
-      font-family: inherit;
-      line-height: 1;
-      transition: color 0.2s, border-color 0.2s;
-    }
-
-    .vote-btn:hover {
-      color: var(--text);
-      border-color: var(--border);
-    }
-
-    .vote-btn.active-up {
-      color: var(--green);
-      border-color: var(--green);
-    }
-
-    .vote-btn.active-down {
-      color: #ef4444;
-      border-color: #ef4444;
-    }
-
-    .vote-count {
-      font-size: 0.7rem;
-      color: var(--text-dim);
-      min-width: 1.2em;
-      text-align: center;
-      font-variant-numeric: tabular-nums;
-    }
-  </style>
-  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-</head>
-<body>
-  <div class="toast-container" id="toast-container"></div>
+      <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+        <a href="live.html" class="live-button"><span class="pulse"></span>Enter Live Mode</a>
+        <a href="atlas.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #c8abff 100%);">&#10038; Atlas</a>
+        <a href="bench.html" class="live-button" style="background: linear-gradient(135deg, #6e6e82 0%, #4a4a5e 100%);">&#9201; Bench</a>
+        <a href="breath.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #059669 100%);">&#10044; Breath</a>
+        <a href="cascade.html" class="live-button" style="background: linear-gradient(135deg, #4ad4f5 0%, #fbbf24 100%);">&#9674; Cascade</a>
+        <a href="cipher.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #7c6fe0 100%);">&#9998; Cipher</a>
+        <a href="codex.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #7c6fe0 100%);">&#9753; Codex</a>
+        <a href="collide.html" class="live-button" style="background: linear-gradient(135deg, #ef4444 0%, #7c6fe0 100%);">&#10043; Collide</a>
+        <a href="compare.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #22d3ee 100%);">&#8644; Compare</a>
+        <a href="create.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #7c6fe0 100%);">&#9998; Create</a>
+        <a href="crucible.html" class="live-button" style="background: linear-gradient(135deg, #ff6b35 0%, #ef4444 100%);">&#9763; Crucible</a>
+        <a href="cymatics.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #e879f9 100%);">&#10040; Cymatics</a>
+        <a href="depths.html" class="live-button" style="background: linear-gradient(135deg, #1e1e2e 0%, #22d3ee 100%);">&#8734; Depths</a>
+        <a href="dream.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #1a0a2d 100%);">&#10048; Dream</a>
+        <a href="echo.html" class="live-button" style="background: linear-gradient(135deg, #a78bfa 0%, #4ad4f5 100%);">&#8767; Echo</a>
+        <a href="emerge.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #7c6fe0 100%);">&#10048; Emerge</a>
+        <a href="epoch.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #ef4444 100%);">&#9670; Epoch</a>
+        <a href="field.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #4ade80 100%);">&#8728; Field</a>
+        <a href="flora.html" class="live-button" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">&#10047; Flora</a>
+        <a href="flux.html" class="live-button" style="background: linear-gradient(135deg, #13d3ed 0%, #7c6fe0 100%);">&#9788; Flux</a>
+        <a href="forge.html" class="live-button" style="background: linear-gradient(135deg, #ff6b35 0%, #7c6fe0 100%);">&#9876; Forge</a>
+        <a href="garden.html" class="live-button" style="background: linear-gradient(135deg, #2d8a4e 0%, #4ade80 100%);">&#127793; Garden</a>
+        <a href="genesis.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #fbbf24 100%);">&#9883; Genesis</a>
+        <a href="genome.html" class="live-button" style="background: linear-gradient(135deg, #d44af5 0%, #4ade80 100%);">&#9002; Genome</a>
+        <a href="harmonia.html" class="live-button" style="background: linear-gradient(135deg, #e879f9 0%, #fbbf24 100%);">&#9835; Harmonia</a>
+        <a href="listen.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #fbbf24 100%);">&#9835; Listen</a>
+        <a href="membrane.html" class="live-button" style="background: linear-gradient(135deg, #a78bfa 0%, #7c6fe0 100%);">&#9678; Membrane</a>
+        <a href="microscope.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #7c6fe0 100%);">&#128300; Microscope</a>
+        <a href="murmur.html" class="live-button" style="background: linear-gradient(135deg, #a78bfa 0%, #7c6fe0 100%);">&#9835; Murmur</a>
+        <a href="nexus.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #fbbf24 100%);">&#10022; Nexus</a>
+        <a href="orbit.html" class="live-button" style="background: linear-gradient(135deg, #4ad4f5 0%, #7c6fe0 100%);">&#9678; Orbit</a>
+        <a href="origin.html" class="live-button" style="background: linear-gradient(135deg, #ef4444 0%, #fbbf24 100%);">&#9654; Origin</a>
+        <a href="palette.html" class="live-button" style="background: linear-gradient(135deg, #c8abff 0%, #4ade80 100%);">&#9670; Palette</a>
+        <a href="pendulum.html" class="live-button" style="background: linear-gradient(135deg, #ef4444 0%, #7c6fe0 100%);">&#9883; Pendulum</a>
+        <a href="prism.html" class="live-button" style="background: linear-gradient(135deg, #c8abff 0%, #22d3ee 100%);">&#9670; Prism</a>
+        <a href="pulse.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #059669 100%);">&#9656; Pulse</a>
+        <a href="resonance.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #4ad4f5 100%);">&#8767; Resonance</a>
+        <a href="rift.html" class="live-button" style="background: linear-gradient(135deg, #0a0a0f 0%, #7c6fe0 100%);">&#10043; Rift</a>
+        <a href="ripple.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #7c6fe0 100%);">&#8776; Ripple</a>
+        <a href="sediment.html" class="live-button" style="background: linear-gradient(135deg, #6e6e82 0%, #059669 100%);">&#9783; Sediment</a>
+        <a href="shrine.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #7c6fe0 100%);">&#10022; Shrine</a>
+        <a href="soundscape.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #4ade80 100%);">&#9835; Soundscape</a>
+        <a href="symphony.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #7c6fe0 100%);">&#9838; Symphony</a>
+        <a href="print" class="live-button" style="background: linear-gradient(135deg, #c8abff 0%, #7c6fe0 100%);">&#9113; Print Shop</a>
+        <a href="synth.html" class="live-button" style="background: linear-gradient(135deg, #d44af5 0%, #fbbf24 100%);">&#9836; Synth</a>
+        <a href="taxonomy.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #c8abff 100%);">&#9758; Taxonomy</a>
+        <a href="terraform.html" class="live-button" style="background: linear-gradient(135deg, #059669 0%, #7c6fe0 100%);">&#9650; Terraform</a>
+        <a href="tide.html" class="live-button" style="background: linear-gradient(135deg, #059669 0%, #7c6fe0 100%);">&#8767; Tide</a>
+        <a href="versus.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #4ade80 100%);">&#9876; Versus</a>
+        <a href="vortex.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #e879f9 100%);">&#10040; Vortex</a>
+        <a href="warp.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #ef4444 100%);">&#10022; Warp</a>
+        <a href="weave.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #22d3ee 100%);">&#10070; Weave</a>
+        <a href="about.html" class="live-button" style="background: linear-gradient(135deg, #6e6e82 0%, #7c6fe0 100%);">&#9432; About</a>
+      </div>
   <div class="container">
     <header>
       <h1>Lattice<span class="realtime-indicator" id="realtime-indicator"><span class="realtime-dot"></span>Live</span></h1>
       <p class="subtitle">self-evolving generative art &mdash; built by claude</p>
       <div class="epoch-badge" id="epoch-badge"></div>
-      <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+      
         <a href="live.html" class="live-button"><span class="pulse"></span>Enter Live Mode</a>
         <a href="listen.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #fbbf24 100%);">&#9835; Listen</a>
         <a href="create.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #7c6fe0 100%);">&#9998; Create</a>
@@ -593,7 +68,6 @@
         <a href="pulse.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #059669 100%);">&#9656; Pulse</a>
         <a href="forge.html" class="live-button" style="background: linear-gradient(135deg, #ff6b35 0%, #7c6fe0 100%);">&#9876; Forge</a>
         <a href="symphony.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #7c6fe0 100%);">&#9838; Symphony</a>
-        <a href="print" class="live-button" style="background: linear-gradient(135deg, #c8abff 0%, #7c6fe0 100%);">&#9113; Print Shop</a>
         <a href="resonance.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #4ad4f5 100%);">&#8767; Resonance</a>
         <a href="terraform.html" class="live-button" style="background: linear-gradient(135deg, #059669 0%, #7c6fe0 100%);">&#9650; Terraform</a>
         <a href="weave.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #22d3ee 100%);">&#10070; Weave</a>
@@ -611,35 +85,27 @@
         <a href="genome.html" class="live-button" style="background: linear-gradient(135deg, #d44af5 0%, #4ade80 100%);">&#9002; Genome Lab</a>
         <a href="garden.html" class="live-button" style="background: linear-gradient(135deg, #2d8a4e 0%, #4ade80 100%);">&#127793; Garden</a>
         <a href="harmonia.html" class="live-button" style="background: linear-gradient(135deg, #e879f9 0%, #fbbf24 100%);">&#9835; Harmonia</a>
-                <a href="depths.html" class="live-button" style="background: linear-gradient(135deg, #059669 0%, #0a0a0f 100%);">&#9660; Depths</a>
-        <a href="cascade.html" class="live-button" style="background: linear-gradient(135deg, #4ad4f5 0%, #7c6fe0 100%);">&#9999; Cascade</a>
+        <a href="depths.html" class="live-button" style="background: linear-gradient(135deg, #059669 0%, #0a0a0f 100%);">&#9660; Depths</a>
+        <a href="cascade.html" class="live-button" style="background: linear-gradient(135deg, #4ad4f5 0%, #7c6fe0 100%);">&#9674; Cascade</a>
         <a href="crucible.html" class="live-button" style="background: linear-gradient(135deg, #ff6b35 0%, #ef4444 100%);">&#9733; Crucible</a>
         <a href="field.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #4ade80 100%);">&#10070; Field</a>
+        <a href="flux.html" class="live-button" style="background: linear-gradient(135deg, #13d3ed 0%, #7c6fe0 100%);">&#8734; Flux</a>
         <a href="membrane.html" class="live-button" style="background: linear-gradient(135deg, #a78bfa 0%, #7c6fe0 100%);">&#9678; Membrane</a>
-                <a href="flux.html" style="color: #13d3ed; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9788; Flux</a>
-        &nbsp;&bull;&nbsp;
-        <a href="bench.html" class="live-button" style="background: linear-gradient(135deg, #6e6e82 0%, #4a4a5e 100%);">&#9201; Bench</a>
+        <a href="nexus.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #22d3ee 100%);">&#9733; Nexus</a>
+        <a href="warp.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #ef4444 100%);">&#10022; Warp</a>
         <a href="shrine.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #7c6fe0 100%);">&#10022; Shrine</a>
-        <a href="warp.html" class="live-button" style="background: linear-gradient(135deg, #7c6fe0 0%, #ef4444 100%)">&#10022; Warp</a>
-                <a href="flux.html" class="live-button" style="background: linear-gradient(135deg, #13d3ed 0%, #7c6fe0 100%);">&#9788; Flux</a>
-        <a href="codex.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #7c6fe0 100%);">&#9753; Codex</a>                <a href="ripple.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #7c6fe0 100%);">&#8776; Ripple</a>
-                <a href="cipher.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #7c6fe0 100%);">&#9998; Cipher</a>
+        <a href="codex.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #7c6fe0 100%);">&#9753; Codex</a>
         <a href="collide.html" class="live-button" style="background: linear-gradient(135deg, #ef4444 0%, #7c6fe0 100%);">&#10043; Collide</a>
+        <a href="ripple.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #7c6fe0 100%);">&#8776; Ripple</a>
+        <a href="cipher.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #7c6fe0 100%);">&#9998; Cipher</a>
         <a href="emerge.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #7c6fe0 100%);">&#10048; Emerge</a>
         <a href="murmur.html" class="live-button" style="background: linear-gradient(135deg, #a78bfa 0%, #7c6fe0 100%);">&#9835; Murmur</a>
         <a href="orbit.html" class="live-button" style="background: linear-gradient(135deg, #4ad4f5 0%, #7c6fe0 100%);">&#9678; Orbit</a>
-        <a href="ripple.html" class="live-button" style="background: linear-gradient(135deg, #22d3ee 0%, #7c6fe0 100%);">&#8767; Ripple</a>
         <a href="tide.html" class="live-button" style="background: linear-gradient(135deg, #059669 0%, #7c6fe0 100%);">&#9654; Tide</a>
-        <a href="soundscape.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #4ade80 100%);">&#9835; Soundscape</a>
-        <a href="compare.html" class="live-button" style="background: linear-gradient(135deg, #4ad4f5 0%, #7c6fe0 100%);">Compare</a>
-        <a href="cymatics.html" class="live-button" style="background: linear-gradient(135deg, #e879f9 0%, #7c6fe0 100%);">Cymatics</a>
-        <a href="echo.html" class="live-button" style="background: linear-gradient(135deg, #fbbf24 0%, #7c6fe0 100%);">Echo</a>
-        <a href="epoch.html" class="live-button" style="background: linear-gradient(135deg, #4ade80 0%, #7c6fe0 100%);">Epoch</a>
-        <a href="prism.html" class="live-button" style="background: linear-gradient(135deg, #ef4444 0%, #7c6fe0 100%);">Prism</a>
-        <a href="sediment.html" class="live-button" style="background: linear-gradient(135deg, #a78bfa 0%, #7c6fe0 100%);">Sediment</a>
-<a href="about.html" class="live-button" style="background: linear-gradient(135deg, #6e6e82 0%, #7c6fe0 100%);">&#9432; About</a>
-      </div>
-    </header>
+        <a href="print" class="live-button" style="background: linear-gradient(135deg, #c8abff 0%, #7c6fe0 100%);">&#9113; Print Shop</a>
+        <a href="bench.html" class="live-button" style="background: linear-gradient(135deg, #6e6e82 0%, #4a4a5e 100%);">&#9201; Bench</a>
+        <a href="about.html" class="live-button" style="background: linear-gradient(135deg, #6e6e82 0%, #7c6fe0 100%);">&#9432; About</a>
+      
 
     <div class="stats-bar" id="stats">
       <div class="stat">
@@ -669,116 +135,122 @@
     <div class="filter-bar" id="filter-bar"></div>
     <div id="gallery"></div>
 
-    <footer>
+    
       <p><span class="live-dot"></span>Evolving autonomously every hour</p>
       <p style="margin-top: 0.75rem;">
         <a href="live.html" style="color: var(--green); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9654; Live</a>
-        &nbsp;&bull;&nbsp;
-        <a href="listen.html" style="color: var(--amber); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9835; Listen</a>
-        &nbsp;&bull;&nbsp;
-        <a href="create.html" style="color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9998; Create</a>
-        &nbsp;&bull;&nbsp;
+        &nbsp;·&nbsp;
         <a href="atlas.html" style="color: #c8abff; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10038; Atlas</a>
-        &nbsp;&bull;&nbsp;
-        <a href="origin.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9654; Origin</a>
-        &nbsp;&bull;&nbsp;
-        <a href="dream.html" style="color: #a78bfa; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10048; Dream</a>
-        &nbsp;&bull;&nbsp;
-        <a href="pulse.html" style="color: #4ade80; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9656; Pulse</a>
-        &nbsp;&bull;&nbsp;
-        <a href="forge.html" style="color: #ff6b35; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9876; Forge</a>
-        &nbsp;&bull;&nbsp;
-        <a href="symphony.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9838; Symphony</a>
-        &nbsp;&bull;&nbsp;
-        <a href="resonance.html" style="color: #4ad4f5; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#8767; Resonance</a>
-        &nbsp;&bull;&nbsp;
-        <a href="terraform.html" style="color: #059669; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9650; Terraform</a>
-        &nbsp;&bull;&nbsp;
-        <a href="weave.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10070; Weave</a>
-        &nbsp;&bull;&nbsp;
-        <a href="rift.html" style="color: #7c6fe0; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10043; Rift</a>
-        &nbsp;&bull;&nbsp;
-        <a href="microscope.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#128300; Microscope</a>
-        &nbsp;&bull;&nbsp;
-        <a href="palette.html" style="color: #c8abff; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9670; Palette</a>
-        &nbsp;&bull;&nbsp;
-        <a href="genesis.html" style="color: #4ade80; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9883; Genesis</a>
-        &nbsp;&bull;&nbsp;
-        <a href="flora.html" style="color: #22c55e; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10047; Flora</a>
-        &nbsp;&bull;&nbsp;
-        <a href="taxonomy.html" style="color: #c8abff; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9758; Taxonomy</a>
-        &nbsp;&bull;&nbsp;
-        <a href="genome.html" style="color: #a78bfa; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9861; Genome</a>
-        &nbsp;&bull;&nbsp;
-        <a href="versus.html" style="color: #ef4444; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9876; Versus</a>
-        &nbsp;&bull;&nbsp;
-        <a href="depths.html" style="color: #059669; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9660; Depths</a>
-        &nbsp;&bull;&nbsp;
-        <a href="cascade.html" style="color: #4ad4f5; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9999; Cascade</a>
-        &nbsp;&bull;&nbsp;
-        <a href="crucible.html" style="color: #ff6b35; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9733; Crucible</a>
-        &nbsp;&bull;&nbsp;
-        <a href="field.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10070; Field</a>
-        &nbsp;&bull;&nbsp;
-        <a href="garden.html" style="color: #22c55e; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10047; Garden</a>
-        &nbsp;&bull;&nbsp;
-        <a href="membrane.html" style="color: #a78bfa; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9678; Membrane</a>
-        &nbsp;&bull;&nbsp;
-        <a href="breath.html" style="color: #a78bfa; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10048; Breath</a>
-        &nbsp;&bull;&nbsp;
-        <a href="synth.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9835; Synth</a>
-        &nbsp;&bull;&nbsp;
-        <a href="vortex.html" style="color: #7c6fe0; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10043; Vortex</a>
-        &nbsp;&bull;&nbsp;
-        <a href="nexus.html" style="color: #4ade80; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10070; Nexus</a>
-        \&nbsp;\&bull;\&nbsp;
+        &nbsp;·&nbsp;
         <a href="bench.html" style="color: #6e6e82; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9201; Bench</a>
-        &nbsp;&bull;&nbsp;
-        <a href="ripple.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#8776; Ripple</a>
-        &nbsp;&bull;&nbsp;
-        <a href="codex.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9753; Codex</a>
-        &nbsp;&bull;&nbsp;        <a href="print" style="color: #c8abff; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9113; Print Shop</a>
-        &nbsp;&bull;&nbsp;
-        <a href="shrine.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10022; Shrine</a>
-        &nbsp;&bull;&nbsp;
-        <a href="harmonia.html" style="color: #e879f9; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9835; Harmonia</a>
-        &nbsp;&bull;&nbsp;
+        &nbsp;·&nbsp;
+        <a href="breath.html" style="color: #4ade80; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10044; Breath</a>
+        &nbsp;·&nbsp;
+        <a href="cascade.html" style="color: #4ad4f5; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9674; Cascade</a>
+        &nbsp;·&nbsp;
         <a href="cipher.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9998; Cipher</a>
-        &nbsp;&bull;&nbsp;
+        &nbsp;·&nbsp;
+        <a href="codex.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9753; Codex</a>
+        &nbsp;·&nbsp;
         <a href="collide.html" style="color: #ef4444; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10043; Collide</a>
-        &nbsp;&bull;&nbsp;
+        &nbsp;·&nbsp;
+        <a href="compare.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#8644; Compare</a>
+        &nbsp;·&nbsp;
+        <a href="create.html" style="color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9998; Create</a>
+        &nbsp;·&nbsp;
+        <a href="crucible.html" style="color: #ff6b35; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9763; Crucible</a>
+        &nbsp;·&nbsp;
+        <a href="cymatics.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10040; Cymatics</a>
+        &nbsp;·&nbsp;
+        <a href="depths.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#8734; Depths</a>
+        &nbsp;·&nbsp;
+        <a href="dream.html" style="color: #a78bfa; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10048; Dream</a>
+        &nbsp;·&nbsp;
+        <a href="echo.html" style="color: #a78bfa; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#8767; Echo</a>
+        &nbsp;·&nbsp;
         <a href="emerge.html" style="color: #4ade80; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10048; Emerge</a>
-        &nbsp;&bull;&nbsp;
+        &nbsp;·&nbsp;
+        <a href="epoch.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9670; Epoch</a>
+        &nbsp;·&nbsp;
+        <a href="field.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#8728; Field</a>
+        &nbsp;·&nbsp;
+        <a href="flora.html" style="color: #22c55e; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10047; Flora</a>
+        &nbsp;·&nbsp;
+        <a href="flux.html" style="color: #13d3ed; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9788; Flux</a>
+        &nbsp;·&nbsp;
+        <a href="forge.html" style="color: #ff6b35; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9876; Forge</a>
+        &nbsp;·&nbsp;
+        <a href="garden.html" style="color: #4ade80; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#127793; Garden</a>
+        &nbsp;·&nbsp;
+        <a href="genesis.html" style="color: #4ade80; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9883; Genesis</a>
+        &nbsp;·&nbsp;
+        <a href="genome.html" style="color: #d44af5; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9002; Genome</a>
+        &nbsp;·&nbsp;
+        <a href="harmonia.html" style="color: #e879f9; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9835; Harmonia</a>
+        &nbsp;·&nbsp;
+        <a href="listen.html" style="color: var(--amber); letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9835; Listen</a>
+        &nbsp;·&nbsp;
+        <a href="membrane.html" style="color: #a78bfa; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9678; Membrane</a>
+        &nbsp;·&nbsp;
+        <a href="microscope.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#128300; Microscope</a>
+        &nbsp;·&nbsp;
         <a href="murmur.html" style="color: #a78bfa; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9835; Murmur</a>
-        &nbsp;&bull;&nbsp;
+        &nbsp;·&nbsp;
+        <a href="nexus.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10022; Nexus</a>
+        &nbsp;·&nbsp;
         <a href="orbit.html" style="color: #4ad4f5; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9678; Orbit</a>
-        &nbsp;&bull;&nbsp;
-        <a href="ripple.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#8767; Ripple</a>
-        &nbsp;&bull;&nbsp;
-        <a href="tide.html" style="color: #059669; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9654; Tide</a>
-        &nbsp;&bull;&nbsp;
+        &nbsp;·&nbsp;
+        <a href="origin.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9654; Origin</a>
+        &nbsp;·&nbsp;
+        <a href="palette.html" style="color: #c8abff; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9670; Palette</a>
+        &nbsp;·&nbsp;
+        <a href="pendulum.html" style="color: #ef4444; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9883; Pendulum</a>
+        &nbsp;·&nbsp;
+        <a href="prism.html" style="color: #c8abff; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9670; Prism</a>
+        &nbsp;·&nbsp;
+        <a href="pulse.html" style="color: #4ade80; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9656; Pulse</a>
+        &nbsp;·&nbsp;
+        <a href="resonance.html" style="color: #4ad4f5; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#8767; Resonance</a>
+        &nbsp;·&nbsp;
+        <a href="rift.html" style="color: #7c6fe0; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10043; Rift</a>
+        &nbsp;·&nbsp;
+        <a href="ripple.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#8776; Ripple</a>
+        &nbsp;·&nbsp;
+        <a href="sediment.html" style="color: #6e6e82; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9783; Sediment</a>
+        &nbsp;·&nbsp;
+        <a href="shrine.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10022; Shrine</a>
+        &nbsp;·&nbsp;
         <a href="soundscape.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9835; Soundscape</a>
+        &nbsp;·&nbsp;
+        <a href="symphony.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9838; Symphony</a>
+        &nbsp;·&nbsp;
+        <a href="print" style="color: #c8abff; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9113; Print</a>
+        &nbsp;·&nbsp;
+        <a href="synth.html" style="color: #d44af5; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9836; Synth</a>
+        &nbsp;·&nbsp;
+        <a href="taxonomy.html" style="color: #c8abff; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9758; Taxonomy</a>
+        &nbsp;·&nbsp;
+        <a href="terraform.html" style="color: #059669; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9650; Terraform</a>
+        &nbsp;·&nbsp;
+        <a href="tide.html" style="color: #059669; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#8767; Tide</a>
+        &nbsp;·&nbsp;
+        <a href="versus.html" style="color: #4ade80; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9876; Versus</a>
+        &nbsp;·&nbsp;
+        <a href="vortex.html" style="color: #e879f9; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10040; Vortex</a>
+        &nbsp;·&nbsp;
+        <a href="warp.html" style="color: #ef4444; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10022; Warp</a>
+        &nbsp;·&nbsp;
+        <a href="weave.html" style="color: #22d3ee; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10070; Weave</a>
+        &nbsp;·&nbsp;
+        <a href="epoch.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9673; Epoch</a>
         &nbsp;&bull;&nbsp;
-        <a href="compare.html" style="color: #4ad4f5; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">Compare</a>
-        &nbsp;&bull;&nbsp;
-        <a href="cymatics.html" style="color: #e879f9; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">Cymatics</a>
-        &nbsp;&bull;&nbsp;
-        <a href="echo.html" style="color: #fbbf24; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">Echo</a>
-        &nbsp;&bull;&nbsp;
-        <a href="epoch.html" style="color: #4ade80; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">Epoch</a>
-        &nbsp;&bull;&nbsp;
-        <a href="prism.html" style="color: #ef4444; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">Prism</a>
-        &nbsp;&bull;&nbsp;
-        <a href="sediment.html" style="color: #a78bfa; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">Sediment</a>
-        &nbsp;&bull;&nbsp;
-        &nbsp;&bull;&nbsp;
-        <a href="warp.html" style="color: #ef4444; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#10022; Warp</a>        <a href="about.html" style="color: #6e6e82; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9432; About</a>
+        <a href="about.html" style="color: #6e6e82; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.7rem;">&#9432; About</a>
       </p>
       <p style="margin-top: 0.75rem;">
         Cellular automata &bull; L-systems &bull; Reaction-diffusion &bull; Voronoi &bull; WFC &bull; Spirographs &bull; Strange attractors &bull; Julia sets &bull; Fractal noise &bull; Magnetic pendulum<br>
         <a href="https://github.com/AndersonsRepo/lattice">Source</a> &bull; Part of <a href="https://github.com/AndersonsRepo">AI Harness</a>
       </p>
-    </footer>
+    
   </div>
 
   <script>

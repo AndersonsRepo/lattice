@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Membrane</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --cyan: #22d3ee;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .bg-glow {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 700px; height: 700px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.25;
+      pointer-events: none;
+      transition: opacity 2s ease;
+      z-index: 0;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.94);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 3rem;
+      color: var(--cyan);
+      margin-bottom: 1.2rem;
+      text-shadow: 0 0 40px rgba(34, 211, 238, 0.4);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-text {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-sub {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      margin-top: 0.8rem;
+      opacity: 0.5;
+      max-width: 400px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* Back button */
+    .back-btn {
+      position: fixed;
+      top: 1rem; left: 1rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      z-index: 50;
+      padding: 0.4rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: rgba(18, 18, 26, 0.8);
+      backdrop-filter: blur(8px);
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .back-btn:hover { color: var(--text); border-color: var(--accent); }
+
+    /* Main canvas */
+    #membraneCanvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+      cursor: crosshair;
+    }
+
+    /* Info panel */
+    .info-panel {
+      position: fixed;
+      top: 1rem; right: 1rem;
+      z-index: 50;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      min-width: 180px;
+      transition: opacity 0.3s;
+    }
+    .info-label {
+      font-size: 0.55rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.15rem;
+    }
+    .info-value {
+      font-size: 0.75rem;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    .info-value:last-child { margin-bottom: 0; }
+    .info-type { color: var(--accent); }
+    .info-score { color: var(--green); }
+
+    /* Controls */
+    .controls {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.8rem;
+    }
+
+    .ctrl-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.35rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .ctrl-btn:hover { color: var(--text); border-color: var(--accent); }
+    .ctrl-btn.active { color: var(--cyan); border-color: var(--cyan); background: rgba(34, 211, 238, 0.08); }
+
+    .ctrl-sep {
+      width: 1px;
+      height: 18px;
+      background: var(--border);
+    }
+
+    .vol-slider {
+      -webkit-appearance: none;
+      width: 60px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    .vol-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--cyan);
+      cursor: pointer;
+    }
+
+    /* Hint text */
+    .hint {
+      position: fixed;
+      bottom: 4.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      opacity: 0.6;
+      transition: opacity 1s;
+      pointer-events: none;
+    }
+    .hint.fade { opacity: 0; }
+
+    /* Keyboard guide */
+    .keys {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1rem;
+      z-index: 50;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      line-height: 1.8;
+      opacity: 0.4;
+    }
+    .keys kbd {
+      display: inline-block;
+      padding: 0.1rem 0.3rem;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      margin-right: 0.2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow" id="bgGlow"></div>
+
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">&#9711;</div>
+    <div class="start-text">Touch the membrane</div>
+    <div class="start-sub">
+      Each piece is a resonant surface. Touch it and hear the structure sing.
+      Ripples propagate through the grid — dense cells ring, gaps absorb.
+    </div>
+  </div>
+
+  <a href="index.html" class="back-btn">&larr; Gallery</a>
+
+  <canvas id="membraneCanvas"></canvas>
+
+  <div class="info-panel" id="infoPanel">
+    <div class="info-label">Piece</div>
+    <div class="info-value" id="pieceName">—</div>
+    <div class="info-label">Type</div>
+    <div class="info-value info-type" id="pieceType">—</div>
+    <div class="info-label">Fitness</div>
+    <div class="info-value info-score" id="pieceScore">—</div>
+    <div class="info-label">Ripples</div>
+    <div class="info-value" id="rippleCount">0</div>
+  </div>
+
+  <div class="hint" id="hint">Click or touch the grid to send ripples</div>
+
+  <div class="controls" id="controls">
+    <button class="ctrl-btn" id="prevBtn">&larr;</button>
+    <button class="ctrl-btn" id="nextBtn">&rarr;</button>
+    <div class="ctrl-sep"></div>
+    <button class="ctrl-btn active" id="modeBtn" data-mode="pluck">Pluck</button>
+    <button class="ctrl-btn" id="modeBtn2" data-mode="rain">Rain</button>
+    <button class="ctrl-btn" id="modeBtn3" data-mode="wave">Wave</button>
+    <div class="ctrl-sep"></div>
+    <button class="ctrl-btn" id="decayBtn">Decay: Med</button>
+    <div class="ctrl-sep"></div>
+    <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="60">
+  </div>
+
+  <div class="keys">
+    <kbd>&#8592;</kbd><kbd>&#8594;</kbd> pieces
+    <br><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> modes
+    <br><kbd>D</kbd> decay
+    <br><kbd>C</kbd> clear
+  </div>
+
+  <script>
+    // ── Constants ──
+    const PENTATONIC = [0, 2, 4, 7, 9]; // C D E G A
+    const BASE_MIDI = 48; // C3
+    const MAX_RIPPLES = 24;
+    const TYPE_COLORS = {
+      '1d': { h: 280, s: 70, base: '#b07ce0' },
+      '2d': { h: 260, s: 70, base: '#7c6fe0' },
+      'lsystem': { h: 140, s: 65, base: '#4ade80' },
+      'reaction-diffusion': { h: 200, s: 75, base: '#4a9de0' },
+      'voronoi': { h: 30, s: 80, base: '#e0a04a' },
+      'wfc': { h: 320, s: 65, base: '#d46fb0' },
+      'spirograph': { h: 180, s: 70, base: '#4ad4c0' },
+      'attractor': { h: 0, s: 75, base: '#e06f6f' },
+      'julia': { h: 50, s: 85, base: '#e0c44a' },
+      'noise': { h: 220, s: 60, base: '#6fa0e0' },
+      'flowfield': { h: 160, s: 65, base: '#4ae0b0' },
+      'magnetic-pendulum': { h: 300, s: 70, base: '#c06fe0' }
+    };
+    const DECAY_LEVELS = [
+      { label: 'Short', factor: 3.0 },
+      { label: 'Med', factor: 1.5 },
+      { label: 'Long', factor: 0.6 }
+    ];
+
+    // ── Audio ──
+    let audioCtx = null;
+    let masterGain = null;
+    let compressor = null;
+    let reverb = null;
+    let volume = 0.6;
+
+    function initAudio() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      compressor = audioCtx.createDynamicsCompressor();
+      compressor.threshold.value = -24;
+      compressor.ratio.value = 6;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.15;
+
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = volume * 0.25;
+
+      reverb = audioCtx.createConvolver();
+      reverb.buffer = createReverbIR(2.5, 2.2);
+
+      const reverbGain = audioCtx.createGain();
+      reverbGain.gain.value = 0.35;
+
+      masterGain.connect(compressor);
+      masterGain.connect(reverb);
+      reverb.connect(reverbGain);
+      reverbGain.connect(compressor);
+      compressor.connect(audioCtx.destination);
+    }
+
+    function createReverbIR(duration, decay) {
+      const rate = audioCtx.sampleRate;
+      const length = rate * duration;
+      const buf = audioCtx.createBuffer(2, length, rate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < length; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+      }
+      return buf;
+    }
+
+    function midiToFreq(midi) {
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    function cellToNote(cellValue, row, totalRows) {
+      // Map cell value + row position to a note in the pentatonic scale
+      const octaveSpan = 3; // span 3 octaves top to bottom
+      const rowNorm = row / totalRows;
+      const octave = Math.floor(rowNorm * octaveSpan);
+      const degree = Math.floor(cellValue * PENTATONIC.length * 0.99);
+      const midi = BASE_MIDI + octave * 12 + PENTATONIC[Math.min(degree, PENTATONIC.length - 1)];
+      return midiToFreq(midi);
+    }
+
+    function playTone(freq, duration, amp, pan, waveType) {
+      if (!audioCtx || audioCtx.state === 'suspended') return;
+      const t = audioCtx.currentTime;
+
+      const osc = audioCtx.createOscillator();
+      osc.type = waveType || 'triangle';
+      osc.frequency.value = freq;
+      osc.detune.value = (Math.random() - 0.5) * 6;
+
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0;
+      gain.gain.linearRampToValueAtTime(Math.min(amp, 0.15), t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+      const panner = audioCtx.createStereoPanner();
+      panner.pan.value = Math.max(-1, Math.min(1, pan));
+
+      osc.connect(gain);
+      gain.connect(panner);
+      panner.connect(masterGain);
+
+      osc.start(t);
+      osc.stop(t + duration + 0.05);
+    }
+
+    // ── Grid parsing ──
+    function parseGrid(rendered) {
+      if (!rendered) return [];
+      const lines = rendered.split('\n').filter(l => l.length > 0);
+      return lines.map(line => {
+        const cells = [];
+        for (const ch of line) {
+          cells.push(ch === ' ' ? 0 : 1);
+        }
+        return cells;
+      });
+    }
+
+    function parseGridIntensity(rendered) {
+      if (!rendered) return [];
+      const CHARS = ' .,:;░▒▓█╱╲╳◊◆●○◐◑◒◓△▽◇◈⬡⬢❦✿❀❁⠁⠃⠇⠏⠟⠿⣿';
+      const lines = rendered.split('\n').filter(l => l.length > 0);
+      return lines.map(line => {
+        const cells = [];
+        for (const ch of line) {
+          const idx = CHARS.indexOf(ch);
+          cells.push(idx <= 0 ? 0 : Math.min(1, idx / 8));
+        }
+        return cells;
+      });
+    }
+
+    // ── Ripple simulation ──
+    class Ripple {
+      constructor(cx, cy, gridRows, gridCols) {
+        this.cx = cx;
+        this.cy = cy;
+        this.radius = 0;
+        this.maxRadius = Math.max(gridRows, gridCols) * 1.2;
+        this.speed = 25; // cells per second
+        this.age = 0;
+        this.alive = true;
+        this.triggered = new Set(); // cells already triggered
+        this.energy = 1.0;
+      }
+
+      update(dt) {
+        this.age += dt;
+        this.radius += this.speed * dt;
+        this.energy = Math.max(0, 1 - (this.radius / this.maxRadius) * decayFactor);
+        if (this.energy <= 0.01) this.alive = false;
+      }
+
+      getCellsAtFront(grid) {
+        // Find cells at the current wavefront that haven't been triggered
+        const cells = [];
+        const rows = grid.length;
+        if (rows === 0) return cells;
+        const cols = grid[0].length;
+
+        const r = this.radius;
+        const rInner = Math.max(0, r - 1.5);
+
+        // Scan cells near the wavefront
+        const minR = Math.max(0, Math.floor(this.cy - r - 1));
+        const maxR = Math.min(rows - 1, Math.ceil(this.cy + r + 1));
+        const minC = Math.max(0, Math.floor(this.cx - r - 1));
+        const maxC = Math.min(cols - 1, Math.ceil(this.cx + r + 1));
+
+        for (let row = minR; row <= maxR; row++) {
+          for (let col = minC; col <= maxC; col++) {
+            const key = row * 10000 + col;
+            if (this.triggered.has(key)) continue;
+
+            const dx = col - this.cx;
+            const dy = row - this.cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist >= rInner && dist <= r && grid[row][col] > 0) {
+              this.triggered.add(key);
+              cells.push({ row, col, value: grid[row][col], dist, dx, dy });
+            }
+          }
+        }
+        return cells;
+      }
+    }
+
+    // ── State ──
+    let pieces = [];
+    let currentIndex = 0;
+    let grid = [];
+    let gridIntensity = [];
+    let ripples = [];
+    let mode = 'pluck'; // pluck, rain, wave
+    let decayIdx = 1;
+    let decayFactor = DECAY_LEVELS[1].factor;
+    let hintShown = true;
+    let rainInterval = null;
+    let cellFlashes = []; // {row, col, alpha, hue}
+    let canvas, ctx;
+    let cellW = 1, cellH = 1;
+    let gridOffX = 0, gridOffY = 0;
+    let typeColor = TYPE_COLORS['2d'];
+
+    // ── Rendering ──
+    function resizeCanvas() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      computeLayout();
+    }
+
+    function computeLayout() {
+      if (grid.length === 0) return;
+      const rows = grid.length;
+      const cols = grid[0].length;
+      const maxW = window.innerWidth * 0.85;
+      const maxH = window.innerHeight * 0.75;
+      cellW = Math.min(maxW / cols, maxH / rows);
+      cellH = cellW;
+      const totalW = cols * cellW;
+      const totalH = rows * cellH;
+      gridOffX = (window.innerWidth - totalW) / 2;
+      gridOffY = (window.innerHeight - totalH) / 2;
+    }
+
+    function screenToGrid(sx, sy) {
+      const col = (sx - gridOffX) / cellW;
+      const row = (sy - gridOffY) / cellH;
+      return { row, col };
+    }
+
+    function draw() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, w, h);
+
+      if (grid.length === 0) return;
+
+      const rows = grid.length;
+      const cols = grid[0].length;
+      const { h: hue, s: sat } = typeColor;
+
+      // Draw grid cells
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const val = gridIntensity[r]?.[c] || 0;
+          if (val <= 0) continue;
+
+          const x = gridOffX + c * cellW;
+          const y = gridOffY + r * cellH;
+
+          const lightness = 8 + val * 25;
+          ctx.fillStyle = `hsl(${hue}, ${sat}%, ${lightness}%)`;
+          ctx.fillRect(x, y, cellW - (cellW > 4 ? 0.5 : 0), cellH - (cellH > 4 ? 0.5 : 0));
+        }
+      }
+
+      // Draw cell flashes
+      for (let i = cellFlashes.length - 1; i >= 0; i--) {
+        const f = cellFlashes[i];
+        f.alpha -= 0.025;
+        if (f.alpha <= 0) {
+          cellFlashes.splice(i, 1);
+          continue;
+        }
+
+        const x = gridOffX + f.col * cellW;
+        const y = gridOffY + f.row * cellH;
+        const size = cellW * (1 + (1 - f.alpha) * 0.5);
+        const offset = (size - cellW) / 2;
+
+        ctx.fillStyle = `hsla(${f.hue}, 80%, 65%, ${f.alpha * 0.8})`;
+        ctx.fillRect(x - offset, y - offset, size, size);
+
+        // Glow
+        if (f.alpha > 0.3) {
+          const glowSize = size * 2;
+          const glowOffset = (glowSize - cellW) / 2;
+          ctx.fillStyle = `hsla(${f.hue}, 70%, 55%, ${f.alpha * 0.15})`;
+          ctx.fillRect(x - glowOffset, y - glowOffset, glowSize, glowSize);
+        }
+      }
+
+      // Draw ripple wavefronts
+      for (const rip of ripples) {
+        if (!rip.alive) continue;
+        const cx = gridOffX + rip.cx * cellW;
+        const cy = gridOffY + rip.cy * cellH;
+        const r = rip.radius * cellW;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(190, 80%, 60%, ${rip.energy * 0.35})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Inner glow ring
+        if (rip.energy > 0.3) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.strokeStyle = `hsla(190, 90%, 70%, ${rip.energy * 0.12})`;
+          ctx.lineWidth = 4;
+          ctx.stroke();
+        }
+      }
+
+      // Draw origin dots for recent ripples
+      for (const rip of ripples) {
+        if (!rip.alive || rip.age > 1.5) continue;
+        const cx = gridOffX + rip.cx * cellW;
+        const cy = gridOffY + rip.cy * cellH;
+        const dotAlpha = Math.max(0, 1 - rip.age / 1.5);
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(190, 90%, 70%, ${dotAlpha * 0.6})`;
+        ctx.fill();
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    // ── Simulation loop ──
+    let lastTime = 0;
+    let noteThrottle = 0;
+    const NOTE_COOLDOWN = 0.015; // min seconds between notes
+
+    function simulate(timestamp) {
+      if (!lastTime) lastTime = timestamp;
+      const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
+      lastTime = timestamp;
+
+      noteThrottle = Math.max(0, noteThrottle - dt);
+
+      // Update ripples
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        const rip = ripples[i];
+        rip.update(dt);
+
+        if (!rip.alive) {
+          ripples.splice(i, 1);
+          continue;
+        }
+
+        // Get cells at wavefront and sonify them
+        const cells = rip.getCellsAtFront(grid);
+        if (cells.length > 0 && noteThrottle <= 0) {
+          // Pick a subset to sonify (avoid note flood)
+          const toPlay = cells.length > 6 ? cells.filter((_, j) => j % Math.ceil(cells.length / 6) === 0) : cells;
+
+          for (const cell of toPlay) {
+            const freq = cellToNote(cell.value, cell.row, grid.length);
+            const pan = (cell.col / grid[0].length) * 2 - 1;
+            const amp = rip.energy * cell.value * 0.12;
+            const dur = 0.3 + (1 - decayFactor / 3) * 0.8;
+            const wave = cell.value > 0.6 ? 'triangle' : 'sine';
+
+            playTone(freq, dur, amp, pan * 0.7, wave);
+
+            // Visual flash
+            cellFlashes.push({
+              row: cell.row,
+              col: cell.col,
+              alpha: rip.energy * 0.9,
+              hue: 190 + cell.value * 70
+            });
+          }
+          noteThrottle = NOTE_COOLDOWN;
+        }
+      }
+
+      document.getElementById('rippleCount').textContent = ripples.length;
+      requestAnimationFrame(simulate);
+    }
+
+    // ── Interaction ──
+    function spawnRipple(sx, sy) {
+      const { row, col } = screenToGrid(sx, sy);
+      if (grid.length === 0) return;
+
+      // Clamp to grid bounds (allow slight overflow for edge touches)
+      const rows = grid.length;
+      const cols = grid[0].length;
+      if (row < -2 || row > rows + 2 || col < -2 || col > cols + 2) return;
+
+      if (ripples.length >= MAX_RIPPLES) {
+        // Remove oldest
+        ripples.shift();
+      }
+
+      const rip = new Ripple(col, row, rows, cols);
+      ripples.push(rip);
+
+      // Dismiss hint
+      if (hintShown) {
+        hintShown = false;
+        document.getElementById('hint').classList.add('fade');
+      }
+
+      // Play an initial impact tone at the touch point
+      const nearestRow = Math.max(0, Math.min(rows - 1, Math.round(row)));
+      const nearestCol = Math.max(0, Math.min(cols - 1, Math.round(col)));
+      const cellVal = gridIntensity[nearestRow]?.[nearestCol] || 0;
+
+      if (cellVal > 0) {
+        const freq = cellToNote(cellVal, nearestRow, rows);
+        playTone(freq, 0.5, 0.1, (nearestCol / cols) * 2 - 1, 'sine');
+        cellFlashes.push({ row: nearestRow, col: nearestCol, alpha: 1.0, hue: 190 });
+      } else {
+        // Even empty cells get a subtle click
+        playTone(midiToFreq(72 + Math.random() * 12), 0.1, 0.03, (col / cols) * 2 - 1, 'sine');
+      }
+    }
+
+    function handlePointer(e) {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.touches ? e.touches[0].clientX : e.clientX);
+      const y = (e.touches ? e.touches[0].clientY : e.clientY);
+      spawnRipple(x, y);
+    }
+
+    function startRain() {
+      if (rainInterval) return;
+      rainInterval = setInterval(() => {
+        if (grid.length === 0) return;
+        const rows = grid.length;
+        const cols = grid[0].length;
+        const rx = Math.random() * cols;
+        const ry = Math.random() * rows;
+        const sx = gridOffX + rx * cellW;
+        const sy = gridOffY + ry * cellH;
+        spawnRipple(sx, sy);
+      }, 400 + Math.random() * 200);
+    }
+
+    function stopRain() {
+      if (rainInterval) {
+        clearInterval(rainInterval);
+        rainInterval = null;
+      }
+    }
+
+    function startWave() {
+      if (rainInterval) return;
+      let phase = 0;
+      rainInterval = setInterval(() => {
+        if (grid.length === 0) return;
+        const rows = grid.length;
+        const cols = grid[0].length;
+        // Sweep left to right
+        const col = (phase % cols);
+        const row = rows / 2 + Math.sin(phase * 0.3) * rows * 0.3;
+        const sx = gridOffX + col * cellW;
+        const sy = gridOffY + row * cellH;
+        spawnRipple(sx, sy);
+        phase += 3;
+      }, 300);
+    }
+
+    // ── Piece management ──
+    function loadPiece(index) {
+      if (pieces.length === 0) return;
+      currentIndex = index;
+      const piece = pieces[index];
+
+      grid = parseGrid(piece.rendered);
+      gridIntensity = parseGridIntensity(piece.rendered);
+      ripples = [];
+      cellFlashes = [];
+
+      typeColor = TYPE_COLORS[piece.genome.type] || TYPE_COLORS['2d'];
+
+      computeLayout();
+
+      // Update info
+      document.getElementById('pieceName').textContent = piece.id;
+      document.getElementById('pieceType').textContent = typeLabel(piece.genome.type);
+      document.getElementById('pieceType').style.color = typeColor.base;
+      document.getElementById('pieceScore').textContent = (piece.score * 100).toFixed(1) + '%';
+      document.getElementById('rippleCount').textContent = '0';
+
+      // Update bg glow
+      document.getElementById('bgGlow').style.background =
+        `radial-gradient(circle, ${typeColor.base}18 0%, transparent 70%)`;
+    }
+
+    function typeLabel(type) {
+      return {
+        '1d': '1D Automaton', '2d': '2D Life-like', 'lsystem': 'L-System',
+        'reaction-diffusion': 'Reaction-Diffusion', 'voronoi': 'Voronoi',
+        'wfc': 'Wave Function Collapse', 'spirograph': 'Spirograph',
+        'attractor': 'Strange Attractor', 'julia': 'Julia Set',
+        'noise': 'Fractal Noise', 'flowfield': 'Flow Field',
+        'magnetic-pendulum': 'Magnetic Pendulum'
+      }[type] || type;
+    }
+
+    // ── Mode switching ──
+    function setMode(newMode) {
+      mode = newMode;
+      stopRain();
+
+      document.querySelectorAll('.ctrl-btn[data-mode]').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+      });
+
+      if (mode === 'rain') startRain();
+      if (mode === 'wave') startWave();
+    }
+
+    function cycleDecay() {
+      decayIdx = (decayIdx + 1) % DECAY_LEVELS.length;
+      decayFactor = DECAY_LEVELS[decayIdx].factor;
+      document.getElementById('decayBtn').textContent = 'Decay: ' + DECAY_LEVELS[decayIdx].label;
+    }
+
+    // ── Init ──
+    async function init() {
+      canvas = document.getElementById('membraneCanvas');
+      ctx = canvas.getContext('2d');
+
+      // Load pieces
+      try {
+        const resp = await fetch('gallery.json');
+        const data = await resp.json();
+        // Use archive (hall of fame pieces with rendered data)
+        pieces = (data.archive || []).filter(p => p.rendered && p.rendered.length > 10);
+        if (pieces.length === 0) {
+          // Fallback: try old format
+          const all = [...(data.hallOfFame || []), ...(data.pieces || [])];
+          pieces = all.filter(p => p.rendered && p.rendered.length > 10);
+        }
+        pieces.sort((a, b) => b.score - a.score);
+      } catch (e) {
+        console.error('Failed to load gallery.json:', e);
+      }
+
+      // Start overlay
+      document.getElementById('startOverlay').addEventListener('click', () => {
+        document.getElementById('startOverlay').classList.add('hidden');
+        initAudio();
+        resizeCanvas();
+        if (pieces.length > 0) loadPiece(0);
+        requestAnimationFrame(draw);
+        requestAnimationFrame(simulate);
+      });
+
+      // Canvas interaction
+      canvas.addEventListener('mousedown', handlePointer);
+      canvas.addEventListener('touchstart', handlePointer, { passive: false });
+
+      // Drag to paint ripples in pluck mode
+      let dragging = false;
+      canvas.addEventListener('mousedown', () => { dragging = true; });
+      canvas.addEventListener('mouseup', () => { dragging = false; });
+      canvas.addEventListener('mouseleave', () => { dragging = false; });
+      canvas.addEventListener('mousemove', e => {
+        if (!dragging || mode !== 'pluck') return;
+        // Throttle drag ripples
+        if (ripples.length < MAX_RIPPLES && Math.random() < 0.3) {
+          spawnRipple(e.clientX, e.clientY);
+        }
+      });
+
+      canvas.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (mode !== 'pluck') return;
+        const touch = e.touches[0];
+        if (ripples.length < MAX_RIPPLES && Math.random() < 0.3) {
+          spawnRipple(touch.clientX, touch.clientY);
+        }
+      }, { passive: false });
+
+      // Controls
+      document.getElementById('prevBtn').addEventListener('click', () => {
+        const idx = (currentIndex - 1 + pieces.length) % pieces.length;
+        loadPiece(idx);
+      });
+      document.getElementById('nextBtn').addEventListener('click', () => {
+        const idx = (currentIndex + 1) % pieces.length;
+        loadPiece(idx);
+      });
+
+      document.querySelectorAll('.ctrl-btn[data-mode]').forEach(btn => {
+        btn.addEventListener('click', () => setMode(btn.dataset.mode));
+      });
+
+      document.getElementById('decayBtn').addEventListener('click', cycleDecay);
+
+      document.getElementById('volSlider').addEventListener('input', e => {
+        volume = e.target.value / 100;
+        if (masterGain) masterGain.gain.value = volume * 0.25;
+      });
+
+      // Keyboard
+      document.addEventListener('keydown', e => {
+        if (e.code === 'ArrowLeft') {
+          e.preventDefault();
+          document.getElementById('prevBtn').click();
+        }
+        if (e.code === 'ArrowRight') {
+          e.preventDefault();
+          document.getElementById('nextBtn').click();
+        }
+        if (e.code === 'Digit1' || e.code === 'Numpad1') setMode('pluck');
+        if (e.code === 'Digit2' || e.code === 'Numpad2') setMode('rain');
+        if (e.code === 'Digit3' || e.code === 'Numpad3') setMode('wave');
+        if (e.code === 'KeyD') cycleDecay();
+        if (e.code === 'KeyC') {
+          ripples = [];
+          cellFlashes = [];
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        resizeCanvas();
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
