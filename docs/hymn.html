@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Hymn</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.96);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-title {
+      font-size: 3rem;
+      font-weight: 300;
+      letter-spacing: 0.5em;
+      color: var(--accent);
+      text-shadow: 0 0 50px var(--accent-glow);
+      margin-bottom: 0.5rem;
+    }
+    .start-sub {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.5rem;
+    }
+    .start-desc {
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      max-width: 420px;
+      text-align: center;
+      line-height: 1.7;
+      margin-bottom: 2rem;
+      opacity: 0.6;
+    }
+    .start-prompt {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      animation: pulse-text 2s ease-in-out infinite;
+    }
+    @keyframes pulse-text {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    canvas#vis {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+    }
+
+    .top-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1.5rem;
+      z-index: 10;
+      background: linear-gradient(to bottom, rgba(10,10,15,0.7) 0%, transparent 100%);
+    }
+    .logo {
+      font-size: 0.8rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .logo span { color: var(--text-dim); font-weight: 300; }
+    .status-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    /* Voice strip at bottom */
+    .voice-strip {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 2rem;
+      z-index: 10;
+      align-items: flex-end;
+    }
+    .voice {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      transition: opacity 2s ease;
+      min-width: 40px;
+    }
+    .voice.fading { opacity: 0.15; }
+    .voice-ring {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      transition: border-color 1s ease, box-shadow 1s ease, transform 0.2s ease;
+      position: relative;
+    }
+    .voice-ring::after {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.3;
+      transition: opacity 0.2s ease;
+    }
+    .voice-ring.active::after { opacity: 0.7; }
+    .voice-label {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* Info */
+    .info-bar {
+      position: fixed;
+      bottom: 8.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .info-epoch {
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+      transition: color 1.5s ease;
+    }
+    .info-gen {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+    .info-newest {
+      font-size: 0.45rem;
+      color: var(--text-dim);
+      opacity: 0;
+      transition: opacity 2s ease;
+      margin-top: 0.2rem;
+    }
+    .info-newest.show { opacity: 0.5; }
+
+    /* Controls */
+    .panel {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 10;
+      background: rgba(18, 18, 26, 0.75);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      transition: opacity 0.3s, transform 0.3s;
+      min-width: 200px;
+    }
+    .panel.hidden { opacity: 0; pointer-events: none; transform: translateX(8px); }
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.4rem;
+    }
+    .ctrl-row:last-child { margin-bottom: 0; }
+    .ctrl-label {
+      font-size: 0.58rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      min-width: 48px;
+    }
+    .ctrl-row input[type="range"] {
+      width: 90px;
+      accent-color: var(--accent);
+      height: 3px;
+    }
+    .ctrl-row .val {
+      font-size: 0.55rem;
+      color: var(--accent);
+      min-width: 28px;
+      text-align: right;
+    }
+
+    /* Spectrum bar */
+    canvas#spectrum {
+      position: fixed;
+      bottom: 0; left: 0;
+      width: 100vw;
+      height: 32px;
+      z-index: 5;
+      pointer-events: none;
+      opacity: 0.35;
+    }
+
+    .key-hint {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 1.5rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      opacity: 0.35;
+      z-index: 10;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="start-overlay" id="start">
+    <div class="start-title">HYMN</div>
+    <div class="start-sub">infinite generative soundscape</div>
+    <div class="start-desc">
+      Evolved pieces layer as simultaneous voices in a never-ending ambient
+      composition. Each genome defines a unique timbre. Voices drift in,
+      breathe, evolve, and fade as the soundscape moves through evolutionary
+      history. Leave it running.
+    </div>
+    <div class="start-prompt">click to begin</div>
+  </div>
+
+  <canvas id="vis"></canvas>
+  <canvas id="spectrum"></canvas>
+
+  <div class="top-bar">
+    <a href="index.html" class="logo">LATTICE <span>/ hymn</span></a>
+    <div class="status-label" id="status">loading...</div>
+  </div>
+
+  <div class="info-bar">
+    <div class="info-epoch" id="info-epoch"></div>
+    <div class="info-gen" id="info-gen"></div>
+    <div class="info-newest" id="info-newest"></div>
+  </div>
+
+  <div class="voice-strip" id="voice-strip"></div>
+
+  <div class="panel" id="panel">
+    <div class="ctrl-row">
+      <span class="ctrl-label">Volume</span>
+      <input type="range" id="s-vol" min="0" max="100" value="55">
+      <span class="val" id="v-vol">55%</span>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Voices</span>
+      <input type="range" id="s-voices" min="1" max="6" value="3">
+      <span class="val" id="v-voices">3</span>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Drift</span>
+      <input type="range" id="s-drift" min="1" max="10" value="5">
+      <span class="val" id="v-drift">5</span>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Reverb</span>
+      <input type="range" id="s-reverb" min="0" max="100" value="70">
+      <span class="val" id="v-reverb">70%</span>
+    </div>
+  </div>
+
+  <div class="key-hint">
+    Space — pause<br>
+    H — controls<br>
+    N — new voice
+  </div>
+
+<script>
+'use strict';
+
+/* ── colour maps ── */
+const TYPE_COLORS = {
+  '1d':'#a78bfa','2d':'#4ade80','lsystem':'#fbbf24','rd':'#f472b6',
+  'voronoi':'#22d3ee','wfc':'#ef4444','spirograph':'#c084fc',
+  'attractor':'#fb923c','julia':'#2dd4bf','noise':'#94a3b8',
+  'flowfield':'#38bdf8','flame':'#ff6b35','dla':'#a3e635',
+  'cymatics':'#e879f9','magnetic_pendulum':'#fbbf24'
+};
+const EPOCH_COLORS = {emergence:'#7c6fe0',order:'#4ade80',chaos:'#ef4444',harmony:'#fbbf24'};
+
+/* ── scales per type ── */
+const SCALES = {
+  '1d':[0,2,4,7,9],'2d':[0,2,4,5,7,9,11],'lsystem':[0,2,4,6,7,9,11],
+  'rd':[0,1,3,5,7,8,10],'voronoi':[0,3,5,7,10],'wfc':[0,2,3,5,7,8,10],
+  'spirograph':[0,2,4,5,7,9,11],'attractor':[0,1,4,5,7,8,11],
+  'julia':[0,2,3,6,7,9,10],'noise':[0,3,5,6,7,10],
+  'flowfield':[0,2,4,7,9],'flame':[0,1,3,5,7,8,10],
+  'dla':[0,2,4,7,9],'cymatics':[0,2,4,6,7,9,11],
+  'magnetic_pendulum':[0,2,3,5,7,9,10]
+};
+const WAVEFORMS = {
+  '1d':'square','2d':'triangle','lsystem':'sawtooth','rd':'sine',
+  'voronoi':'triangle','wfc':'square','spirograph':'sine',
+  'attractor':'sawtooth','julia':'sine','noise':'triangle',
+  'flowfield':'sine','flame':'sawtooth','dla':'triangle',
+  'cymatics':'sine','magnetic_pendulum':'triangle'
+};
+
+/* ── state ── */
+let audioCtx,masterGain,reverbGain,dryGain,convolver,analyser,compressor;
+let pieces=[], voices=[], paused=false, panelShown=true;
+let archiveIdx=0, voiceId=0, lastIntro=0;
+const BASE=65.41; // C2
+
+/* ── load pieces ── */
+async function loadPieces(){
+  try{
+    const r=await fetch('gallery.json');
+    const d=await r.json();
+    const all=[...(d.hallOfFame||[]),...(d.current||[])];
+    all.sort((a,b)=>(a.generation||0)-(b.generation||0));
+    return all;
+  }catch(e){return[];}
+}
+
+/* ── audio setup ── */
+function initAudio(){
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  compressor=audioCtx.createDynamicsCompressor();
+  compressor.threshold.value=-20; compressor.knee.value=10;
+  compressor.ratio.value=8; compressor.attack.value=0.005; compressor.release.value=0.15;
+
+  masterGain=audioCtx.createGain(); masterGain.gain.value=0.55;
+  analyser=audioCtx.createAnalyser(); analyser.fftSize=256;
+
+  // 4s algorithmic reverb
+  convolver=audioCtx.createConvolver();
+  const sr=audioCtx.sampleRate, len=sr*4;
+  const buf=audioCtx.createBuffer(2,len,sr);
+  for(let ch=0;ch<2;ch++){
+    const d=buf.getChannelData(ch);
+    for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.8);
+  }
+  convolver.buffer=buf;
+
+  dryGain=audioCtx.createGain(); dryGain.gain.value=0.3;
+  reverbGain=audioCtx.createGain(); reverbGain.gain.value=0.7;
+
+  compressor.connect(dryGain);
+  compressor.connect(convolver);
+  convolver.connect(reverbGain);
+  dryGain.connect(masterGain);
+  reverbGain.connect(masterGain);
+  masterGain.connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
+
+/* ── sub-bass drone ── */
+function startDrone(){
+  const g=audioCtx.createGain(); g.gain.value=0.05;
+  [32.7, 49.0].forEach(f=>{
+    const o=audioCtx.createOscillator();
+    o.type='sine'; o.frequency.value=f;
+    // slow pitch drift
+    const lfo=audioCtx.createOscillator();
+    const lg=audioCtx.createGain();
+    lfo.type='sine'; lfo.frequency.value=0.025; lg.gain.value=0.4;
+    lfo.connect(lg); lg.connect(o.frequency); lfo.start();
+    o.connect(g); o.start();
+  });
+  g.connect(compressor);
+}
+
+/* ── create voice from piece ── */
+function createVoice(piece){
+  const id=voiceId++;
+  const type=piece.type||'1d';
+  const scale=SCALES[type]||SCALES['1d'];
+  const wave=WAVEFORMS[type]||'sine';
+  const color=TYPE_COLORS[type]||'#7c6fe0';
+
+  const m=piece.metrics||{};
+  const complexity=m.complexity||0.5;
+  const symmetry=m.symmetry||0.5;
+  const density=m.density||0.4;
+  const edgeAct=m.edgeActivity||0.5;
+  const score=piece.score||0.65;
+
+  const octShift=Math.floor(score*3); // 0-2 octaves up
+
+  const vGain=audioCtx.createGain(); vGain.gain.value=0;
+  const pan=audioCtx.createStereoPanner();
+  pan.pan.value=(Math.random()-0.5)*1.4;
+  vGain.connect(pan); pan.connect(compressor);
+
+  // 2-4 oscillator layers
+  const nLayers=2+Math.floor(complexity*2);
+  const layers=[];
+  for(let i=0;i<nLayers;i++){
+    const osc=audioCtx.createOscillator();
+    const lg=audioCtx.createGain();
+    const ni=Math.floor(Math.random()*scale.length);
+    const oct=octShift+Math.floor(i/2);
+    const semi=scale[ni]+12*oct;
+    const freq=BASE*Math.pow(2,semi/12);
+    osc.type=i===0?wave:(i%2===0?'sine':'triangle');
+    osc.frequency.value=freq;
+    osc.detune.value=(Math.random()-0.5)*8*(1+edgeAct);
+    lg.gain.value=(0.07/nLayers)*(1-i*0.12);
+
+    // pitch drift LFO
+    const pLfo=audioCtx.createOscillator();
+    const pLg=audioCtx.createGain();
+    pLfo.type='sine'; pLfo.frequency.value=0.015+Math.random()*0.06;
+    pLg.gain.value=freq*0.003*(1+edgeAct);
+    pLfo.connect(pLg); pLg.connect(osc.frequency); pLfo.start();
+
+    // breathing LFO
+    const aLfo=audioCtx.createOscillator();
+    const aLg=audioCtx.createGain();
+    aLfo.type='sine'; aLfo.frequency.value=0.04+Math.random()*0.1;
+    aLg.gain.value=lg.gain.value*0.35*symmetry;
+    aLfo.connect(aLg); aLg.connect(lg.gain); aLfo.start();
+
+    osc.connect(lg); lg.connect(vGain); osc.start();
+    layers.push({osc,lg,pLfo,pLg,aLfo,aLg,freq});
+  }
+
+  // Fade in 6-14s
+  const fadeIn=6+Math.random()*8;
+  const now=audioCtx.currentTime;
+  vGain.gain.setValueAtTime(0,now);
+  vGain.gain.linearRampToValueAtTime(0.12*density+0.04,now+fadeIn);
+
+  const lifetime=25+Math.random()*35; // 25-60s
+
+  return {
+    id,piece,type,color,layers,vGain,pan,
+    startTime:now,fadeIn,lifetime,
+    scale,octShift,wave,
+    evolveMs:(3+Math.random()*5)*1000,
+    lastEvolve:Date.now(),
+    fadingOut:false, amp:0
+  };
+}
+
+/* ── evolve voice: glide one layer to new note ── */
+function evolveVoice(v){
+  if(v.fadingOut||!v.layers.length) return;
+  const l=v.layers[Math.floor(Math.random()*v.layers.length)];
+  const ni=Math.floor(Math.random()*v.scale.length);
+  const oct=v.octShift+Math.floor(Math.random()*2);
+  const f=BASE*Math.pow(2,(v.scale[ni]+12*oct)/12);
+  l.osc.frequency.linearRampToValueAtTime(f,audioCtx.currentTime+2+Math.random()*3);
+  l.freq=f;
+}
+
+/* ── fade out + cleanup ── */
+function fadeOut(v){
+  if(v.fadingOut) return;
+  v.fadingOut=true;
+  const dur=8+Math.random()*5;
+  v.vGain.gain.linearRampToValueAtTime(0,audioCtx.currentTime+dur);
+  setTimeout(()=>{
+    v.layers.forEach(l=>{try{l.osc.stop();l.pLfo.stop();l.aLfo.stop();}catch(e){}});
+    try{v.vGain.disconnect();v.pan.disconnect();}catch(e){}
+    voices=voices.filter(x=>x.id!==v.id);
+    renderVoiceStrip();
+  },dur*1000+500);
+}
+
+/* ── next piece (chronological cycle) ── */
+function nextPiece(){
+  if(!pieces.length) return null;
+  return pieces[archiveIdx++%pieces.length];
+}
+
+function getEpoch(g){const c=(g||0)%40;return c<10?'emergence':c<20?'order':c<30?'chaos':'harmony';}
+
+/* ── UI ── */
+function renderVoiceStrip(){
+  const el=document.getElementById('voice-strip');
+  el.innerHTML='';
+  voices.forEach(v=>{
+    const d=document.createElement('div');
+    d.className='voice'+(v.fadingOut?' fading':'');
+    const ring=document.createElement('div');
+    ring.className='voice-ring';
+    ring.style.borderColor=v.color;
+    ring.style.color=v.color;
+    ring.id='vr-'+v.id;
+    const lbl=document.createElement('div');
+    lbl.className='voice-label';
+    lbl.textContent=v.type;
+    d.appendChild(ring);
+    d.appendChild(lbl);
+    el.appendChild(d);
+  });
+}
+
+function updateInfo(){
+  if(!voices.length) return;
+  const v=voices[voices.length-1];
+  const g=v.piece.generation||0;
+  const ep=getEpoch(g);
+  const epEl=document.getElementById('info-epoch');
+  epEl.textContent=ep;
+  epEl.style.color=EPOCH_COLORS[ep]||'#7c6fe0';
+  document.getElementById('info-gen').textContent='generation '+g;
+  const nEl=document.getElementById('info-newest');
+  nEl.textContent=(v.piece.id||v.type)+' — score '+(v.piece.score||0).toFixed(3);
+  nEl.classList.add('show');
+  setTimeout(()=>nEl.classList.remove('show'),6000);
+}
+
+/* ── canvas ── */
+const vis=document.getElementById('vis');
+const vCtx=vis.getContext('2d');
+const spCanvas=document.getElementById('spectrum');
+const spCtx=spCanvas.getContext('2d');
+
+function resize(){
+  vis.width=innerWidth; vis.height=innerHeight;
+  spCanvas.width=innerWidth; spCanvas.height=32;
+}
+addEventListener('resize',resize); resize();
+
+// particles
+const pts=[];
+function drawVis(t){
+  const w=vis.width,h=vis.height;
+  vCtx.fillStyle='rgba(10,10,15,0.05)';
+  vCtx.fillRect(0,0,w,h);
+
+  // spawn from voices
+  voices.forEach(v=>{
+    if(!v.fadingOut&&Math.random()<0.12&&pts.length<150){
+      pts.push({
+        x:w/2+(Math.random()-0.5)*w*0.6,
+        y:h/2+(Math.random()-0.5)*h*0.5,
+        vx:(Math.random()-0.5)*0.25,
+        vy:-0.08-Math.random()*0.25,
+        r:1+Math.random()*2.5,
+        c:v.color,
+        life:1,
+        dec:0.002+Math.random()*0.004
+      });
+    }
+  });
+
+  for(let i=pts.length-1;i>=0;i--){
+    const p=pts[i];
+    p.x+=p.vx; p.y+=p.vy; p.life-=p.dec;
+    if(p.life<=0){pts.splice(i,1);continue;}
+    vCtx.beginPath();
+    vCtx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    const a=Math.floor(p.life*35).toString(16).padStart(2,'0');
+    vCtx.fillStyle=p.c.slice(0,7)+a;
+    vCtx.fill();
+  }
+
+  // central glow
+  if(voices.length){
+    const v=voices[voices.length-1];
+    const ep=getEpoch(v.piece.generation||0);
+    const ec=EPOCH_COLORS[ep];
+    const r=Math.min(w,h)*0.3;
+    const gr=vCtx.createRadialGradient(w/2,h/2,0,w/2,h/2,r);
+    gr.addColorStop(0,ec+'06');
+    gr.addColorStop(1,'transparent');
+    vCtx.fillStyle=gr;
+    vCtx.fillRect(w/2-r,h/2-r,r*2,r*2);
+  }
+}
+
+function drawSpectrum(){
+  if(!analyser) return;
+  const w=spCanvas.width,h=spCanvas.height;
+  const data=new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  spCtx.clearRect(0,0,w,h);
+  const bw=w/data.length;
+  for(let i=0;i<data.length;i++){
+    const v=data[i]/255;
+    spCtx.fillStyle='rgba(124,111,224,'+v*0.55+')';
+    spCtx.fillRect(i*bw,h-v*h,bw-0.5,v*h);
+  }
+}
+
+/* ── voice amplitude vis ── */
+function updateAmps(){
+  voices.forEach(v=>{
+    const el=audioCtx.currentTime-v.startTime;
+    let env=el<v.fadeIn?el/v.fadeIn:v.fadingOut?Math.max(0,v.vGain.gain.value/0.16):1;
+    const breathe=0.65+0.35*Math.sin(el*0.35+v.id);
+    v.amp=env*breathe;
+    const ring=document.getElementById('vr-'+v.id);
+    if(ring){
+      const s=0.8+v.amp*0.4;
+      ring.style.transform='scale('+s+')';
+      ring.style.boxShadow='0 0 '+Math.floor(v.amp*12)+'px '+v.color+'60';
+      if(v.amp>0.6) ring.classList.add('active'); else ring.classList.remove('active');
+    }
+  });
+}
+
+/* ── main loop ── */
+function loop(t){
+  if(!paused){
+    drawVis(t);
+    drawSpectrum();
+    updateAmps();
+
+    const now=Date.now();
+    const maxV=parseInt(document.getElementById('s-voices').value);
+    const drift=parseInt(document.getElementById('s-drift').value);
+    const interval=(12-drift)*2000+4000; // 6-24s
+
+    // introduce new voices
+    if(voices.filter(v=>!v.fadingOut).length<maxV && now-lastIntro>interval){
+      const p=nextPiece();
+      if(p){
+        const v=createVoice(p);
+        voices.push(v);
+        lastIntro=now;
+        renderVoiceStrip();
+        updateInfo();
+      }
+    }
+
+    // evolve + lifetime check
+    voices.forEach(v=>{
+      if(now-v.lastEvolve>v.evolveMs){evolveVoice(v);v.lastEvolve=now;}
+      if(audioCtx.currentTime-v.startTime>v.lifetime&&!v.fadingOut) fadeOut(v);
+    });
+  }
+  requestAnimationFrame(loop);
+}
+
+/* ── controls ── */
+['vol','voices','drift','reverb'].forEach(k=>{
+  const sl=document.getElementById('s-'+k);
+  if(!sl) return;
+  sl.addEventListener('input',()=>{
+    const v=parseFloat(sl.value);
+    document.getElementById('v-'+k).textContent=
+      k==='vol'?Math.round(v)+'%':k==='reverb'?Math.round(v)+'%':v;
+    if(k==='vol'&&masterGain)
+      masterGain.gain.linearRampToValueAtTime(v/100,audioCtx.currentTime+0.1);
+    if(k==='reverb'){
+      if(reverbGain) reverbGain.gain.linearRampToValueAtTime(v/100,audioCtx.currentTime+0.3);
+      if(dryGain) dryGain.gain.linearRampToValueAtTime(1-v/100,audioCtx.currentTime+0.3);
+    }
+  });
+});
+
+/* ── keyboard ── */
+addEventListener('keydown',e=>{
+  if(e.key===' '||e.code==='Space'){
+    e.preventDefault();
+    paused=!paused;
+    document.getElementById('status').textContent=paused?'paused':'drifting...';
+    if(paused) audioCtx.suspend(); else audioCtx.resume();
+  }
+  if(e.key==='h'||e.key==='H'){
+    panelShown=!panelShown;
+    document.getElementById('panel').classList.toggle('hidden',!panelShown);
+  }
+  if(e.key==='n'||e.key==='N'){
+    if(!audioCtx) return;
+    const p=nextPiece();
+    if(p){
+      const v=createVoice(p);
+      voices.push(v);
+      lastIntro=Date.now();
+      renderVoiceStrip();
+      updateInfo();
+    }
+  }
+});
+
+/* ── start ── */
+document.getElementById('start').addEventListener('click',async()=>{
+  document.getElementById('start').classList.add('hidden');
+  pieces=await loadPieces();
+  if(!pieces.length){
+    document.getElementById('status').textContent='no pieces found';
+    return;
+  }
+  initAudio();
+  startDrone();
+  document.getElementById('status').textContent='drifting...';
+
+  // seed with 2 voices
+  for(let i=0;i<2&&i<pieces.length;i++){
+    const p=nextPiece();
+    if(p) voices.push(createVoice(p));
+  }
+  lastIntro=Date.now();
+  renderVoiceStrip();
+  updateInfo();
+  requestAnimationFrame(loop);
+});
+
+// init canvas
+vCtx.fillStyle='#0a0a0f';
+vCtx.fillRect(0,0,vis.width,vis.height);
+</script>
+</body>
+</html>
