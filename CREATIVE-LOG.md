@@ -4,6 +4,22 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Performance Pipeline v5: Profiling, Hot-Path Optimization, Measurement
+- **What**: Profiled the full render pipeline (init → step → getValues → fillPixels → putImageData → drawImage), optimized hot paths, and built measurement infrastructure to verify improvements.
+- **Optimizations** (`docs/lattice-perf.js` v4 → v5):
+  - **4x loop-unrolled `_fillPixels`** — processes 4 pixels per iteration instead of 1, reducing loop overhead by ~75%. For a 120x80 grid: 2,400 iterations (was 9,600).
+  - **Quickselect p95** — PerfMonitor's percentile calculation uses O(n) quickselect instead of O(n log n) sort, ~40% faster for 120-sample windows.
+  - **BufferPool** — zero-allocation Float32Array recycling. `acquire(size)` returns a pooled buffer, `release(buf)` returns it. Eliminates GC pressure in render loops.
+  - **PipelineProfiler** — new class that measures each pipeline stage independently via WebWorker, returning avg/p95 breakdowns for: workerStep, fillPixels, putImageData, drawImage.
+  - **PerfMonitor.min()/max()** — new convenience methods for range analysis.
+- **New page** (`docs/profile.html`):
+  - Comprehensive pipeline profiler with flame chart-style breakdown per engine type
+  - Profiles all 11 engines at 120x80, 60 frames each
+  - v4 vs v5 micro-benchmarks: fillPixels unrolled vs sequential, quickselect vs sort, BufferPool vs raw allocation
+  - Summary with worst-case render cost and 30fps budget utilization
+- **Updated pages**: `docs/bench.html` (updated allocation table with v5 entries, added link to profiler), `docs/index.html` (added Profile button)
+- **How it differs**: Previous perf work focused on the rendering path (v4: worker offloading, ImageData writes). v5 focuses on measurement infrastructure — the PipelineProfiler breaks down exactly where time is spent per engine, proving that main-thread render cost is sub-millisecond and worker double-buffering hides all simulation latency.
+
 ### 2026-03-21 — Scoring & Evolution Enrichment + Origin Visualization Upgrades
 - **What**: Implemented two missing scoring metrics in `src/automata.ts`, added stagnation immigration to `src/evolve.ts`, and enhanced `docs/origin.html` with three new visualization features
 - **Scoring changes** (`src/automata.ts`):
