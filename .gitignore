@@ -3,3 +3,4 @@ gallery/population.json
 gallery/*.txt
 logs/
 .worktrees/
+.vercel
