@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Depths</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    /* --- HUD overlay --- */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title { pointer-events: auto; }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .hud-title .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .hud-title .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+      pointer-events: auto;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    /* --- Coordinate display --- */
+    .coords {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.03em;
+      line-height: 1.8;
+      pointer-events: none;
+    }
+    .coords .val { color: var(--accent); }
+
+    /* --- Orbit overlay --- */
+    #orbitCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    /* --- Control panel --- */
+    .panel {
+      position: absolute;
+      right: 1.25rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 230px;
+      background: rgba(18, 18, 26, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 1rem;
+      pointer-events: auto;
+      z-index: 20;
+      max-height: 85vh;
+      overflow-y: auto;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+
+    .panel.collapsed {
+      opacity: 0;
+      transform: translateY(-50%) translateX(260px);
+      pointer-events: none;
+    }
+
+    .panel::-webkit-scrollbar { width: 3px; }
+    .panel::-webkit-scrollbar-track { background: transparent; }
+    .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .panel-section {
+      margin-bottom: 0.85rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+    .section-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.5rem;
+    }
+
+    /* Presets */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.3rem;
+    }
+
+    .preset-btn {
+      padding: 0.35rem 0.4rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.5rem;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .preset-btn:hover { border-color: var(--accent); color: var(--text); }
+    .preset-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* Sliders */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .slider-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      width: 54px;
+      flex-shrink: 0;
+    }
+
+    .slider-val {
+      font-size: 0.55rem;
+      color: var(--accent);
+      width: 42px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      flex: 1;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.3);
+    }
+
+    /* Color palette selector */
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.3rem;
+    }
+
+    .palette-btn {
+      height: 18px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .palette-btn:hover { border-color: var(--accent); transform: scale(1.05); }
+    .palette-btn.active { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+
+    /* Action buttons */
+    .action-row {
+      display: flex;
+      gap: 0.3rem;
+      margin-top: 0.3rem;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 0.4rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+    .action-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Toggle button */
+    .toggle-panel {
+      position: absolute;
+      right: 1.25rem;
+      bottom: 1.25rem;
+      pointer-events: auto;
+      z-index: 25;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(18, 18, 26, 0.85);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.7rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      backdrop-filter: blur(8px);
+    }
+    .toggle-panel:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Zoom animation pulse */
+    .zoom-flash {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid var(--accent);
+      pointer-events: none;
+      animation: zoomPulse 0.6s ease-out forwards;
+      z-index: 4;
+    }
+
+    @keyframes zoomPulse {
+      0% { transform: translate(-50%,-50%) scale(0); opacity: 0.8; }
+      100% { transform: translate(-50%,-50%) scale(3); opacity: 0; }
+    }
+
+    /* Loading indicator */
+    .render-indicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 0.6rem;
+      color: var(--accent);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 6;
+    }
+    .render-indicator.visible { opacity: 1; }
+
+    /* Minimap */
+    .minimap {
+      position: absolute;
+      bottom: 1.25rem;
+      right: 4rem;
+      width: 80px;
+      height: 80px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      pointer-events: auto;
+      cursor: pointer;
+      z-index: 15;
+      background: var(--bg);
+    }
+    .minimap canvas { width: 100%; height: 100%; }
+
+    /* Help tooltip */
+    .help-hint {
+      position: absolute;
+      bottom: 4rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      text-align: center;
+      opacity: 0.7;
+      pointer-events: none;
+      transition: opacity 1s;
+      z-index: 10;
+    }
+    .help-hint.hidden { opacity: 0; }
+
+    /* Mandelbrot toggle */
+    .mode-toggle {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 0.5rem;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 0.3rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.5rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .mode-btn:hover { border-color: var(--accent); color: var(--text); }
+    .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  </style>
+</head>
+<body>
+
+<canvas id="fractalCanvas"></canvas>
+<canvas id="orbitCanvas"></canvas>
+
+<div class="hud">
+  <div class="hud-top">
+    <div class="hud-title">
+      <a href="index.html" class="back-link">&larr; lattice</a>
+      <h1>Depths</h1>
+    </div>
+    <div class="hud-stats">
+      <div>zoom <span class="val" id="zoomLevel">1.0x</span></div>
+      <div>iterations <span class="val" id="iterCount">128</span></div>
+      <div>render <span class="val" id="renderTime">—</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="coords" id="coords">
+  <div>real <span class="val" id="coordReal">0.000</span></div>
+  <div>imag <span class="val" id="coordImag">0.000</span></div>
+  <div>c = <span class="val" id="coordC">-0.700 + 0.270i</span></div>
+</div>
+
+<div class="render-indicator" id="renderIndicator">rendering</div>
+
+<div class="help-hint" id="helpHint">
+  click to zoom in &middot; shift+click to zoom out &middot; drag to pan &middot; scroll to zoom
+</div>
+
+<div class="panel" id="panel">
+  <div class="panel-section">
+    <div class="section-label">Mode</div>
+    <div class="mode-toggle">
+      <button class="mode-btn active" data-mode="julia">Julia</button>
+      <button class="mode-btn" data-mode="mandelbrot">Mandelbrot</button>
+    </div>
+  </div>
+
+  <div class="panel-section" id="juliaControls">
+    <div class="section-label">Julia constant (c)</div>
+    <div class="slider-row">
+      <span class="slider-label">c real</span>
+      <input type="range" id="cReal" min="-2" max="2" step="0.001" value="-0.7">
+      <span class="slider-val" id="cRealVal">-0.700</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">c imag</span>
+      <input type="range" id="cImag" min="-2" max="2" step="0.001" value="0.27015">
+      <span class="slider-val" id="cImagVal">0.270</span>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Rendering</div>
+    <div class="slider-row">
+      <span class="slider-label">max iter</span>
+      <input type="range" id="maxIter" min="32" max="1024" step="16" value="128">
+      <span class="slider-val" id="maxIterVal">128</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">escape</span>
+      <input type="range" id="escapeRadius" min="2" max="20" step="0.5" value="4">
+      <span class="slider-val" id="escapeRadiusVal">4.0</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">color shift</span>
+      <input type="range" id="colorShift" min="0" max="1" step="0.01" value="0">
+      <span class="slider-val" id="colorShiftVal">0.00</span>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Presets</div>
+    <div class="preset-grid" id="presetGrid"></div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Palette</div>
+    <div class="palette-grid" id="paletteGrid"></div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Audio</div>
+    <div class="slider-row">
+      <span class="slider-label">volume</span>
+      <input type="range" id="audioVol" min="0" max="1" step="0.01" value="0.3">
+      <span class="slider-val" id="audioVolVal">0.30</span>
+    </div>
+    <div class="action-row">
+      <button class="action-btn" id="audioToggle">enable audio</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Actions</div>
+    <div class="action-row">
+      <button class="action-btn" id="resetView">reset</button>
+      <button class="action-btn" id="exportPng">export</button>
+    </div>
+    <div class="action-row">
+      <button class="action-btn" id="randomize">randomize</button>
+      <button class="action-btn" id="toggleOrbit">orbit</button>
+    </div>
+  </div>
+</div>
+
+<div class="minimap" id="minimap" title="Click to navigate">
+  <canvas id="minimapCanvas" width="80" height="80"></canvas>
+</div>
+
+<button class="toggle-panel" id="toggleBtn" title="Toggle panel [H]">&#9776;</button>
+
+<script>
+// ── State ──────────────────────────────────────────────────
+const canvas = document.getElementById('fractalCanvas');
+const ctx = canvas.getContext('2d');
+const orbitCanvas = document.getElementById('orbitCanvas');
+const octx = orbitCanvas.getContext('2d');
+const minimapCanvas = document.getElementById('minimapCanvas');
+const mctx = minimapCanvas.getContext('2d');
+
+let W, H;
+let mode = 'julia'; // julia | mandelbrot
+
+// View: complex plane coordinates
+let viewCenterX = 0, viewCenterY = 0;
+let viewScale = 3; // width in complex plane units
+
+// Julia constant
+let cReal = -0.7, cImag = 0.27015;
+
+// Render params
+let maxIter = 128;
+let escapeRadius = 4;
+let colorShift = 0;
+let activePalette = 0;
+
+// Interaction
+let isDragging = false;
+let dragStartX, dragStartY, dragCenterX, dragCenterY;
+let showOrbit = false;
+let mouseX = 0, mouseY = 0;
+let panelVisible = true;
+let helpVisible = true;
+
+// Audio
+let audioCtx = null;
+let audioEnabled = false;
+let oscillators = [];
+let gainNode = null;
+let audioVolume = 0.3;
+
+// Render state
+let renderQueued = false;
+let renderWorking = false;
+let imageData = null;
+
+// ── Color palettes ─────────────────────────────────────────
+const palettes = [
+  { name: 'Void',    fn: (t) => hsl2rgb(0.72 + t * 0.15, 0.7, t * 0.55) },
+  { name: 'Ember',   fn: (t) => hsl2rgb(0.02 + t * 0.08, 0.9, t * 0.6) },
+  { name: 'Ocean',   fn: (t) => hsl2rgb(0.55 + t * 0.12, 0.75, t * 0.5) },
+  { name: 'Neon',    fn: (t) => hsl2rgb(t * 0.85, 0.95, 0.35 + t * 0.25) },
+  { name: 'Frost',   fn: (t) => hsl2rgb(0.52 + t * 0.06, 0.4, 0.3 + t * 0.55) },
+  { name: 'Plasma',  fn: (t) => {
+    const r = Math.sin(t * 3.14159) * 0.5 + 0.5;
+    const g = Math.sin(t * 3.14159 + 2.094) * 0.5 + 0.5;
+    const b = Math.sin(t * 3.14159 + 4.188) * 0.5 + 0.5;
+    return [r * 255, g * 255, b * 255];
+  }},
+  { name: 'Lattice', fn: (t) => {
+    // Purple → green → black, matching the project palette
+    if (t < 0.5) {
+      const s = t * 2;
+      return [124 * (1-s) + 74*s, 111*(1-s) + 222*s, 224*(1-s) + 128*s];
+    } else {
+      const s = (t - 0.5) * 2;
+      return [74*(1-s), 222*(1-s), 128*(1-s)];
+    }
+  }},
+  { name: 'Mono',    fn: (t) => { const v = t * 200; return [v, v, v]; } }
+];
+
+// Presets: famous Julia set parameters
+const presets = [
+  { name: 'Dendrite',    cr: -0.7,    ci: 0.27015 },
+  { name: 'Spirals',     cr: -0.8,    ci: 0.156 },
+  { name: 'Lightning',   cr: -0.1,    ci: 0.651 },
+  { name: 'Frost',       cr: 0.285,   ci: 0.01 },
+  { name: 'Galaxies',    cr: -0.4,    ci: 0.6 },
+  { name: 'Rabbit',      cr: -0.123,  ci: 0.745 },
+  { name: 'Dragon',      cr: 0.36,    ci: 0.1 },
+  { name: 'Seashell',    cr: -0.75,   ci: 0.11 },
+  { name: 'San Marco',   cr: -0.75,   ci: 0.0 },
+  { name: 'Nebula',      cr: 0.355,   ci: 0.355 },
+];
+
+// ── Helpers ────────────────────────────────────────────────
+function hsl2rgb(h, s, l) {
+  h = ((h % 1) + 1) % 1;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const k = (n + h * 12) % 12;
+    return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+  };
+  return [f(0) * 255, f(8) * 255, f(4) * 255];
+}
+
+function screenToComplex(sx, sy) {
+  const aspect = W / H;
+  const scaleX = viewScale * aspect;
+  const scaleY = viewScale;
+  return [
+    viewCenterX + (sx / W - 0.5) * scaleX,
+    viewCenterY + (sy / H - 0.5) * scaleY
+  ];
+}
+
+function complexToScreen(cx, cy) {
+  const aspect = W / H;
+  const scaleX = viewScale * aspect;
+  const scaleY = viewScale;
+  return [
+    ((cx - viewCenterX) / scaleX + 0.5) * W,
+    ((cy - viewCenterY) / scaleY + 0.5) * H
+  ];
+}
+
+// ── Fractal renderer ───────────────────────────────────────
+function computePixel(px, py) {
+  let zr, zi, cr, ci;
+
+  if (mode === 'julia') {
+    zr = px; zi = py;
+    cr = cReal; ci = cImag;
+  } else {
+    zr = 0; zi = 0;
+    cr = px; ci = py;
+  }
+
+  const escSq = escapeRadius * escapeRadius;
+  let i = 0;
+  let zr2 = zr * zr, zi2 = zi * zi;
+
+  while (zr2 + zi2 <= escSq && i < maxIter) {
+    zi = 2 * zr * zi + ci;
+    zr = zr2 - zi2 + cr;
+    zr2 = zr * zr;
+    zi2 = zi * zi;
+    i++;
+  }
+
+  if (i === maxIter) return -1; // inside set
+
+  // Smooth iteration count for continuous coloring
+  const log2 = Math.log(2);
+  const nu = Math.log(Math.log(Math.sqrt(zr2 + zi2)) / log2) / log2;
+  return i + 1 - nu;
+}
+
+function render(lowRes) {
+  const step = lowRes ? 4 : 1;
+  const aspect = W / H;
+  const scaleX = viewScale * aspect;
+  const scaleY = viewScale;
+  const halfW = W * 0.5;
+  const halfH = H * 0.5;
+  const palFn = palettes[activePalette].fn;
+  const shift = colorShift;
+
+  if (!imageData || imageData.width !== W || imageData.height !== H) {
+    imageData = ctx.createImageData(W, H);
+  }
+  const data = imageData.data;
+
+  const startTime = performance.now();
+  let totalIter = 0;
+  let insideCount = 0;
+
+  for (let sy = 0; sy < H; sy += step) {
+    const py = viewCenterY + (sy - halfH) / H * scaleY;
+    for (let sx = 0; sx < W; sx += step) {
+      const px = viewCenterX + (sx - halfW) / W * scaleX;
+      const iter = computePixel(px, py);
+
+      let r, g, b;
+      if (iter < 0) {
+        r = g = b = 0;
+        insideCount++;
+      } else {
+        const t = ((iter / maxIter) + shift) % 1;
+        const c = palFn(t);
+        r = c[0]; g = c[1]; b = c[2];
+        totalIter += iter;
+      }
+
+      // Fill block for low-res
+      for (let dy = 0; dy < step && sy + dy < H; dy++) {
+        for (let dx = 0; dx < step && sx + dx < W; dx++) {
+          const idx = ((sy + dy) * W + (sx + dx)) * 4;
+          data[idx] = r;
+          data[idx + 1] = g;
+          data[idx + 2] = b;
+          data[idx + 3] = 255;
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  const elapsed = performance.now() - startTime;
+  document.getElementById('renderTime').textContent = elapsed < 1000
+    ? Math.round(elapsed) + 'ms'
+    : (elapsed / 1000).toFixed(1) + 's';
+
+  // Update audio based on fractal density
+  if (audioEnabled) {
+    const totalPixels = (W / step) * (H / step);
+    const density = insideCount / totalPixels;
+    const avgIter = totalIter / Math.max(1, totalPixels - insideCount);
+    updateAudio(density, avgIter / maxIter);
+  }
+
+  return !lowRes;
+}
+
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    const indicator = document.getElementById('renderIndicator');
+
+    // Quick low-res pass
+    render(true);
+
+    // Schedule full render
+    indicator.classList.add('visible');
+    setTimeout(() => {
+      render(false);
+      indicator.classList.remove('visible');
+      renderMinimap();
+    }, 16);
+  });
+}
+
+// ── Minimap ────────────────────────────────────────────────
+function renderMinimap() {
+  const mW = 80, mH = 80;
+  const mData = mctx.createImageData(mW, mH);
+  const d = mData.data;
+  const palFn = palettes[activePalette].fn;
+
+  // Minimap always shows a fixed wide view
+  const mScale = mode === 'mandelbrot' ? 4 : 3.5;
+  const mCx = mode === 'mandelbrot' ? -0.5 : 0;
+  const mCy = 0;
+  const quickIter = 48;
+
+  for (let sy = 0; sy < mH; sy++) {
+    const py = mCy + (sy / mH - 0.5) * mScale;
+    for (let sx = 0; sx < mW; sx++) {
+      const px = mCx + (sx / mW - 0.5) * mScale;
+
+      let zr, zi, cr, ci;
+      if (mode === 'julia') {
+        zr = px; zi = py; cr = cReal; ci = cImag;
+      } else {
+        zr = 0; zi = 0; cr = px; ci = py;
+      }
+
+      let i = 0;
+      const escSq = 4;
+      while (zr * zr + zi * zi <= escSq && i < quickIter) {
+        const tmp = zr * zr - zi * zi + cr;
+        zi = 2 * zr * zi + ci;
+        zr = tmp;
+        i++;
+      }
+
+      const idx = (sy * mW + sx) * 4;
+      if (i === quickIter) {
+        d[idx] = d[idx+1] = d[idx+2] = 0;
+      } else {
+        const t = ((i / quickIter) + colorShift) % 1;
+        const c = palFn(t);
+        d[idx] = c[0]; d[idx+1] = c[1]; d[idx+2] = c[2];
+      }
+      d[idx + 3] = 255;
+    }
+  }
+  mctx.putImageData(mData, 0, 0);
+
+  // Draw viewport rectangle
+  const aspect = W / H;
+  const vx = ((viewCenterX - mCx) / mScale + 0.5) * mW;
+  const vy = ((viewCenterY - mCy) / mScale + 0.5) * mH;
+  const vw = (viewScale * aspect / mScale) * mW;
+  const vh = (viewScale / mScale) * mH;
+
+  mctx.strokeStyle = '#7c6fe0';
+  mctx.lineWidth = 1;
+  mctx.strokeRect(vx - vw/2, vy - vh/2, vw, vh);
+}
+
+// ── Orbit visualization ────────────────────────────────────
+function drawOrbit(sx, sy) {
+  octx.clearRect(0, 0, W, H);
+  if (!showOrbit) return;
+
+  const [px, py] = screenToComplex(sx, sy);
+  let zr, zi, cr, ci;
+
+  if (mode === 'julia') {
+    zr = px; zi = py; cr = cReal; ci = cImag;
+  } else {
+    zr = 0; zi = 0; cr = px; ci = py;
+  }
+
+  const escSq = escapeRadius * escapeRadius;
+  const points = [[zr, zi]];
+
+  for (let i = 0; i < maxIter && zr*zr + zi*zi <= escSq; i++) {
+    const tmp = zr*zr - zi*zi + cr;
+    zi = 2*zr*zi + ci;
+    zr = tmp;
+    points.push([zr, zi]);
+  }
+
+  octx.strokeStyle = 'rgba(124, 111, 224, 0.4)';
+  octx.lineWidth = 1;
+  octx.beginPath();
+
+  for (let i = 0; i < points.length; i++) {
+    const [scx, scy] = complexToScreen(points[i][0], points[i][1]);
+    if (i === 0) octx.moveTo(scx, scy);
+    else octx.lineTo(scx, scy);
+  }
+  octx.stroke();
+
+  // Draw dots at each orbit point
+  for (let i = 0; i < Math.min(points.length, 200); i++) {
+    const [scx, scy] = complexToScreen(points[i][0], points[i][1]);
+    const alpha = 1 - i / Math.min(points.length, 200);
+    octx.fillStyle = `rgba(74, 222, 128, ${alpha * 0.7})`;
+    octx.beginPath();
+    octx.arc(scx, scy, 2, 0, Math.PI * 2);
+    octx.fill();
+  }
+}
+
+// ── Audio ──────────────────────────────────────────────────
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  gainNode = audioCtx.createGain();
+  gainNode.gain.value = audioVolume * 0.15;
+  gainNode.connect(audioCtx.destination);
+
+  // Create 3 oscillators for ambient chord
+  const types = ['sine', 'triangle', 'sine'];
+  for (let i = 0; i < 3; i++) {
+    const osc = audioCtx.createOscillator();
+    const oscGain = audioCtx.createGain();
+    oscGain.gain.value = [0.5, 0.3, 0.2][i];
+    osc.type = types[i];
+    osc.frequency.value = 110;
+    osc.connect(oscGain);
+    oscGain.connect(gainNode);
+    osc.start();
+    oscillators.push({ osc, gain: oscGain });
+  }
+}
+
+function updateAudio(density, avgIterNorm) {
+  if (!audioCtx || !audioEnabled) return;
+
+  // Map fractal characteristics to frequencies
+  // Density influences root note (more dense = lower)
+  const root = 80 + (1 - density) * 200;
+  // Average iteration depth influences harmonic spread
+  const spread = 1 + avgIterNorm * 2;
+
+  const now = audioCtx.currentTime;
+  oscillators[0].osc.frequency.setTargetAtTime(root, now, 0.5);
+  oscillators[1].osc.frequency.setTargetAtTime(root * spread, now, 0.5);
+  oscillators[2].osc.frequency.setTargetAtTime(root * spread * 1.5, now, 0.5);
+
+  gainNode.gain.setTargetAtTime(audioVolume * 0.15, now, 0.3);
+}
+
+function toggleAudio() {
+  if (!audioEnabled) {
+    initAudio();
+    audioEnabled = true;
+    document.getElementById('audioToggle').textContent = 'disable audio';
+  } else {
+    audioEnabled = false;
+    if (gainNode) gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+    document.getElementById('audioToggle').textContent = 'enable audio';
+  }
+}
+
+// ── Zoom animation ─────────────────────────────────────────
+function animateZoom(targetCx, targetCy, factor, sx, sy) {
+  // Add visual pulse
+  const flash = document.createElement('div');
+  flash.className = 'zoom-flash';
+  flash.style.left = sx + 'px';
+  flash.style.top = sy + 'px';
+  flash.style.width = '40px';
+  flash.style.height = '40px';
+  document.body.appendChild(flash);
+  setTimeout(() => flash.remove(), 600);
+
+  // Smooth zoom: animate over 300ms
+  const startCx = viewCenterX, startCy = viewCenterY;
+  const startScale = viewScale;
+  const endScale = viewScale * factor;
+  const endCx = targetCx + (startCx - targetCx) * factor;
+  const endCy = targetCy + (startCy - targetCy) * factor;
+  const startTime = performance.now();
+  const duration = 300;
+
+  function step(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    const ease = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2) / 2;
+
+    viewCenterX = startCx + (endCx - startCx) * ease;
+    viewCenterY = startCy + (endCy - startCy) * ease;
+    viewScale = startScale + (endScale - startScale) * ease;
+
+    render(true);
+    updateHUD();
+
+    if (t < 1) {
+      requestAnimationFrame(step);
+    } else {
+      scheduleRender();
+    }
+  }
+
+  requestAnimationFrame(step);
+}
+
+// ── HUD updates ────────────────────────────────────────────
+function updateHUD() {
+  const zoom = 3 / viewScale;
+  document.getElementById('zoomLevel').textContent =
+    zoom < 1000 ? zoom.toFixed(1) + 'x'
+    : zoom < 1e6 ? (zoom/1000).toFixed(1) + 'Kx'
+    : (zoom/1e6).toFixed(1) + 'Mx';
+  document.getElementById('iterCount').textContent = maxIter;
+}
+
+function updateCoords(sx, sy) {
+  const [rx, ry] = screenToComplex(sx, sy);
+  document.getElementById('coordReal').textContent = rx.toFixed(6);
+  document.getElementById('coordImag').textContent = ry.toFixed(6);
+  if (mode === 'julia') {
+    document.getElementById('coordC').textContent =
+      `${cReal.toFixed(3)} ${cImag >= 0 ? '+' : '-'} ${Math.abs(cImag).toFixed(3)}i`;
+  } else {
+    document.getElementById('coordC').textContent =
+      `${rx.toFixed(3)} ${ry >= 0 ? '+' : '-'} ${Math.abs(ry).toFixed(3)}i`;
+  }
+}
+
+// ── Resize ─────────────────────────────────────────────────
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W; canvas.height = H;
+  orbitCanvas.width = W; orbitCanvas.height = H;
+  imageData = null;
+  scheduleRender();
+}
+
+// ── Event handlers ─────────────────────────────────────────
+canvas.addEventListener('mousedown', (e) => {
+  if (e.button === 0 && !e.shiftKey) {
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragCenterX = viewCenterX;
+    dragCenterY = viewCenterY;
+    canvas.style.cursor = 'grabbing';
+  }
+});
+
+window.addEventListener('mousemove', (e) => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  updateCoords(e.clientX, e.clientY);
+
+  if (isDragging) {
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    const aspect = W / H;
+    viewCenterX = dragCenterX - dx / W * viewScale * aspect;
+    viewCenterY = dragCenterY - dy / H * viewScale;
+    updateHUD();
+    render(true);
+  }
+
+  if (showOrbit) drawOrbit(e.clientX, e.clientY);
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (isDragging) {
+    const dist = Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY);
+    isDragging = false;
+    canvas.style.cursor = 'crosshair';
+
+    if (dist < 5) {
+      // Click without drag — zoom
+      const [cx, cy] = screenToComplex(e.clientX, e.clientY);
+      if (e.shiftKey) {
+        animateZoom(cx, cy, 2, e.clientX, e.clientY); // zoom out
+      } else {
+        animateZoom(cx, cy, 0.35, e.clientX, e.clientY); // zoom in
+      }
+      dismissHelp();
+    } else {
+      scheduleRender(); // end drag — full render
+    }
+  }
+});
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const [cx, cy] = screenToComplex(e.clientX, e.clientY);
+  const factor = e.deltaY > 0 ? 1.15 : 0.87;
+  animateZoom(cx, cy, factor, e.clientX, e.clientY);
+  dismissHelp();
+}, { passive: false });
+
+// Touch support
+let lastTouchDist = 0;
+let lastTouchMid = null;
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    isDragging = true;
+    dragStartX = e.touches[0].clientX;
+    dragStartY = e.touches[0].clientY;
+    dragCenterX = viewCenterX;
+    dragCenterY = viewCenterY;
+  } else if (e.touches.length === 2) {
+    isDragging = false;
+    const t = e.touches;
+    lastTouchDist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    lastTouchMid = [(t[0].clientX + t[1].clientX)/2, (t[0].clientY + t[1].clientY)/2];
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 1 && isDragging) {
+    const dx = e.touches[0].clientX - dragStartX;
+    const dy = e.touches[0].clientY - dragStartY;
+    const aspect = W / H;
+    viewCenterX = dragCenterX - dx / W * viewScale * aspect;
+    viewCenterY = dragCenterY - dy / H * viewScale;
+    updateHUD();
+    render(true);
+  } else if (e.touches.length === 2) {
+    const t = e.touches;
+    const dist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const mid = [(t[0].clientX + t[1].clientX)/2, (t[0].clientY + t[1].clientY)/2];
+    if (lastTouchDist > 0) {
+      const factor = lastTouchDist / dist;
+      const [cx, cy] = screenToComplex(mid[0], mid[1]);
+      viewScale *= factor;
+      viewCenterX += (cx - viewCenterX) * (1 - factor);
+      viewCenterY += (cy - viewCenterY) * (1 - factor);
+      updateHUD();
+      render(true);
+    }
+    lastTouchDist = dist;
+    lastTouchMid = mid;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  if (e.touches.length === 0) {
+    if (isDragging) {
+      isDragging = false;
+      scheduleRender();
+    }
+    lastTouchDist = 0;
+  }
+});
+
+// Double-tap to zoom
+let lastTap = 0;
+canvas.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - lastTap < 300 && e.changedTouches.length === 1) {
+    const t = e.changedTouches[0];
+    const [cx, cy] = screenToComplex(t.clientX, t.clientY);
+    animateZoom(cx, cy, 0.35, t.clientX, t.clientY);
+  }
+  lastTap = now;
+});
+
+// ── Keyboard shortcuts ─────────────────────────────────────
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'h' || e.key === 'H') {
+    panelVisible = !panelVisible;
+    document.getElementById('panel').classList.toggle('collapsed', !panelVisible);
+  }
+  if (e.key === 'o' || e.key === 'O') {
+    showOrbit = !showOrbit;
+    document.getElementById('toggleOrbit').textContent = showOrbit ? 'orbit on' : 'orbit';
+    if (!showOrbit) octx.clearRect(0, 0, W, H);
+  }
+  if (e.key === 'r' || e.key === 'R') {
+    if (!e.ctrlKey && !e.metaKey) randomizeParams();
+  }
+  if (e.key === 'Escape') {
+    resetView();
+  }
+  if (e.key === ' ') {
+    e.preventDefault();
+    toggleAudio();
+  }
+});
+
+// ── Panel controls ─────────────────────────────────────────
+function setupSlider(id, valId, callback, format) {
+  const slider = document.getElementById(id);
+  const valEl = document.getElementById(valId);
+  slider.addEventListener('input', () => {
+    const v = parseFloat(slider.value);
+    valEl.textContent = format ? format(v) : v;
+    callback(v);
+  });
+}
+
+setupSlider('cReal', 'cRealVal', (v) => { cReal = v; scheduleRender(); }, v => v.toFixed(3));
+setupSlider('cImag', 'cImagVal', (v) => { cImag = v; scheduleRender(); }, v => v.toFixed(3));
+setupSlider('maxIter', 'maxIterVal', (v) => { maxIter = v; scheduleRender(); }, v => Math.round(v));
+setupSlider('escapeRadius', 'escapeRadiusVal', (v) => { escapeRadius = v; scheduleRender(); }, v => v.toFixed(1));
+setupSlider('colorShift', 'colorShiftVal', (v) => { colorShift = v; scheduleRender(); }, v => v.toFixed(2));
+setupSlider('audioVol', 'audioVolVal', (v) => {
+  audioVolume = v;
+  if (gainNode) gainNode.gain.setTargetAtTime(v * 0.15, audioCtx.currentTime, 0.1);
+}, v => v.toFixed(2));
+
+// Mode toggle
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+    document.getElementById('juliaControls').style.display = mode === 'julia' ? '' : 'none';
+    resetView();
+  });
+});
+
+// Presets
+function buildPresets() {
+  const grid = document.getElementById('presetGrid');
+  presets.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn';
+    btn.textContent = p.name;
+    btn.addEventListener('click', () => {
+      cReal = p.cr; cImag = p.ci;
+      document.getElementById('cReal').value = cReal;
+      document.getElementById('cRealVal').textContent = cReal.toFixed(3);
+      document.getElementById('cImag').value = cImag;
+      document.getElementById('cImagVal').textContent = cImag.toFixed(3);
+      mode = 'julia';
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-mode="julia"]').classList.add('active');
+      document.getElementById('juliaControls').style.display = '';
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      resetView();
+    });
+    if (i === 0) btn.classList.add('active');
+    grid.appendChild(btn);
+  });
+}
+
+// Palettes
+function buildPalettes() {
+  const grid = document.getElementById('paletteGrid');
+  palettes.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'palette-btn' + (i === 0 ? ' active' : '');
+    btn.title = p.name;
+
+    // Draw gradient preview
+    const cv = document.createElement('canvas');
+    cv.width = 40; cv.height = 18;
+    const c = cv.getContext('2d');
+    for (let x = 0; x < 40; x++) {
+      const t = x / 40;
+      const [r, g, b] = p.fn(t);
+      c.fillStyle = `rgb(${r},${g},${b})`;
+      c.fillRect(x, 0, 1, 18);
+    }
+    btn.style.background = `url(${cv.toDataURL()})`;
+    btn.style.backgroundSize = 'cover';
+
+    btn.addEventListener('click', () => {
+      activePalette = i;
+      document.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      scheduleRender();
+    });
+
+    grid.appendChild(btn);
+  });
+}
+
+// Action buttons
+document.getElementById('resetView').addEventListener('click', resetView);
+document.getElementById('exportPng').addEventListener('click', exportPng);
+document.getElementById('randomize').addEventListener('click', randomizeParams);
+document.getElementById('audioToggle').addEventListener('click', toggleAudio);
+document.getElementById('toggleBtn').addEventListener('click', () => {
+  panelVisible = !panelVisible;
+  document.getElementById('panel').classList.toggle('collapsed', !panelVisible);
+});
+document.getElementById('toggleOrbit').addEventListener('click', () => {
+  showOrbit = !showOrbit;
+  document.getElementById('toggleOrbit').textContent = showOrbit ? 'orbit on' : 'orbit';
+  if (!showOrbit) octx.clearRect(0, 0, W, H);
+  else drawOrbit(mouseX, mouseY);
+});
+
+// Minimap click navigation
+document.getElementById('minimap').addEventListener('click', (e) => {
+  const rect = e.target.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / rect.width;
+  const my = (e.clientY - rect.top) / rect.height;
+  const mScale = mode === 'mandelbrot' ? 4 : 3.5;
+  const mCx = mode === 'mandelbrot' ? -0.5 : 0;
+  viewCenterX = mCx + (mx - 0.5) * mScale;
+  viewCenterY = (my - 0.5) * mScale;
+  updateHUD();
+  scheduleRender();
+});
+
+// ── Actions ────────────────────────────────────────────────
+function resetView() {
+  viewCenterX = mode === 'mandelbrot' ? -0.5 : 0;
+  viewCenterY = 0;
+  viewScale = 3;
+  updateHUD();
+  scheduleRender();
+}
+
+function exportPng() {
+  const link = document.createElement('a');
+  link.download = `depths-${mode}-${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+function randomizeParams() {
+  cReal = (Math.random() - 0.5) * 2.5;
+  cImag = (Math.random() - 0.5) * 2.5;
+  // Clamp to interesting region
+  const mag = Math.sqrt(cReal*cReal + cImag*cImag);
+  if (mag > 1.5) {
+    cReal *= 1.2 / mag;
+    cImag *= 1.2 / mag;
+  }
+  document.getElementById('cReal').value = cReal;
+  document.getElementById('cRealVal').textContent = cReal.toFixed(3);
+  document.getElementById('cImag').value = cImag;
+  document.getElementById('cImagVal').textContent = cImag.toFixed(3);
+
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  if (mode !== 'julia') {
+    mode = 'julia';
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('[data-mode="julia"]').classList.add('active');
+    document.getElementById('juliaControls').style.display = '';
+  }
+  resetView();
+}
+
+function dismissHelp() {
+  if (helpVisible) {
+    helpVisible = false;
+    document.getElementById('helpHint').classList.add('hidden');
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────
+buildPresets();
+buildPalettes();
+resize();
+window.addEventListener('resize', resize);
+updateHUD();
+</script>
+</body>
+</html>
