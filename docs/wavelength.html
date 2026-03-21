@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Wavelength</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #ef4444;
+      --cyan: #22d3ee;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed; inset: 0;
+      background: rgba(10, 10, 15, 0.97);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 100; cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 3rem; color: var(--accent);
+      margin-bottom: 1rem;
+      text-shadow: 0 0 40px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-title {
+      font-size: 1.1rem; color: var(--text);
+      letter-spacing: 0.35em; text-transform: uppercase;
+      font-weight: 300; margin-bottom: 0.5rem;
+    }
+    .start-sub {
+      font-size: 0.6rem; color: var(--text-dim);
+      letter-spacing: 0.08em; max-width: 420px;
+      text-align: center; line-height: 1.8;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+
+    /* Background glow */
+    .bg-glow {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 600px; height: 600px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.12;
+      pointer-events: none;
+      z-index: 0;
+      transition: opacity 1s ease;
+    }
+
+    .back-link {
+      position: fixed;
+      top: 1rem; left: 1rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      z-index: 20;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    /* Main layout */
+    .main {
+      position: relative; z-index: 1;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+
+    /* Top bar */
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.6rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .top-bar h1 {
+      font-size: 0.8rem; font-weight: 300;
+      letter-spacing: 0.3em; text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+    .top-bar .sub {
+      color: var(--text-dim); font-size: 0.5rem;
+      letter-spacing: 0.06em;
+    }
+    .top-controls {
+      display: flex; align-items: center; gap: 1rem;
+    }
+    .top-controls label {
+      font-size: 0.55rem; color: var(--text-dim);
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .top-controls input[type="range"] {
+      width: 80px; height: 3px;
+      -webkit-appearance: none; appearance: none;
+      background: var(--border); border-radius: 2px;
+      outline: none; vertical-align: middle;
+    }
+    .top-controls input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent); cursor: pointer;
+    }
+
+    /* Center stage */
+    .stage {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Waveform canvas */
+    #waveCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      opacity: 0.4;
+    }
+
+    /* Tuner dial */
+    .tuner-wrap {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .dial-container {
+      position: relative;
+      width: 280px; height: 280px;
+    }
+
+    #dialCanvas {
+      width: 100%; height: 100%;
+      cursor: grab;
+    }
+    #dialCanvas:active { cursor: grabbing; }
+
+    .dial-center {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+    }
+    .dial-gen {
+      font-size: 2rem; font-weight: 200;
+      color: var(--text);
+      letter-spacing: 0.05em;
+      line-height: 1;
+    }
+    .dial-epoch {
+      font-size: 0.55rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 0.3rem;
+    }
+    .dial-score {
+      font-size: 0.65rem;
+      color: var(--green);
+      margin-top: 0.15rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* Playing pieces */
+    .voices-row {
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-start;
+      justify-content: center;
+      flex-wrap: wrap;
+      max-width: 700px;
+    }
+
+    .voice-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.7rem;
+      min-width: 120px;
+      max-width: 160px;
+      transition: border-color 0.4s, opacity 0.4s;
+      opacity: 0;
+    }
+    .voice-card.active { opacity: 1; }
+    .voice-card .v-type {
+      font-size: 0.5rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+    .voice-card .v-score {
+      font-size: 0.55rem;
+      color: var(--green);
+      letter-spacing: 0.04em;
+    }
+    .voice-card .v-gen {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+    }
+    .voice-card .v-bar {
+      height: 2px;
+      background: var(--border);
+      border-radius: 1px;
+      margin-top: 0.35rem;
+      overflow: hidden;
+    }
+    .voice-card .v-bar-fill {
+      height: 100%;
+      border-radius: 1px;
+      transition: width 0.3s;
+    }
+
+    /* Spectrum */
+    #spectrumCanvas {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 60px;
+      opacity: 0.5;
+    }
+
+    /* Bottom bar */
+    .bottom-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.6rem 1.5rem;
+      border-top: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .transport {
+      display: flex; align-items: center; gap: 0.8rem;
+    }
+
+    .btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      padding: 0.35rem 0.7rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+    .drift-indicator {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+    }
+
+    .mode-info {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      text-align: right;
+    }
+    .mode-info .scale-name { color: var(--accent); }
+    .mode-info .layer-count { color: var(--green); }
+
+    /* Keyboard hint */
+    .key-hint {
+      position: fixed;
+      bottom: 3.5rem; right: 1rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+      opacity: 0.4;
+      z-index: 20;
+      text-align: right;
+      line-height: 1.8;
+    }
+    .key-hint kbd {
+      display: inline-block;
+      padding: 0.1rem 0.3rem;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+    }
+
+    @media (max-width: 600px) {
+      .dial-container { width: 200px; height: 200px; }
+      .dial-gen { font-size: 1.5rem; }
+      .voices-row { gap: 0.4rem; }
+      .voice-card { min-width: 90px; padding: 0.4rem; }
+      .key-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Start overlay -->
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">◎</div>
+    <div class="start-title">Wavelength</div>
+    <div class="start-sub">
+      tune into the frequency of evolution<br>
+      multiple pieces play simultaneously as layered sonic textures<br>
+      drag the dial to scan through 148 generations
+    </div>
+  </div>
+
+  <div class="bg-glow" id="bgGlow"></div>
+  <a href="index.html" class="back-link">← lattice</a>
+
+  <div class="main" id="main">
+    <div class="top-bar">
+      <div>
+        <h1>Wavelength</h1>
+        <div class="sub">ambient evolutionary radio</div>
+      </div>
+      <div class="top-controls">
+        <label>Vol</label>
+        <input type="range" id="volumeSlider" min="0" max="100" value="60">
+        <label>Drift</label>
+        <input type="range" id="driftSlider" min="0" max="100" value="30">
+        <label>Layers</label>
+        <input type="range" id="layerSlider" min="2" max="6" value="4">
+      </div>
+    </div>
+
+    <div class="stage">
+      <canvas id="waveCanvas"></canvas>
+      <div class="tuner-wrap">
+        <div class="dial-container">
+          <canvas id="dialCanvas" width="560" height="560"></canvas>
+          <div class="dial-center">
+            <div class="dial-gen" id="dialGen">1</div>
+            <div class="dial-epoch" id="dialEpoch">emergence</div>
+            <div class="dial-score" id="dialScore">0.0%</div>
+          </div>
+        </div>
+        <div class="voices-row" id="voicesRow"></div>
+      </div>
+      <canvas id="spectrumCanvas"></canvas>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="transport">
+        <button class="btn" id="playBtn">Play</button>
+        <button class="btn" id="driftBtn">Drift</button>
+        <span class="drift-indicator" id="driftLabel">Manual</span>
+      </div>
+      <div class="mode-info">
+        <span class="scale-name" id="scaleLabel">C Pentatonic</span>
+        &middot;
+        <span class="layer-count" id="layerLabel">4 voices</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="key-hint">
+    <kbd>Space</kbd> play/pause &nbsp;
+    <kbd>D</kbd> drift &nbsp;
+    <kbd>←</kbd><kbd>→</kbd> tune<br>
+    <kbd>↑</kbd><kbd>↓</kbd> volume &nbsp;
+    <kbd>L</kbd> layers
+  </div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Epoch colors & scales ──
+  const EPOCH_COLORS = {
+    emergence: '#7c6fe0',
+    order:     '#4ade80',
+    chaos:     '#ef4444',
+    harmony:   '#fbbf24'
+  };
+
+  const EPOCH_SCALES = {
+    emergence: [0, 2, 4, 7, 9],           // C pentatonic — open
+    order:     [0, 2, 3, 5, 7, 9, 10],    // D dorian — structured
+    chaos:     [0, 1, 3, 5, 7, 8, 10],    // E phrygian — dark
+    harmony:   [0, 2, 4, 5, 7, 9, 10]     // F mixolydian — warm
+  };
+
+  const EPOCH_SCALE_NAMES = {
+    emergence: 'C Pentatonic',
+    order:     'D Dorian',
+    chaos:     'E Phrygian',
+    harmony:   'F Mixolydian'
+  };
+
+  // Species → waveform + color
+  const SPECIES = {
+    '1d':       { wave: 'square',   color: '#a78bfa', label: '1D Automata' },
+    '2d':       { wave: 'triangle', color: '#4ade80', label: '2D Life' },
+    lsystem:    { wave: 'sawtooth', color: '#22d3ee', label: 'L-System' },
+    rd:         { wave: 'sine',     color: '#c084fc', label: 'Reaction-Diff' },
+    voronoi:    { wave: 'triangle', color: '#38bdf8', label: 'Voronoi' },
+    wfc:        { wave: 'square',   color: '#fb7185', label: 'WFC' },
+    spirograph: { wave: 'sine',     color: '#fbbf24', label: 'Spirograph' },
+    attractor:  { wave: 'sawtooth', color: '#f97316', label: 'Attractor' },
+    julia:      { wave: 'sine',     color: '#e879f9', label: 'Julia Set' },
+    noise:      { wave: 'triangle', color: '#34d399', label: 'Perlin Noise' },
+    flowfield:  { wave: 'sawtooth', color: '#2dd4bf', label: 'Flow Field' },
+    dla:        { wave: 'square',   color: '#94a3b8', label: 'DLA' },
+    flame:      { wave: 'sawtooth', color: '#fb923c', label: 'Fractal Flame' },
+    physarum:   { wave: 'sine',     color: '#a3e635', label: 'Physarum' }
+  };
+
+  // ── State ──
+  let gallery = null;
+  let archive = [];
+  let history = [];
+  let audioCtx = null;
+  let masterGain = null;
+  let compressor = null;
+  let reverbGain = null;
+  let reverbConvolver = null;
+  let analyser = null;
+  let droneOsc = null;
+  let droneGain = null;
+  let playing = false;
+  let drifting = false;
+  let tunerPos = 0;         // 0-1 position on the timeline
+  let maxGen = 1;
+  let activeLayers = [];     // current playing voice layers
+  let layerCount = 4;
+  let driftSpeed = 0.3;
+  let dragging = false;
+  let animFrame = null;
+
+  // ── DOM ──
+  const startOverlay = document.getElementById('startOverlay');
+  const mainEl = document.getElementById('main');
+  const dialCanvas = document.getElementById('dialCanvas');
+  const dialCtx = dialCanvas.getContext('2d');
+  const waveCanvas = document.getElementById('waveCanvas');
+  const waveCtx = waveCanvas.getContext('2d');
+  const specCanvas = document.getElementById('spectrumCanvas');
+  const specCtx = specCanvas.getContext('2d');
+  const voicesRow = document.getElementById('voicesRow');
+  const dialGenEl = document.getElementById('dialGen');
+  const dialEpochEl = document.getElementById('dialEpoch');
+  const dialScoreEl = document.getElementById('dialScore');
+  const playBtn = document.getElementById('playBtn');
+  const driftBtn = document.getElementById('driftBtn');
+  const driftLabel = document.getElementById('driftLabel');
+  const scaleLabel = document.getElementById('scaleLabel');
+  const layerLabel = document.getElementById('layerLabel');
+  const volumeSlider = document.getElementById('volumeSlider');
+  const driftSlider = document.getElementById('driftSlider');
+  const layerSlider = document.getElementById('layerSlider');
+  const bgGlow = document.getElementById('bgGlow');
+
+  // ── Load gallery ──
+  async function loadGallery() {
+    try {
+      const resp = await fetch('gallery.json');
+      gallery = await resp.json();
+      history = gallery.history || [];
+      archive = gallery.archive || [];
+      maxGen = gallery.generation || 1;
+    } catch(e) {
+      console.error('Failed to load gallery.json:', e);
+      history = [];
+      archive = [];
+      maxGen = 148;
+    }
+  }
+
+  // ── Audio setup ──
+  function initAudio() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.value = -18;
+    compressor.knee.value = 12;
+    compressor.ratio.value = 6;
+    compressor.attack.value = 0.01;
+    compressor.release.value = 0.15;
+
+    // Analyser
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.85;
+
+    // Reverb
+    reverbConvolver = audioCtx.createConvolver();
+    const reverbLen = audioCtx.sampleRate * 3;
+    const reverbBuf = audioCtx.createBuffer(2, reverbLen, audioCtx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = reverbBuf.getChannelData(ch);
+      for (let i = 0; i < reverbLen; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (reverbLen * 0.25));
+      }
+    }
+    reverbConvolver.buffer = reverbBuf;
+
+    reverbGain = audioCtx.createGain();
+    reverbGain.gain.value = 0.25;
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.6;
+
+    // Route: voices → compressor → [dry → master, wet → reverb → master] → analyser → out
+    compressor.connect(masterGain);
+    compressor.connect(reverbConvolver);
+    reverbConvolver.connect(reverbGain);
+    reverbGain.connect(masterGain);
+    masterGain.connect(analyser);
+    analyser.connect(audioCtx.destination);
+
+    // Sub-bass drone
+    droneOsc = audioCtx.createOscillator();
+    droneOsc.type = 'sine';
+    droneOsc.frequency.value = 55; // A1
+    droneGain = audioCtx.createGain();
+    droneGain.gain.value = 0;
+    droneOsc.connect(droneGain);
+    droneGain.connect(compressor);
+    droneOsc.start();
+  }
+
+  // ── Piece sonification ──
+  // Each "voice layer" is a set of oscillators that sonify one piece from the archive
+  function createVoiceLayer(piece) {
+    if (!audioCtx || !piece) return null;
+
+    const type = piece.genome?.type || 'noise';
+    const sp = SPECIES[type] || SPECIES.noise;
+    const score = piece.score || 0.5;
+    const metrics = piece.metrics || {};
+    const gen = piece.generation || 1;
+    const epoch = piece.epoch || 'emergence';
+    const scale = EPOCH_SCALES[epoch] || EPOCH_SCALES.emergence;
+    const rendered = piece.rendered || '';
+
+    // Layer gain
+    const layerGain = audioCtx.createGain();
+    layerGain.gain.value = 0;
+    layerGain.connect(compressor);
+
+    // Stereo panner
+    const panner = audioCtx.createStereoPanner();
+    panner.pan.value = (Math.random() - 0.5) * 0.8;
+    panner.connect(layerGain);
+
+    // Create oscillators based on the piece's grid content
+    const oscs = [];
+    const rows = rendered.split('\n');
+    const numRows = Math.min(rows.length, 8);
+    const baseNote = 48; // C3
+
+    for (let r = 0; r < numRows; r++) {
+      const row = rows[Math.floor(r * rows.length / numRows)] || '';
+      // Count non-space characters as density
+      let density = 0;
+      for (let i = 0; i < row.length; i++) {
+        if (row[i] !== ' ') density++;
+      }
+      const rowDensity = row.length > 0 ? density / row.length : 0;
+
+      if (rowDensity < 0.1) continue; // skip near-empty rows
+
+      const scaleIdx = r % scale.length;
+      const octave = Math.floor(r / scale.length);
+      const midiNote = baseNote + scale[scaleIdx] + octave * 12;
+      const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+
+      const osc = audioCtx.createOscillator();
+      osc.type = sp.wave;
+      // Slight detuning for warmth — complexity drives amount
+      const detune = (metrics.complexity || 1) * (r - numRows / 2) * 3;
+      osc.frequency.value = freq;
+      osc.detune.value = detune;
+
+      const oscGain = audioCtx.createGain();
+      // Row density controls per-osc volume
+      oscGain.gain.value = rowDensity * 0.12 * score;
+
+      osc.connect(oscGain);
+      oscGain.connect(panner);
+      osc.start();
+      oscs.push({ osc, gain: oscGain, baseFreq: freq });
+    }
+
+    // Add a harmonic partial for pieces with high symmetry
+    if ((metrics.symmetry || 0) > 0.5) {
+      const harmOsc = audioCtx.createOscillator();
+      harmOsc.type = 'sine';
+      harmOsc.frequency.value = 440 * Math.pow(2, (baseNote + scale[0] + 12 - 69) / 12);
+      const harmGain = audioCtx.createGain();
+      harmGain.gain.value = metrics.symmetry * 0.04;
+      harmOsc.connect(harmGain);
+      harmGain.connect(panner);
+      harmOsc.start();
+      oscs.push({ osc: harmOsc, gain: harmGain, baseFreq: harmOsc.frequency.value });
+    }
+
+    return {
+      piece,
+      type,
+      sp,
+      oscs,
+      layerGain,
+      panner,
+      targetVol: score * 0.15,
+      currentVol: 0,
+      fadeState: 'in', // in, sustain, out
+      age: 0
+    };
+  }
+
+  function fadeInLayer(layer, duration) {
+    if (!layer) return;
+    const now = audioCtx.currentTime;
+    layer.layerGain.gain.cancelScheduledValues(now);
+    layer.layerGain.gain.setValueAtTime(0, now);
+    layer.layerGain.gain.linearRampToValueAtTime(layer.targetVol, now + duration);
+    layer.fadeState = 'sustain';
+  }
+
+  function fadeOutLayer(layer, duration) {
+    if (!layer) return;
+    const now = audioCtx.currentTime;
+    layer.fadeState = 'out';
+    layer.layerGain.gain.cancelScheduledValues(now);
+    layer.layerGain.gain.setValueAtTime(layer.layerGain.gain.value, now);
+    layer.layerGain.gain.linearRampToValueAtTime(0, now + duration);
+    setTimeout(() => destroyLayer(layer), duration * 1000 + 100);
+  }
+
+  function destroyLayer(layer) {
+    if (!layer) return;
+    layer.oscs.forEach(o => {
+      try { o.osc.stop(); } catch(e) {}
+      try { o.osc.disconnect(); } catch(e) {}
+      try { o.gain.disconnect(); } catch(e) {}
+    });
+    try { layer.panner.disconnect(); } catch(e) {}
+    try { layer.layerGain.disconnect(); } catch(e) {}
+  }
+
+  // ── Piece selection ──
+  function getPiecesNearGeneration(gen, count) {
+    if (archive.length === 0) return [];
+    // Find pieces closest to this generation
+    const scored = archive.map((p, i) => ({
+      piece: p,
+      dist: Math.abs((p.generation || 1) - gen),
+      idx: i
+    }));
+    scored.sort((a, b) => a.dist - b.dist);
+    // Deduplicate by id, take top `count`
+    const seen = new Set();
+    const result = [];
+    for (const s of scored) {
+      const id = s.piece.id || s.idx;
+      if (!seen.has(id)) {
+        seen.add(id);
+        result.push(s.piece);
+      }
+      if (result.length >= count) break;
+    }
+    return result;
+  }
+
+  function getEpochForGen(gen) {
+    const epochs = ['emergence', 'order', 'chaos', 'harmony'];
+    const idx = Math.floor((gen - 1) / 10) % 4;
+    return epochs[idx];
+  }
+
+  function getHistoryForGen(gen) {
+    if (history.length === 0) return null;
+    let best = history[0];
+    for (const h of history) {
+      if (Math.abs(h.generation - gen) < Math.abs(best.generation - gen)) {
+        best = h;
+      }
+    }
+    return best;
+  }
+
+  // ── Update layers based on tuner position ──
+  let lastLayerGen = -1;
+
+  function updateLayers() {
+    const gen = Math.max(1, Math.round(tunerPos * maxGen));
+    if (gen === lastLayerGen) return;
+    lastLayerGen = gen;
+
+    const epoch = getEpochForGen(gen);
+    const histEntry = getHistoryForGen(gen);
+
+    // Update display
+    dialGenEl.textContent = gen;
+    dialEpochEl.textContent = epoch;
+    dialEpochEl.style.color = EPOCH_COLORS[epoch];
+    dialScoreEl.textContent = histEntry
+      ? (histEntry.bestScore * 100).toFixed(1) + '%'
+      : '--';
+    scaleLabel.textContent = EPOCH_SCALE_NAMES[epoch];
+
+    // Update drone pitch based on epoch
+    if (droneOsc) {
+      const dronePitches = { emergence: 55, order: 62, chaos: 49, harmony: 58 };
+      const now = audioCtx.currentTime;
+      droneOsc.frequency.cancelScheduledValues(now);
+      droneOsc.frequency.setValueAtTime(droneOsc.frequency.value, now);
+      droneOsc.frequency.linearRampToValueAtTime(dronePitches[epoch], now + 2);
+    }
+
+    // Update background glow
+    bgGlow.style.background = `radial-gradient(circle, ${EPOCH_COLORS[epoch]}30 0%, transparent 70%)`;
+
+    // Get target pieces
+    const targetPieces = getPiecesNearGeneration(gen, layerCount);
+
+    // Determine which layers to keep, add, remove
+    const currentIds = new Set(activeLayers.filter(l => l.fadeState !== 'out').map(l => l.piece.id));
+    const targetIds = new Set(targetPieces.map(p => p.id));
+
+    // Fade out layers whose pieces aren't in the target set
+    for (const layer of activeLayers) {
+      if (layer.fadeState !== 'out' && !targetIds.has(layer.piece.id)) {
+        fadeOutLayer(layer, 3);
+      }
+    }
+
+    // Add new layers for pieces not currently playing
+    for (const piece of targetPieces) {
+      if (!currentIds.has(piece.id)) {
+        const layer = createVoiceLayer(piece);
+        if (layer) {
+          activeLayers.push(layer);
+          fadeInLayer(layer, 4);
+        }
+      }
+    }
+
+    // Clean up destroyed layers
+    activeLayers = activeLayers.filter(l => l.fadeState !== 'out' || l.layerGain.gain.value > 0.001);
+
+    // Update voice cards
+    updateVoiceCards(targetPieces);
+  }
+
+  // ── Voice cards ──
+  function updateVoiceCards(pieces) {
+    // Ensure we have enough cards
+    while (voicesRow.children.length < layerCount) {
+      const card = document.createElement('div');
+      card.className = 'voice-card';
+      card.innerHTML = `
+        <div class="v-type"></div>
+        <div class="v-score"></div>
+        <div class="v-gen"></div>
+        <div class="v-bar"><div class="v-bar-fill"></div></div>
+      `;
+      voicesRow.appendChild(card);
+    }
+    while (voicesRow.children.length > layerCount) {
+      voicesRow.removeChild(voicesRow.lastChild);
+    }
+
+    for (let i = 0; i < layerCount; i++) {
+      const card = voicesRow.children[i];
+      const piece = pieces[i];
+      if (piece) {
+        const type = piece.genome?.type || 'noise';
+        const sp = SPECIES[type] || SPECIES.noise;
+        card.querySelector('.v-type').textContent = sp.label;
+        card.querySelector('.v-type').style.color = sp.color;
+        card.querySelector('.v-score').textContent = ((piece.score || 0) * 100).toFixed(1) + '%';
+        card.querySelector('.v-gen').textContent = 'gen ' + (piece.generation || '?');
+        card.querySelector('.v-bar-fill').style.width = ((piece.score || 0) * 100) + '%';
+        card.querySelector('.v-bar-fill').style.background = sp.color;
+        card.style.borderColor = sp.color + '40';
+        card.classList.add('active');
+      } else {
+        card.classList.remove('active');
+      }
+    }
+    layerLabel.textContent = pieces.length + ' voice' + (pieces.length !== 1 ? 's' : '');
+  }
+
+  // ── Dial rendering ──
+  function drawDial() {
+    const w = dialCanvas.width;
+    const h = dialCanvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const r = w / 2 - 30;
+
+    dialCtx.clearRect(0, 0, w, h);
+
+    // Outer ring — epoch colored arc
+    const arcStart = -Math.PI / 2;
+    dialCtx.lineWidth = 3;
+    for (let i = 0; i < maxGen; i++) {
+      const frac = i / maxGen;
+      const angle = arcStart + frac * Math.PI * 2;
+      const epoch = getEpochForGen(i + 1);
+      dialCtx.strokeStyle = EPOCH_COLORS[epoch] + '60';
+      dialCtx.beginPath();
+      dialCtx.arc(cx, cy, r, angle, angle + (Math.PI * 2 / maxGen) + 0.01);
+      dialCtx.stroke();
+    }
+
+    // Tick marks for Hall of Fame entries
+    dialCtx.lineWidth = 1;
+    for (const piece of archive) {
+      const gen = piece.generation || 1;
+      const frac = gen / maxGen;
+      const angle = arcStart + frac * Math.PI * 2;
+      const type = piece.genome?.type || 'noise';
+      const sp = SPECIES[type] || SPECIES.noise;
+      const score = piece.score || 0.5;
+
+      const innerR = r - 8;
+      const outerR = r - 3 - score * 10;
+
+      dialCtx.strokeStyle = sp.color + '80';
+      dialCtx.beginPath();
+      dialCtx.moveTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
+      dialCtx.lineTo(cx + Math.cos(angle) * outerR, cy + Math.sin(angle) * outerR);
+      dialCtx.stroke();
+    }
+
+    // Pointer needle
+    const pointerAngle = arcStart + tunerPos * Math.PI * 2;
+    dialCtx.save();
+    dialCtx.strokeStyle = '#ffffff';
+    dialCtx.lineWidth = 2;
+    dialCtx.shadowColor = '#ffffff';
+    dialCtx.shadowBlur = 8;
+    dialCtx.beginPath();
+    dialCtx.moveTo(cx + Math.cos(pointerAngle) * (r - 25), cy + Math.sin(pointerAngle) * (r - 25));
+    dialCtx.lineTo(cx + Math.cos(pointerAngle) * (r + 5), cy + Math.sin(pointerAngle) * (r + 5));
+    dialCtx.stroke();
+    dialCtx.restore();
+
+    // Center dot
+    dialCtx.fillStyle = var_accent;
+    dialCtx.beginPath();
+    dialCtx.arc(cx, cy, 4, 0, Math.PI * 2);
+    dialCtx.fill();
+  }
+
+  const var_accent = '#7c6fe0';
+
+  // ── Waveform visualization ──
+  function drawWaveform() {
+    if (!analyser) return;
+
+    const w = waveCanvas.width;
+    const h = waveCanvas.height;
+    waveCtx.clearRect(0, 0, w, h);
+
+    const bufLen = analyser.frequencyBinCount;
+    const data = new Uint8Array(bufLen);
+    analyser.getByteTimeDomainData(data);
+
+    const epoch = getEpochForGen(Math.max(1, Math.round(tunerPos * maxGen)));
+    const color = EPOCH_COLORS[epoch];
+
+    waveCtx.lineWidth = 1.5;
+    waveCtx.strokeStyle = color + '80';
+    waveCtx.beginPath();
+
+    const sliceW = w / bufLen;
+    for (let i = 0; i < bufLen; i++) {
+      const v = data[i] / 128.0;
+      const y = v * h / 2;
+      if (i === 0) waveCtx.moveTo(0, y);
+      else waveCtx.lineTo(i * sliceW, y);
+    }
+    waveCtx.stroke();
+
+    // Second pass — thinner, brighter
+    waveCtx.lineWidth = 0.5;
+    waveCtx.strokeStyle = color;
+    waveCtx.beginPath();
+    for (let i = 0; i < bufLen; i++) {
+      const v = data[i] / 128.0;
+      const y = v * h / 2;
+      if (i === 0) waveCtx.moveTo(0, y);
+      else waveCtx.lineTo(i * sliceW, y);
+    }
+    waveCtx.stroke();
+  }
+
+  // ── Spectrum visualization ──
+  function drawSpectrum() {
+    if (!analyser) return;
+
+    const w = specCanvas.width;
+    const h = specCanvas.height;
+    specCtx.clearRect(0, 0, w, h);
+
+    const bufLen = analyser.frequencyBinCount;
+    const data = new Uint8Array(bufLen);
+    analyser.getByteFrequencyData(data);
+
+    const epoch = getEpochForGen(Math.max(1, Math.round(tunerPos * maxGen)));
+    const color = EPOCH_COLORS[epoch];
+
+    const barCount = 64;
+    const barW = w / barCount;
+    const step = Math.floor(bufLen / barCount);
+
+    for (let i = 0; i < barCount; i++) {
+      let sum = 0;
+      for (let j = 0; j < step; j++) {
+        sum += data[i * step + j];
+      }
+      const avg = sum / step;
+      const barH = (avg / 255) * h;
+
+      const alpha = 0.3 + (avg / 255) * 0.7;
+      specCtx.fillStyle = color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+      specCtx.fillRect(i * barW + 1, h - barH, barW - 2, barH);
+    }
+  }
+
+  // ── Canvas sizing ──
+  function resizeCanvases() {
+    const stage = document.querySelector('.stage');
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    waveCanvas.width = rect.width;
+    waveCanvas.height = rect.height;
+    specCanvas.width = rect.width;
+    specCanvas.height = 60;
+  }
+
+  // ── Dial interaction ──
+  function dialAngleFromEvent(e) {
+    const rect = dialCanvas.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const clientX = e.clientX ?? e.touches?.[0]?.clientX ?? cx;
+    const clientY = e.clientY ?? e.touches?.[0]?.clientY ?? cy;
+    let angle = Math.atan2(clientY - cy, clientX - cx);
+    // Convert to 0-1 position (top = 0)
+    angle += Math.PI / 2;
+    if (angle < 0) angle += Math.PI * 2;
+    return Math.min(1, Math.max(0, angle / (Math.PI * 2)));
+  }
+
+  dialCanvas.addEventListener('mousedown', (e) => {
+    dragging = true;
+    tunerPos = dialAngleFromEvent(e);
+    updateLayers();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    tunerPos = dialAngleFromEvent(e);
+    updateLayers();
+  });
+
+  window.addEventListener('mouseup', () => { dragging = false; });
+
+  dialCanvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    dragging = true;
+    tunerPos = dialAngleFromEvent(e);
+    updateLayers();
+  }, { passive: false });
+
+  window.addEventListener('touchmove', (e) => {
+    if (!dragging) return;
+    tunerPos = dialAngleFromEvent(e);
+    updateLayers();
+  });
+
+  window.addEventListener('touchend', () => { dragging = false; });
+
+  // ── Controls ──
+  function togglePlay() {
+    playing = !playing;
+    playBtn.textContent = playing ? 'Pause' : 'Play';
+    playBtn.classList.toggle('active', playing);
+
+    if (playing && droneGain) {
+      const now = audioCtx.currentTime;
+      droneGain.gain.cancelScheduledValues(now);
+      droneGain.gain.setValueAtTime(droneGain.gain.value, now);
+      droneGain.gain.linearRampToValueAtTime(0.06, now + 2);
+      updateLayers();
+    } else if (!playing) {
+      // Fade out everything
+      const now = audioCtx.currentTime;
+      if (droneGain) {
+        droneGain.gain.cancelScheduledValues(now);
+        droneGain.gain.setValueAtTime(droneGain.gain.value, now);
+        droneGain.gain.linearRampToValueAtTime(0, now + 1);
+      }
+      for (const layer of activeLayers) {
+        fadeOutLayer(layer, 1.5);
+      }
+    }
+  }
+
+  function toggleDrift() {
+    drifting = !drifting;
+    driftBtn.classList.toggle('active', drifting);
+    driftLabel.textContent = drifting ? 'Drifting' : 'Manual';
+  }
+
+  playBtn.addEventListener('click', togglePlay);
+  driftBtn.addEventListener('click', toggleDrift);
+
+  volumeSlider.addEventListener('input', () => {
+    if (masterGain) masterGain.gain.value = volumeSlider.value / 100;
+  });
+
+  driftSlider.addEventListener('input', () => {
+    driftSpeed = driftSlider.value / 100;
+  });
+
+  layerSlider.addEventListener('input', () => {
+    layerCount = parseInt(layerSlider.value);
+    lastLayerGen = -1; // force layer refresh
+    updateLayers();
+  });
+
+  // Keyboard
+  document.addEventListener('keydown', (e) => {
+    if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    else if (e.key === 'd' || e.key === 'D') { toggleDrift(); }
+    else if (e.key === 'ArrowLeft') {
+      tunerPos = Math.max(0, tunerPos - 1 / maxGen);
+      updateLayers();
+    }
+    else if (e.key === 'ArrowRight') {
+      tunerPos = Math.min(1, tunerPos + 1 / maxGen);
+      updateLayers();
+    }
+    else if (e.key === 'ArrowUp') {
+      volumeSlider.value = Math.min(100, parseInt(volumeSlider.value) + 5);
+      volumeSlider.dispatchEvent(new Event('input'));
+    }
+    else if (e.key === 'ArrowDown') {
+      volumeSlider.value = Math.max(0, parseInt(volumeSlider.value) - 5);
+      volumeSlider.dispatchEvent(new Event('input'));
+    }
+    else if (e.key === 'l' || e.key === 'L') {
+      layerSlider.value = (parseInt(layerSlider.value) % 6) + 1;
+      if (parseInt(layerSlider.value) < 2) layerSlider.value = 2;
+      layerSlider.dispatchEvent(new Event('input'));
+    }
+  });
+
+  // ── Animation loop ──
+  let lastTime = 0;
+
+  function tick(timestamp) {
+    animFrame = requestAnimationFrame(tick);
+
+    const dt = lastTime ? (timestamp - lastTime) / 1000 : 0;
+    lastTime = timestamp;
+
+    // Drift
+    if (drifting && playing && !dragging) {
+      tunerPos += driftSpeed * 0.003 * dt * 60;
+      if (tunerPos > 1) tunerPos -= 1; // loop
+      updateLayers();
+    }
+
+    // Modulate oscillators slightly for life
+    for (const layer of activeLayers) {
+      if (layer.fadeState === 'out') continue;
+      const t = audioCtx ? audioCtx.currentTime : 0;
+      for (let i = 0; i < layer.oscs.length; i++) {
+        const o = layer.oscs[i];
+        // Gentle LFO on gain
+        const lfo = Math.sin(t * 0.3 + i * 0.7) * 0.3 + 0.7;
+        const target = o.gain.value > 0 ? o.gain.value : 0;
+        // Don't fight the fade envelopes
+      }
+    }
+
+    drawDial();
+    drawWaveform();
+    drawSpectrum();
+  }
+
+  // ── Start ──
+  startOverlay.addEventListener('click', async () => {
+    startOverlay.classList.add('hidden');
+    mainEl.style.opacity = '1';
+    resizeCanvases();
+    initAudio();
+    await loadGallery();
+    tunerPos = 0;
+    updateLayers();
+    togglePlay();
+    if (!drifting) toggleDrift();
+    animFrame = requestAnimationFrame(tick);
+  });
+
+  window.addEventListener('resize', resizeCanvases);
+
+})();
+</script>
+</body>
+</html>
