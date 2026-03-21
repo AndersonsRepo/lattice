@@ -4,6 +4,18 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+
+### 2026-03-21 — Aether / Interactive Flow Field Explorer
+- **What**: Full-screen particle flow field explorer (`docs/aether.html`) — thousands of particles carried by invisible mathematical fields, shaped by mouse interaction
+- **Details**: 8000 particles (1K-25K) in 4 field modes: Flow (3D simplex curl noise), Vortex (dual counter-rotating attractors), Radial (pulsating waves), Wave (standing wave interference). Built-in simplex 2D/3D noise, zero deps. Mouse attracts; click repels. 8 emitter patterns. Speed-based hue evolution. Sliders for turbulence, speed, curl, damping, mouse force, size, trails, hue shift. Mic reactivity + ambient drone synth (pitch follows particle speed). Keyboard shortcuts, touch support.
+- **Pages**: `docs/aether.html` (new), `docs/index.html` (added button)
+- **How it differs**: The field is invisible — you only see matter moving through it. Mouse is a physical force. Drone audio creates feedback: speed to sound to (mic) to speed.
+### 2026-03-21 — Map / Visual Sitemap + Broken Link Fixes
+- **What**: Built the missing `docs/map.html` — a searchable, categorized directory of all 70+ pages in the Lattice universe. Also fixed broken navigation links.
+- **Details**: 7 category sections (Core, Sound & Music, Visual Experiences, Botanical, Data & Analysis, Automata & Simulation, Tools & Dev). Each page gets a card with icon, title, one-line description, and searchable tags. Category filter bar at top with counts. Live text search (searches names, descriptions, and tags simultaneously). Keyboard shortcuts: `/` to focus search, Escape to clear. Page count display. Responsive grid layout. **Fixes**: Removed broken `lineage.html` links from index.html header and footer navigation — the page was logged in CREATIVE-LOG by an autonomous session but never actually created. Replaced with working `map.html` link. 25KB total.
+- **Pages**: `docs/map.html` (new), `docs/index.html` (fixed broken links, added Map button)
+- **What it fixes**: The site had 70+ pages with a wall of 60+ buttons in the nav and no organizational structure. Many pages created by parallel autonomous agents had similar names and no descriptions. Map gives every page a home with context, making the full scope of the site discoverable for the first time.
+
 ### 2026-03-21 — Filament / Electromagnetic Field Explorer
 - **What**: Interactive electromagnetic field playground (`docs/filament.html`) — place positive and negative charges, watch field lines and particles flow between them in real-time
 - **Details**: Full-screen Canvas 2D with three visualization modes: **Particles** (thousands of particles trace electric field lines with purple-to-green color mapping by field direction and magnitude, trail persistence), **Field Lines** (traced from positive charges to negative charges using Euler integration with gradient coloring), **Potential** (scalar potential field rendered as a heat map with equipotential contour lines via marching). Click to place +/- charges, drag to move them, right-click to delete. Charges have glowing halos and +/- symbols. Starts with a default dipole. Audio reactivity: mic bass pumps field strength, treble spawns particle bursts near charges. Spectrum bar visualization. Frosted-glass parameter panel with sliders for particle count (500-8000), field strength, trail persistence, simulation speed, charge size. Touch support. Keyboard: H (panel), Space (pause), C (clear), R (randomize), M (mic), S (screenshot), F (fullscreen), 1/2/3 (viz modes). Vignette overlay. Softened Coulomb field to prevent singularities at charge positions.

@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Filament</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #ef4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+    /* --- Panel --- */
+    .panel {
+      position: absolute;
+      top: 1rem; right: 1rem;
+      width: 280px;
+      background: rgba(18,18,26,0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: 0.7rem;
+      z-index: 10;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .panel.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(20px);
+    }
+    .panel h2 {
+      font-size: 0.75rem;
+      font-weight: 400;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+    .panel .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .panel .back-link:hover { color: var(--accent); }
+    .section-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin: 0.75rem 0 0.4rem;
+    }
+    .tool-row {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 0.5rem;
+    }
+    .tool-btn {
+      flex: 1;
+      padding: 6px 0;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      letter-spacing: 0.05em;
+    }
+    .tool-btn:hover { border-color: var(--accent); color: var(--text); }
+    .tool-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0.35rem 0;
+    }
+    .slider-row label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      min-width: 80px;
+    }
+    .slider-row input[type=range] {
+      flex: 1;
+      margin: 0 8px;
+      accent-color: var(--accent);
+      height: 3px;
+    }
+    .slider-row .val {
+      font-size: 0.6rem;
+      color: var(--accent);
+      min-width: 28px;
+      text-align: right;
+    }
+    .viz-row {
+      display: flex;
+      gap: 4px;
+      margin: 0.4rem 0;
+    }
+    .viz-btn {
+      flex: 1;
+      padding: 5px 0;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .viz-btn:hover { border-color: var(--accent); color: var(--text); }
+    .viz-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .help-text {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+      margin-top: 0.75rem;
+      border-top: 1px solid var(--border);
+      padding-top: 0.6rem;
+    }
+    .help-text kbd {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 1px 4px;
+      font-size: 0.55rem;
+    }
+    /* Spectrum bar */
+    .spectrum {
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 100%; height: 32px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    /* Info overlay */
+    .info {
+      position: absolute;
+      bottom: 40px; left: 1rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      pointer-events: none;
+      z-index: 5;
+      line-height: 1.6;
+    }
+    .info .accent { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <canvas id="field"></canvas>
+  <canvas id="spectrum" class="spectrum"></canvas>
+
+  <div class="panel" id="panel">
+    <a href="index.html" class="back-link">&larr; Lattice</a>
+    <h2>Filament</h2>
+    <p style="font-size:0.6rem;color:var(--text-dim);margin-bottom:0.5rem;">
+      Place charges. Watch the field come alive.
+    </p>
+
+    <div class="section-label">Tool</div>
+    <div class="tool-row">
+      <button class="tool-btn active" data-tool="positive">+ Charge</button>
+      <button class="tool-btn" data-tool="negative">&minus; Charge</button>
+      <button class="tool-btn" data-tool="move">Move</button>
+    </div>
+    <div class="tool-row">
+      <button class="tool-btn" data-tool="delete">Delete</button>
+      <button class="tool-btn" id="clearBtn">Clear All</button>
+    </div>
+
+    <div class="section-label">Visualization</div>
+    <div class="viz-row">
+      <button class="viz-btn active" data-viz="particles">Particles</button>
+      <button class="viz-btn" data-viz="field-lines">Field Lines</button>
+      <button class="viz-btn" data-viz="potential">Potential</button>
+    </div>
+
+    <div class="section-label">Parameters</div>
+    <div class="slider-row">
+      <label>Particles</label>
+      <input type="range" id="particleCount" min="500" max="8000" value="3000" step="100">
+      <span class="val" id="particleCountVal">3000</span>
+    </div>
+    <div class="slider-row">
+      <label>Strength</label>
+      <input type="range" id="strength" min="0.5" max="5" value="2" step="0.1">
+      <span class="val" id="strengthVal">2.0</span>
+    </div>
+    <div class="slider-row">
+      <label>Trail</label>
+      <input type="range" id="trail" min="0.01" max="0.3" value="0.06" step="0.01">
+      <span class="val" id="trailVal">0.06</span>
+    </div>
+    <div class="slider-row">
+      <label>Speed</label>
+      <input type="range" id="speed" min="0.2" max="3" value="1" step="0.1">
+      <span class="val" id="speedVal">1.0</span>
+    </div>
+    <div class="slider-row">
+      <label>Charge Size</label>
+      <input type="range" id="chargeSize" min="20" max="200" value="80" step="5">
+      <span class="val" id="chargeSizeVal">80</span>
+    </div>
+
+    <div class="section-label">Audio Reactivity</div>
+    <div class="tool-row">
+      <button class="tool-btn" id="micBtn">Mic Off</button>
+    </div>
+
+    <div class="help-text">
+      <kbd>Click</kbd> place charge &middot; <kbd>Drag</kbd> move charge<br>
+      <kbd>Right-click</kbd> delete &middot; <kbd>Space</kbd> pause<br>
+      <kbd>H</kbd> panel &middot; <kbd>C</kbd> clear &middot; <kbd>R</kbd> randomize<br>
+      <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> viz mode &middot; <kbd>M</kbd> mic<br>
+      <kbd>S</kbd> screenshot &middot; <kbd>F</kbd> fullscreen
+    </div>
+  </div>
+
+  <div class="info" id="info">
+    <span class="accent">FILAMENT</span> &mdash; electromagnetic field explorer<br>
+    <span id="chargeInfo">0 charges</span> &middot; <span id="fpsInfo">60 fps</span>
+  </div>
+
+  <script>
+  (function() {
+    'use strict';
+
+    // --- Canvas setup ---
+    const canvas = document.getElementById('field');
+    const ctx = canvas.getContext('2d');
+    const specCanvas = document.getElementById('spectrum');
+    const specCtx = specCanvas.getContext('2d');
+
+    let W, H, dpr;
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      specCanvas.width = W * dpr;
+      specCanvas.height = 32 * dpr;
+      specCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- State ---
+    const charges = [];
+    let particles = [];
+    let tool = 'positive';
+    let vizMode = 'particles';
+    let paused = false;
+    let dragging = null;
+    let dragOffset = { x: 0, y: 0 };
+
+    // Params
+    let targetParticleCount = 3000;
+    let fieldStrength = 2;
+    let trailAlpha = 0.06;
+    let simSpeed = 1;
+    let chargeRadius = 80;
+
+    // Audio
+    let audioCtx = null, analyser = null, freqData = null, micActive = false;
+
+    // FPS
+    let frameCount = 0, lastFpsTime = performance.now(), fps = 60;
+
+    // --- Charges ---
+    function addCharge(x, y, sign) {
+      charges.push({
+        x, y, sign, // +1 or -1
+        strength: sign * chargeRadius,
+        color: sign > 0 ? '#7c6fe0' : '#4ade80',
+        glow: sign > 0 ? 'rgba(124,111,224,' : 'rgba(74,222,128,',
+      });
+      updateChargeInfo();
+    }
+
+    function removeCharge(idx) {
+      charges.splice(idx, 1);
+      updateChargeInfo();
+    }
+
+    function nearestCharge(x, y, radius) {
+      let best = -1, bestD = radius * radius;
+      for (let i = 0; i < charges.length; i++) {
+        const dx = charges[i].x - x, dy = charges[i].y - y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD) { best = i; bestD = d2; }
+      }
+      return best;
+    }
+
+    function updateChargeInfo() {
+      const pos = charges.filter(c => c.sign > 0).length;
+      const neg = charges.length - pos;
+      document.getElementById('chargeInfo').textContent =
+        `${charges.length} charge${charges.length !== 1 ? 's' : ''} (${pos}+ ${neg}-)`;
+    }
+
+    // --- Particles ---
+    function initParticles(count) {
+      particles = [];
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          vx: 0, vy: 0,
+          life: Math.random() * 200 + 100,
+          age: 0,
+        });
+      }
+    }
+    initParticles(targetParticleCount);
+
+    function respawnParticle(p) {
+      // Spawn near a random charge or random position
+      if (charges.length > 0 && Math.random() < 0.7) {
+        const c = charges[Math.floor(Math.random() * charges.length)];
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 20 + Math.random() * 60;
+        p.x = c.x + Math.cos(angle) * dist;
+        p.y = c.y + Math.sin(angle) * dist;
+      } else {
+        p.x = Math.random() * W;
+        p.y = Math.random() * H;
+      }
+      p.vx = 0;
+      p.vy = 0;
+      p.life = Math.random() * 200 + 100;
+      p.age = 0;
+    }
+
+    // --- Field computation ---
+    function fieldAt(x, y) {
+      let ex = 0, ey = 0;
+      for (let i = 0; i < charges.length; i++) {
+        const c = charges[i];
+        const dx = x - c.x, dy = y - c.y;
+        const d2 = dx * dx + dy * dy + 400; // softening
+        const d = Math.sqrt(d2);
+        const f = c.strength * fieldStrength / d2;
+        ex += f * dx / d;
+        ey += f * dy / d;
+      }
+      return { x: ex, y: ey };
+    }
+
+    function potentialAt(x, y) {
+      let v = 0;
+      for (let i = 0; i < charges.length; i++) {
+        const c = charges[i];
+        const dx = x - c.x, dy = y - c.y;
+        const d = Math.sqrt(dx * dx + dy * dy + 400);
+        v += c.strength * fieldStrength / d;
+      }
+      return v;
+    }
+
+    // --- Visualization: Particles ---
+    function updateParticles(dt) {
+      const maxSpeed = 6 * simSpeed;
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        if (charges.length === 0) {
+          // Brownian drift
+          p.x += (Math.random() - 0.5) * 0.5;
+          p.y += (Math.random() - 0.5) * 0.5;
+          continue;
+        }
+        const e = fieldAt(p.x, p.y);
+        p.vx += e.x * dt * simSpeed * 40;
+        p.vy += e.y * dt * simSpeed * 40;
+        // Damping
+        p.vx *= 0.97;
+        p.vy *= 0.97;
+        // Clamp
+        const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        if (spd > maxSpeed) { p.vx *= maxSpeed / spd; p.vy *= maxSpeed / spd; }
+        p.x += p.vx;
+        p.y += p.vy;
+        p.age++;
+        if (p.age > p.life || p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50) {
+          respawnParticle(p);
+        }
+      }
+    }
+
+    function drawParticles() {
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        const alpha = Math.min(1, p.age / 20) * Math.max(0, 1 - p.age / p.life);
+        if (alpha < 0.01) continue;
+        // Color by field direction
+        const e = fieldAt(p.x, p.y);
+        const mag = Math.sqrt(e.x * e.x + e.y * e.y);
+        const hue = (Math.atan2(e.y, e.x) / Math.PI * 180 + 360) % 360;
+        const brightness = Math.min(1, mag * 3);
+        // Map to purple-green spectrum
+        const r = lerp(124, 74, brightness);
+        const g = lerp(111, 222, brightness);
+        const b = lerp(224, 128, brightness);
+        ctx.fillStyle = `rgba(${r|0},${g|0},${b|0},${alpha * 0.8})`;
+        const size = 1.2 + brightness * 1.5;
+        ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
+      }
+    }
+
+    // --- Visualization: Field Lines ---
+    function drawFieldLines() {
+      if (charges.length === 0) return;
+      const steps = 200;
+      const stepSize = 4;
+      ctx.lineWidth = 1.2;
+
+      for (let ci = 0; ci < charges.length; ci++) {
+        const c = charges[ci];
+        if (c.sign < 0) continue; // Only trace from positive charges
+        const numLines = 16;
+        for (let li = 0; li < numLines; li++) {
+          const angle = (li / numLines) * Math.PI * 2;
+          let x = c.x + Math.cos(angle) * 15;
+          let y = c.y + Math.sin(angle) * 15;
+
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          let valid = true;
+          for (let s = 0; s < steps; s++) {
+            const e = fieldAt(x, y);
+            const mag = Math.sqrt(e.x * e.x + e.y * e.y);
+            if (mag < 0.0001) { valid = false; break; }
+            x += (e.x / mag) * stepSize;
+            y += (e.y / mag) * stepSize;
+            if (x < -20 || x > W + 20 || y < -20 || y > H + 20) break;
+            // Stop if we reach a negative charge
+            for (let j = 0; j < charges.length; j++) {
+              if (charges[j].sign > 0) continue;
+              const dx = x - charges[j].x, dy = y - charges[j].y;
+              if (dx * dx + dy * dy < 200) { valid = false; break; }
+            }
+            if (!valid) break;
+            ctx.lineTo(x, y);
+          }
+          const grad = ctx.createLinearGradient(c.x, c.y, x, y);
+          grad.addColorStop(0, 'rgba(124,111,224,0.6)');
+          grad.addColorStop(1, 'rgba(74,222,128,0.3)');
+          ctx.strokeStyle = grad;
+          ctx.stroke();
+        }
+      }
+
+      // Also trace from negative charges (reversed)
+      for (let ci = 0; ci < charges.length; ci++) {
+        const c = charges[ci];
+        if (c.sign > 0) continue;
+        const numLines = 16;
+        for (let li = 0; li < numLines; li++) {
+          const angle = (li / numLines) * Math.PI * 2;
+          let x = c.x + Math.cos(angle) * 15;
+          let y = c.y + Math.sin(angle) * 15;
+
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          for (let s = 0; s < steps; s++) {
+            const e = fieldAt(x, y);
+            const mag = Math.sqrt(e.x * e.x + e.y * e.y);
+            if (mag < 0.0001) break;
+            // Trace against the field (toward positive)
+            x -= (e.x / mag) * stepSize;
+            y -= (e.y / mag) * stepSize;
+            if (x < -20 || x > W + 20 || y < -20 || y > H + 20) break;
+            let hitPositive = false;
+            for (let j = 0; j < charges.length; j++) {
+              if (charges[j].sign < 0) continue;
+              const dx = x - charges[j].x, dy = y - charges[j].y;
+              if (dx * dx + dy * dy < 200) { hitPositive = true; break; }
+            }
+            if (hitPositive) break;
+            ctx.lineTo(x, y);
+          }
+          ctx.strokeStyle = 'rgba(74,222,128,0.25)';
+          ctx.stroke();
+        }
+      }
+    }
+
+    // --- Visualization: Potential ---
+    function drawPotential() {
+      if (charges.length === 0) return;
+      const step = 6;
+      const cols = Math.ceil(W / step);
+      const rows = Math.ceil(H / step);
+      const imgData = ctx.createImageData(cols, rows);
+      const data = imgData.data;
+
+      for (let iy = 0; iy < rows; iy++) {
+        for (let ix = 0; ix < cols; ix++) {
+          const x = ix * step + step / 2;
+          const y = iy * step + step / 2;
+          let v = potentialAt(x, y);
+          // Map potential to color
+          const idx = (iy * cols + ix) * 4;
+          if (v > 0) {
+            const t = Math.min(1, v * 0.01);
+            data[idx] = 124 * t | 0;
+            data[idx + 1] = 111 * t | 0;
+            data[idx + 2] = 224 * t | 0;
+          } else {
+            const t = Math.min(1, -v * 0.01);
+            data[idx] = 74 * t | 0;
+            data[idx + 1] = 222 * t | 0;
+            data[idx + 2] = 128 * t | 0;
+          }
+          data[idx + 3] = Math.min(200, Math.abs(v) * 2) | 0;
+        }
+      }
+      // Draw scaled
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = cols;
+      tmpCanvas.height = rows;
+      tmpCanvas.getContext('2d').putImageData(imgData, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(tmpCanvas, 0, 0, W, H);
+
+      // Equipotential contours
+      ctx.lineWidth = 0.8;
+      const levels = [-300, -200, -100, -50, -20, 20, 50, 100, 200, 300];
+      for (const level of levels) {
+        ctx.strokeStyle = level > 0
+          ? `rgba(124,111,224,${0.15 + Math.abs(level) * 0.0003})`
+          : `rgba(74,222,128,${0.15 + Math.abs(level) * 0.0003})`;
+        // March along grid
+        for (let iy = 0; iy < rows - 1; iy++) {
+          for (let ix = 0; ix < cols - 1; ix++) {
+            const x = ix * step, y = iy * step;
+            const v00 = potentialAt(x, y);
+            const v10 = potentialAt(x + step, y);
+            const v01 = potentialAt(x, y + step);
+            // Simple horizontal/vertical crossing check
+            if ((v00 - level) * (v10 - level) < 0) {
+              const t = (level - v00) / (v10 - v00);
+              const cx = x + t * step;
+              ctx.beginPath();
+              ctx.arc(cx, y, 0.8, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            if ((v00 - level) * (v01 - level) < 0) {
+              const t = (level - v00) / (v01 - v00);
+              const cy = y + t * step;
+              ctx.beginPath();
+              ctx.arc(x, cy, 0.8, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+    }
+
+    // --- Draw charges ---
+    function drawCharges() {
+      for (let i = 0; i < charges.length; i++) {
+        const c = charges[i];
+        // Glow
+        const grad = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 40);
+        grad.addColorStop(0, c.glow + '0.3)');
+        grad.addColorStop(1, c.glow + '0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 40, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core
+        ctx.fillStyle = c.color;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Symbol
+        ctx.fillStyle = '#0a0a0f';
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(c.sign > 0 ? '+' : '\u2212', c.x, c.y + 0.5);
+      }
+    }
+
+    // --- Vignette ---
+    function drawVignette() {
+      const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
+      grad.addColorStop(0, 'transparent');
+      grad.addColorStop(1, 'rgba(10,10,15,0.6)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // --- Audio ---
+    function toggleMic() {
+      if (micActive) {
+        micActive = false;
+        document.getElementById('micBtn').textContent = 'Mic Off';
+        document.getElementById('micBtn').classList.remove('active');
+        return;
+      }
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        const source = audioCtx.createMediaStreamSource(stream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        freqData = new Uint8Array(analyser.frequencyBinCount);
+        micActive = true;
+        document.getElementById('micBtn').textContent = 'Mic On';
+        document.getElementById('micBtn').classList.add('active');
+      }).catch(() => {});
+    }
+
+    function getAudioBands() {
+      if (!micActive || !analyser) return { bass: 0, mid: 0, treble: 0 };
+      analyser.getByteFrequencyData(freqData);
+      const n = freqData.length;
+      let bass = 0, mid = 0, treble = 0;
+      const third = Math.floor(n / 3);
+      for (let i = 0; i < third; i++) bass += freqData[i];
+      for (let i = third; i < third * 2; i++) mid += freqData[i];
+      for (let i = third * 2; i < n; i++) treble += freqData[i];
+      bass /= third * 255;
+      mid /= third * 255;
+      treble /= (n - third * 2) * 255;
+      return { bass, mid, treble };
+    }
+
+    function drawSpectrum() {
+      specCtx.clearRect(0, 0, W, 32);
+      if (!micActive || !analyser) return;
+      analyser.getByteFrequencyData(freqData);
+      const barW = W / freqData.length;
+      for (let i = 0; i < freqData.length; i++) {
+        const h = (freqData[i] / 255) * 28;
+        const t = i / freqData.length;
+        const r = lerp(124, 74, t) | 0;
+        const g = lerp(111, 222, t) | 0;
+        const b = lerp(224, 128, t) | 0;
+        specCtx.fillStyle = `rgba(${r},${g},${b},0.7)`;
+        specCtx.fillRect(i * barW, 32 - h, barW - 1, h);
+      }
+    }
+
+    // --- Utility ---
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    // --- Presets ---
+    function randomize() {
+      charges.length = 0;
+      const count = 3 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < count; i++) {
+        const sign = Math.random() < 0.5 ? 1 : -1;
+        addCharge(
+          100 + Math.random() * (W - 200),
+          100 + Math.random() * (H - 200),
+          sign
+        );
+      }
+    }
+
+    // --- Interaction ---
+    let mouseX = 0, mouseY = 0;
+
+    canvas.addEventListener('mousedown', e => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      mouseX = x; mouseY = y;
+
+      if (e.button === 2) {
+        // Right click = delete nearest
+        const idx = nearestCharge(x, y, 30);
+        if (idx >= 0) removeCharge(idx);
+        return;
+      }
+
+      if (tool === 'move') {
+        const idx = nearestCharge(x, y, 30);
+        if (idx >= 0) {
+          dragging = idx;
+          dragOffset.x = charges[idx].x - x;
+          dragOffset.y = charges[idx].y - y;
+        }
+      } else if (tool === 'delete') {
+        const idx = nearestCharge(x, y, 30);
+        if (idx >= 0) removeCharge(idx);
+      } else if (tool === 'positive') {
+        addCharge(x, y, 1);
+      } else if (tool === 'negative') {
+        addCharge(x, y, -1);
+      }
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+      if (dragging !== null && charges[dragging]) {
+        charges[dragging].x = mouseX + dragOffset.x;
+        charges[dragging].y = mouseY + dragOffset.y;
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => { dragging = null; });
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Touch support
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = t.clientX - rect.left;
+      const y = t.clientY - rect.top;
+      if (tool === 'move') {
+        const idx = nearestCharge(x, y, 40);
+        if (idx >= 0) {
+          dragging = idx;
+          dragOffset.x = charges[idx].x - x;
+          dragOffset.y = charges[idx].y - y;
+        }
+      } else if (tool === 'delete') {
+        const idx = nearestCharge(x, y, 40);
+        if (idx >= 0) removeCharge(idx);
+      } else if (tool === 'positive') {
+        addCharge(x, y, 1);
+      } else if (tool === 'negative') {
+        addCharge(x, y, -1);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = t.clientX - rect.left;
+      const y = t.clientY - rect.top;
+      if (dragging !== null && charges[dragging]) {
+        charges[dragging].x = x + dragOffset.x;
+        charges[dragging].y = y + dragOffset.y;
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', () => { dragging = null; });
+
+    // --- UI ---
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        tool = btn.dataset.tool;
+      });
+    });
+
+    document.querySelectorAll('.viz-btn[data-viz]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.viz-btn[data-viz]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        vizMode = btn.dataset.viz;
+      });
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      charges.length = 0;
+      updateChargeInfo();
+    });
+
+    document.getElementById('micBtn').addEventListener('click', toggleMic);
+
+    // Sliders
+    const sliders = [
+      { id: 'particleCount', valId: 'particleCountVal', fn: v => {
+        targetParticleCount = +v;
+        if (particles.length < targetParticleCount) {
+          while (particles.length < targetParticleCount)
+            particles.push({ x: Math.random() * W, y: Math.random() * H, vx: 0, vy: 0, life: 200, age: 0 });
+        } else {
+          particles.length = targetParticleCount;
+        }
+      }},
+      { id: 'strength', valId: 'strengthVal', fn: v => { fieldStrength = +v; }},
+      { id: 'trail', valId: 'trailVal', fn: v => { trailAlpha = +v; }},
+      { id: 'speed', valId: 'speedVal', fn: v => { simSpeed = +v; }},
+      { id: 'chargeSize', valId: 'chargeSizeVal', fn: v => {
+        chargeRadius = +v;
+        charges.forEach(c => c.strength = c.sign * chargeRadius);
+      }},
+    ];
+
+    sliders.forEach(s => {
+      const el = document.getElementById(s.id);
+      const valEl = document.getElementById(s.valId);
+      el.addEventListener('input', () => {
+        valEl.textContent = (+el.value).toFixed(el.step && el.step.includes('.') ? el.step.split('.')[1].length : 0);
+        s.fn(el.value);
+      });
+    });
+
+    // Keyboard
+    window.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT') return;
+      switch (e.key.toLowerCase()) {
+        case 'h':
+          document.getElementById('panel').classList.toggle('hidden');
+          break;
+        case ' ':
+          e.preventDefault();
+          paused = !paused;
+          break;
+        case 'c':
+          charges.length = 0;
+          updateChargeInfo();
+          break;
+        case 'r':
+          randomize();
+          break;
+        case 'm':
+          toggleMic();
+          break;
+        case 's':
+          {
+            const link = document.createElement('a');
+            link.download = 'filament.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+          }
+          break;
+        case 'f':
+          if (document.fullscreenElement) document.exitFullscreen();
+          else document.documentElement.requestFullscreen();
+          break;
+        case '1':
+          vizMode = 'particles';
+          document.querySelectorAll('.viz-btn').forEach(b => b.classList.remove('active'));
+          document.querySelector('[data-viz="particles"]').classList.add('active');
+          break;
+        case '2':
+          vizMode = 'field-lines';
+          document.querySelectorAll('.viz-btn').forEach(b => b.classList.remove('active'));
+          document.querySelector('[data-viz="field-lines"]').classList.add('active');
+          break;
+        case '3':
+          vizMode = 'potential';
+          document.querySelectorAll('.viz-btn').forEach(b => b.classList.remove('active'));
+          document.querySelector('[data-viz="potential"]').classList.add('active');
+          break;
+      }
+    });
+
+    // --- Main loop ---
+    let lastTime = performance.now();
+
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+
+      // FPS
+      frameCount++;
+      if (now - lastFpsTime > 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastFpsTime = now;
+        document.getElementById('fpsInfo').textContent = fps + ' fps';
+      }
+
+      // Audio modulation
+      const audio = getAudioBands();
+      if (micActive) {
+        // Bass pumps field strength, treble spawns sparks
+        fieldStrength = +document.getElementById('strength').value + audio.bass * 3;
+        if (audio.treble > 0.3 && charges.length > 0) {
+          // Spawn burst of particles near random charge
+          const c = charges[Math.floor(Math.random() * charges.length)];
+          for (let i = 0; i < 5; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            particles.push({
+              x: c.x + Math.cos(angle) * 15,
+              y: c.y + Math.sin(angle) * 15,
+              vx: Math.cos(angle) * 2,
+              vy: Math.sin(angle) * 2,
+              life: 80 + Math.random() * 80,
+              age: 0,
+            });
+          }
+          // Trim excess
+          if (particles.length > targetParticleCount + 500) {
+            particles.splice(0, particles.length - targetParticleCount);
+          }
+        }
+      }
+
+      if (!paused) {
+        updateParticles(dt);
+      }
+
+      // Draw
+      // Trail fade
+      ctx.fillStyle = `rgba(10,10,15,${trailAlpha})`;
+      ctx.fillRect(0, 0, W, H);
+
+      if (vizMode === 'particles') {
+        drawParticles();
+      } else if (vizMode === 'field-lines') {
+        // Clear fully for field lines (they don't benefit from trails)
+        ctx.fillStyle = 'rgba(10,10,15,1)';
+        ctx.fillRect(0, 0, W, H);
+        drawFieldLines();
+        // Still draw a subset of particles for atmosphere
+        const oldLen = particles.length;
+        const subset = particles.slice(0, Math.min(1000, particles.length));
+        for (const p of subset) {
+          const alpha = Math.min(1, p.age / 20) * Math.max(0, 1 - p.age / p.life) * 0.3;
+          if (alpha < 0.01) continue;
+          ctx.fillStyle = `rgba(124,111,224,${alpha})`;
+          ctx.fillRect(p.x, p.y, 1, 1);
+        }
+      } else if (vizMode === 'potential') {
+        ctx.fillStyle = 'rgba(10,10,15,1)';
+        ctx.fillRect(0, 0, W, H);
+        drawPotential();
+      }
+
+      drawCharges();
+      drawVignette();
+      drawSpectrum();
+    }
+
+    // Start with a default dipole
+    addCharge(W * 0.35, H * 0.5, 1);
+    addCharge(W * 0.65, H * 0.5, -1);
+
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>
