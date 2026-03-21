@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Genesis</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 4rem;
+      color: var(--green);
+      text-shadow: 0 0 60px rgba(74, 222, 128, 0.4);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-title {
+      font-size: 1.6rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-top: 1.5rem;
+    }
+    .start-sub {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      margin-top: 0.8rem;
+      max-width: 440px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .start-hint {
+      color: var(--text-dim);
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 2rem;
+      animation: breathe 3s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    .main {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header-bar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.8rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header-bar h1 {
+      font-size: 1rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .back-link {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    .algo-tabs {
+      display: flex;
+      gap: 0;
+      margin-left: auto;
+    }
+    .algo-tab {
+      padding: 0.4rem 1rem;
+      font-family: inherit;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .algo-tab:first-child { border-radius: 4px 0 0 4px; }
+    .algo-tab:last-child { border-radius: 0 4px 4px 0; }
+    .algo-tab + .algo-tab { border-left: none; }
+    .algo-tab.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .algo-tab:hover:not(.active) { color: var(--text); background: rgba(124,111,224,0.1); }
+
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    #mainCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+    #waveCanvas {
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 100%; height: 80px;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    .step-display {
+      position: absolute;
+      top: 1rem; right: 1rem;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      z-index: 5;
+    }
+    .step-num { color: var(--green); font-size: 1.1rem; }
+
+    .info-overlay {
+      position: absolute;
+      top: 1rem; left: 1rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+      z-index: 5;
+      max-width: 260px;
+      opacity: 0.7;
+    }
+    .info-label { color: var(--accent); }
+    .info-value { color: var(--text); }
+
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.6rem 1.2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .ctrl-btn {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .play-btn { width: 44px; height: 44px; font-size: 1.2rem; }
+
+    .speed-label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      cursor: pointer;
+      min-width: 2.5rem;
+      text-align: center;
+      user-select: none;
+    }
+    .speed-label:hover { color: var(--accent); }
+
+    .volume-slider {
+      width: 80px;
+      accent-color: var(--accent);
+    }
+
+    .param-group {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-left: auto;
+    }
+    .param-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+    .param-slider {
+      width: 60px;
+      accent-color: var(--green);
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 4;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(10,10,15,0.6) 100%);
+    }
+
+    .note-flash {
+      position: absolute;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 3;
+      animation: noteRise 1.2s ease-out forwards;
+    }
+    @keyframes noteRise {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-40px) scale(0.3); }
+    }
+
+    @media (max-width: 700px) {
+      .algo-tabs { flex-wrap: wrap; gap: 2px; }
+      .algo-tab { font-size: 0.55rem; padding: 0.3rem 0.6rem; }
+      .algo-tab:first-child, .algo-tab:last-child { border-radius: 3px; }
+      .algo-tab + .algo-tab { border-left: 1px solid var(--border); }
+      .param-group { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">&#9883;</div>
+    <div class="start-title">Genesis</div>
+    <div class="start-sub">
+      Watch algorithms think. Hear computation happen.<br>
+      Every cell birth, every chemical reaction, every branch growth — made audible.
+    </div>
+    <div class="start-hint">click anywhere to begin</div>
+  </div>
+
+  <div class="main" id="mainContent" style="opacity: 0; transition: opacity 1s ease;">
+    <div class="header-bar">
+      <a href="index.html" class="back-link">&larr; Gallery</a>
+      <h1>Genesis</h1>
+      <div class="algo-tabs">
+        <button class="algo-tab active" data-algo="automata1d">1D Automata</button>
+        <button class="algo-tab" data-algo="life">Game of Life</button>
+        <button class="algo-tab" data-algo="rd">Reaction-Diffusion</button>
+        <button class="algo-tab" data-algo="lsystem">L-System</button>
+      </div>
+    </div>
+
+    <div class="canvas-area">
+      <canvas id="mainCanvas"></canvas>
+      <canvas id="waveCanvas"></canvas>
+      <div class="step-display">
+        step <span class="step-num" id="stepNum">0</span>
+      </div>
+      <div class="info-overlay" id="infoOverlay"></div>
+    </div>
+
+    <div class="controls-bar">
+      <button class="ctrl-btn" id="restartBtn" title="New seed (N)">&#8634;</button>
+      <button class="ctrl-btn play-btn" id="playBtn" title="Play / Pause (Space)">&#9654;</button>
+      <button class="ctrl-btn" id="stepBtn" title="Single step (S)">&#8677;</button>
+      <span class="speed-label" id="speedLabel" title="Click to change speed">1&times;</span>
+      <div style="width: 1px; height: 20px; background: var(--border);"></div>
+      <span style="font-size: 0.6rem; color: var(--text-dim);">&#9834;</span>
+      <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="55" title="Volume">
+      <div class="param-group">
+        <span class="param-label" id="paramALabel">Rule</span>
+        <input type="range" class="param-slider" id="paramA" min="0" max="255" value="110">
+        <span class="param-label" id="paramBLabel">Density</span>
+        <input type="range" class="param-slider" id="paramB" min="10" max="90" value="40">
+      </div>
+    </div>
+  </div>
+
+  <div class="vignette"></div>
+
+<script>
+// ============================================================
+// Genesis — Hear algorithms compute
+// ============================================================
+
+// ── Audio Context ──
+let audioCtx = null;
+let masterGain = null;
+let compressor = null;
+let convolver = null;
+let analyser = null;
+
+function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  // Master chain: compressor → master gain → destination
+  compressor = audioCtx.createDynamicsCompressor();
+  compressor.threshold.value = -20;
+  compressor.knee.value = 10;
+  compressor.ratio.value = 8;
+
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.55;
+
+  // Reverb via convolved noise
+  convolver = audioCtx.createConvolver();
+  const reverbLen = audioCtx.sampleRate * 2.5;
+  const reverbBuf = audioCtx.createBuffer(2, reverbLen, audioCtx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = reverbBuf.getChannelData(ch);
+    for (let i = 0; i < reverbLen; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / reverbLen, 2.2);
+    }
+  }
+  convolver.buffer = reverbBuf;
+
+  const reverbGain = audioCtx.createGain();
+  reverbGain.gain.value = 0.25;
+
+  // Analyser for waveform vis
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+
+  compressor.connect(masterGain);
+  compressor.connect(convolver);
+  convolver.connect(reverbGain);
+  reverbGain.connect(masterGain);
+  masterGain.connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
+
+// ── Musical scales ──
+// Pentatonic minor: dark, mysterious
+const PENTA_MINOR = [0, 3, 5, 7, 10];
+// Whole tone: dreamy, floating
+const WHOLE_TONE = [0, 2, 4, 6, 8, 10];
+// Hirajoshi: Japanese, sparse
+const HIRAJOSHI = [0, 2, 3, 7, 8];
+// Lydian: bright, expansive
+const LYDIAN = [0, 2, 4, 6, 7, 9, 11];
+
+function midiToFreq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+
+function scaleNote(scale, baseNote, index) {
+  const octave = Math.floor(index / scale.length);
+  const degree = index % scale.length;
+  return baseNote + octave * 12 + scale[degree];
+}
+
+// ── Tone generation helpers ──
+function playTone(freq, duration, wave, volume, panX) {
+  if (!audioCtx || audioCtx.state === 'suspended') return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const pan = audioCtx.createStereoPanner();
+
+  osc.type = wave;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume * 0.15, now + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+  pan.pan.value = Math.max(-1, Math.min(1, panX));
+
+  osc.connect(gain);
+  gain.connect(pan);
+  pan.connect(compressor);
+  osc.start(now);
+  osc.stop(now + duration + 0.05);
+}
+
+function playBell(freq, duration, volume) {
+  if (!audioCtx || audioCtx.state === 'suspended') return;
+  const now = audioCtx.currentTime;
+  // Fundamental + partials for bell timbre
+  [1, 2.76, 4.07, 5.93].forEach((partial, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq * partial;
+    const pVol = volume * 0.08 / (i + 1);
+    gain.gain.setValueAtTime(pVol, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration / (i + 1));
+    osc.connect(gain);
+    gain.connect(compressor);
+    osc.start(now);
+    osc.stop(now + duration + 0.1);
+  });
+}
+
+function playNoise(duration, volume, filterFreq) {
+  if (!audioCtx || audioCtx.state === 'suspended') return;
+  const now = audioCtx.currentTime;
+  const bufSize = audioCtx.sampleRate * duration;
+  const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = filterFreq;
+  filter.Q.value = 8;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(volume * 0.06, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(compressor);
+  src.start(now);
+}
+
+// Persistent drone for reaction-diffusion
+let droneOscA = null, droneOscB = null, droneGainA = null, droneGainB = null;
+
+function startDrone() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+
+  droneOscA = audioCtx.createOscillator();
+  droneOscB = audioCtx.createOscillator();
+  droneGainA = audioCtx.createGain();
+  droneGainB = audioCtx.createGain();
+
+  droneOscA.type = 'sine';
+  droneOscB.type = 'triangle';
+  droneOscA.frequency.value = 55; // A1
+  droneOscB.frequency.value = 82.4; // E2
+  droneGainA.gain.value = 0;
+  droneGainB.gain.value = 0;
+
+  droneOscA.connect(droneGainA);
+  droneOscB.connect(droneGainB);
+  droneGainA.connect(compressor);
+  droneGainB.connect(compressor);
+  droneOscA.start(now);
+  droneOscB.start(now);
+}
+
+function stopDrone() {
+  const now = audioCtx ? audioCtx.currentTime : 0;
+  if (droneGainA) { droneGainA.gain.linearRampToValueAtTime(0, now + 0.5); }
+  if (droneGainB) { droneGainB.gain.linearRampToValueAtTime(0, now + 0.5); }
+  setTimeout(() => {
+    try { droneOscA?.stop(); } catch(e) {}
+    try { droneOscB?.stop(); } catch(e) {}
+    droneOscA = droneOscB = droneGainA = droneGainB = null;
+  }, 600);
+}
+
+function updateDrone(freqA, freqB, volA, volB) {
+  if (!droneOscA) return;
+  const now = audioCtx.currentTime;
+  droneOscA.frequency.linearRampToValueAtTime(freqA, now + 0.3);
+  droneOscB.frequency.linearRampToValueAtTime(freqB, now + 0.3);
+  droneGainA.gain.linearRampToValueAtTime(Math.min(volA, 0.12), now + 0.3);
+  droneGainB.gain.linearRampToValueAtTime(Math.min(volB, 0.08), now + 0.3);
+}
+
+// ── State ──
+let currentAlgo = 'automata1d';
+let playing = false;
+let step = 0;
+let animFrame = null;
+let lastStepTime = 0;
+const SPEEDS = [0.25, 0.5, 1, 2, 4];
+let speedIdx = 2;
+
+// Algorithm state containers
+let state1d = null;
+let stateLife = null;
+let stateRD = null;
+let stateLsys = null;
+
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+const waveCanvas = document.getElementById('waveCanvas');
+const waveCtx = waveCanvas.getContext('2d');
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  waveCanvas.width = rect.width * dpr;
+  waveCanvas.height = 80 * dpr;
+  waveCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+
+// ── Algorithms ──
+
+// --- 1D Cellular Automata ---
+function init1D() {
+  const ruleNum = parseInt(document.getElementById('paramA').value);
+  const width = Math.min(Math.floor(canvas.width / (window.devicePixelRatio || 1) / 4), 200);
+  const ruleBits = [];
+  for (let i = 0; i < 8; i++) ruleBits[i] = (ruleNum >> i) & 1;
+
+  const row = new Uint8Array(width);
+  // Start with single center cell
+  row[Math.floor(width / 2)] = 1;
+
+  state1d = { width, rule: ruleNum, ruleBits, rows: [row], currentRow: row };
+  updateInfo();
+}
+
+function step1D() {
+  const { width, ruleBits, currentRow } = state1d;
+  const next = new Uint8Array(width);
+  let births = 0;
+
+  for (let i = 0; i < width; i++) {
+    const left = i > 0 ? currentRow[i - 1] : currentRow[width - 1];
+    const center = currentRow[i];
+    const right = i < width - 1 ? currentRow[i + 1] : currentRow[0];
+    const idx = (left << 2) | (center << 1) | right;
+    next[i] = ruleBits[idx];
+    if (next[i] === 1 && currentRow[i] === 0) births++;
+  }
+
+  state1d.rows.push(next);
+  state1d.currentRow = next;
+
+  // Sonify: each alive cell in the new row = a note
+  const alive = [];
+  for (let i = 0; i < width; i++) {
+    if (next[i] === 1) alive.push(i);
+  }
+
+  // Pick up to 8 notes from alive cells, spread across the row
+  const maxNotes = 8;
+  const stride = Math.max(1, Math.floor(alive.length / maxNotes));
+  const scale = PENTA_MINOR;
+  const baseNote = 48; // C3
+
+  for (let n = 0; n < Math.min(maxNotes, alive.length); n++) {
+    const cellIdx = alive[n * stride];
+    const normalized = cellIdx / width; // 0-1
+    const scaleIdx = Math.floor(normalized * 12);
+    const midi = scaleNote(scale, baseNote, scaleIdx);
+    const freq = midiToFreq(midi);
+    const pan = normalized * 2 - 1;
+    const delay = n * 0.02;
+
+    setTimeout(() => {
+      playTone(freq, 0.4 + Math.random() * 0.2, 'triangle', 0.5 + Math.random() * 0.3, pan);
+    }, delay * 1000);
+  }
+
+  // Density-based low drone hit
+  const density = alive.length / width;
+  if (density > 0.3) {
+    playTone(midiToFreq(36), 0.8, 'sine', density * 0.4, 0);
+  }
+
+  step++;
+}
+
+function draw1D() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  const { rows, width } = state1d;
+
+  const cellW = w / width;
+  const cellH = Math.max(2, Math.min(cellW, h / 120));
+  const maxRows = Math.floor(h / cellH);
+
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, w, h);
+
+  const startRow = Math.max(0, rows.length - maxRows);
+
+  for (let r = startRow; r < rows.length; r++) {
+    const row = rows[r];
+    const y = (r - startRow) * cellH;
+    const isLatest = r === rows.length - 1;
+
+    for (let c = 0; c < width; c++) {
+      if (row[c] === 1) {
+        if (isLatest) {
+          ctx.fillStyle = '#4ade80';
+          ctx.shadowColor = '#4ade80';
+          ctx.shadowBlur = 6;
+        } else {
+          const age = (rows.length - 1 - r) / maxRows;
+          const alpha = 1 - age * 0.6;
+          ctx.fillStyle = `rgba(124, 111, 224, ${alpha})`;
+          ctx.shadowBlur = 0;
+        }
+        ctx.fillRect(c * cellW, y, cellW - 0.5, cellH - 0.5);
+      }
+    }
+  }
+  ctx.shadowBlur = 0;
+
+  // Scan line on latest row
+  if (rows.length > 0) {
+    const y = (rows.length - 1 - startRow) * cellH;
+    ctx.fillStyle = 'rgba(74, 222, 128, 0.08)';
+    ctx.fillRect(0, y, w, cellH);
+  }
+}
+
+// --- 2D Game of Life ---
+function initLife() {
+  const density = parseInt(document.getElementById('paramB').value) / 100;
+  const cols = 80;
+  const rows = 60;
+  const grid = [];
+  for (let r = 0; r < rows; r++) {
+    grid[r] = new Uint8Array(cols);
+    for (let c = 0; c < cols; c++) {
+      grid[r][c] = Math.random() < density ? 1 : 0;
+    }
+  }
+  stateLife = { cols, rows, grid, births: [], deaths: [], population: 0, prevPop: 0 };
+  // Count initial population
+  let pop = 0;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (grid[r][c]) pop++;
+  stateLife.population = pop;
+  stateLife.prevPop = pop;
+  updateInfo();
+}
+
+function stepLife() {
+  const { cols, rows, grid } = stateLife;
+  const next = [];
+  const births = [];
+  const deaths = [];
+
+  for (let r = 0; r < rows; r++) {
+    next[r] = new Uint8Array(cols);
+    for (let c = 0; c < cols; c++) {
+      let neighbors = 0;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const nr = (r + dr + rows) % rows;
+          const nc = (c + dc + cols) % cols;
+          neighbors += grid[nr][nc];
+        }
+      }
+      if (grid[r][c] === 1) {
+        next[r][c] = (neighbors === 2 || neighbors === 3) ? 1 : 0;
+        if (next[r][c] === 0) deaths.push([r, c]);
+      } else {
+        next[r][c] = (neighbors === 3) ? 1 : 0;
+        if (next[r][c] === 1) births.push([r, c]);
+      }
+    }
+  }
+
+  stateLife.prevPop = stateLife.population;
+  stateLife.grid = next;
+  stateLife.births = births;
+  stateLife.deaths = deaths;
+
+  let pop = 0;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (next[r][c]) pop++;
+  stateLife.population = pop;
+
+  // Sonify births as bright bell tones
+  const maxBells = 6;
+  const bStride = Math.max(1, Math.floor(births.length / maxBells));
+  for (let i = 0; i < Math.min(maxBells, births.length); i++) {
+    const [br, bc] = births[i * bStride];
+    const normalizedR = br / rows;
+    const scaleIdx = Math.floor(normalizedR * 10);
+    const midi = scaleNote(HIRAJOSHI, 60, scaleIdx); // C4 base
+    const pan = (bc / cols) * 2 - 1;
+    setTimeout(() => playBell(midiToFreq(midi), 0.6, 0.6), i * 15);
+  }
+
+  // Deaths as low filtered noise bursts
+  if (deaths.length > 5) {
+    const intensity = Math.min(deaths.length / 50, 1);
+    playNoise(0.3, intensity * 0.5, 200 + intensity * 300);
+  }
+
+  // Population drone
+  const popRatio = pop / (cols * rows);
+  playTone(midiToFreq(36 + popRatio * 12), 0.5, 'sine', popRatio * 0.3, 0);
+
+  step++;
+}
+
+function drawLife() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  const { cols, rows, grid, births, deaths } = stateLife;
+
+  const cellW = w / cols;
+  const cellH = h / rows;
+
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, w, h);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] === 1) {
+        const isBirth = births.some(b => b[0] === r && b[1] === c);
+        if (isBirth) {
+          ctx.fillStyle = '#4ade80';
+          ctx.shadowColor = '#4ade80';
+          ctx.shadowBlur = 8;
+        } else {
+          ctx.fillStyle = '#7c6fe0';
+          ctx.shadowBlur = 0;
+        }
+        ctx.fillRect(c * cellW + 0.5, r * cellH + 0.5, cellW - 1, cellH - 1);
+      }
+    }
+  }
+
+  // Death flash
+  ctx.shadowBlur = 0;
+  for (const [dr, dc] of deaths) {
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+    ctx.fillRect(dc * cellW, dr * cellH, cellW, cellH);
+  }
+  ctx.shadowBlur = 0;
+}
+
+// --- Reaction-Diffusion (Gray-Scott) ---
+function initRD() {
+  const size = 100;
+  const A = [], B = [];
+  for (let i = 0; i < size; i++) {
+    A[i] = new Float32Array(size);
+    B[i] = new Float32Array(size);
+    for (let j = 0; j < size; j++) {
+      A[i][j] = 1.0;
+      B[i][j] = 0.0;
+    }
+  }
+  // Seed a few spots of chemical B
+  for (let s = 0; s < 5; s++) {
+    const cx = 20 + Math.floor(Math.random() * 60);
+    const cy = 20 + Math.floor(Math.random() * 60);
+    for (let di = -3; di <= 3; di++) {
+      for (let dj = -3; dj <= 3; dj++) {
+        const ni = cx + di, nj = cy + dj;
+        if (ni >= 0 && ni < size && nj >= 0 && nj < size) {
+          B[ni][nj] = 1.0;
+          A[ni][nj] = 0.5;
+        }
+      }
+    }
+  }
+
+  const feed = 0.035 + (parseInt(document.getElementById('paramA').value) / 255) * 0.03;
+  const kill = 0.057 + (parseInt(document.getElementById('paramB').value) / 100) * 0.01;
+
+  stateRD = { size, A, B, feed, kill, Du: 0.21, Dv: 0.105 };
+  startDrone();
+  updateInfo();
+}
+
+function stepRD() {
+  const { size, A, B, feed, kill, Du, Dv } = stateRD;
+  const dt = 1.0;
+
+  const nextA = [], nextB = [];
+  for (let i = 0; i < size; i++) {
+    nextA[i] = new Float32Array(size);
+    nextB[i] = new Float32Array(size);
+  }
+
+  let totalB = 0, maxB = 0, hotspots = 0;
+
+  for (let i = 0; i < size; i++) {
+    for (let j = 0; j < size; j++) {
+      const a = A[i][j], b = B[i][j];
+
+      // Laplacian (5-point stencil)
+      const ip = (i + 1) % size, im = (i - 1 + size) % size;
+      const jp = (j + 1) % size, jm = (j - 1 + size) % size;
+      const lapA = A[ip][j] + A[im][j] + A[i][jp] + A[i][jm] - 4 * a;
+      const lapB = B[ip][j] + B[im][j] + B[i][jp] + B[i][jm] - 4 * b;
+
+      const reaction = a * b * b;
+      nextA[i][j] = Math.max(0, Math.min(1, a + (Du * lapA - reaction + feed * (1 - a)) * dt));
+      nextB[i][j] = Math.max(0, Math.min(1, b + (Dv * lapB + reaction - (kill + feed) * b) * dt));
+
+      totalB += nextB[i][j];
+      if (nextB[i][j] > maxB) maxB = nextB[i][j];
+      if (nextB[i][j] > 0.3) hotspots++;
+    }
+  }
+
+  stateRD.A = nextA;
+  stateRD.B = nextB;
+
+  // Sonify: chemical B concentration drives drone pitch + occasional bell events at hotspots
+  const avgB = totalB / (size * size);
+  const hotRatio = hotspots / (size * size);
+
+  // Drone: avgB maps to frequency
+  const freqA = 40 + avgB * 120; // 40-160 Hz
+  const freqB = 60 + hotRatio * 200; // 60-260 Hz
+  updateDrone(freqA, freqB, avgB * 0.5, hotRatio * 0.3);
+
+  // Occasional texture events at high-activity regions
+  if (step % 3 === 0 && hotRatio > 0.05) {
+    playNoise(0.5, hotRatio * 0.3, 400 + avgB * 2000);
+  }
+
+  // Bell at strong concentration peaks
+  if (maxB > 0.8 && step % 5 === 0) {
+    const bellFreq = 200 + maxB * 600;
+    playBell(bellFreq, 1.2, 0.3);
+  }
+
+  step++;
+}
+
+function drawRD() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  const { size, A, B } = stateRD;
+
+  const cellW = w / size;
+  const cellH = h / size;
+
+  // Use ImageData for performance
+  const imgData = ctx.createImageData(Math.ceil(w), Math.ceil(h));
+  const pixels = imgData.data;
+
+  for (let i = 0; i < size; i++) {
+    for (let j = 0; j < size; j++) {
+      const a = A[i][j];
+      const b = B[i][j];
+
+      // Color: A = dark purple base, B = bright green/cyan highlights
+      const r = Math.floor(10 + b * 80 + (1 - a) * 40);
+      const g = Math.floor(10 + b * 200);
+      const bl = Math.floor(15 + (1 - a) * 100 + b * 60);
+
+      // Fill the cell area in pixels
+      const px0 = Math.floor(j * cellW);
+      const py0 = Math.floor(i * cellH);
+      const px1 = Math.floor((j + 1) * cellW);
+      const py1 = Math.floor((i + 1) * cellH);
+
+      for (let py = py0; py < py1 && py < Math.ceil(h); py++) {
+        for (let px = px0; px < px1 && px < Math.ceil(w); px++) {
+          const idx = (py * Math.ceil(w) + px) * 4;
+          pixels[idx] = r;
+          pixels[idx + 1] = g;
+          pixels[idx + 2] = bl;
+          pixels[idx + 3] = 255;
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+// --- L-System ---
+const LSYSTEM_PRESETS = [
+  { name: 'Binary Tree', axiom: '0', rules: { '0': '1[0]0', '1': '11' }, angle: 45, iters: 7 },
+  { name: 'Sierpinski', axiom: 'F-G-G', rules: { 'F': 'F-G+F+G-F', 'G': 'GG' }, angle: 120, iters: 5 },
+  { name: 'Dragon Curve', axiom: 'FX', rules: { 'X': 'X+YF+', 'Y': '-FX-Y' }, angle: 90, iters: 10 },
+  { name: 'Plant', axiom: 'X', rules: { 'X': 'F+[[X]-X]-F[-FX]+X', 'F': 'FF' }, angle: 25, iters: 5 },
+  { name: 'Koch Snowflake', axiom: 'F--F--F', rules: { 'F': 'F+F--F+F' }, angle: 60, iters: 4 },
+  { name: 'Hilbert', axiom: 'A', rules: { 'A': '-BF+AFA+FB-', 'B': '+AF-BFB-FA+' }, angle: 90, iters: 5 },
+];
+
+function initLsys() {
+  const presetIdx = Math.floor((parseInt(document.getElementById('paramA').value) / 256) * LSYSTEM_PRESETS.length);
+  const preset = LSYSTEM_PRESETS[Math.min(presetIdx, LSYSTEM_PRESETS.length - 1)];
+
+  // Generate the full string
+  let str = preset.axiom;
+  for (let gen = 0; gen < preset.iters; gen++) {
+    let next = '';
+    for (const ch of str) {
+      next += preset.rules[ch] || ch;
+    }
+    str = next;
+  }
+
+  // Limit to prevent perf issues
+  if (str.length > 15000) str = str.slice(0, 15000);
+
+  stateLsys = {
+    preset,
+    str,
+    pos: 0,           // current position in string (for step-by-step)
+    segments: [],      // rendered segments so far
+    turtle: { x: 0, y: 0, angle: -90 },
+    stack: [],
+    stepLen: 4,
+    branchDepth: 0,
+  };
+  updateInfo();
+}
+
+function stepLsys() {
+  const { str, preset } = stateLsys;
+  const charsPerStep = Math.max(1, Math.floor(str.length / 500)); // ~500 visual steps total
+  let processedDrawChars = 0;
+
+  while (stateLsys.pos < str.length && processedDrawChars < charsPerStep) {
+    const ch = str[stateLsys.pos];
+    const t = stateLsys.turtle;
+    const len = stateLsys.stepLen;
+
+    switch (ch) {
+      case 'F':
+      case 'G':
+      case '0':
+      case '1': {
+        const rad = t.angle * Math.PI / 180;
+        const nx = t.x + Math.cos(rad) * len;
+        const ny = t.y + Math.sin(rad) * len;
+        stateLsys.segments.push({ x1: t.x, y1: t.y, x2: nx, y2: ny, depth: stateLsys.branchDepth });
+        t.x = nx;
+        t.y = ny;
+        processedDrawChars++;
+
+        // Sound: ascending pitch based on position in string, pan by x-position
+        if (processedDrawChars === 1) { // one sound per step
+          const progress = stateLsys.pos / str.length;
+          const scaleIdx = Math.floor(progress * 20);
+          const midi = scaleNote(LYDIAN, 50, scaleIdx);
+          playTone(midiToFreq(midi), 0.25, 'triangle', 0.4, 0);
+        }
+        break;
+      }
+      case '+':
+        t.angle += preset.angle;
+        break;
+      case '-':
+        t.angle -= preset.angle;
+        break;
+      case '[':
+        stateLsys.stack.push({ x: t.x, y: t.y, angle: t.angle });
+        stateLsys.branchDepth++;
+        // Branch push = bright arpeggio note
+        if (stateLsys.branchDepth <= 8) {
+          const midi = scaleNote(WHOLE_TONE, 60, stateLsys.branchDepth);
+          playBell(midiToFreq(midi), 0.8, 0.25);
+        }
+        break;
+      case ']':
+        if (stateLsys.stack.length > 0) {
+          const saved = stateLsys.stack.pop();
+          t.x = saved.x;
+          t.y = saved.y;
+          t.angle = saved.angle;
+        }
+        stateLsys.branchDepth = Math.max(0, stateLsys.branchDepth - 1);
+        break;
+    }
+    stateLsys.pos++;
+  }
+
+  step++;
+}
+
+function drawLsys() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  const { segments } = stateLsys;
+
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, w, h);
+
+  if (segments.length === 0) return;
+
+  // Find bounding box
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const s of segments) {
+    minX = Math.min(minX, s.x1, s.x2);
+    maxX = Math.max(maxX, s.x1, s.x2);
+    minY = Math.min(minY, s.y1, s.y2);
+    maxY = Math.max(maxY, s.y1, s.y2);
+  }
+
+  const bw = maxX - minX || 1;
+  const bh = maxY - minY || 1;
+  const scale = Math.min((w - 40) / bw, (h - 40) / bh);
+  const ox = (w - bw * scale) / 2 - minX * scale;
+  const oy = (h - bh * scale) / 2 - minY * scale;
+
+  const maxDepth = segments.reduce((m, s) => Math.max(m, s.depth), 0) || 1;
+
+  for (let i = 0; i < segments.length; i++) {
+    const s = segments[i];
+    const age = i / segments.length;
+    const isRecent = i > segments.length - 20;
+    const depthRatio = s.depth / maxDepth;
+
+    if (isRecent) {
+      ctx.strokeStyle = '#4ade80';
+      ctx.shadowColor = '#4ade80';
+      ctx.shadowBlur = 6;
+      ctx.lineWidth = 2;
+    } else {
+      const r = Math.floor(124 - depthRatio * 60);
+      const g = Math.floor(111 + depthRatio * 40);
+      const b = Math.floor(224 - depthRatio * 80);
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${0.4 + age * 0.6})`;
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = Math.max(0.5, 2 - depthRatio * 1.5);
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(s.x1 * scale + ox, s.y1 * scale + oy);
+    ctx.lineTo(s.x2 * scale + ox, s.y2 * scale + oy);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+}
+
+// ── Algorithm dispatch ──
+const ALGOS = {
+  automata1d: { init: init1D, step: step1D, draw: draw1D },
+  life: { init: initLife, step: stepLife, draw: drawLife },
+  rd: { init: initRD, step: stepRD, draw: drawRD },
+  lsystem: { init: initLsys, step: stepLsys, draw: drawLsys },
+};
+
+function updateInfo() {
+  const el = document.getElementById('infoOverlay');
+  let html = '';
+
+  if (currentAlgo === 'automata1d' && state1d) {
+    html = `<span class="info-label">algorithm</span> <span class="info-value">Wolfram 1D</span><br>
+            <span class="info-label">rule</span> <span class="info-value">${state1d.rule}</span><br>
+            <span class="info-label">width</span> <span class="info-value">${state1d.width} cells</span><br>
+            <span class="info-label">scale</span> <span class="info-value">C pentatonic minor</span>`;
+  } else if (currentAlgo === 'life' && stateLife) {
+    html = `<span class="info-label">algorithm</span> <span class="info-value">Conway's Life</span><br>
+            <span class="info-label">grid</span> <span class="info-value">${stateLife.cols}&times;${stateLife.rows}</span><br>
+            <span class="info-label">population</span> <span class="info-value">${stateLife.population}</span><br>
+            <span class="info-label">births</span> <span class="info-value" style="color:var(--green)">${stateLife.births.length}</span>
+            <span class="info-label">deaths</span> <span class="info-value" style="color:#ef4444">${stateLife.deaths.length}</span><br>
+            <span class="info-label">scale</span> <span class="info-value">Hirajoshi</span>`;
+  } else if (currentAlgo === 'rd' && stateRD) {
+    html = `<span class="info-label">algorithm</span> <span class="info-value">Gray-Scott RD</span><br>
+            <span class="info-label">feed</span> <span class="info-value">${stateRD.feed.toFixed(4)}</span>
+            <span class="info-label">kill</span> <span class="info-value">${stateRD.kill.toFixed(4)}</span><br>
+            <span class="info-label">grid</span> <span class="info-value">${stateRD.size}&times;${stateRD.size}</span><br>
+            <span class="info-label">voice</span> <span class="info-value">dual drone + noise</span>`;
+  } else if (currentAlgo === 'lsystem' && stateLsys) {
+    const pct = stateLsys.str.length > 0 ? Math.round(stateLsys.pos / stateLsys.str.length * 100) : 0;
+    html = `<span class="info-label">algorithm</span> <span class="info-value">L-System</span><br>
+            <span class="info-label">preset</span> <span class="info-value">${stateLsys.preset.name}</span><br>
+            <span class="info-label">angle</span> <span class="info-value">${stateLsys.preset.angle}&deg;</span><br>
+            <span class="info-label">drawn</span> <span class="info-value">${pct}%</span><br>
+            <span class="info-label">scale</span> <span class="info-value">Lydian</span>`;
+  }
+  el.innerHTML = html;
+}
+
+function updateParamLabels() {
+  const pA = document.getElementById('paramALabel');
+  const pB = document.getElementById('paramBLabel');
+  const slA = document.getElementById('paramA');
+  const slB = document.getElementById('paramB');
+
+  switch (currentAlgo) {
+    case 'automata1d':
+      pA.textContent = 'Rule'; slA.min = 0; slA.max = 255; slA.value = 110;
+      pB.textContent = 'Width'; slB.min = 50; slB.max = 200; slB.value = 100;
+      break;
+    case 'life':
+      pA.textContent = 'Birth'; slA.min = 0; slA.max = 8; slA.value = 3;
+      pB.textContent = 'Density'; slB.min = 10; slB.max = 90; slB.value = 40;
+      break;
+    case 'rd':
+      pA.textContent = 'Feed'; slA.min = 0; slA.max = 255; slA.value = 128;
+      pB.textContent = 'Kill'; slB.min = 10; slB.max = 90; slB.value = 50;
+      break;
+    case 'lsystem':
+      pA.textContent = 'Preset'; slA.min = 0; slA.max = 255; slA.value = Math.floor(Math.random() * 256);
+      pB.textContent = 'Scale'; slB.min = 1; slB.max = 8; slB.value = 4;
+      break;
+  }
+}
+
+function switchAlgo(algo) {
+  playing = false;
+  document.getElementById('playBtn').innerHTML = '&#9654;';
+  if (animFrame) cancelAnimationFrame(animFrame);
+  stopDrone();
+
+  currentAlgo = algo;
+  step = 0;
+  document.getElementById('stepNum').textContent = '0';
+
+  // Update tabs
+  document.querySelectorAll('.algo-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.algo === algo);
+  });
+
+  updateParamLabels();
+  resize();
+  ALGOS[algo].init();
+  ALGOS[algo].draw();
+}
+
+function doStep() {
+  ALGOS[currentAlgo].step();
+  ALGOS[currentAlgo].draw();
+  document.getElementById('stepNum').textContent = step;
+  updateInfo();
+}
+
+// ── Waveform visualizer ──
+function drawWaveform() {
+  if (!analyser) return;
+  const rect = waveCanvas.parentElement?.getBoundingClientRect();
+  if (!rect) return;
+  const w = rect.width;
+  const h = 80;
+
+  const bufLen = analyser.frequencyBinCount;
+  const data = new Uint8Array(bufLen);
+  analyser.getByteTimeDomainData(data);
+
+  waveCtx.clearRect(0, 0, w, h);
+  waveCtx.strokeStyle = 'rgba(124, 111, 224, 0.4)';
+  waveCtx.lineWidth = 1.5;
+  waveCtx.beginPath();
+
+  const sliceW = w / bufLen;
+  for (let i = 0; i < bufLen; i++) {
+    const v = data[i] / 128.0;
+    const y = (v * h) / 2;
+    if (i === 0) waveCtx.moveTo(0, y);
+    else waveCtx.lineTo(i * sliceW, y);
+  }
+  waveCtx.stroke();
+}
+
+// ── Main loop ──
+function loop(timestamp) {
+  animFrame = requestAnimationFrame(loop);
+  drawWaveform();
+
+  if (!playing) return;
+
+  const interval = 200 / SPEEDS[speedIdx]; // ms between steps
+  if (timestamp - lastStepTime < interval) return;
+  lastStepTime = timestamp;
+
+  doStep();
+
+  // L-system completion check
+  if (currentAlgo === 'lsystem' && stateLsys && stateLsys.pos >= stateLsys.str.length) {
+    playing = false;
+    document.getElementById('playBtn').innerHTML = '&#9654;';
+  }
+}
+
+// ── Controls ──
+document.getElementById('playBtn').addEventListener('click', () => {
+  playing = !playing;
+  document.getElementById('playBtn').innerHTML = playing ? '&#10074;&#10074;' : '&#9654;';
+  if (playing) lastStepTime = performance.now();
+});
+
+document.getElementById('stepBtn').addEventListener('click', () => {
+  if (!playing) doStep();
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+  playing = false;
+  document.getElementById('playBtn').innerHTML = '&#9654;';
+  stopDrone();
+  step = 0;
+  document.getElementById('stepNum').textContent = '0';
+  resize();
+  ALGOS[currentAlgo].init();
+  ALGOS[currentAlgo].draw();
+});
+
+document.getElementById('speedLabel').addEventListener('click', () => {
+  speedIdx = (speedIdx + 1) % SPEEDS.length;
+  document.getElementById('speedLabel').textContent = SPEEDS[speedIdx] + '\u00d7';
+});
+
+document.getElementById('volumeSlider').addEventListener('input', (e) => {
+  if (masterGain) masterGain.gain.value = e.target.value / 100;
+});
+
+document.querySelectorAll('.algo-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchAlgo(tab.dataset.algo));
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    document.getElementById('playBtn').click();
+  } else if (e.code === 'KeyS') {
+    document.getElementById('stepBtn').click();
+  } else if (e.code === 'KeyN') {
+    document.getElementById('restartBtn').click();
+  } else if (e.code === 'Digit1') {
+    switchAlgo('automata1d');
+  } else if (e.code === 'Digit2') {
+    switchAlgo('life');
+  } else if (e.code === 'Digit3') {
+    switchAlgo('rd');
+  } else if (e.code === 'Digit4') {
+    switchAlgo('lsystem');
+  }
+});
+
+// ── Start ──
+document.getElementById('startOverlay').addEventListener('click', () => {
+  document.getElementById('startOverlay').classList.add('hidden');
+  document.getElementById('mainContent').style.opacity = '1';
+
+  initAudio();
+  resize();
+  switchAlgo('automata1d');
+  animFrame = requestAnimationFrame(loop);
+});
+
+</script>
+</body>
+</html>
