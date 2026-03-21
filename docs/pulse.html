@@ -425,6 +425,18 @@
     </div>
   </div>
 
+  <div class="section-label">genetic drift</div>
+  <div class="chart-wrap" id="drift-wrap">
+    <canvas id="drift-canvas" style="display:block;width:100%;height:260px"></canvas>
+    <div id="drift-tooltip" style="position:absolute;pointer-events:none;background:rgba(10,10,15,0.92);border:1px solid var(--border);border-radius:6px;padding:0.7rem 1rem;font-size:0.68rem;line-height:1.6;color:var(--text);white-space:nowrap;z-index:20;opacity:0;transition:opacity 0.1s;backdrop-filter:blur(4px)">
+      <div class="tt-gen" id="drift-tt-gen">GEN</div><div id="drift-tt-species"></div>
+    </div>
+  </div>
+  <div class="chart-legend" id="drift-legend"></div>
+
+  <div class="section-label">fitness distribution</div>
+  <div class="chart-wrap"><canvas id="distro-canvas" style="display:block;width:100%;height:180px"></canvas></div>
+
 </div>
 
 <script>
@@ -916,6 +928,10 @@ function buildVitals(data) {
   document.getElementById('v-runtime-sub').textContent = `${days}d ${hrs}h active`;
 }
 
+
+function buildDriftChart(history){var canvas=document.getElementById('drift-canvas'),wrap=document.getElementById('drift-wrap'),tt=document.getElementById('drift-tooltip'),leg=document.getElementById('drift-legend');SPECIES.forEach(function(sp){var d=document.createElement('div');d.className='legend-item';var dot=document.createElement('div');dot.style.cssText='width:8px;height:8px;border-radius:50%;background:'+SPECIES_COLORS[sp]+';flex-shrink:0';var l=document.createElement('span');l.textContent=SPECIES_LABELS[sp];d.appendChild(dot);d.appendChild(l);leg.appendChild(d)});function draw(){var r=canvas.parentElement.getBoundingClientRect(),dpr=devicePixelRatio||1,w=r.width,h=260;canvas.width=w*dpr;canvas.height=h*dpr;canvas.style.height=h+'px';var ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);var p={l:50,r:20,t:16,b:30},cw=w-p.l-p.r,ch=h-p.t-p.b;ctx.fillStyle='#12121a';ctx.fillRect(0,0,w,h);var n=history.length;if(!n)return;var stacks=history.map(function(g){var c=g.speciesCounts||{},t=Object.values(c).reduce(function(s,v){return s+v},0);return t?SPECIES.map(function(sp){return(c[sp]||0)/t}):SPECIES.map(function(){return 0})});for(var si=SPECIES.length-1;si>=0;si--){ctx.beginPath();for(var gi=0;gi<n;gi++){var cum=0;for(var s=0;s<=si;s++)cum+=stacks[gi][s];var x=p.l+(gi/(n-1||1))*cw,y=p.t+ch-cum*ch;gi===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}for(gi=n-1;gi>=0;gi--){cum=0;for(s=0;s<si;s++)cum+=stacks[gi][s];ctx.lineTo(p.l+(gi/(n-1||1))*cw,p.t+ch-cum*ch)}ctx.closePath();var rgb=hexToRgb(SPECIES_COLORS[SPECIES[si]]);ctx.fillStyle='rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+',0.65)';ctx.fill()}ctx.fillStyle='#6e6e82';ctx.font='8px SF Mono,Fira Code,monospace';ctx.textAlign='right';[0,0.5,1].forEach(function(pc){var y=p.t+ch-pc*ch;ctx.fillText(Math.round(pc*100)+'%',p.l-6,y+3);ctx.strokeStyle='rgba(30,30,46,0.6)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(p.l+cw,y);ctx.stroke()});ctx.textAlign='center';var maxG=history[n-1].generation;[1,25,50,75,100,125,maxG].forEach(function(g){var idx=history.findIndex(function(h){return h.generation>=g});if(idx<0)return;ctx.fillText(g,p.l+(idx/(n-1||1))*cw,p.t+ch+14)});canvas._L={p:p,cw:cw,ch:ch,n:n,stacks:stacks}}draw();new ResizeObserver(draw).observe(canvas.parentElement);wrap.addEventListener('mousemove',function(e){var L=canvas._L;if(!L)return;var r=canvas.getBoundingClientRect(),mx=e.clientX-r.left;var gi=Math.max(0,Math.min(L.n-1,Math.round((mx-L.p.l)/L.cw*(L.n-1))));var h=history[gi];if(!h)return;document.getElementById('drift-tt-gen').textContent='GEN '+h.generation;var c=h.speciesCounts||{},t=Object.values(c).reduce(function(s,v){return s+v},0);document.getElementById('drift-tt-species').innerHTML=SPECIES.filter(function(sp){return(c[sp]||0)>0}).sort(function(a,b){return(c[b]||0)-(c[a]||0)}).map(function(sp){return'<span style="color:'+SPECIES_COLORS[sp]+'">'+SPECIES_LABELS[sp]+'</span> '+(t?((c[sp]||0)/t*100).toFixed(0):'0')+'%'}).join('<br>');tt.style.left=(mx+14)+'px';tt.style.top='40px';tt.style.opacity='1'});wrap.addEventListener('mouseleave',function(){tt.style.opacity='0'})}
+function buildDistroChart(history){var canvas=document.getElementById('distro-canvas');function draw(){var r=canvas.parentElement.getBoundingClientRect(),dpr=devicePixelRatio||1,w=r.width,h=180;canvas.width=w*dpr;canvas.height=h*dpr;canvas.style.height=h+'px';var ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);var p={l:50,r:20,t:16,b:30},cw=w-p.l-p.r,ch=h-p.t-p.b;ctx.fillStyle='#12121a';ctx.fillRect(0,0,w,h);var n=history.length;if(!n)return;var bw=Math.max(cw/n,1.5);function yS(s){return p.t+ch-((clamp(s,0.4,0.9)-0.4)/0.5)*ch}ctx.fillStyle='#6e6e82';ctx.font='8px SF Mono,Fira Code,monospace';ctx.textAlign='right';for(var v=0.45;v<=0.85;v+=0.1){var y=yS(v);ctx.fillText(v.toFixed(2),p.l-6,y+3);ctx.strokeStyle='rgba(30,30,46,0.6)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(p.l+cw,y);ctx.stroke()}history.forEach(function(g,i){var x=p.l+(i/(n-1||1))*cw,yB=yS(g.bestScore),yA=yS(g.avgScore);var gr=ctx.createLinearGradient(0,yB,0,yA);gr.addColorStop(0,'rgba(74,222,128,0.7)');gr.addColorStop(1,'rgba(124,111,224,0.25)');ctx.fillStyle=gr;ctx.fillRect(x-bw/2,yB,bw,yA-yB);ctx.beginPath();ctx.arc(x,yB,1.5,0,Math.PI*2);ctx.fillStyle='#4ade80';ctx.fill()});ctx.textAlign='center';ctx.fillStyle='#6e6e82';var maxG=history[n-1].generation;[1,25,50,75,100,125,maxG].forEach(function(g){var idx=history.findIndex(function(h){return h.generation>=g});if(idx<0)return;ctx.fillText(g,p.l+(idx/(n-1||1))*cw,p.t+ch+14)});ctx.font='9px SF Mono,Fira Code,monospace';ctx.textAlign='left';ctx.fillStyle='rgba(74,222,128,0.6)';ctx.fillText('best',p.l+4,p.t+12);ctx.fillStyle='rgba(124,111,224,0.5)';ctx.fillText('avg',p.l+4,p.t+ch-4)}draw();new ResizeObserver(draw).observe(canvas.parentElement)}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 fetch('./gallery.json')
   .then(r => r.json())
@@ -923,6 +939,8 @@ fetch('./gallery.json')
     buildVitals(data);
     buildChart(data.history);
     buildHeatmap(data.history);
+    buildDriftChart(data.history);
+    buildDistroChart(data.history);
   })
   .catch(err => {
     console.error('Failed to load gallery.json:', err);

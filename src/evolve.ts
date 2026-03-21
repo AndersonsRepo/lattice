@@ -30,6 +30,7 @@ import {
   evolveJulia,
   evolveNoise,
   evolveFlowField,
+  evolveFractalFlame,
   render,
   score,
   computeScore,
@@ -241,6 +242,9 @@ function generatePiece(genome: Genome, generation: number, populationMetrics?: P
     case "flowfield":
       grid = evolveFlowField(genome);
       break;
+    case "fractal-flame":
+      grid = evolveFractalFlame(genome);
+      break;
     default:
       grid = evolve1D(genome);
   }
@@ -328,6 +332,13 @@ function formatPieceForDiscord(piece: Piece): string {
   ].join("\n");
 }
 
+function metricDistance(a: PieceMetrics, b: PieceMetrics): number {
+  const keys: (keyof PieceMetrics)[] = ["complexity", "symmetry", "density", "edgeActivity", "structuralInterest", "fractalDimension", "informationDensity", "compositionBalance"];
+  let sum = 0;
+  for (const k of keys) { sum += ((a[k] ?? 0) - (b[k] ?? 0)) ** 2; }
+  return Math.sqrt(sum);
+}
+
 async function run(): Promise<void> {
   mkdirSync(GALLERY_DIR, { recursive: true });
 
@@ -384,38 +395,55 @@ async function run(): Promise<void> {
     return best;
   }
 
-  // Generate offspring — mix of mutation and crossover
-  const offspring: Piece[] = [];
-  for (let i = 0; i < OFFSPRING_PER_RUN; i++) {
-    let childGenome: Genome;
-    const parent = tournamentSelect(pop.pieces);
+  // Stagnation + adaptive mutation
+  let history: GenerationRecord[] = [];
+  if (existsSync(HISTORY_FILE)) { try { history = JSON.parse(readFileSync(HISTORY_FILE, "utf-8")); } catch {} }
+  const recentBest = history.slice(-15).map(h => h.bestScore);
+  const isStagnant = recentBest.length >= 15 && (Math.max(...recentBest) - Math.min(...recentBest)) < 0.005;
+  if (isStagnant) console.log("  Stagnation detected");
 
-    if (rng() < 0.3 && pop.pieces.length >= 2) {
-      // 30% chance: crossover between two tournament-selected parents
-      let otherParent = tournamentSelect(pop.pieces);
-      let attempts = 0;
-      while (otherParent.id === parent.id && attempts < 5) {
-        otherParent = tournamentSelect(pop.pieces);
-        attempts++;
-      }
-      childGenome = crossoverGenomes(parent.genome, otherParent.genome, rng);
-      console.log(
-        `  Crossover ${parent.genome.type}×${otherParent.genome.type} → ${childGenome.type}`
-      );
-    } else {
-      childGenome = mutateGenome(parent.genome, rng);
-    }
-
-    const child = generatePiece(childGenome, gen, popMetrics);
-    offspring.push(child);
-    console.log(
-      `  Offspring ${child.id}: ${child.genome.type} → score ${(child.score * 100).toFixed(1)}% ` +
-        `(novelty: ${(child.metrics.novelty * 100).toFixed(0)}%)`
-    );
+  function adaptiveMutate(genome: Genome, parentScore: number): Genome {
+    const best = pop.pieces[0]?.score ?? 0.5, worst = pop.pieces[pop.pieces.length-1]?.score ?? 0;
+    const f01 = (parentScore - worst) / Math.max(best - worst, 0.01);
+    const passes = (f01 > 0.7 ? 1 : f01 > 0.4 ? 2 : 3) + (isStagnant ? 1 : 0);
+    let m = genome;
+    for (let p = 0; p < passes; p++) m = mutateGenome(m, rng);
+    return m;
   }
 
-  // Speciation-aware selection: guarantee MIN_SLOTS_PER_TYPE for each genome type
-  const allPieces = [...pop.pieces, ...offspring].sort((a, b) => b.score - a.score);
+  const offspring: Piece[] = [];
+  const effOff = isStagnant ? OFFSPRING_PER_RUN + 4 : OFFSPRING_PER_RUN;
+  for (let i = 0; i < effOff; i++) {
+    let childGenome: Genome;
+    const parent = tournamentSelect(pop.pieces);
+    if (rng() < 0.3 && pop.pieces.length >= 2) {
+      let other = tournamentSelect(pop.pieces);
+      let att = 0;
+      while (other.id === parent.id && att < 5) { other = tournamentSelect(pop.pieces); att++; }
+      childGenome = crossoverGenomes(parent.genome, other.genome, rng);
+      if (rng() < 0.5) childGenome = mutateGenome(childGenome, rng);
+      console.log(`  Crossover ${parent.genome.type}\u00d7${other.genome.type} \u2192 ${childGenome.type}`);
+    } else {
+      childGenome = adaptiveMutate(parent.genome, parent.score);
+    }
+    const child = generatePiece(childGenome, gen, popMetrics);
+    offspring.push(child);
+    console.log(`  Offspring ${child.id}: ${child.genome.type} \u2192 ${(child.score*100).toFixed(1)}% (novelty: ${(child.metrics.novelty*100).toFixed(0)}%)`);
+  }
+
+  // Fitness sharing
+  const allPieces = [...pop.pieces, ...offspring];
+  const SHARING_RADIUS = 0.15;
+  const sharedScores = new Map<string, number>();
+  for (const piece of allPieces) {
+    const sameType = allPieces.filter(p => p.genome.type === piece.genome.type);
+    let nc = 0;
+    for (const o of sameType) { const d = metricDistance(piece.metrics, o.metrics); if (d < SHARING_RADIUS) nc += 1 - d/SHARING_RADIUS; }
+    sharedScores.set(piece.id, piece.score / Math.max(nc, 1));
+  }
+  allPieces.sort((a, b) => (sharedScores.get(b.id) ?? b.score) - (sharedScores.get(a.id) ?? a.score));
+
+    // Speciation-aware selection
   const survivors: Piece[] = [];
   const reserved = new Set<string>();
 
@@ -477,11 +505,6 @@ async function run(): Promise<void> {
   // Save population to both Supabase and JSON
   await savePop(pop);
 
-  // Track generation history for the timeline chart
-  let history: GenerationRecord[] = [];
-  if (existsSync(HISTORY_FILE)) {
-    try { history = JSON.parse(readFileSync(HISTORY_FILE, "utf-8")); } catch {}
-  }
   const genRecord: GenerationRecord = {
     generation: gen,
     bestScore: bestScore,

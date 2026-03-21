@@ -144,8 +144,8 @@ export interface DLARule {
 }
 
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla" | "fractal-flame";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule | FlameRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla" | "fractal-flame" | "physarum";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule | FlameRule | PhysarumRule;
   width: number;
   height: number;
   palette: string[];
@@ -1464,6 +1464,26 @@ export function render(grid: number[][], palette: string[]): string {
     .join("\n");
 }
 
+/** Get the effective color stops for a genome (from colorTheme if present, else species defaults) */
+export function getColorStops(genome: Genome): string[] {
+  if (genome.colorTheme?.stops?.length) return genome.colorTheme.stops;
+  return getSpeciesColors(genome.type);
+}
+
+/** Render a grid as a 2D color map: returns hex color per cell for Canvas rendering */
+export function renderColorMap(grid: number[][], genome: Genome): string[][] {
+  const colors = getColorStops(genome);
+  const palette = genome.palette;
+  return grid.map(row =>
+    row.map(cell => {
+      const ch = palette[cell % palette.length];
+      if (ch === " ") return colors[0]; // background
+      const intensity = cell / Math.max(1, palette.length - 1);
+      const idx = Math.round(intensity * (colors.length - 1));
+      return colors[Math.min(idx, colors.length - 1)];
+    })
+  );
+}
 // --- Scoring ---
 export function score(grid: number[][]): PieceMetrics {
   const height = grid.length;
@@ -1695,6 +1715,8 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
   const fractalScore = Math.min((metrics.fractalDimension ?? 0) / 2, 1); // normalize 0-2 → 0-1
   const infoDensityScore = metrics.informationDensity ?? 0;
   const coherenceScore = metrics.spatialCoherence ?? 0;
+  const balanceScore = metrics.compositionBalance ?? 0;
+  const rhythmScore = metrics.rhythmicRegularity ?? 0;
 
   // Base weights — type-aware adjustments blend with epoch modifiers
   let w = getTypeWeights(genomeType);
@@ -1714,6 +1736,8 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
       fractal: w.fractal * 0.6 + ew.fractal * 0.4,
       infoDensity: w.infoDensity * 0.6 + ew.infoDensity * 0.4,
       coherence: w.coherence * 0.6 + ew.coherence * 0.4,
+      balance: w.balance * 0.6 + ew.balance * 0.4,
+      rhythm: w.rhythm * 0.6 + ew.rhythm * 0.4,
     };
   }
 
@@ -1726,11 +1750,13 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
     noveltyScore * w.novelty +
     fractalScore * w.fractal +
     infoDensityScore * w.infoDensity +
-    coherenceScore * w.coherence
+    coherenceScore * w.coherence +
+    balanceScore * w.balance +
+    rhythmScore * w.rhythm
   );
 }
 
-type Weights = { density: number; complexity: number; symmetry: number; edge: number; structure: number; novelty: number; fractal: number; infoDensity: number; balance: number };
+type Weights = { density: number; complexity: number; symmetry: number; edge: number; structure: number; novelty: number; fractal: number; infoDensity: number; coherence: number; balance: number; rhythm: number };
 
 // Ideal density per type — null means full-coverage (score by state diversity)
 function getIdealDensity(genomeType?: Genome["type"]): number | null {
@@ -1838,7 +1864,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield", "dla"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield", "dla", "fractal-flame"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
@@ -1936,29 +1962,29 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
         { production: variant, weight: 0.4 },
       ];
     }
-    // Mutate parametric extensions (20% chance each)
-    if (rng() < 0.2) {
-      rule.angleJitter = Math.max(0, Math.min(15, (rule.angleJitter ?? 0) + (rng() - 0.5) * 5));
+    // 8% chance to add/modify context-sensitive rule
+    if (rng() < 0.08) {
+      const symbols = ["F", "G"];
+      const sym = symbols[Math.floor(rng() * symbols.length)];
+      const ctxChars = ["F", "G", "+", "-"];
+      const left = rng() > 0.5 ? ctxChars[Math.floor(rng() * ctxChars.length)] : undefined;
+      const right = rng() > 0.5 ? ctxChars[Math.floor(rng() * ctxChars.length)] : undefined;
+      const prodChars = "F+-[]G~!";
+      let prod = "";
+      const plen = 3 + Math.floor(rng() * 6);
+      for (let c = 0; c < plen; c++) prod += prodChars[Math.floor(rng() * prodChars.length)];
+      if (!rule.contextSensitive) rule.contextSensitive = [];
+      rule.contextSensitive.push({ left, symbol: sym, right, production: prod });
+      if (rule.contextSensitive.length > 4) rule.contextSensitive.shift();
     }
-    if (rng() < 0.2) {
-      rule.lengthScale = Math.max(0.5, Math.min(1.0, (rule.lengthScale ?? 1) + (rng() - 0.5) * 0.15));
-    }
-    if (rng() < 0.15) {
-      rule.tropism = Math.max(-0.3, Math.min(0.3, (rule.tropism ?? 0) + (rng() - 0.5) * 0.1));
-    }
-    // 10% chance to add/modify stochastic rule variant
-    if (rng() < 0.1) {
+    // 5% chance to introduce leaf/flower production symbols
+    if (rng() < 0.05) {
       const keys = Object.keys(rule.rules);
       const key = keys[Math.floor(rng() * keys.length)];
-      const chars = "F+-[]G";
-      let variant = "";
-      const len = 3 + Math.floor(rng() * 8);
-      for (let c = 0; c < len; c++) variant += chars[Math.floor(rng() * chars.length)];
-      if (!rule.stochastic) rule.stochastic = {};
-      rule.stochastic[key] = [
-        { production: rule.rules[key], weight: 0.6 },
-        { production: variant, weight: 0.4 },
-      ];
+      const botanicalSnippets = ["{F-F}@", "{F+F-F}@", "F[@{F}]F", "[~F@]"];
+      const snippet = botanicalSnippets[Math.floor(rng() * botanicalSnippets.length)];
+      const pos = Math.floor(rng() * (rule.rules[key].length + 1));
+      rule.rules[key] = rule.rules[key].slice(0, pos) + snippet + rule.rules[key].slice(pos);
     }
   } else if (mutated.type === "reaction-diffusion") {
     const rule = mutated.rule as ReactionDiffusionRule;
