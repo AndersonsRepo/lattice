@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Weave</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* --- Vignette overlay --- */
+    .vignette {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 2;
+      background: radial-gradient(ellipse at center,
+        transparent 40%,
+        rgba(10,10,15,0.35) 70%,
+        rgba(10,10,15,0.75) 100%);
+    }
+
+    /* --- Back link --- */
+    .back {
+      position: fixed;
+      top: 1.25rem; left: 1.25rem;
+      z-index: 20;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.1em;
+      transition: color 0.2s;
+    }
+    .back:hover { color: var(--accent); }
+
+    /* --- HUD panel (bottom-left) --- */
+    .hud {
+      position: fixed;
+      bottom: 1.5rem; left: 1.5rem;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .hud-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.2rem;
+    }
+    .hud-value {
+      font-size: 0.7rem;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+    }
+    .hud-row { margin-bottom: 0.6rem; }
+
+    /* --- Control panel (right side, frosted glass) --- */
+    .panel {
+      position: fixed;
+      top: 50%;
+      right: 1.5rem;
+      transform: translateY(-50%);
+      z-index: 10;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1rem;
+      width: 220px;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .panel.hidden {
+      opacity: 0;
+      transform: translateY(-50%) translateX(20px);
+      pointer-events: none;
+    }
+    .panel-title {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* --- Brush selector --- */
+    .brush-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      margin-bottom: 1rem;
+    }
+    .brush-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      padding: 0.4rem 0.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-transform: uppercase;
+    }
+    .brush-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .brush-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0a0a0f;
+    }
+
+    /* --- Sliders --- */
+    .slider-group {
+      margin-bottom: 0.8rem;
+    }
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .slider-label .val { color: var(--green); }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    /* --- Action buttons --- */
+    .actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 0.8rem;
+      padding-top: 0.8rem;
+      border-top: 1px solid var(--border);
+    }
+    .action-btn {
+      flex: 1;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      padding: 0.4rem 0.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-transform: uppercase;
+    }
+    .action-btn:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .action-btn.mic {
+      position: relative;
+    }
+    .action-btn.mic.active {
+      border-color: var(--green);
+      color: var(--green);
+      animation: mic-pulse 1.5s ease infinite;
+    }
+    @keyframes mic-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.3); }
+      50% { box-shadow: 0 0 8px 2px rgba(74, 222, 128, 0.15); }
+    }
+
+    /* --- Toggle panel button --- */
+    .toggle-panel {
+      position: fixed;
+      top: 1.25rem; right: 1.25rem;
+      z-index: 20;
+      background: rgba(18, 18, 26, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      letter-spacing: 0;
+    }
+    .toggle-panel:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* --- Audio visualizer bar --- */
+    .audio-bar {
+      position: fixed;
+      bottom: 0; left: 0;
+      width: 100%; height: 3px;
+      z-index: 5;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .audio-bar.active { opacity: 1; }
+
+    /* --- Tooltip --- */
+    .tooltip {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      background: rgba(18, 18, 26, 0.9);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      opacity: 0;
+      transition: opacity 0.5s;
+      pointer-events: none;
+      text-align: center;
+    }
+    .tooltip.show { opacity: 1; }
+
+    @media (max-width: 600px) {
+      .panel {
+        top: auto; bottom: 0; right: 0;
+        transform: none;
+        width: 100%;
+        border-radius: 12px 12px 0 0;
+        max-height: 45vh;
+        overflow-y: auto;
+      }
+      .panel.hidden {
+        transform: translateY(100%);
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="vignette"></div>
+  <a href="index.html" class="back">&larr; gallery</a>
+  <button class="toggle-panel" id="togglePanel" title="Toggle controls [H]">&equiv;</button>
+
+  <div class="hud" id="hud">
+    <div class="hud-row">
+      <div class="hud-label">Brush</div>
+      <div class="hud-value" id="hudBrush">Flow Field</div>
+    </div>
+    <div class="hud-row">
+      <div class="hud-label">Particles</div>
+      <div class="hud-value" id="hudParticles">0</div>
+    </div>
+    <div class="hud-row">
+      <div class="hud-label">FPS</div>
+      <div class="hud-value" id="hudFps">0</div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="panel-title">Weave</div>
+
+    <div class="brush-grid" id="brushGrid">
+      <button class="brush-btn active" data-brush="flow">Flow Field</button>
+      <button class="brush-btn" data-brush="rd">React-Diff</button>
+      <button class="brush-btn" data-brush="life">Life</button>
+      <button class="brush-btn" data-brush="julia">Julia Set</button>
+      <button class="brush-btn" data-brush="noise">Noise</button>
+      <button class="brush-btn" data-brush="spiro">Spirograph</button>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-label"><span>Brush Size</span><span class="val" id="sizeVal">40</span></div>
+      <input type="range" id="brushSize" min="10" max="200" value="40">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label"><span>Trail Fade</span><span class="val" id="fadeVal">0.03</span></div>
+      <input type="range" id="trailFade" min="0" max="100" value="3">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label"><span>Intensity</span><span class="val" id="intensityVal">0.7</span></div>
+      <input type="range" id="intensity" min="0" max="100" value="70">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label"><span>Color Shift</span><span class="val" id="hueVal">270</span></div>
+      <input type="range" id="hueShift" min="0" max="360" value="270">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label"><span>Speed</span><span class="val" id="speedVal">1.0</span></div>
+      <input type="range" id="speed" min="1" max="30" value="10">
+    </div>
+
+    <div class="actions">
+      <button class="action-btn mic" id="micBtn">Mic</button>
+      <button class="action-btn" id="clearBtn">Clear</button>
+      <button class="action-btn" id="saveBtn">Save</button>
+    </div>
+  </div>
+
+  <canvas id="audioBar" class="audio-bar"></canvas>
+
+  <div class="tooltip" id="tooltip">Click and drag to paint. Press H to toggle controls.</div>
+
+<script>
+// ============================================================
+//  Lattice — Weave: Generative Painting Canvas
+// ============================================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const audioBarCanvas = document.getElementById('audioBar');
+const audioBarCtx = audioBarCanvas.getContext('2d');
+
+// --- State ---
+let W, H;
+let mouse = { x: -1000, y: -1000, px: -1000, py: -1000, down: false, speed: 0 };
+let activeBrush = 'flow';
+let brushSize = 40;
+let trailFade = 0.03;
+let intensity = 0.7;
+let hueShift = 270;
+let speedMul = 1.0;
+let time = 0;
+let frameCount = 0;
+let lastFpsTime = 0;
+let fps = 0;
+let panelVisible = true;
+
+// Audio
+let audioCtx = null;
+let analyser = null;
+let audioData = null;
+let micActive = false;
+let audioLevel = 0;
+let audioFreq = 0;
+
+// Particle pools
+let particles = [];
+const MAX_PARTICLES = 8000;
+
+// --- Flow field ---
+const FLOW_RES = 20;
+let flowCols, flowRows, flowField;
+
+// --- Reaction-diffusion grid ---
+const RD_SCALE = 4;
+let rdW, rdH, rdA, rdB, rdNextA, rdNextB;
+
+// --- Life grid ---
+const LIFE_SCALE = 4;
+let lifeW, lifeH, lifeGrid, lifeNext;
+
+// ============================================================
+//  Resize
+// ============================================================
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  audioBarCanvas.width = W;
+  audioBarCanvas.height = 3;
+
+  // Flow field
+  flowCols = Math.ceil(W / FLOW_RES) + 1;
+  flowRows = Math.ceil(H / FLOW_RES) + 1;
+  flowField = new Float32Array(flowCols * flowRows);
+
+  // RD grid
+  rdW = Math.ceil(W / RD_SCALE);
+  rdH = Math.ceil(H / RD_SCALE);
+  rdA = new Float32Array(rdW * rdH).fill(1);
+  rdB = new Float32Array(rdW * rdH).fill(0);
+  rdNextA = new Float32Array(rdW * rdH);
+  rdNextB = new Float32Array(rdW * rdH);
+
+  // Life grid
+  lifeW = Math.ceil(W / LIFE_SCALE);
+  lifeH = Math.ceil(H / LIFE_SCALE);
+  lifeGrid = new Uint8Array(lifeW * lifeH);
+  lifeNext = new Uint8Array(lifeW * lifeH);
+
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ============================================================
+//  Mulberry32 PRNG
+// ============================================================
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = t + Math.imul(t ^ (t >>> 7), 61 | t) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(Date.now());
+
+// ============================================================
+//  Color helpers
+// ============================================================
+function hsl(h, s, l, a = 1) {
+  return `hsla(${h % 360}, ${s}%, ${l}%, ${a})`;
+}
+
+function brushColor(t, alpha = 1) {
+  const audioHue = micActive ? audioFreq * 60 : 0;
+  const h = (hueShift + t * 30 + audioHue) % 360;
+  const s = 60 + intensity * 30;
+  const l = 40 + intensity * 25 + (micActive ? audioLevel * 20 : 0);
+  return hsl(h, s, l, alpha);
+}
+
+// ============================================================
+//  Particle class
+// ============================================================
+class Particle {
+  constructor(x, y, vx, vy, life, hue) {
+    this.x = x; this.y = y;
+    this.vx = vx; this.vy = vy;
+    this.life = life;
+    this.maxLife = life;
+    this.hue = hue;
+    this.size = 1 + rng() * 2;
+  }
+  update(dt) {
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.life -= dt;
+    return this.life > 0 && this.x > -50 && this.x < W + 50 && this.y > -50 && this.y < H + 50;
+  }
+  draw() {
+    const t = this.life / this.maxLife;
+    const alpha = t * 0.8 * intensity;
+    ctx.fillStyle = hsl(this.hue, 65, 55 + t * 20, alpha);
+    ctx.fillRect(this.x - this.size * 0.5, this.y - this.size * 0.5, this.size, this.size);
+  }
+}
+
+function spawnParticle(x, y, vx, vy, life, hue) {
+  if (particles.length < MAX_PARTICLES) {
+    particles.push(new Particle(x, y, vx, vy, life, hue));
+  }
+}
+
+// ============================================================
+//  Flow Field
+// ============================================================
+function updateFlowField() {
+  const t = time * 0.3 * speedMul;
+  for (let row = 0; row < flowRows; row++) {
+    for (let col = 0; col < flowCols; col++) {
+      const x = col * FLOW_RES;
+      const y = row * FLOW_RES;
+
+      // Perlin-like angle from sine combination
+      let angle = (Math.sin(x * 0.003 + t) + Math.sin(y * 0.004 + t * 0.7)
+        + Math.sin((x + y) * 0.002 + t * 0.5)) * Math.PI;
+
+      // Mouse influence — warp flow toward/around cursor
+      if (mouse.down) {
+        const dx = x - mouse.x;
+        const dy = y - mouse.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const radius = brushSize * 3;
+        if (dist < radius) {
+          const influence = 1 - dist / radius;
+          const curl = Math.atan2(-dx, dy);
+          angle += curl * influence * intensity * 2;
+        }
+      }
+
+      flowField[row * flowCols + col] = angle;
+    }
+  }
+}
+
+function flowBrush(dt) {
+  updateFlowField();
+
+  // Spawn particles at mouse
+  if (mouse.down) {
+    const count = Math.floor(3 + intensity * 8 + (micActive ? audioLevel * 10 : 0));
+    for (let i = 0; i < count; i++) {
+      const angle = rng() * Math.PI * 2;
+      const r = rng() * brushSize;
+      const px = mouse.x + Math.cos(angle) * r;
+      const py = mouse.y + Math.sin(angle) * r;
+      const life = 60 + rng() * 120;
+      spawnParticle(px, py, 0, 0, life, hueShift + rng() * 40);
+    }
+  }
+
+  // Update particles with flow
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    const col = Math.floor(p.x / FLOW_RES);
+    const row = Math.floor(p.y / FLOW_RES);
+    if (col >= 0 && col < flowCols && row >= 0 && row < flowRows) {
+      const angle = flowField[row * flowCols + col];
+      const force = 1.5 * speedMul;
+      p.vx += Math.cos(angle) * force * dt;
+      p.vy += Math.sin(angle) * force * dt;
+      p.vx *= 0.98;
+      p.vy *= 0.98;
+    }
+    if (!p.update(dt)) {
+      particles.splice(i, 1);
+    } else {
+      p.draw();
+    }
+  }
+}
+
+// ============================================================
+//  Reaction-Diffusion Brush
+// ============================================================
+function seedRD(cx, cy, radius) {
+  const rx = Math.floor(cx / RD_SCALE);
+  const ry = Math.floor(cy / RD_SCALE);
+  const r = Math.floor(radius / RD_SCALE);
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      if (dx * dx + dy * dy <= r * r) {
+        const ix = rx + dx;
+        const iy = ry + dy;
+        if (ix >= 0 && ix < rdW && iy >= 0 && iy < rdH) {
+          rdB[iy * rdW + ix] = 1;
+        }
+      }
+    }
+  }
+}
+
+function rdBrush(dt) {
+  if (mouse.down) {
+    seedRD(mouse.x, mouse.y, brushSize * 0.5);
+  }
+
+  // Gray-Scott parameters — mouse position influences feed/kill
+  const feed = 0.035 + (mouse.x / W) * 0.03 * intensity;
+  const kill = 0.06 + (mouse.y / H) * 0.005 * intensity;
+  const dA = 1.0, dB = 0.5;
+
+  const steps = Math.ceil(4 * speedMul);
+  for (let s = 0; s < steps; s++) {
+    for (let y = 1; y < rdH - 1; y++) {
+      for (let x = 1; x < rdW - 1; x++) {
+        const i = y * rdW + x;
+        const a = rdA[i], b = rdB[i];
+        const lapA = rdA[i - 1] + rdA[i + 1] + rdA[i - rdW] + rdA[i + rdW] - 4 * a;
+        const lapB = rdB[i - 1] + rdB[i + 1] + rdB[i - rdW] + rdB[i + rdW] - 4 * b;
+        const abb = a * b * b;
+        rdNextA[i] = a + (dA * lapA - abb + feed * (1 - a));
+        rdNextB[i] = b + (dB * lapB + abb - (kill + feed) * b);
+      }
+    }
+    [rdA, rdNextA] = [rdNextA, rdA];
+    [rdB, rdNextB] = [rdNextB, rdB];
+  }
+
+  // Render RD to canvas
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const data = imgData.data;
+  const audioBoost = micActive ? 1 + audioLevel : 1;
+  for (let y = 0; y < rdH; y++) {
+    for (let x = 0; x < rdW; x++) {
+      const b = rdB[y * rdW + x];
+      if (b > 0.05) {
+        const v = Math.min(b * 2 * audioBoost, 1);
+        const h = (hueShift + b * 60) % 360;
+        // Convert HSL to RGB inline for performance
+        const hp = h / 60;
+        const s = 0.65;
+        const l = v * 0.5 * intensity;
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const xc = c * (1 - Math.abs(hp % 2 - 1));
+        let r1 = 0, g1 = 0, b1 = 0;
+        if (hp < 1) { r1 = c; g1 = xc; }
+        else if (hp < 2) { r1 = xc; g1 = c; }
+        else if (hp < 3) { g1 = c; b1 = xc; }
+        else if (hp < 4) { g1 = xc; b1 = c; }
+        else if (hp < 5) { r1 = xc; b1 = c; }
+        else { r1 = c; b1 = xc; }
+        const m = l - c / 2;
+
+        for (let py = 0; py < RD_SCALE; py++) {
+          for (let px = 0; px < RD_SCALE; px++) {
+            const sx = x * RD_SCALE + px;
+            const sy = y * RD_SCALE + py;
+            if (sx < W && sy < H) {
+              const idx = (sy * W + sx) * 4;
+              const blend = v * 0.6;
+              data[idx]     = data[idx]     * (1 - blend) + (r1 + m) * 255 * blend;
+              data[idx + 1] = data[idx + 1] * (1 - blend) + (g1 + m) * 255 * blend;
+              data[idx + 2] = data[idx + 2] * (1 - blend) + (b1 + m) * 255 * blend;
+            }
+          }
+        }
+      }
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+// ============================================================
+//  Life Brush (Game of Life)
+// ============================================================
+function seedLife(cx, cy, radius) {
+  const rx = Math.floor(cx / LIFE_SCALE);
+  const ry = Math.floor(cy / LIFE_SCALE);
+  const r = Math.floor(radius / LIFE_SCALE);
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      if (dx * dx + dy * dy <= r * r && rng() < 0.4) {
+        const ix = rx + dx;
+        const iy = ry + dy;
+        if (ix >= 0 && ix < lifeW && iy >= 0 && iy < lifeH) {
+          lifeGrid[iy * lifeW + ix] = 1;
+        }
+      }
+    }
+  }
+}
+
+function lifeBrush(dt) {
+  if (mouse.down) {
+    seedLife(mouse.x, mouse.y, brushSize * 0.5);
+  }
+
+  const steps = Math.ceil(speedMul);
+  for (let s = 0; s < steps; s++) {
+    lifeNext.fill(0);
+    for (let y = 1; y < lifeH - 1; y++) {
+      for (let x = 1; x < lifeW - 1; x++) {
+        let n = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            n += lifeGrid[(y + dy) * lifeW + (x + dx)];
+          }
+        }
+        const alive = lifeGrid[y * lifeW + x];
+        if (alive && (n === 2 || n === 3)) lifeNext[y * lifeW + x] = 1;
+        else if (!alive && n === 3) lifeNext[y * lifeW + x] = 1;
+      }
+    }
+    [lifeGrid, lifeNext] = [lifeNext, lifeGrid];
+  }
+
+  // Render
+  const audioBoost = micActive ? 1 + audioLevel * 0.5 : 1;
+  for (let y = 0; y < lifeH; y++) {
+    for (let x = 0; x < lifeW; x++) {
+      if (lifeGrid[y * lifeW + x]) {
+        const h = (hueShift + x * 0.5 + y * 0.3) % 360;
+        ctx.fillStyle = hsl(h, 60, 50 * audioBoost, 0.7 * intensity);
+        ctx.fillRect(x * LIFE_SCALE, y * LIFE_SCALE, LIFE_SCALE, LIFE_SCALE);
+      }
+    }
+  }
+}
+
+// ============================================================
+//  Julia Set Brush
+// ============================================================
+function juliaBrush(dt) {
+  if (!mouse.down) return;
+
+  const cx = (mouse.x / W - 0.5) * 2;
+  const cy = (mouse.y / H - 0.5) * 2;
+  const audioMod = micActive ? audioLevel * 0.3 : 0;
+  const cr = -0.7 + cx * 0.4 * intensity + audioMod;
+  const ci = 0.27 + cy * 0.3 * intensity;
+  const sz = brushSize * 2;
+  const maxIter = 30 + Math.floor(intensity * 40);
+
+  const startX = Math.max(0, Math.floor(mouse.x - sz));
+  const startY = Math.max(0, Math.floor(mouse.y - sz));
+  const endX = Math.min(W, Math.ceil(mouse.x + sz));
+  const endY = Math.min(H, Math.ceil(mouse.y + sz));
+
+  const imgData = ctx.getImageData(startX, startY, endX - startX, endY - startY);
+  const data = imgData.data;
+  const w = endX - startX;
+
+  for (let py = startY; py < endY; py += 2) {
+    for (let px = startX; px < endX; px += 2) {
+      let zr = (px - mouse.x) / sz * 2;
+      let zi = (py - mouse.y) / sz * 2;
+      let iter = 0;
+      while (zr * zr + zi * zi < 4 && iter < maxIter) {
+        const tmp = zr * zr - zi * zi + cr;
+        zi = 2 * zr * zi + ci;
+        zr = tmp;
+        iter++;
+      }
+      if (iter < maxIter) {
+        const t = iter / maxIter;
+        const h = (hueShift + t * 180) % 360;
+        const l = 20 + t * 50;
+        const s = 70;
+        // HSL to RGB
+        const hp = h / 60;
+        const c = (1 - Math.abs(2 * l / 100 - 1)) * s / 100;
+        const xc = c * (1 - Math.abs(hp % 2 - 1));
+        let r1 = 0, g1 = 0, b1 = 0;
+        if (hp < 1) { r1 = c; g1 = xc; }
+        else if (hp < 2) { r1 = xc; g1 = c; }
+        else if (hp < 3) { g1 = c; b1 = xc; }
+        else if (hp < 4) { g1 = xc; b1 = c; }
+        else if (hp < 5) { r1 = xc; b1 = c; }
+        else { r1 = c; b1 = xc; }
+        const m = l / 100 - c / 2;
+        const blend = t * 0.7 * intensity;
+
+        for (let dy = 0; dy < 2 && py + dy < endY; dy++) {
+          for (let dx = 0; dx < 2 && px + dx < endX; dx++) {
+            const idx = ((py + dy - startY) * w + (px + dx - startX)) * 4;
+            data[idx]     = data[idx]     * (1 - blend) + (r1 + m) * 255 * blend;
+            data[idx + 1] = data[idx + 1] * (1 - blend) + (g1 + m) * 255 * blend;
+            data[idx + 2] = data[idx + 2] * (1 - blend) + (b1 + m) * 255 * blend;
+          }
+        }
+      }
+    }
+  }
+  ctx.putImageData(imgData, startX, startY);
+}
+
+// ============================================================
+//  Noise Brush (Fractal noise terrain)
+// ============================================================
+function noiseBrush(dt) {
+  if (!mouse.down) return;
+
+  const sz = brushSize * 1.5;
+  const startX = Math.max(0, Math.floor(mouse.x - sz));
+  const startY = Math.max(0, Math.floor(mouse.y - sz));
+  const endX = Math.min(W, Math.ceil(mouse.x + sz));
+  const endY = Math.min(H, Math.ceil(mouse.y + sz));
+  const t = time * speedMul * 0.2;
+  const audioMod = micActive ? audioLevel : 0;
+
+  const imgData = ctx.getImageData(startX, startY, endX - startX, endY - startY);
+  const data = imgData.data;
+  const w = endX - startX;
+
+  for (let py = startY; py < endY; py += 2) {
+    for (let px = startX; px < endX; px += 2) {
+      const dx = px - mouse.x;
+      const dy = py - mouse.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > sz) continue;
+
+      const falloff = 1 - dist / sz;
+      const scale = 0.008 * intensity;
+
+      // Layered sine noise (4 octaves)
+      let v = 0, amp = 1, freq = 1;
+      for (let o = 0; o < 4; o++) {
+        v += Math.sin(px * scale * freq + t + o) *
+             Math.cos(py * scale * freq + t * 0.7 + o * 2) * amp;
+        amp *= 0.5;
+        freq *= 2.1;
+      }
+      v = (v + 1) * 0.5;
+
+      // Domain warp
+      const warp = Math.sin(v * 6 + t) * 0.3 + audioMod * 0.5;
+      v = Math.max(0, Math.min(1, v + warp));
+
+      const h = (hueShift + v * 80 + dist * 0.2) % 360;
+      const l = 15 + v * 45;
+      const s = 55 + v * 20;
+      const blend = falloff * 0.5 * intensity;
+
+      const hp = h / 60;
+      const c = (1 - Math.abs(2 * l / 100 - 1)) * s / 100;
+      const xc = c * (1 - Math.abs(hp % 2 - 1));
+      let r1 = 0, g1 = 0, b1 = 0;
+      if (hp < 1) { r1 = c; g1 = xc; }
+      else if (hp < 2) { r1 = xc; g1 = c; }
+      else if (hp < 3) { g1 = c; b1 = xc; }
+      else if (hp < 4) { g1 = xc; b1 = c; }
+      else if (hp < 5) { r1 = xc; b1 = c; }
+      else { r1 = c; b1 = xc; }
+      const m = l / 100 - c / 2;
+
+      for (let ddy = 0; ddy < 2 && py + ddy < endY; ddy++) {
+        for (let ddx = 0; ddx < 2 && px + ddx < endX; ddx++) {
+          const idx = ((py + ddy - startY) * w + (px + ddx - startX)) * 4;
+          data[idx]     = data[idx]     * (1 - blend) + (r1 + m) * 255 * blend;
+          data[idx + 1] = data[idx + 1] * (1 - blend) + (g1 + m) * 255 * blend;
+          data[idx + 2] = data[idx + 2] * (1 - blend) + (b1 + m) * 255 * blend;
+        }
+      }
+    }
+  }
+  ctx.putImageData(imgData, startX, startY);
+}
+
+// ============================================================
+//  Spirograph Brush
+// ============================================================
+let spiroAngle = 0;
+let spiroTrails = [];
+
+function spiroBrush(dt) {
+  if (!mouse.down) return;
+
+  const R = brushSize;
+  const r = R * (0.3 + intensity * 0.4);
+  const d = r * (0.7 + (mouse.y / H) * 0.8);
+  const layers = 3;
+  const audioBoost = micActive ? 1 + audioLevel : 1;
+
+  spiroAngle += dt * 0.08 * speedMul;
+
+  for (let layer = 0; layer < layers; layer++) {
+    const offset = layer * Math.PI * 2 / layers;
+    const a = spiroAngle + offset;
+    const x = mouse.x + (R - r) * Math.cos(a) + d * Math.cos((R - r) / r * a);
+    const y = mouse.y + (R - r) * Math.sin(a) - d * Math.sin((R - r) / r * a);
+
+    const h = (hueShift + layer * 40 + spiroAngle * 10) % 360;
+    spiroTrails.push({ x, y, h, life: 60, maxLife: 60 });
+  }
+
+  // Draw trails
+  for (let i = spiroTrails.length - 1; i >= 0; i--) {
+    const t = spiroTrails[i];
+    t.life -= dt;
+    if (t.life <= 0) {
+      spiroTrails.splice(i, 1);
+      continue;
+    }
+    const alpha = (t.life / t.maxLife) * 0.8 * intensity * audioBoost;
+    const size = 1.5 + (1 - t.life / t.maxLife) * 1.5;
+    ctx.fillStyle = hsl(t.h, 70, 55, Math.min(alpha, 1));
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Cap trails
+  if (spiroTrails.length > 5000) {
+    spiroTrails = spiroTrails.slice(-3000);
+  }
+}
+
+// ============================================================
+//  Audio (microphone)
+// ============================================================
+async function toggleMic() {
+  const btn = document.getElementById('micBtn');
+  const bar = document.querySelector('.audio-bar');
+
+  if (micActive) {
+    micActive = false;
+    btn.classList.remove('active');
+    bar.classList.remove('active');
+    if (audioCtx) { audioCtx.close(); audioCtx = null; }
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new AudioContext();
+    const source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    audioData = new Uint8Array(analyser.frequencyBinCount);
+    micActive = true;
+    btn.classList.add('active');
+    bar.classList.add('active');
+  } catch (e) {
+    console.warn('Mic access denied:', e);
+  }
+}
+
+function updateAudio() {
+  if (!micActive || !analyser) return;
+  analyser.getByteFrequencyData(audioData);
+
+  // Compute RMS level
+  let sum = 0;
+  for (let i = 0; i < audioData.length; i++) {
+    sum += audioData[i] * audioData[i];
+  }
+  audioLevel = Math.sqrt(sum / audioData.length) / 255;
+
+  // Dominant frequency bin
+  let maxVal = 0, maxIdx = 0;
+  for (let i = 0; i < audioData.length; i++) {
+    if (audioData[i] > maxVal) { maxVal = audioData[i]; maxIdx = i; }
+  }
+  audioFreq = maxIdx / audioData.length;
+
+  // Draw audio bar
+  audioBarCtx.clearRect(0, 0, W, 3);
+  const barW = W / audioData.length;
+  for (let i = 0; i < audioData.length; i++) {
+    const v = audioData[i] / 255;
+    const h = (hueShift + i * 2) % 360;
+    audioBarCtx.fillStyle = hsl(h, 70, 50, v);
+    audioBarCtx.fillRect(i * barW, 0, barW + 1, 3);
+  }
+}
+
+// ============================================================
+//  Main loop
+// ============================================================
+let lastTime = 0;
+
+function frame(ts) {
+  const dt = Math.min(ts - lastTime, 50);
+  lastTime = ts;
+  time += dt * 0.01;
+
+  // FPS
+  frameCount++;
+  if (ts - lastFpsTime > 500) {
+    fps = Math.round(frameCount / ((ts - lastFpsTime) / 1000));
+    frameCount = 0;
+    lastFpsTime = ts;
+    document.getElementById('hudFps').textContent = fps;
+    document.getElementById('hudParticles').textContent =
+      activeBrush === 'flow' ? particles.length :
+      activeBrush === 'spiro' ? spiroTrails.length : '--';
+  }
+
+  // Trail fade (darken canvas)
+  if (trailFade > 0) {
+    ctx.fillStyle = `rgba(10, 10, 15, ${trailFade})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  updateAudio();
+
+  // Dispatch brush
+  switch (activeBrush) {
+    case 'flow':  flowBrush(dt * 0.1); break;
+    case 'rd':    rdBrush(dt * 0.1); break;
+    case 'life':  lifeBrush(dt * 0.1); break;
+    case 'julia': juliaBrush(dt * 0.1); break;
+    case 'noise': noiseBrush(dt * 0.1); break;
+    case 'spiro': spiroBrush(dt * 0.1); break;
+  }
+
+  // Update mouse speed
+  const mdx = mouse.x - mouse.px;
+  const mdy = mouse.y - mouse.py;
+  mouse.speed = Math.sqrt(mdx * mdx + mdy * mdy);
+  mouse.px = mouse.x;
+  mouse.py = mouse.y;
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ============================================================
+//  Input handlers
+// ============================================================
+function updateMouse(e) {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+}
+
+canvas.addEventListener('mousedown', (e) => { mouse.down = true; updateMouse(e); });
+canvas.addEventListener('mousemove', updateMouse);
+canvas.addEventListener('mouseup', () => { mouse.down = false; });
+canvas.addEventListener('mouseleave', () => { mouse.down = false; });
+
+// Touch
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  mouse.down = true;
+  const t = e.touches[0];
+  mouse.x = t.clientX; mouse.y = t.clientY;
+}, { passive: false });
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouse.x = t.clientX; mouse.y = t.clientY;
+}, { passive: false });
+canvas.addEventListener('touchend', () => { mouse.down = false; });
+
+// Panel controls
+document.querySelectorAll('.brush-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.brush-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeBrush = btn.dataset.brush;
+    document.getElementById('hudBrush').textContent = btn.textContent;
+  });
+});
+
+document.getElementById('brushSize').addEventListener('input', (e) => {
+  brushSize = +e.target.value;
+  document.getElementById('sizeVal').textContent = brushSize;
+});
+document.getElementById('trailFade').addEventListener('input', (e) => {
+  trailFade = +e.target.value / 1000;
+  document.getElementById('fadeVal').textContent = trailFade.toFixed(3);
+});
+document.getElementById('intensity').addEventListener('input', (e) => {
+  intensity = +e.target.value / 100;
+  document.getElementById('intensityVal').textContent = intensity.toFixed(2);
+});
+document.getElementById('hueShift').addEventListener('input', (e) => {
+  hueShift = +e.target.value;
+  document.getElementById('hueVal').textContent = hueShift;
+});
+document.getElementById('speed').addEventListener('input', (e) => {
+  speedMul = +e.target.value / 10;
+  document.getElementById('speedVal').textContent = speedMul.toFixed(1);
+});
+
+document.getElementById('micBtn').addEventListener('click', toggleMic);
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+  particles = [];
+  spiroTrails = [];
+  rdA.fill(1); rdB.fill(0);
+  lifeGrid.fill(0);
+});
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = `lattice-weave-${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+
+document.getElementById('togglePanel').addEventListener('click', () => {
+  panelVisible = !panelVisible;
+  document.getElementById('panel').classList.toggle('hidden', !panelVisible);
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key.toLowerCase()) {
+    case 'h': {
+      panelVisible = !panelVisible;
+      document.getElementById('panel').classList.toggle('hidden', !panelVisible);
+      break;
+    }
+    case 'c': {
+      document.getElementById('clearBtn').click();
+      break;
+    }
+    case 's': {
+      if (!e.ctrlKey && !e.metaKey) document.getElementById('saveBtn').click();
+      break;
+    }
+    case 'm': {
+      toggleMic();
+      break;
+    }
+    case '1': case '2': case '3': case '4': case '5': case '6': {
+      const idx = +e.key - 1;
+      const btns = document.querySelectorAll('.brush-btn');
+      if (btns[idx]) btns[idx].click();
+      break;
+    }
+  }
+});
+
+// Show tooltip briefly
+const tooltip = document.getElementById('tooltip');
+tooltip.classList.add('show');
+setTimeout(() => tooltip.classList.remove('show'), 4000);
+
+</script>
+</body>
+</html>
