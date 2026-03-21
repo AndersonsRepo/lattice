@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulse — Lattice</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #ef4444;
+      --cyan: #22d3ee;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Back button ── */
+    #back-btn {
+      position: fixed;
+      top: 1.25rem;
+      left: 1.5rem;
+      font-family: inherit;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      text-decoration: none;
+      text-transform: uppercase;
+      background: none;
+      border: none;
+      cursor: pointer;
+      z-index: 100;
+      transition: color 0.2s;
+    }
+    #back-btn:hover { color: var(--text); }
+
+    /* ── Page header ── */
+    .page-header {
+      text-align: center;
+      padding: 4rem 1.5rem 2.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .page-title {
+      font-size: 0.65rem;
+      letter-spacing: 0.5em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.6rem;
+    }
+    .page-title span { color: var(--green); }
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 300;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--green);
+      text-shadow: 0 0 40px rgba(74,222,128,0.3), 0 0 80px rgba(74,222,128,0.1);
+    }
+    .page-subtitle {
+      margin-top: 0.6rem;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Main container ── */
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 1.5rem 4rem;
+    }
+
+    /* ── Section labels ── */
+    .section-label {
+      font-size: 0.58rem;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin: 2.5rem 0 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Vital monitors ── */
+    .vitals-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+    }
+    @media (max-width: 700px) {
+      .vitals-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    .monitor {
+      background: var(--surface);
+      padding: 1.5rem 1rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .monitor::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .monitor.green::before  { background: var(--green);  box-shadow: 0 0 12px rgba(74,222,128,0.6); }
+    .monitor.accent::before { background: var(--accent); box-shadow: 0 0 12px rgba(124,111,224,0.6); }
+    .monitor.amber::before  { background: var(--amber);  box-shadow: 0 0 12px rgba(251,191,36,0.6); }
+    .monitor.cyan::before   { background: var(--cyan);   box-shadow: 0 0 12px rgba(34,211,238,0.6); }
+    .monitor.dim::before    { background: var(--text-dim); }
+
+    .monitor-label {
+      font-size: 0.52rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.75rem;
+    }
+    .monitor-value {
+      font-size: 1.9rem;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .monitor.green  .monitor-value { color: var(--green);  text-shadow: 0 0 20px rgba(74,222,128,0.4); }
+    .monitor.accent .monitor-value { color: var(--accent); text-shadow: 0 0 20px rgba(124,111,224,0.4); }
+    .monitor.amber  .monitor-value { color: var(--amber);  text-shadow: 0 0 20px rgba(251,191,36,0.4); }
+    .monitor.cyan   .monitor-value { color: var(--cyan);   text-shadow: 0 0 20px rgba(34,211,238,0.4); }
+    .monitor.dim    .monitor-value { color: var(--text); }
+
+    .monitor-unit {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      margin-top: 0.4rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Epoch badge inline ── */
+    .epoch-chip {
+      display: inline-block;
+      padding: 0.2rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 600;
+      border: 1px solid;
+    }
+    .epoch-chip.emergence { color: #a78bfa; border-color: #a78bfa40; background: #a78bfa10; }
+    .epoch-chip.order     { color: var(--green); border-color: #4ade8040; background: #4ade8010; }
+    .epoch-chip.chaos     { color: var(--red); border-color: #ef444440; background: #ef444410; }
+    .epoch-chip.harmony   { color: var(--amber); border-color: #fbbf2440; background: #fbbf2410; }
+
+    /* ── EKG chart container ── */
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    #ekg-svg {
+      display: block;
+      width: 100%;
+      height: 300px;
+    }
+
+    /* ── Chart tooltip ── */
+    #chart-tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(10,10,15,0.92);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.7rem 1rem;
+      font-size: 0.68rem;
+      line-height: 1.6;
+      color: var(--text);
+      white-space: nowrap;
+      z-index: 20;
+      opacity: 0;
+      transition: opacity 0.1s;
+      backdrop-filter: blur(4px);
+    }
+    #chart-tooltip.visible { opacity: 1; }
+    .tt-gen { font-size: 0.8rem; font-weight: 600; color: var(--accent); margin-bottom: 0.3rem; }
+    .tt-epoch { margin-bottom: 0.3rem; }
+    .tt-best { color: var(--green); }
+    .tt-avg  { color: var(--text-dim); }
+
+    /* ── Chart legend ── */
+    .chart-legend {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+      padding: 0 0.25rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.62rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+    }
+    .legend-line {
+      width: 28px;
+      height: 2px;
+    }
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 2px solid;
+    }
+
+    /* epoch legend swatches */
+    .epoch-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+    }
+
+    /* ── Species heatmap ── */
+    .heatmap-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .heatmap-inner {
+      display: flex;
+      align-items: stretch;
+    }
+
+    .heatmap-labels {
+      flex-shrink: 0;
+      width: 130px;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+    }
+
+    .heatmap-label {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0 0.75rem;
+      font-size: 0.6rem;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      white-space: nowrap;
+      height: 26px;
+      flex-shrink: 0;
+    }
+    .heatmap-label-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    #heatmap-canvas {
+      display: block;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .heatmap-axis {
+      display: flex;
+      padding: 0.3rem 0 0.3rem 130px;
+      gap: 0;
+    }
+    .heatmap-axis-labels {
+      flex: 1;
+      position: relative;
+      height: 20px;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+    }
+    .heatmap-axis-labels span {
+      position: absolute;
+      transform: translateX(-50%);
+    }
+
+    /* ── Annotations on chart ── */
+    .annotation-text {
+      font-size: 9px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      fill: rgba(200,200,212,0.55);
+      pointer-events: none;
+    }
+
+    /* ── Scrollbar styling ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<a href="index.html" id="back-btn">← Lattice</a>
+
+<div class="page-header">
+  <div class="page-title">lattice / <span>pulse</span></div>
+  <h1>Pulse</h1>
+  <div class="page-subtitle">evolutionary vital signs — 148 generations</div>
+</div>
+
+<div class="container">
+
+  <div class="section-label">vital signs</div>
+
+  <div class="vitals-grid">
+    <div class="monitor accent">
+      <div class="monitor-label">Generation</div>
+      <div class="monitor-value" id="v-gen">0</div>
+      <div class="monitor-unit">current cycle</div>
+    </div>
+    <div class="monitor green">
+      <div class="monitor-label">Best Fitness</div>
+      <div class="monitor-value" id="v-best">0.000</div>
+      <div class="monitor-unit">peak score</div>
+    </div>
+    <div class="monitor dim">
+      <div class="monitor-label">Avg Fitness</div>
+      <div class="monitor-value" id="v-avg">0.000</div>
+      <div class="monitor-unit">population mean</div>
+    </div>
+    <div class="monitor amber">
+      <div class="monitor-label">Specimens</div>
+      <div class="monitor-value" id="v-total">0</div>
+      <div class="monitor-unit">pieces created</div>
+    </div>
+    <div class="monitor cyan">
+      <div class="monitor-label">Runtime</div>
+      <div class="monitor-value" id="v-runtime">—</div>
+      <div class="monitor-unit" id="v-runtime-sub">active</div>
+    </div>
+  </div>
+
+  <div class="section-label">fitness trajectory</div>
+
+  <div class="chart-wrap" id="chart-wrap">
+    <svg id="ekg-svg" viewBox="0 0 900 300" preserveAspectRatio="none"></svg>
+    <div id="chart-tooltip">
+      <div class="tt-gen" id="tt-gen">GEN —</div>
+      <div class="tt-epoch" id="tt-epoch"></div>
+      <div class="tt-best" id="tt-best">best —</div>
+      <div class="tt-avg"  id="tt-avg">avg  —</div>
+      <div id="tt-species" style="color:var(--text-dim);margin-top:0.3rem;font-size:0.62rem;"></div>
+    </div>
+  </div>
+
+  <div class="chart-legend" id="chart-legend">
+    <div class="legend-item">
+      <div class="legend-line" style="background:var(--green);box-shadow:0 0 6px rgba(74,222,128,0.5)"></div>
+      <span>best fitness</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-line" style="background:var(--text-dim);border-top:1px dashed var(--text-dim);height:0"></div>
+      <span>avg fitness</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="border-color:#fff;background:rgba(255,255,255,0.2)"></div>
+      <span>hall of fame induction</span>
+    </div>
+    <div class="legend-item" style="margin-left:auto">
+      <div class="epoch-swatch" style="background:#7c6fe030;border:1px solid #7c6fe060"></div>
+      <span>emergence</span>
+    </div>
+    <div class="legend-item">
+      <div class="epoch-swatch" style="background:#4ade8025;border:1px solid #4ade8050"></div>
+      <span>order</span>
+    </div>
+    <div class="legend-item">
+      <div class="epoch-swatch" style="background:#ef444420;border:1px solid #ef444440"></div>
+      <span>chaos</span>
+    </div>
+    <div class="legend-item">
+      <div class="epoch-swatch" style="background:#fbbf2420;border:1px solid #fbbf2440"></div>
+      <span>harmony</span>
+    </div>
+  </div>
+
+  <div class="section-label">species activity</div>
+
+  <div class="heatmap-wrap">
+    <div class="heatmap-inner">
+      <div class="heatmap-labels" id="heatmap-labels"></div>
+      <canvas id="heatmap-canvas"></canvas>
+    </div>
+    <div class="heatmap-axis">
+      <div class="heatmap-axis-labels" id="heatmap-axis"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── Species config ───────────────────────────────────────────────────────────
+const SPECIES = [
+  'wfc', 'reaction-diffusion', '2d', 'julia', 'noise',
+  'flowfield', 'attractor', 'lsystem', 'voronoi', 'spirograph', '1d'
+];
+
+const SPECIES_COLORS = {
+  'wfc':                '#e879f9',
+  'reaction-diffusion': '#7c6fe0',
+  '2d':                 '#4ade80',
+  'julia':              '#60a5fa',
+  'noise':              '#fb923c',
+  'flowfield':          '#f472b6',
+  'attractor':          '#c084fc',
+  'lsystem':            '#34d399',
+  'voronoi':            '#38bdf8',
+  'spirograph':         '#fbbf24',
+  '1d':                 '#a78bfa',
+};
+
+const SPECIES_LABELS = {
+  'wfc':                'Wave Func. Collapse',
+  'reaction-diffusion': 'Reaction-Diffusion',
+  '2d':                 '2D Life-like',
+  'julia':              'Julia Set',
+  'noise':              'Fractal Noise',
+  'flowfield':          'Flow Field',
+  'attractor':          'Strange Attractor',
+  'lsystem':            'L-System',
+  'voronoi':            'Voronoi',
+  'spirograph':         'Spirograph',
+  '1d':                 '1D Automaton',
+};
+
+const EPOCH_FILL = {
+  'emergence': 'rgba(124,111,224,0.12)',
+  'order':     'rgba(74,222,128,0.09)',
+  'chaos':     'rgba(239,68,68,0.09)',
+  'harmony':   'rgba(251,191,36,0.09)',
+};
+
+const EPOCH_STROKE = {
+  'emergence': 'rgba(124,111,224,0.35)',
+  'order':     'rgba(74,222,128,0.25)',
+  'chaos':     'rgba(239,68,68,0.25)',
+  'harmony':   'rgba(251,191,36,0.25)',
+};
+
+// Chart layout constants (for 900×300 viewBox)
+const PAD = { left: 58, right: 28, top: 26, bottom: 42 };
+const VB_W = 900, VB_H = 300;
+const CHART_W = VB_W - PAD.left - PAD.right;
+const CHART_H = VB_H - PAD.top  - PAD.bottom;
+const Y_MIN = 0.50, Y_MAX = 0.86;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function xForGen(g, maxG) {
+  return PAD.left + (g - 1) / (maxG - 1) * CHART_W;
+}
+function yForScore(s) {
+  return PAD.top + (1 - (clamp(s, Y_MIN, Y_MAX) - Y_MIN) / (Y_MAX - Y_MIN)) * CHART_H;
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}
+
+// ─── CountUp animation ────────────────────────────────────────────────────────
+function countUp(el, target, duration, isFloat, suffix='') {
+  const start = performance.now();
+  const fmt = v => isFloat
+    ? v.toFixed(3)
+    : Math.round(v).toLocaleString();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const e = 1 - Math.pow(1 - t, 3);
+    el.textContent = fmt(target * e) + suffix;
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ─── Build SVG chart ──────────────────────────────────────────────────────────
+function buildChart(history) {
+  const svg = document.getElementById('ekg-svg');
+  svg.innerHTML = '';
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs) => {
+    const el = document.createElementNS(ns, tag);
+    Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
+    return el;
+  };
+
+  const maxG = history[history.length - 1].generation;
+
+  // ── Epoch bands ──
+  let prevEpoch = null, bandStart = 1;
+  const epochRects = [];
+  history.forEach((h, i) => {
+    if (h.epoch !== prevEpoch) {
+      if (prevEpoch) {
+        epochRects.push({ epoch: prevEpoch, start: bandStart, end: h.generation - 1 });
+      }
+      bandStart = h.generation;
+      prevEpoch = h.epoch;
+    }
+    if (i === history.length - 1) {
+      epochRects.push({ epoch: h.epoch, start: bandStart, end: h.generation });
+    }
+  });
+
+  epochRects.forEach(b => {
+    const x1 = xForGen(b.start, maxG);
+    const x2 = xForGen(b.end,   maxG);
+    svg.appendChild(mk('rect', {
+      x: x1, y: PAD.top,
+      width: Math.max(x2 - x1, 1), height: CHART_H,
+      fill: EPOCH_FILL[b.epoch] || 'rgba(100,100,100,0.08)',
+    }));
+  });
+
+  // ── Y-axis grid lines & labels ──
+  const yGridValues = [0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85];
+  yGridValues.forEach(v => {
+    const y = yForScore(v);
+    if (y < PAD.top || y > PAD.top + CHART_H) return;
+    svg.appendChild(mk('line', {
+      x1: PAD.left, x2: PAD.left + CHART_W, y1: y, y2: y,
+      stroke: '#1e1e2e', 'stroke-width': 1, 'stroke-dasharray': '2,4'
+    }));
+    const t = mk('text', {
+      x: PAD.left - 6, y: y + 3.5,
+      'text-anchor': 'end', fill: '#6e6e82',
+      'font-size': '8', 'font-family': 'SF Mono, Fira Code, monospace',
+    });
+    t.textContent = v.toFixed(2);
+    svg.appendChild(t);
+  });
+
+  // ── X-axis labels ──
+  const xTicks = [1, 25, 50, 75, 100, 125, maxG];
+  xTicks.forEach(g => {
+    const x = xForGen(Math.min(g, maxG), maxG);
+    const t = mk('text', {
+      x, y: PAD.top + CHART_H + 14,
+      'text-anchor': 'middle', fill: '#6e6e82',
+      'font-size': '8', 'font-family': 'SF Mono, Fira Code, monospace',
+    });
+    t.textContent = g;
+    svg.appendChild(t);
+  });
+
+  // ── X-axis line ──
+  svg.appendChild(mk('line', {
+    x1: PAD.left, x2: PAD.left + CHART_W,
+    y1: PAD.top + CHART_H, y2: PAD.top + CHART_H,
+    stroke: '#1e1e2e', 'stroke-width': 1
+  }));
+
+  // ── Avg score path (dashed, dim) ──
+  const avgPts = history.map(h => `${xForGen(h.generation, maxG).toFixed(2)},${yForScore(h.avgScore).toFixed(2)}`);
+  const avgPath = mk('path', {
+    d: 'M ' + avgPts.join(' L '),
+    fill: 'none', stroke: '#6e6e82',
+    'stroke-width': 1.2,
+    'stroke-dasharray': '3,4',
+    opacity: 0.7,
+  });
+  svg.appendChild(avgPath);
+
+  // ── Best score path (green, glowing) ──
+  const bestPts = history.map(h => `${xForGen(h.generation, maxG).toFixed(2)},${yForScore(h.bestScore).toFixed(2)}`);
+  const bestPath = mk('path', {
+    d: 'M ' + bestPts.join(' L '),
+    fill: 'none', stroke: '#4ade80',
+    'stroke-width': 2,
+    filter: 'url(#glow)',
+  });
+  svg.appendChild(bestPath);
+
+  // SVG defs (glow filter)
+  const defs = mk('defs', {});
+  defs.innerHTML = `
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  `;
+  svg.insertBefore(defs, svg.firstChild);
+
+  // ── HOF induction dots ──
+  let prevHof = 0;
+  history.forEach(h => {
+    if ((h.hallOfFameSize || 0) > prevHof) {
+      const x = xForGen(h.generation, maxG);
+      const y = yForScore(h.bestScore);
+      svg.appendChild(mk('circle', {
+        cx: x, cy: y, r: 3.5,
+        fill: 'rgba(255,255,255,0.15)',
+        stroke: '#fff',
+        'stroke-width': 1.2,
+      }));
+      prevHof = h.hallOfFameSize;
+    }
+  });
+
+  // ── Key annotations ──
+  const annotations = [];
+  // First HOF induction
+  const firstHof = history.find(h => h.hallOfFameSize > 0);
+  if (firstHof) annotations.push({ gen: firstHof.generation, score: firstHof.bestScore, text: 'first life', above: true });
+  // Find speciation (first gen with non-empty speciesCounts)
+  const speciationGen = history.find(h => Object.keys(h.speciesCounts || {}).length > 0);
+  if (speciationGen) annotations.push({ gen: speciationGen.generation, score: speciationGen.bestScore, text: 'speciation', above: false });
+  // Peak score
+  const peakEntry = history.reduce((a, b) => b.bestScore > a.bestScore ? b : a);
+  if (peakEntry.generation !== firstHof?.generation) {
+    annotations.push({ gen: peakEntry.generation, score: peakEntry.bestScore, text: `peak ${peakEntry.bestScore.toFixed(3)}`, above: true });
+  }
+
+  annotations.forEach(a => {
+    const x = xForGen(a.gen, maxG);
+    const y = yForScore(a.score);
+    const ty = a.above ? y - 14 : y + 16;
+    svg.appendChild(mk('line', {
+      x1: x, x2: x, y1: y, y2: ty,
+      stroke: 'rgba(200,200,212,0.3)', 'stroke-width': 0.8, 'stroke-dasharray': '2,2'
+    }));
+    const t = mk('text', {
+      x, y: ty + (a.above ? -2 : 9),
+      'text-anchor': x > VB_W - 100 ? 'end' : (x < 100 ? 'start' : 'middle'),
+      fill: 'rgba(200,200,212,0.5)',
+      'font-size': '8.5', 'font-family': 'SF Mono, Fira Code, monospace',
+    });
+    t.textContent = a.text;
+    svg.appendChild(t);
+  });
+
+  // ── Present-moment cursor (blinking dot at last point) ──
+  const lastH = history[history.length - 1];
+  const cx = xForGen(lastH.generation, maxG);
+  const cy = yForScore(lastH.bestScore);
+  const pulseDot = mk('circle', {
+    cx, cy, r: 4,
+    fill: '#4ade80',
+    opacity: 1,
+  });
+  pulseDot.innerHTML = `<animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite"/>`;
+  svg.appendChild(pulseDot);
+  // Outer ring
+  const ring = mk('circle', {
+    cx, cy, r: 7,
+    fill: 'none', stroke: '#4ade80',
+    'stroke-width': 1, opacity: 0.5,
+  });
+  ring.innerHTML = `<animate attributeName="r" values="5;10" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.5;0" dur="2s" repeatCount="indefinite"/>`;
+  svg.appendChild(ring);
+
+  // ── Animate best-score path draw-in ──
+  requestAnimationFrame(() => {
+    const len = bestPath.getTotalLength();
+    bestPath.style.strokeDasharray = len;
+    bestPath.style.strokeDashoffset = len;
+    bestPath.style.transition = 'stroke-dashoffset 2.8s cubic-bezier(0.4,0,0.2,1)';
+    requestAnimationFrame(() => {
+      bestPath.style.strokeDashoffset = 0;
+    });
+  });
+
+  // ── Hover interaction ──
+  const wrap = document.getElementById('chart-wrap');
+  const tooltip = document.getElementById('chart-tooltip');
+
+  function onMove(e) {
+    const rect = wrap.getBoundingClientRect();
+    const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+    const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+
+    // Map pixel X → viewbox X
+    const vbX = (px / rect.width) * VB_W;
+
+    // Find nearest generation
+    let nearestIdx = 0, nearestDist = Infinity;
+    history.forEach((h, i) => {
+      const hx = xForGen(h.generation, maxG);
+      const d = Math.abs(hx - vbX);
+      if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
+    });
+
+    const h = history[nearestIdx];
+    const hx = xForGen(h.generation, maxG);
+    const screenX = (hx / VB_W) * rect.width;
+
+    // Remove old crosshair
+    svg.querySelectorAll('.crosshair').forEach(el => el.remove());
+
+    // Draw crosshair
+    const cross = mk('line', {
+      x1: hx, x2: hx, y1: PAD.top, y2: PAD.top + CHART_H,
+      stroke: 'rgba(200,200,212,0.25)', 'stroke-width': 1,
+      class: 'crosshair',
+    });
+    svg.appendChild(cross);
+    const dot = mk('circle', {
+      cx: hx, cy: yForScore(h.bestScore), r: 4,
+      fill: '#4ade80', stroke: '#0a0a0f', 'stroke-width': 1.5,
+      class: 'crosshair',
+    });
+    svg.appendChild(dot);
+
+    // Update tooltip
+    document.getElementById('tt-gen').textContent = `GEN ${h.generation}`;
+    document.getElementById('tt-epoch').innerHTML = `<span class="epoch-chip ${h.epoch}">${h.epoch}</span>`;
+    document.getElementById('tt-best').textContent = `best  ${h.bestScore.toFixed(4)}`;
+    document.getElementById('tt-avg').textContent  = `avg   ${h.avgScore.toFixed(4)}`;
+
+    const specCounts = h.speciesCounts || {};
+    const specKeys = Object.keys(specCounts);
+    if (specKeys.length > 0) {
+      const top = specKeys.sort((a,b) => specCounts[b]-specCounts[a]).slice(0,3);
+      document.getElementById('tt-species').textContent = top.map(s => `${s}×${specCounts[s]}`).join('  ');
+    } else {
+      document.getElementById('tt-species').textContent = 'pre-speciation';
+    }
+
+    // Position tooltip
+    let ttX = screenX + 14;
+    if (ttX + 200 > rect.width) ttX = screenX - 200;
+    tooltip.style.left = ttX + 'px';
+    tooltip.style.top  = (py - 20) + 'px';
+    tooltip.classList.add('visible');
+  }
+
+  function onLeave() {
+    tooltip.classList.remove('visible');
+    svg.querySelectorAll('.crosshair').forEach(el => el.remove());
+  }
+
+  wrap.addEventListener('mousemove', onMove);
+  wrap.addEventListener('mouseleave', onLeave);
+  wrap.addEventListener('touchmove', onMove, { passive: true });
+  wrap.addEventListener('touchend', onLeave);
+}
+
+// ─── Build species heatmap ────────────────────────────────────────────────────
+function buildHeatmap(history) {
+  const labelsEl = document.getElementById('heatmap-labels');
+  const canvas   = document.getElementById('heatmap-canvas');
+  const axisEl   = document.getElementById('heatmap-axis');
+
+  const ROW_H = 26;
+  const numRows = SPECIES.length;
+  const numCols = history.length;
+
+  // Build labels
+  labelsEl.style.paddingTop = '0';
+  SPECIES.forEach(sp => {
+    const div = document.createElement('div');
+    div.className = 'heatmap-label';
+    div.style.height = ROW_H + 'px';
+    const dot = document.createElement('div');
+    dot.className = 'heatmap-label-dot';
+    dot.style.background = SPECIES_COLORS[sp];
+    const name = document.createElement('span');
+    name.textContent = SPECIES_LABELS[sp];
+    div.appendChild(dot);
+    div.appendChild(name);
+    labelsEl.appendChild(div);
+  });
+
+  // Find max counts per species
+  const maxCounts = {};
+  SPECIES.forEach(sp => {
+    maxCounts[sp] = Math.max(1, ...history.map(h => (h.speciesCounts || {})[sp] || 0));
+  });
+
+  // Size canvas
+  const LABEL_W = 130;
+  const totalH = numRows * ROW_H;
+
+  function drawHeatmap() {
+    const containerW = canvas.parentElement.offsetWidth;
+    const canvasW = Math.max(containerW - LABEL_W, 100);
+    canvas.width  = canvasW;
+    canvas.height = totalH;
+    canvas.style.height = totalH + 'px';
+
+    const cellW = canvasW / numCols;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvasW, totalH);
+
+    // Background
+    ctx.fillStyle = '#12121a';
+    ctx.fillRect(0, 0, canvasW, totalH);
+
+    SPECIES.forEach((sp, row) => {
+      const color = SPECIES_COLORS[sp];
+      const [r, g, b] = hexToRgb(color);
+
+      history.forEach((h, col) => {
+        const count = (h.speciesCounts || {})[sp] || 0;
+        if (count === 0) return;
+        const alpha = 0.15 + (count / maxCounts[sp]) * 0.75;
+        ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+        ctx.fillRect(
+          col * cellW,
+          row * ROW_H,
+          Math.ceil(cellW),
+          ROW_H - 1
+        );
+      });
+    });
+
+    // Row dividers
+    ctx.strokeStyle = 'rgba(30,30,46,0.6)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < numRows; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, i * ROW_H);
+      ctx.lineTo(canvasW, i * ROW_H);
+      ctx.stroke();
+    }
+
+    // Generation tick marks at intervals
+    ctx.fillStyle = 'rgba(110,110,130,0.4)';
+    const tickGens = [1, 25, 50, 75, 100, 125, history[history.length-1].generation];
+    tickGens.forEach(g => {
+      const idx = history.findIndex(h => h.generation >= g);
+      if (idx < 0) return;
+      const x = (idx / numCols) * canvasW;
+      ctx.fillRect(x, 0, 1, totalH);
+    });
+  }
+
+  drawHeatmap();
+
+  // Axis labels
+  const maxG = history[history.length-1].generation;
+  const axisLabels = document.createElement('div');
+  axisLabels.className = 'heatmap-axis-labels';
+  const tickPcts = [1, 25, 50, 75, 100, 125, maxG].map(g => ({
+    label: g,
+    pct: (g - 1) / (maxG - 1) * 100
+  }));
+  tickPcts.forEach(({ label, pct }) => {
+    const span = document.createElement('span');
+    span.textContent = label;
+    span.style.left = pct + '%';
+    axisLabels.appendChild(span);
+  });
+  axisEl.appendChild(axisLabels);
+
+  // Redraw on resize
+  const ro = new ResizeObserver(() => drawHeatmap());
+  ro.observe(canvas.parentElement);
+}
+
+// ─── Vitals countdown ────────────────────────────────────────────────────────
+function buildVitals(data) {
+  const history = data.history;
+  const stats   = data.stats;
+  const latest  = history[history.length - 1];
+
+  countUp(document.getElementById('v-gen'),   latest.generation,         1400, false);
+  countUp(document.getElementById('v-best'),  stats.bestScoreEver,       1600, true);
+  countUp(document.getElementById('v-avg'),   stats.avgScore,            1600, true);
+  countUp(document.getElementById('v-total'), stats.totalPiecesEver,     1400, false);
+
+  // Runtime
+  const t0 = new Date(history[0].timestamp);
+  const t1 = new Date(latest.timestamp);
+  const diffMs = t1 - t0;
+  const days = Math.floor(diffMs / 86400000);
+  const hrs  = Math.floor((diffMs % 86400000) / 3600000);
+  document.getElementById('v-runtime').textContent = days + 'd';
+  document.getElementById('v-runtime-sub').textContent = `${days}d ${hrs}h active`;
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+fetch('./gallery.json')
+  .then(r => r.json())
+  .then(data => {
+    buildVitals(data);
+    buildChart(data.history);
+    buildHeatmap(data.history);
+  })
+  .catch(err => {
+    console.error('Failed to load gallery.json:', err);
+    document.querySelector('.page-subtitle').textContent = 'error loading evolution data';
+  });
+</script>
+</body>
+</html>
