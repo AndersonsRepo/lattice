@@ -4,6 +4,18 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Warp / Mathematical Pattern Generator (autonomous session)
+- **What**: Hypnotic mathematical pattern explorer (`docs/warp.html`) — mouse-driven interference patterns with real-time parameter control
+- **Details**: Full-screen Canvas 2D with 6 pattern modes: Moiré (concentric circle interference), Interference (trigonometric wave grids), Spiral (logarithmic spirals centered on mouse), Lissajous (parametric curves as additive light), Mandala (radial symmetry with configurable folds), Ripple (wave propagation from animated sources). Per-pixel rendering at reduced res, scaled up for 60fps. 5 sliders (Scale, Speed, Complexity, Layers 1-8, Bloom). 6 palettes. Mouse position = 2 free parameters in every mode. Audio reactivity: mic bass/mid/treble modulate pattern params. Spectrum bar. Frosted-glass panel. Keyboard shortcuts (arrows, C, R, Space, M, F, S, ?). Touch support.
+- **Pages**: `docs/warp.html` (new), `docs/index.html` (added Warp button)
+- **Inspiration**: Pure exploration — move the mouse and the mathematics respond. Each mode is a different mathematical universe navigated by cursor position. The bloom post-process makes everything feel like light rather than data.
+
+
+### 2026-03-21 — Echo / Ecosystem Playground (autonomous session)
+- **What**: Interactive multi-colony cellular automata ecosystem (`docs/echo.html`) — click to seed life, watch colonies grow, compete, and fade
+- **Details**: Full-screen Canvas 2D with cell-grid simulation. Each click spawns an autonomous colony with unique rules and color (16-color palette). Four colony types: **Game of Life** (randomized birth/survive rules), **Wolfram 1D** (random rule 0-255), **Reaction-Diffusion** (randomized feed/kill), **Noise** (animated value noise). Colonies grow outward, claiming territory. Three interaction modes: **Compete** (density wins), **Merge** (blend), **Ignore** (pass-through). Configurable lifespans with ghost trails. Growth frontier glow. Mic reactivity auto-spawns colonies. Frosted-glass panel with type/interaction selectors, sliders for lifespan/growth/max colonies/trail. Burst mode, ImageData rendering, touch support. Keyboard shortcuts: 1-5 type, Q/W/E interaction, Space/Tab/C/B/R/M/S/F/I.
+- **Pages**: `docs/echo.html` (new), `docs/index.html` (added Echo button)
+- **What makes it unique**: First page where multiple independent automata coexist on a shared canvas with emergent territorial behavior — an ecology of competing civilizations, each with its own rules.
 
 ### 2026-03-21 — Orbit / Interactive Strange Attractor Explorer
 - **What**: Full-screen interactive strange attractor explorer (`docs/orbit.html`) — real-time density-accumulation rendering of chaotic dynamical systems
@@ -213,6 +225,18 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Pages**: `docs/collide.html` (new), `docs/index.html` (added Collide button in header + footer link)
 - **What makes it different**: Every other interactive page runs a single algorithm. Collide puts two algorithms on the same canvas and makes their interaction the artwork. The Split blend mode creates a literal territory boundary. Difference mode produces alien color inversions where algorithms overlap. The mouse controls the border between two mathematical worlds.
 
+### 2026-03-21 — Shrine / Sacred Artifact Viewer (autonomous session)
+- **What**: Contemplative single-piece viewer (`docs/shrine.html`) — each Hall of Fame piece presented as a sacred artifact
+- **Details**: Full-screen experience with ambient particle system radiating outward from the piece. Pieces sorted by fitness score, navigable with arrow keys/swipe. Each piece rendered with type-specific color palette inside a glowing gradient frame. Genome DNA barcode, lineage strip, metrics, and auto-generated poetic inscription. 6s breathing animation. 1.5s crossfade transitions. Ambient particles colored to match species type.
+- **Pages**: `docs/shrine.html` (new), `docs/index.html` (nav fixes + Shrine button)
+- **Nav fixes**: Fixed footer formatting (duplicate microscope link, empty bullet, two links on same line). Added all orphaned pages to both header and footer navigation.
+
+
+### 2026-03-21 — Breath / Living Computation Sonification (autonomous session)
+- **What**: Real-time cellular automata sonification (`docs/breath.html`) — watch algorithms live and hear each state change as it happens
+- **Details**: Full-screen Canvas cellular automaton running live, with Web Audio API sonifying every birth and death in real time. Pieces from the gallery archive seed the initial grid state. Three CA rulesets: **Life** (B3/S23), **Seeds** (B2/S — explosive), **1D** (Wolfram Rule 110). Cell births produce bell-like sine tones (Y=pitch, X=pan). Deaths produce filtered whispers routed to reverb. Sub-bass drone modulated by density. Convolver reverb (4s IR). Interactive drawing mode. Stats HUD. Extinction auto-reseed. 20 pieces from archive.
+- **Pages**: `docs/breath.html` (new), `docs/index.html` (added Breath button in header + footer)
+- **How it differs**: Listen/Symphony/Resonance play back static data. Breath runs CA live and sonifies each state transition as it happens — computation itself as sound.
 ## In Progress
 
 (nothing currently)
@@ -233,3 +257,9 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Details**: Full-screen Canvas 2D. A 1D cellular automaton runs continuously, each generation drawn as a horizontal row of colored cells cascading down the screen like a waterfall. When the canvas fills, rows scroll up. **Rule slider** (0–255) with instant feedback. **Shift+mouse** morphs rule by cursor X. **Click** injects perturbations. **Rule strip** shows all 8 neighborhood→output mappings. **Famous rules** cycles 14 noteworthy rules. Three initial conditions (center, random, alternating). Noise slider for stochastic evolution. **Audio reactivity** maps frequency bins to cell flips. 7 color palettes (Amethyst, Emerald, Ember, Frost, Plasma, Bone, Spectrum). Controls: cell size, speed, pause, clear, PNG export. Keyboard shortcuts. Frosted-glass panel. Vignette. HUD with rule, generation, Wolfram class. Touch support.
 - **Pages**: `docs/cascade.html` (new), `docs/index.html` (added Cascade button in header + footer link)
 - **What makes it different**: The only page dedicated to 1D cellular automata — the simplest computational systems that produce complex behavior. Rule 110 is Turing-complete. Rule 30 generates randomness from a single cell. Rule 90 produces Sierpinski triangles. The shift+mouse morphing reveals the taxonomy of elementary computation in a single gesture.
+
+### 2026-03-21 — Garden / Botanical L-System Laboratory (autonomous session)
+- **What**: Focused L-system art studio (`docs/garden.html`) — grow, mutate, and explore botanical and fractal L-systems with 12 curated species presets and 5 color palettes
+- **Details**: Split-pane Canvas layout. Left: full-screen rendering with depth-aware coloring (trunk → branch → leaf → leafTip gradient), line width tapering by depth, bloom glow on leaf tips, vignette overlay, animated growth mode (segments draw in progressively over ~2 seconds). Right: sidebar with 12 species presets (Willow, Fern, Sakura, Seaweed, Frost, Canopy, Dragon, Vine, Coral, Spiral, Hilbert, Meadow), live grammar display showing production rules and stochastic variants with probability weights, 5 parameter sliders (Branching Angle, Iterations, Angle Jitter, Branch Taper, Tropism), stochastic toggle for probabilistic rule selection, animate toggle for progressive growth visualization, Grow/Mutate/Random/Save PNG actions. 5 color palettes (Botanical — earthy greens/browns, Frost — ice blues, Ember — warm oranges, Void — deep purples, Moss — forest greens). Mutate perturbs all parameters simultaneously with small random deltas. PNG export at 4x resolution. Keyboard shortcuts (G/M/R/S/A/1-9).
+- **Pages**: `docs/garden.html` (new), `docs/index.html` (added Garden button in header + footer link)
+- **How it differs from Flora**: Flora is a grammar editor — you edit production rule strings character by character. Garden is a species explorer. The presets are curated for visual beauty (Sakura with stochastic cherry blossom branching, Vine with asymmetric weight distributions, Coral with dual production pathways). The color palette system maps depth to trunk/branch/leaf/bloom colors instead of using a single type-color gradient. The animated growth mode lets you watch the L-system unfold stroke by stroke. Flora is for designing grammars; Garden is for experiencing them.
