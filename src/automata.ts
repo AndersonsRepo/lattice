@@ -1482,6 +1482,7 @@ export const SPECIES_COLORS: Record<string, { bg: string; colors: string[] }> = 
   'flowfield':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a1a', '#0d3b3b', '#166b6b', '#22a8a8', '#4ad4d4', '#88eeff', '#ccffff'] },
   'sandpile':            { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0a1a', '#3b0d3b', '#6b166b', '#a822a8', '#d44ad4', '#f088f0', '#ffccff'] },
   'harmonograph':        { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0d2d', '#2d1a5b', '#4a2d8b', '#6b44b8', '#9d6be0', '#c8a0f5', '#e8d4ff'] },
+  'particle-life':       { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0a0d', '#3b0d1a', '#6b1633', '#a8224d', '#db4a6b', '#f588a0', '#ffccd8'] },
 };
 
 export function speciesGradient(type: string, steps: number = 8): string[] {
@@ -2433,35 +2434,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     }
     if (rng() < 0.1) {
       rule.turbulence = Math.max(1, Math.min(4, rule.turbulence + (rng() > 0.5 ? 1 : -1)));
-    // Crossover color themes if both parents have them
-    if (a.colorTheme && b.colorTheme) {
-      child.colorTheme = crossoverColorThemes(a.colorTheme, b.colorTheme, rng);
-      child.colorTheme = { ...child.colorTheme, stops: themeToColors(child.colorTheme) };
-    } else {
-      child.colorTheme = (a.colorTheme || b.colorTheme) ? { ...(a.colorTheme || b.colorTheme)! } : undefined;
-    }    }
-  } else if (mutated.type === "dla") {
-    const rule = mutated.rule as DLARule;
-    const param = rng();
-    if (param < 0.25) {
-      rule.stickiness = Math.max(0.1, Math.min(1.0, rule.stickiness + (rng() - 0.5) * 0.2));
-    } else if (param < 0.4) {
-      rule.maxParticles = Math.max(500, Math.min(8000, rule.maxParticles + Math.floor((rng() - 0.5) * 2000)));
-    } else if (param < 0.55) {
-      const shapes: DLARule["seedShape"][] = ["center", "line", "circle", "scatter"];
-      rule.seedShape = shapes[Math.floor(rng() * shapes.length)];
-    } else if (param < 0.65) {
-      rule.seeds = Math.max(1, Math.min(8, rule.seeds + (rng() > 0.5 ? 1 : -1)));
-    } else if (param < 0.75) {
-      rule.bias = rng() * Math.PI * 2;
-      rule.biasStrength = Math.max(0, Math.min(0.5, rule.biasStrength + (rng() - 0.5) * 0.15));
-    } else if (param < 0.85) {
-      rule.branchAngle = Math.max(0, Math.min(1, rule.branchAngle + (rng() - 0.5) * 0.3));
-    } else {
-      rule.quantize = 3 + Math.floor(rng() * 6);
     }
-  }
-
   } else if (mutated.type === "dla") {
     mutateDLA(mutated.rule as DLARule, rng);
   } else if (mutated.type === "sandpile") {
@@ -2488,10 +2461,6 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
   // Color theme mutation (25% chance) — evolve colors in OKLCH space
   if (rng() < 0.25) {
     if (mutated.colorTheme) {
-      mutated.colorTheme = mutateColorTheme(mutated.colorTheme, rng);
-      mutated.colorTheme = { ...mutated.colorTheme, stops: themeToColors(mutated.colorTheme) };
-    } else {
-      // Initialize color theme from species defaults
       const baseTheme = SPECIES_THEMES[mutated.type] || SPECIES_THEMES["2d"];
       mutated.colorTheme = mutateColorTheme(baseTheme, rng);
       mutated.colorTheme = { ...mutated.colorTheme, stops: themeToColors(mutated.colorTheme) };
@@ -2666,9 +2635,6 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
     rule.biasStrength = ra.biasStrength * t + rb.biasStrength * (1 - t);
     rule.branchAngle = ra.branchAngle * t + rb.branchAngle * (1 - t);
     rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
-  } else if (child.type === "dla") {
-    const ra = a.rule as DLARule, rb = b.rule as DLARule;
-    crossoverDLA(child.rule as DLARule, rb, rng);
   } else if (child.type === "sandpile") {
     child.rule = crossoverSandpile(a.rule as SandpileRule, b.rule as SandpileRule, rng);
   } else if (child.type === "magnetic-pendulum") {
@@ -3861,4 +3827,23 @@ SEED_GENOMES.push(
     mutations: 0,
     lineage: [],
   },
+);
+
+// Turmite seed genomes
+SEED_GENOMES.push(
+  ...TURMITE_SEED_GENOMES_PARTIAL.map((partial, i) => ({
+    type: "turmite" as const,
+    rule: partial.rule,
+    width: partial.width,
+    height: partial.height,
+    palette: partial.palette === "SHADE_PALETTE" ? SHADE_PALETTE
+           : partial.palette === "BRAILLE_PALETTE" ? BRAILLE_PALETTE
+           : partial.palette === "GEOMETRIC_PALETTE" ? GEOMETRIC_PALETTE
+           : partial.palette === "STAR_PALETTE" ? STAR_PALETTE
+           : partial.palette === "WAVE_PALETTE" ? WAVE_PALETTE
+           : SHADE_PALETTE,
+    seed: 88001 + i,
+    mutations: 0,
+    lineage: [] as string[],
+  }))
 );

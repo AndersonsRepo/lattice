@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lattice — Palette Lab</title>
+  <title>Lattice — Palette Laboratory</title>
   <style>
     :root {
       --bg: #0a0a0f;
@@ -15,10 +15,9 @@
       --accent-glow: #7c6fe040;
       --green: #4ade80;
       --amber: #fbbf24;
+      --red: #f87171;
     }
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
     body {
       background: var(--bg);
       color: var(--text);
@@ -26,692 +25,74 @@
       min-height: 100vh;
       overflow-x: hidden;
     }
-
-    .container {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
-
-    header {
-      text-align: center;
-      padding: 3rem 0 2rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 2.5rem;
-    }
-
-    h1 {
-      font-size: 2.5rem;
-      font-weight: 300;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: var(--accent);
-      text-shadow: 0 0 30px var(--accent-glow);
-      margin-bottom: 0.5rem;
-    }
-
-    .subtitle {
-      color: var(--text-dim);
-      font-size: 0.85rem;
-      letter-spacing: 0.1em;
-    }
-
-    h2 {
-      font-size: 1.1rem;
-      font-weight: 400;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 1.25rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .section {
-      margin-bottom: 3rem;
-    }
-
-    .desc {
-      font-size: 0.75rem;
-      color: var(--text-dim);
-      margin-bottom: 1rem;
-    }
-
-    /* --- Species Chromatics --- */
-    .species-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .species-row {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.4rem 0.75rem;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .species-row:hover { background: var(--surface); }
-    .species-row.active {
-      background: var(--surface);
-      box-shadow: inset 0 0 0 1px var(--accent);
-    }
-
-    .species-label {
-      width: 140px;
-      flex-shrink: 0;
-      font-size: 0.72rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-    }
-
-    .gradient-strip {
-      flex: 1;
-      height: 28px;
-      border-radius: 4px;
-      overflow: hidden;
-      display: flex;
-    }
-    .gradient-strip .swatch {
-      flex: 1;
-      transition: transform 0.15s;
-    }
-    .gradient-strip .swatch:hover { transform: scaleY(1.3); }
-
-    .species-hex {
-      width: 60px;
-      flex-shrink: 0;
-      font-size: 0.65rem;
-      color: var(--text-dim);
-      text-align: right;
-    }
-
-    /* --- OKLAB Gamut Wheel --- */
-    .wheel-section {
-      display: flex;
-      gap: 2rem;
-      align-items: flex-start;
-      flex-wrap: wrap;
-    }
-
-    .wheel-container {
-      position: relative;
-      width: 320px;
-      height: 320px;
-      flex-shrink: 0;
-    }
-
-    .wheel-canvas {
-      border-radius: 50%;
-      box-shadow: 0 0 40px rgba(124, 111, 224, 0.15);
-    }
-
-    .wheel-info {
-      flex: 1;
-      min-width: 200px;
-    }
-
-    .color-detail {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.25rem;
-      margin-bottom: 1rem;
-    }
-
-    .color-preview {
-      width: 100%;
-      height: 48px;
-      border-radius: 4px;
-      margin-bottom: 0.75rem;
-    }
-
-    .color-values {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.5rem;
-      font-size: 0.72rem;
-    }
-
-    .color-values dt {
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .color-values dd { text-align: right; }
-
-    /* --- Harmony Engine --- */
-    .harmony-controls {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .harmony-btn {
-      padding: 0.4rem 0.9rem;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      background: transparent;
-      color: var(--text-dim);
-      font-family: inherit;
-      font-size: 0.7rem;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .harmony-btn:hover {
-      border-color: var(--accent);
-      color: var(--text);
-    }
-    .harmony-btn.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-    }
-
-    .harmony-result {
-      display: flex;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
-
-    .harmony-color {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .harmony-swatch {
-      width: 64px;
-      height: 64px;
-      border-radius: 8px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-      transition: transform 0.2s;
-      cursor: pointer;
-    }
-    .harmony-swatch:hover { transform: scale(1.1); }
-
-    .harmony-label {
-      font-size: 0.62rem;
-      color: var(--text-dim);
-    }
-
-    /* --- Gradient Lab --- */
-    .gradient-lab {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.5rem;
-    }
-
-    .gradient-controls {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      margin-bottom: 1.25rem;
-      flex-wrap: wrap;
-    }
-
-    .color-input-group {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .color-input-group label {
-      font-size: 0.7rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    input[type="color"] {
-      width: 36px;
-      height: 36px;
-      border: 2px solid var(--border);
-      border-radius: 6px;
-      background: none;
-      cursor: pointer;
-      padding: 0;
-    }
-    input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
-    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
-
-    .steps-input {
-      width: 60px;
-      padding: 0.35rem 0.5rem;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 0.8rem;
-      text-align: center;
-    }
-
-    .gradient-comparison {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .gradient-row {
-      display: flex;
-      flex-direction: column;
-      gap: 0.3rem;
-    }
-
-    .gradient-row-label {
-      font-size: 0.65rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-
-    .gradient-bar {
-      height: 40px;
-      border-radius: 6px;
-      overflow: hidden;
-      display: flex;
-    }
-    .gradient-bar .swatch { flex: 1; }
-
-    .gradient-hex-row {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 0.25rem;
-    }
-
-    .gradient-hex-row span {
-      font-size: 0.58rem;
-      color: var(--text-dim);
-      flex: 1;
-      text-align: center;
-    }
-
-    /* --- Palette Forge --- */
-    .forge-layout {
-      display: grid;
-      grid-template-columns: 1fr 280px;
-      gap: 1.5rem;
-    }
-
-    .forge-canvas-wrap {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 300px;
-    }
-
-    .forge-canvas-wrap canvas {
-      image-rendering: pixelated;
-      max-width: 100%;
-      border-radius: 4px;
-    }
-
-    .forge-sidebar {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .forge-piece-list {
-      max-height: 200px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      padding-right: 0.25rem;
-    }
-
-    .forge-piece-list::-webkit-scrollbar { width: 4px; }
-    .forge-piece-list::-webkit-scrollbar-track { background: var(--surface); border-radius: 2px; }
-    .forge-piece-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-    .piece-option {
-      padding: 0.35rem 0.6rem;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      background: transparent;
-      color: var(--text-dim);
-      font-family: inherit;
-      font-size: 0.65rem;
-      cursor: pointer;
-      transition: all 0.15s;
-      text-align: left;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .piece-option:hover { border-color: var(--accent); color: var(--text); }
-    .piece-option.active {
-      background: var(--surface);
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    .palette-picker {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .palette-chip {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.3rem 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .palette-chip:hover { border-color: var(--accent); }
-    .palette-chip.active {
-      border-color: var(--accent);
-      background: var(--surface);
-    }
-
-    .palette-chip-label {
-      font-size: 0.62rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      width: 80px;
-      flex-shrink: 0;
-    }
-
-    .palette-chip-colors {
-      display: flex;
-      flex: 1;
-      height: 16px;
-      border-radius: 3px;
-      overflow: hidden;
-    }
-    .palette-chip-colors .swatch { flex: 1; }
-
-    /* --- Hue Generator --- */
-    .hue-controls {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
-    }
-
-    input[type="range"] {
-      -webkit-appearance: none;
-      height: 6px;
-      background: var(--border);
-      border-radius: 3px;
-      outline: none;
-      flex: 1;
-      min-width: 120px;
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: var(--accent);
-      cursor: pointer;
-      border: 2px solid var(--bg);
-      box-shadow: 0 0 8px var(--accent-glow);
-    }
-
-    .hue-value {
-      font-size: 0.8rem;
-      color: var(--accent);
-      width: 50px;
-      text-align: right;
-    }
-
-    .generated-strip {
-      height: 48px;
-      border-radius: 8px;
-      overflow: hidden;
-      display: flex;
-      margin-bottom: 0.75rem;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    }
-    .generated-strip .swatch { flex: 1; }
-
-    /* --- Density Profile --- */
-    .density-chart {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1rem;
-    }
-
-    .density-bars {
-      display: flex;
-      align-items: flex-end;
-      gap: 2px;
-      height: 120px;
-      padding-bottom: 1.5rem;
-      position: relative;
-    }
-
-    .density-bar-wrap {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      height: 100%;
-      justify-content: flex-end;
-    }
-
-    .density-bar {
-      width: 100%;
-      border-radius: 3px 3px 0 0;
-      min-height: 2px;
-      transition: height 0.3s ease;
-    }
-
-    .density-label {
-      font-size: 0.55rem;
-      color: var(--text-dim);
-      margin-top: 0.3rem;
-      text-align: center;
-    }
-
-    .density-pct {
-      font-size: 0.5rem;
-      color: var(--text-dim);
-      margin-bottom: 0.2rem;
-    }
-
-    /* --- Palette Breeder --- */
-    .breeder-layout {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .breeder-parent {
-      flex: 1;
-      min-width: 100px;
-    }
-
-    .breeder-parent-label {
-      font-size: 0.65rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 0.4rem;
-    }
-
-    .breeder-strip {
-      height: 36px;
-      border-radius: 6px;
-      overflow: hidden;
-      display: flex;
-    }
-    .breeder-strip .swatch { flex: 1; }
-
-    .breeder-offspring {
-      width: 100%;
-    }
-
-    .breeder-slider-wrap {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      margin: 0.75rem 0;
-    }
-
-    .breeder-slider-label {
-      font-size: 0.65rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      flex-shrink: 0;
-    }
-
-    /* --- Hall of Fame --- */
-    .hof-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-      gap: 0.5rem;
-    }
-
-    .hof-chip {
-      position: relative;
-      border-radius: 6px;
-      overflow: hidden;
-      aspect-ratio: 1;
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .hof-chip:hover {
-      transform: scale(1.08);
-      box-shadow: 0 0 20px rgba(124, 111, 224, 0.3);
-      z-index: 1;
-    }
-
-    .hof-chip canvas { width: 100%; height: 100%; }
-
-    .hof-chip .hof-label {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 0.2rem 0.3rem;
-      background: rgba(10, 10, 15, 0.85);
-      font-size: 0.55rem;
-      color: var(--text-dim);
-      text-align: center;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .hof-chip:hover .hof-label { opacity: 1; }
-
-    /* --- Palette DNA --- */
-    .dna-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .dna-row {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1rem;
-    }
-
-    .dna-name {
-      font-size: 0.7rem;
-      color: var(--accent);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: 0.5rem;
-    }
-
-    .dna-chars {
-      display: flex;
-      gap: 0;
-      margin-bottom: 0.4rem;
-    }
-
-    .dna-char {
-      flex: 1;
-      text-align: center;
-      font-size: 1.1rem;
-      padding: 0.5rem 0;
-      border: 1px solid var(--border);
-      transition: background 0.2s;
-    }
-    .dna-char:first-child { border-radius: 4px 0 0 4px; }
-    .dna-char:last-child { border-radius: 0 4px 4px 0; }
-
-    .dna-colors {
-      display: flex;
-      gap: 0;
-    }
-
-    .dna-color-cell {
-      flex: 1;
-      height: 6px;
-    }
-    .dna-color-cell:first-child { border-radius: 3px 0 0 3px; }
-    .dna-color-cell:last-child { border-radius: 0 3px 3px 0; }
-
-    .back-link {
-      display: inline-block;
-      margin-top: 0.75rem;
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 0.75rem;
-      letter-spacing: 0.08em;
-    }
+    .container { max-width: 1000px; margin: 0 auto; padding: 2rem 1.5rem; }
+    header { text-align: center; padding: 3rem 0 2rem; border-bottom: 1px solid var(--border); margin-bottom: 2.5rem; }
+    h1 { font-size: 2.5rem; font-weight: 300; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); text-shadow: 0 0 30px var(--accent-glow); margin-bottom: 0.5rem; }
+    .subtitle { color: var(--text-dim); font-size: 0.85rem; letter-spacing: 0.1em; }
+    h2 { font-size: 1.1rem; font-weight: 400; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 1.25rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    .section { margin-bottom: 3rem; }
+    .desc { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 1rem; line-height: 1.5; }
+    .back-link { display: inline-block; margin-top: 0.75rem; color: var(--accent); text-decoration: none; font-size: 0.75rem; letter-spacing: 0.08em; }
     .back-link:hover { text-decoration: underline; }
-
-    footer {
-      text-align: center;
-      padding: 2rem 0;
-      color: var(--text-dim);
-      font-size: 0.7rem;
-      border-top: 1px solid var(--border);
-      margin-top: 2rem;
-    }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+    select, input[type="range"] { background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: inherit; font-size: 0.72rem; border-radius: 4px; padding: 0.35rem 0.5rem; }
+    select:focus, input:focus { outline: none; border-color: var(--accent); }
+    input[type="range"] { -webkit-appearance: none; height: 4px; border: none; padding: 0; cursor: pointer; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+    input[type="color"] { background: var(--bg); border: 1px solid var(--border); width: 40px; height: 28px; padding: 2px; border-radius: 4px; cursor: pointer; }
+    label { font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+    .controls-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+    .control-group { display: flex; flex-direction: column; gap: 0.3rem; }
+    .grad-bar { height: 40px; border-radius: 6px; overflow: hidden; display: flex; }
+    .grad-bar .swatch { flex: 1; transition: transform 0.15s; cursor: pointer; position: relative; }
+    .grad-bar .swatch:hover { transform: scaleY(1.2); z-index: 1; }
+    .grad-bar.slim { height: 24px; }
+    .hex-row { display: flex; justify-content: space-between; margin-top: 0.2rem; }
+    .hex-row span { font-size: 0.55rem; color: var(--text-dim); flex: 1; text-align: center; }
+    .gamut-wrap { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
+    .gamut-wrap canvas { border-radius: 8px; border: 1px solid var(--border); }
+    .gamut-info { flex: 1; min-width: 220px; }
+    .gamut-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem; }
+    .gamut-stat { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; text-align: center; }
+    .gamut-stat .val { font-size: 1.2rem; color: var(--accent); display: block; margin-bottom: 0.15rem; }
+    .gamut-stat .lbl { font-size: 0.58rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+    .cvd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+    .cvd-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; }
+    .cvd-card h3 { font-size: 0.72rem; color: var(--text); font-weight: 400; margin-bottom: 0.5rem; letter-spacing: 0.06em; }
+    .cvd-deltaE { font-size: 0.6rem; color: var(--text-dim); }
+    .cvd-deltaE .good { color: var(--green); }
+    .cvd-deltaE .warn { color: var(--amber); }
+    .cvd-deltaE .bad { color: var(--red); }
+    .score-bars { display: flex; flex-direction: column; gap: 0.5rem; }
+    .score-row { display: flex; align-items: center; gap: 0.75rem; }
+    .score-label { width: 100px; font-size: 0.65rem; color: var(--text-dim); text-align: right; text-transform: uppercase; letter-spacing: 0.04em; }
+    .score-track { flex: 1; height: 20px; background: var(--bg); border-radius: 10px; overflow: hidden; }
+    .score-fill { height: 100%; border-radius: 10px; transition: width 0.6s ease; }
+    .score-val { width: 44px; font-size: 0.72rem; text-align: right; }
+    .uniform-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .uniform-half { text-align: center; }
+    .uniform-half label { display: block; margin-bottom: 0.4rem; }
+    .dna-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+    .dna-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; cursor: pointer; transition: all 0.2s; }
+    .dna-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .dna-card.selected { border-color: var(--green); box-shadow: 0 0 12px rgba(74, 222, 128, 0.2); }
+    .dna-card canvas { width: 100%; height: 60px; border-radius: 4px; display: block; margin-bottom: 0.4rem; }
+    .dna-card .dna-id { font-size: 0.58rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dna-card .dna-score { font-size: 0.62rem; color: var(--green); }
+    .dna-detail { margin-top: 1rem; }
+    .dna-theme-props { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-top: 0.75rem; }
+    .dna-prop { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; text-align: center; }
+    .dna-prop .val { font-size: 1rem; color: var(--accent); display: block; }
+    .dna-prop .lbl { font-size: 0.55rem; color: var(--text-dim); text-transform: uppercase; }
+    .hue-ring-wrap { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; justify-content: center; }
+    footer { text-align: center; padding: 2rem 0; color: var(--text-dim); font-size: 0.7rem; border-top: 1px solid var(--border); margin-top: 2rem; }
     footer a { color: var(--accent); text-decoration: none; }
     footer a:hover { text-decoration: underline; }
-
-    select {
-      background: var(--surface);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 0.3rem 0.5rem;
-      font-family: inherit;
-      font-size: 0.7rem;
-      cursor: pointer;
-    }
-
-    @media (max-width: 768px) {
-      .forge-layout { grid-template-columns: 1fr; }
-    }
-
     @media (max-width: 640px) {
-      .wheel-section { flex-direction: column; align-items: center; }
-      .species-label { width: 100px; font-size: 0.62rem; }
-      .harmony-swatch { width: 48px; height: 48px; }
       h1 { font-size: 1.6rem; }
-      .forge-layout { grid-template-columns: 1fr; }
+      .gamut-wrap { flex-direction: column; }
+      .uniform-compare { grid-template-columns: 1fr; }
+      .dna-theme-props { grid-template-columns: repeat(3, 1fr); }
     }
   </style>
 </head>
@@ -720,1021 +101,500 @@
     <header>
       <h1>Palette Lab</h1>
       <p class="subtitle">Perceptual color science for generative art</p>
-      <a href="index.html" class="back-link">&larr; Back to Gallery</a>
+      <a href="chromatic.html" class="back-link">&larr; Chromatic Lab</a>
+      &nbsp;&bull;&nbsp;
+      <a href="index.html" class="back-link">Gallery</a>
     </header>
 
-    <!-- Section 1: Species Chromatics -->
-    <div class="section" id="species-section">
-      <h2>Species Chromatics</h2>
+    <!-- Section 1: Perceptual Uniformity -->
+    <div class="section" id="uniformity-section">
+      <h2>Perceptual Uniformity</h2>
       <p class="desc">
-        Each species has a canonical 8-stop gradient mapped through OKLAB perceptual color space.
-        Click a species to explore its color properties.
+        RGB interpolation creates perceptual banding and muddy midpoints.
+        OKLCH gradients maintain even perceptual steps because the color space models human vision.
+        Pick two colors and see the difference.
       </p>
-      <div class="species-grid" id="species-grid"></div>
-    </div>
-
-    <!-- Section 2: OKLAB Gamut Wheel + Detail -->
-    <div class="section">
-      <h2>OKLAB Gamut</h2>
-      <div class="wheel-section">
-        <div class="wheel-container">
-          <canvas class="wheel-canvas" id="wheel" width="320" height="320"></canvas>
+      <div class="controls-row">
+        <div class="control-group"><label>Color A</label><input type="color" id="uni-a" value="#6b4edb"></div>
+        <div class="control-group"><label>Color B</label><input type="color" id="uni-b" value="#4ade80"></div>
+        <div class="control-group">
+          <label>Steps <span id="uni-steps-val">12</span></label>
+          <input type="range" id="uni-steps" min="4" max="24" value="12" style="width:140px;">
         </div>
-        <div class="wheel-info">
-          <div class="color-detail" id="color-detail">
-            <div class="color-preview" id="color-preview" style="background: var(--accent);"></div>
-            <dl class="color-values">
-              <dt>Hex</dt><dd id="val-hex">#7c6fe0</dd>
-              <dt>OKLAB L</dt><dd id="val-L">0.000</dd>
-              <dt>OKLAB a</dt><dd id="val-a">0.000</dd>
-              <dt>OKLAB b</dt><dd id="val-b">0.000</dd>
-              <dt>OKLCH C</dt><dd id="val-C">0.000</dd>
-              <dt>OKLCH h</dt><dd id="val-h">0.0&deg;</dd>
-            </dl>
+      </div>
+      <div class="card">
+        <div class="uniform-compare">
+          <div class="uniform-half">
+            <label>Naive RGB</label>
+            <div class="grad-bar" id="uni-rgb-bar"></div>
+            <div id="uni-rgb-score" style="font-size:0.62rem;color:var(--text-dim);margin-top:0.3rem;"></div>
           </div>
-
-          <!-- Harmony Engine -->
-          <h2 style="margin-top: 0;">Harmony Engine</h2>
-          <div class="harmony-controls" id="harmony-controls">
-            <button class="harmony-btn active" data-rule="complementary">Complementary</button>
-            <button class="harmony-btn" data-rule="analogous">Analogous</button>
-            <button class="harmony-btn" data-rule="triadic">Triadic</button>
-            <button class="harmony-btn" data-rule="split-complementary">Split-Comp</button>
-            <button class="harmony-btn" data-rule="tetradic">Tetradic</button>
+          <div class="uniform-half">
+            <label>OKLCH Perceptual</label>
+            <div class="grad-bar" id="uni-oklch-bar"></div>
+            <div id="uni-oklch-score" style="font-size:0.62rem;color:var(--text-dim);margin-top:0.3rem;"></div>
           </div>
-          <div class="harmony-result" id="harmony-result"></div>
+        </div>
+        <canvas id="uni-deltaE-chart" width="900" height="100" style="width:100%;height:80px;margin-top:1rem;border-radius:6px;display:block;"></canvas>
+        <div style="display:flex;gap:1rem;margin-top:0.3rem;">
+          <span style="font-size:0.58rem;color:var(--red);">&#9644; RGB &Delta;E steps</span>
+          <span style="font-size:0.58rem;color:var(--green);">&#9644; OKLCH &Delta;E steps</span>
         </div>
       </div>
     </div>
 
-    <!-- Section 3: Gradient Lab -->
-    <div class="section">
-      <h2>Gradient Lab</h2>
+    <!-- Section 2: Gamut Boundary -->
+    <div class="section" id="gamut-section">
+      <h2>Gamut Boundary</h2>
       <p class="desc">
-        Compare naive RGB interpolation with perceptually uniform OKLAB gradients.
-        OKLAB avoids the muddy desaturation that plagues RGB blending.
+        The sRGB gamut is not a cube in perceptual space. At each lightness level,
+        only certain hue/chroma combinations are representable. Drag to see where colors clip.
       </p>
-      <div class="gradient-lab">
-        <div class="gradient-controls">
-          <div class="color-input-group">
-            <label>From</label>
-            <input type="color" id="grad-from" value="#7c6fe0">
-          </div>
-          <div class="color-input-group">
-            <label>To</label>
-            <input type="color" id="grad-to" value="#4ade80">
-          </div>
-          <div class="color-input-group">
-            <label>Steps</label>
-            <input type="number" class="steps-input" id="grad-steps" value="12" min="3" max="32">
-          </div>
+      <div class="controls-row">
+        <div class="control-group" style="flex:1;min-width:200px;">
+          <label>Lightness <span id="gamut-L-val">0.65</span></label>
+          <input type="range" id="gamut-L" min="5" max="95" value="65" style="width:100%;">
         </div>
-        <div class="gradient-comparison" id="gradient-comparison"></div>
       </div>
-    </div>
-
-    <!-- Section 4: Palette Forge — apply palettes to pieces live -->
-    <div class="section">
-      <h2>Palette Forge</h2>
-      <p class="desc">
-        Select a Hall of Fame piece and re-render it with any species palette in real time.
-        See how the same structure transforms under different color mappings.
-      </p>
-      <div class="forge-layout">
-        <div class="forge-canvas-wrap">
-          <canvas id="forge-canvas" width="400" height="300"></canvas>
-        </div>
-        <div class="forge-sidebar">
-          <div>
-            <div class="gradient-row-label" style="margin-bottom: 0.5rem;">Piece</div>
-            <div class="forge-piece-list" id="forge-piece-list"></div>
-          </div>
-          <div>
-            <div class="gradient-row-label" style="margin-bottom: 0.5rem;">Color Palette</div>
-            <div class="palette-picker" id="palette-picker"></div>
+      <div class="card">
+        <div class="gamut-wrap">
+          <canvas id="gamut-canvas" width="360" height="220"></canvas>
+          <div class="gamut-info">
+            <label>Chroma ring at this lightness</label>
+            <canvas id="gamut-ring" width="220" height="220" style="border-radius:50%;border:1px solid var(--border);display:block;margin-top:0.5rem;"></canvas>
+            <div class="gamut-stats" id="gamut-stats"></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Section 5: Hue Generator -->
-    <div class="section">
-      <h2>Hue Generator</h2>
+    <!-- Section 3: CVD -->
+    <div class="section" id="cvd-section">
+      <h2>Color Vision Deficiency</h2>
       <p class="desc">
-        Generate perceptually uniform palettes from any hue angle.
-        The chroma curve peaks at mid-lightness for maximum vibrancy without clipping.
+        How species palettes appear under different forms of color blindness.
+        Good art maintains structural contrast even when hue information is lost.
       </p>
-      <div class="hue-controls">
-        <label style="font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em;">Hue</label>
-        <input type="range" id="hue-slider" min="0" max="360" value="270">
-        <span class="hue-value" id="hue-value">270&deg;</span>
-        <label style="font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-left: 1rem;">Steps</label>
-        <input type="number" class="steps-input" id="hue-steps" value="8" min="3" max="16">
+      <div class="controls-row">
+        <div class="control-group"><label>Species</label><select id="cvd-species"></select></div>
       </div>
-      <div class="generated-strip" id="generated-strip"></div>
-      <div class="gradient-hex-row" id="generated-hexes"></div>
-    </div>
-
-    <!-- Section 6: Density Profile -->
-    <div class="section">
-      <h2>Density Profile</h2>
-      <p class="desc">
-        Grid state distribution of the selected piece. Each bar shows what fraction of the grid
-        occupies that state &mdash; the mapping from structure to color.
-      </p>
-      <div class="density-chart" id="density-chart">
-        <div class="density-bars" id="density-bars"></div>
-      </div>
-    </div>
-
-    <!-- Section 7: Palette Breeder -->
-    <div class="section">
-      <h2>Palette Breeder</h2>
-      <p class="desc">
-        Blend two species palettes in OKLAB perceptual space. Slide to morph between parents.
-        This is how evolution could cross color genes between species.
-      </p>
-      <div class="breeder-layout">
-        <div class="breeder-parent">
-          <div class="breeder-parent-label">Parent A</div>
-          <select id="breeder-a"></select>
-          <div class="breeder-strip" id="breeder-strip-a" style="margin-top: 0.5rem;"></div>
+      <div class="card">
+        <div style="margin-bottom:0.75rem;">
+          <label>Original Palette</label>
+          <div class="grad-bar slim" id="cvd-original"></div>
         </div>
-        <div class="breeder-parent">
-          <div class="breeder-parent-label">Parent B</div>
-          <select id="breeder-b"></select>
-          <div class="breeder-strip" id="breeder-strip-b" style="margin-top: 0.5rem;"></div>
+        <div class="cvd-grid" id="cvd-grid"></div>
+      </div>
+    </div>
+
+    <!-- Section 4: Scorer -->
+    <div class="section" id="scorer-section">
+      <h2>Aesthetic Scorer</h2>
+      <p class="desc">
+        Four perceptual dimensions rate palette quality: step uniformity, lightness contrast,
+        chroma richness, and hue spread. Every species palette is scored.
+      </p>
+      <div class="controls-row">
+        <div class="control-group"><label>Species</label><select id="scorer-species"></select></div>
+      </div>
+      <div class="card">
+        <div class="grad-bar slim" id="scorer-bar" style="margin-bottom:1rem;"></div>
+        <div class="score-bars" id="scorer-bars"></div>
+        <div style="margin-top:1rem;text-align:center;">
+          <span style="font-size:1.8rem;color:var(--accent);font-weight:300;" id="scorer-overall"></span>
+          <span style="font-size:0.65rem;color:var(--text-dim);display:block;">Overall Aesthetic Score</span>
         </div>
       </div>
-      <div class="breeder-slider-wrap">
-        <span class="breeder-slider-label">A</span>
-        <input type="range" id="breeder-slider" min="0" max="100" value="50">
-        <span class="breeder-slider-label">B</span>
-      </div>
-      <div class="breeder-strip" id="breeder-offspring" style="height: 48px;"></div>
-      <div class="gradient-hex-row" id="breeder-hexes" style="margin-top: 0.3rem;"></div>
     </div>
 
-    <!-- Section 8: Hall of Fame Palette Map -->
-    <div class="section">
-      <h2>Hall of Fame &mdash; Color Map</h2>
+    <!-- Section 5: HoF DNA -->
+    <div class="section" id="dna-section">
+      <h2>Hall of Fame &mdash; Palette DNA</h2>
       <p class="desc">
-        Every Hall of Fame piece rendered with its species color palette.
-        Click to load it in the Palette Forge above.
-      </p>
-      <div class="hof-grid" id="hof-grid"></div>
-    </div>
-
-    <!-- Section 9: Palette DNA -->
-    <div class="section">
-      <h2>Palette DNA</h2>
-      <p class="desc">
-        Unicode character palettes mapped to color intensity. Each glyph position
-        corresponds to a brightness level in the species gradient.
+        Each piece carries color DNA&mdash;an evolved ColorTheme or species default.
+        Select a piece to see its OKLCH theme, aesthetic score, and temperature.
       </p>
       <div class="dna-grid" id="dna-grid"></div>
+      <div class="card dna-detail" id="dna-detail" style="display:none;">
+        <div style="font-size:0.72rem;color:var(--accent);letter-spacing:0.08em;margin-bottom:0.5rem;" id="dna-title"></div>
+        <div class="grad-bar slim" id="dna-bar"></div>
+        <div class="hex-row" id="dna-hex"></div>
+        <div class="dna-theme-props" id="dna-props"></div>
+        <div class="score-bars" id="dna-scores" style="margin-top:0.75rem;"></div>
+      </div>
+    </div>
+
+    <!-- Section 6: Hue Ring -->
+    <div class="section" id="ring-section">
+      <h2>Species Hue Distribution</h2>
+      <p class="desc">
+        Where each species sits on the OKLCH hue wheel. Harmony modes shape how
+        the gradient traverses the wheel.
+      </p>
+      <div class="card">
+        <div class="hue-ring-wrap">
+          <canvas id="species-ring" width="300" height="300"></canvas>
+          <div id="ring-legend" style="font-size:0.65rem;line-height:2;"></div>
+        </div>
+      </div>
     </div>
 
     <footer>
       <p>
         <a href="index.html">Gallery</a> &bull;
-        <a href="live.html">Live</a> &bull;
+        <a href="chromatic.html">Chromatic Lab</a> &bull;
         <a href="create.html">Create</a> &bull;
-        <a href="atlas.html">Atlas</a> &bull;
-        <a href="pulse.html">Pulse</a> &bull;
-        <a href="about.html">About</a>
+        <a href="codex.html">Codex</a> &bull;
+        <a href="atlas.html">Atlas</a>
       </p>
-      <p style="margin-top: 0.5rem;">Color science powered by OKLAB &bull; <a href="https://github.com/AndersonsRepo/lattice">Source</a></p>
+      <p style="margin-top:0.5rem;">OKLCH/OKLAB perceptual color science &bull; <a href="https://github.com/AndersonsRepo/lattice">Source</a></p>
     </footer>
   </div>
 
 <script>
-// ========== OKLAB Color System ==========
+// ═══ OKLAB/OKLCH Color Engine ═══
 
-function srgbToLinear(c) {
-  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-}
-function linearToSrgb(c) {
-  return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
-}
+function srgbToLinear(c){return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
+function linearToSrgb(c){return c<=0.0031308?12.92*c:1.055*Math.pow(c,1/2.4)-0.055}
+function hexToRgb(hex){return[parseInt(hex.slice(1,3),16)/255,parseInt(hex.slice(3,5),16)/255,parseInt(hex.slice(5,7),16)/255]}
 
-function hexToOklab(hex) {
-  const r = srgbToLinear(parseInt(hex.slice(1, 3), 16) / 255);
-  const g = srgbToLinear(parseInt(hex.slice(3, 5), 16) / 255);
-  const b = srgbToLinear(parseInt(hex.slice(5, 7), 16) / 255);
-  const l_ = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m_ = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s_ = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  return {
-    L: 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
-    a: 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
-    b: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
-  };
+function hexToOklab(hex){
+  const[r,g,b]=hexToRgb(hex);const lr=srgbToLinear(r),lg=srgbToLinear(g),lb=srgbToLinear(b);
+  const l_=Math.cbrt(0.4122214708*lr+0.5363325363*lg+0.0514459929*lb);
+  const m_=Math.cbrt(0.2119034982*lr+0.6806995451*lg+0.1073969566*lb);
+  const s_=Math.cbrt(0.0883024619*lr+0.2817188376*lg+0.6299787005*lb);
+  return[0.2104542553*l_+0.7936177850*m_-0.0040720468*s_,1.9779984951*l_-2.4285922050*m_+0.4505937099*s_,0.0259040371*l_+0.7827717662*m_-0.8086757660*s_];
 }
 
-function oklabToHex(lab) {
-  const l = lab.L + 0.3963377774 * lab.a + 0.2158037573 * lab.b;
-  const m = lab.L - 0.1055613458 * lab.a - 0.0638541728 * lab.b;
-  const s = lab.L - 0.0894841775 * lab.a - 1.2914855480 * lab.b;
-  const rv = Math.round(Math.max(0, Math.min(1, linearToSrgb(+4.0767416621 * l*l*l - 3.3077115913 * m*m*m + 0.2309699292 * s*s*s))) * 255);
-  const gv = Math.round(Math.max(0, Math.min(1, linearToSrgb(-1.2684380046 * l*l*l + 2.6097574011 * m*m*m - 0.3413193965 * s*s*s))) * 255);
-  const bv = Math.round(Math.max(0, Math.min(1, linearToSrgb(-0.0041960863 * l*l*l - 0.7034186147 * m*m*m + 1.7076147010 * s*s*s))) * 255);
-  return '#' + [rv, gv, bv].map(c => c.toString(16).padStart(2, '0')).join('');
+function oklabToLinearRgb(L,a,b){
+  const l=L+0.3963377774*a+0.2158037573*b,m=L-0.1055613458*a-0.0638541728*b,s=L-0.0894841775*a-1.2914855480*b;
+  return[4.0767416621*l*l*l-3.3077115913*m*m*m+0.2309699292*s*s*s,-1.2684380046*l*l*l+2.6097574011*m*m*m-0.3413193965*s*s*s,-0.0041960863*l*l*l-0.7034186147*m*m*m+1.7076147010*s*s*s];
 }
 
-function oklabToOklch(lab) {
-  return { L: lab.L, C: Math.sqrt(lab.a * lab.a + lab.b * lab.b), h: ((Math.atan2(lab.b, lab.a) * 180 / Math.PI) + 360) % 360 };
+function oklabToHex(L,a,b){
+  const[rv,gv,bv]=oklabToLinearRgb(L,a,b).map(v=>Math.round(Math.max(0,Math.min(1,linearToSrgb(v)))*255));
+  return'#'+[rv,gv,bv].map(c=>c.toString(16).padStart(2,'0')).join('');
 }
 
-function oklchToOklab(lch) {
-  const hRad = lch.h * Math.PI / 180;
-  return { L: lch.L, a: lch.C * Math.cos(hRad), b: lch.C * Math.sin(hRad) };
+function oklabToOklch(L,a,b){return[L,Math.sqrt(a*a+b*b),((Math.atan2(b,a)*180/Math.PI)+360)%360]}
+function oklchToOklab(L,C,h){const r=h*Math.PI/180;return[L,C*Math.cos(r),C*Math.sin(r)]}
+function hexToOklch(hex){const[L,a,b]=hexToOklab(hex);return oklabToOklch(L,a,b)}
+
+function oklchToHex(L,C,h){
+  let c=C;
+  for(let i=0;i<25;i++){
+    const[lL,la,lb]=oklchToOklab(L,c,h);const[r,g,b]=oklabToLinearRgb(lL,la,lb);
+    if(r>=-0.001&&r<=1.001&&g>=-0.001&&g<=1.001&&b>=-0.001&&b<=1.001)return oklabToHex(lL,la,lb);
+    c*=0.95;
+  }
+  const gy=Math.round(Math.max(0,Math.min(1,L))*255).toString(16).padStart(2,'0');
+  return'#'+gy+gy+gy;
 }
 
-function perceptualGradient(hex1, hex2, steps) {
-  const lab1 = hexToOklab(hex1), lab2 = hexToOklab(hex2);
-  return Array.from({ length: steps }, (_, i) => {
-    const t = steps === 1 ? 0 : i / (steps - 1);
-    return oklabToHex({ L: lab1.L + (lab2.L - lab1.L) * t, a: lab1.a + (lab2.a - lab1.a) * t, b: lab1.b + (lab2.b - lab1.b) * t });
-  });
+function deltaE(a,b){const x=hexToOklab(a),y=hexToOklab(b);return Math.sqrt((x[0]-y[0])**2+(x[1]-y[1])**2+(x[2]-y[2])**2)}
+
+function gamutMaxChroma(L,h){
+  let lo=0,hi=0.4;
+  for(let i=0;i<20;i++){const mid=(lo+hi)/2;const[lL,la,lb]=oklchToOklab(L,mid,h);const[r,g,b]=oklabToLinearRgb(lL,la,lb);
+    if(r>=-0.001&&r<=1.001&&g>=-0.001&&g<=1.001&&b>=-0.001&&b<=1.001)lo=mid;else hi=mid;}
+  return lo;
 }
 
-function rgbGradient(hex1, hex2, steps) {
-  const r1 = parseInt(hex1.slice(1,3),16), g1 = parseInt(hex1.slice(3,5),16), b1 = parseInt(hex1.slice(5,7),16);
-  const r2 = parseInt(hex2.slice(1,3),16), g2 = parseInt(hex2.slice(3,5),16), b2 = parseInt(hex2.slice(5,7),16);
-  return Array.from({ length: steps }, (_, i) => {
-    const t = steps === 1 ? 0 : i / (steps - 1);
-    return '#' + [Math.round(r1 + (r2 - r1) * t), Math.round(g1 + (g2 - g1) * t), Math.round(b1 + (b2 - b1) * t)].map(c => c.toString(16).padStart(2, '0')).join('');
-  });
+function naiveRgbGradient(hex1,hex2,steps){
+  const[r1,g1,b1]=hexToRgb(hex1),[r2,g2,b2]=hexToRgb(hex2);
+  return Array.from({length:steps},(_,i)=>{const t=steps===1?0.5:i/(steps-1);
+    return'#'+[r1+(r2-r1)*t,g1+(g2-g1)*t,b1+(b2-b1)*t].map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('');});
 }
 
-function colorHarmony(hex, rule) {
-  const lch = oklabToOklch(hexToOklab(hex));
-  const offsets = {
-    'complementary': [0, 180],
-    'analogous': [-30, 0, 30],
-    'triadic': [0, 120, 240],
-    'split-complementary': [0, 150, 210],
-    'tetradic': [0, 90, 180, 270],
-  };
-  return offsets[rule].map(d => oklabToHex(oklchToOklab({ L: lch.L, C: lch.C, h: ((lch.h + d) % 360 + 360) % 360 })));
+function oklchGradient(hex1,hex2,steps){
+  const[L1,C1,h1]=hexToOklch(hex1),[L2,C2,h2]=hexToOklch(hex2);
+  let dh=h2-h1;if(dh>180)dh-=360;if(dh<-180)dh+=360;
+  return Array.from({length:steps},(_,i)=>{const t=steps===1?0.5:i/(steps-1);return oklchToHex(L1+(L2-L1)*t,C1+(C2-C1)*t,(h1+dh*t+360)%360);});
 }
 
-function generatePerceptualPalette(hue, steps) {
-  return Array.from({ length: steps }, (_, i) => {
-    const t = i / (steps - 1);
-    return oklabToHex(oklchToOklab({
-      L: 0.05 + t * 0.95,
-      C: t < 0.1 ? t * 1.5 : (t < 0.85 ? 0.15 + (1 - Math.abs(2 * t - 1)) * 0.08 : 0.15 * (1 - t) * 4),
-      h: hue,
-    }));
-  });
+function simCVD(hex,type){
+  const[r,g,b]=hexToRgb(hex);const lr=srgbToLinear(r),lg=srgbToLinear(g),lb=srgbToLinear(b);
+  let sr,sg,sb;
+  if(type==='protanopia'){sr=0.152286*lr+1.052583*lg-0.204868*lb;sg=0.114503*lr+0.786281*lg+0.099216*lb;sb=-0.003882*lr-0.048116*lg+1.051998*lb;}
+  else if(type==='deuteranopia'){sr=0.367322*lr+0.860646*lg-0.227968*lb;sg=0.280085*lr+0.672501*lg+0.047413*lb;sb=-0.011820*lr+0.042940*lg+0.968881*lb;}
+  else if(type==='tritanopia'){sr=1.255528*lr-0.076749*lg-0.178779*lb;sg=-0.078411*lr+0.930809*lg+0.147602*lb;sb=0.004733*lr+0.691367*lg+0.303900*lb;}
+  else{const lum=0.2126*lr+0.7152*lg+0.0722*lb;sr=sg=sb=lum;}
+  const toH=v=>{const s=Math.round(linearToSrgb(Math.max(0,Math.min(1,v)))*255).toString(16);return s.length===1?'0'+s:s;};
+  return'#'+toH(sr)+toH(sg)+toH(sb);
 }
 
-function blendPalettes(p1, p2, t) {
-  const len = Math.max(p1.length, p2.length);
-  return Array.from({ length: len }, (_, i) => {
-    const lab1 = hexToOklab(p1[Math.min(i, p1.length - 1)]);
-    const lab2 = hexToOklab(p2[Math.min(i, p2.length - 1)]);
-    return oklabToHex({ L: lab1.L + (lab2.L - lab1.L) * t, a: lab1.a + (lab2.a - lab1.a) * t, b: lab1.b + (lab2.b - lab1.b) * t });
-  });
+function analyzePalette(colors){
+  if(colors.length<2)return{deltaEs:[],avgDeltaE:0,variance:0,uniformityScore:100};
+  const deltaEs=[];for(let i=0;i<colors.length-1;i++)deltaEs.push(deltaE(colors[i],colors[i+1]));
+  const avg=deltaEs.reduce((a,b)=>a+b,0)/deltaEs.length;
+  const variance=deltaEs.reduce((a,d)=>a+(d-avg)**2,0)/deltaEs.length;
+  return{deltaEs,avgDeltaE:avg,variance,uniformityScore:avg>0?Math.max(0,100-Math.sqrt(variance)/avg*100):0};
 }
 
-// ========== Data ==========
+function scorePaletteAesthetics(colors){
+  if(colors.length<2)return{uniformity:0,contrast:0,chromaRichness:0,hueSpread:0,overall:0};
+  const a=analyzePalette(colors),uniformity=a.uniformityScore/100;
+  const lums=colors.map(c=>hexToOklab(c)[0]),contrast=Math.min(1,(Math.max(...lums)-Math.min(...lums))/0.8);
+  const chromas=colors.map(c=>hexToOklch(c)[1]),avgC=chromas.reduce((a,b)=>a+b,0)/chromas.length;
+  const chromaVar=chromas.reduce((a,c)=>a+Math.abs(c-avgC),0)/chromas.length;
+  const chromaRichness=Math.min(1,avgC/0.15*0.6+chromaVar/0.05*0.4);
+  const hues=colors.filter(c=>hexToOklch(c)[1]>0.02).map(c=>hexToOklch(c)[2]);
+  let hueSpread=0;
+  if(hues.length>=2){const sorted=[...hues].sort((a,b)=>a-b);let maxGap=0;
+    for(let i=1;i<sorted.length;i++)maxGap=Math.max(maxGap,sorted[i]-sorted[i-1]);
+    maxGap=Math.max(maxGap,360-sorted[sorted.length-1]+sorted[0]);hueSpread=Math.min(1,(360-maxGap)/180);}
+  const overall=uniformity*0.3+contrast*0.3+chromaRichness*0.25+hueSpread*0.15;
+  return{uniformity,contrast,chromaRichness,hueSpread,overall};
+}
 
-const SPECIES_COLORS = {
-  '1d':                  { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a3e', '#3b2d8b', '#6b4edb', '#9d7af5', '#c8abff', '#e8d8ff', '#ffffff'] },
-  '2d':                  { bg: '#0a0a0f', colors: ['#0a0a0f', '#0d2818', '#166b3a', '#22a95c', '#4ade80', '#7af5a8', '#b8ffd4', '#e8fff0'] },
-  'lsystem':             { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a0a', '#6b3a0d', '#a85c16', '#db8b22', '#f5b84a', '#ffe088', '#fff4cc'] },
-  'reaction-diffusion':  { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0a2d', '#3b0d6b', '#6b16a8', '#a822db', '#d44af5', '#f088ff', '#ffccff'] },
-  'voronoi':             { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a2d', '#0d3b6b', '#166ba8', '#22a8db', '#4ad4f5', '#88eeff', '#ccf8ff'] },
-  'wfc':                 { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d0a0a', '#6b0d1a', '#a8163b', '#db226b', '#f54a9d', '#ff88c8', '#ffccee'] },
-  'spirograph':          { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a2d0a', '#3b6b0d', '#6ba816', '#a8db22', '#d4f54a', '#eeff88', '#ffffcc'] },
-  'attractor':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a1a', '#6b2d2d', '#a84a3b', '#db6b4a', '#f59d6b', '#ffc8a0', '#ffe8d8'] },
-  'julia':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a2d2d', '#0d6b5b', '#16a88a', '#22dbb5', '#4af5d4', '#88ffe8', '#ccfff4'] },
-  'noise':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a0a', '#3b3b0d', '#6b6b16', '#a8a822', '#d4d44a', '#eeff88', '#ffffcc'] },
-  'flowfield':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a1a', '#0d3b3b', '#166b6b', '#22a8a8', '#4ad4d4', '#88eeff', '#ccffff'] },
-  'magnetic-pendulum':   { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d0a1a', '#6b0d3b', '#a8166b', '#db22a8', '#f54ad4', '#ff88ee', '#ffccf8'] },
+function colorTemperature(hex){
+  const[,,h]=hexToOklch(hex);let t=0;
+  [{c:30,w:60,wt:1},{c:60,w:40,wt:0.7},{c:330,w:50,wt:0.6}].forEach(z=>{let d=Math.abs(h-z.c);if(d>180)d=360-d;t+=Math.max(0,1-d/z.w)*z.wt;});
+  [{c:210,w:60,wt:1},{c:170,w:40,wt:0.8},{c:270,w:40,wt:0.5}].forEach(z=>{let d=Math.abs(h-z.c);if(d>180)d=360-d;t-=Math.max(0,1-d/z.w)*z.wt;});
+  return Math.max(-1,Math.min(1,t));
+}
+
+function paletteTemperature(colors){
+  const ch=colors.filter(c=>hexToOklch(c)[1]>0.02);
+  return ch.length?ch.reduce((s,c)=>s+colorTemperature(c),0)/ch.length:0;
+}
+
+// ═══ Data ═══
+
+const SPECIES_THEMES={
+  '1d':{hue:270,chroma:0.18,harmony:'mono',lMin:0.05,lMax:1.0},
+  '2d':{hue:145,chroma:0.18,harmony:'mono',lMin:0.05,lMax:0.95},
+  'lsystem':{hue:35,chroma:0.16,harmony:'mono',lMin:0.05,lMax:0.95},
+  'reaction-diffusion':{hue:300,chroma:0.19,harmony:'mono',lMin:0.05,lMax:0.95},
+  'voronoi':{hue:200,chroma:0.16,harmony:'mono',lMin:0.05,lMax:0.92},
+  'wfc':{hue:340,chroma:0.18,harmony:'mono',lMin:0.05,lMax:0.93},
+  'spirograph':{hue:90,chroma:0.17,harmony:'mono',lMin:0.05,lMax:0.95},
+  'attractor':{hue:20,chroma:0.14,harmony:'mono',lMin:0.05,lMax:0.92},
+  'julia':{hue:170,chroma:0.16,harmony:'mono',lMin:0.05,lMax:0.92},
+  'noise':{hue:65,chroma:0.15,harmony:'mono',lMin:0.05,lMax:0.95},
+  'flowfield':{hue:185,chroma:0.14,harmony:'mono',lMin:0.05,lMax:0.92},
+  'flame':{hue:10,chroma:0.20,harmony:'analogous',lMin:0.05,lMax:0.95},
 };
 
-const TYPE_LABELS = {
-  '1d': 'Wolfram 1D', '2d': 'Life-like 2D', 'lsystem': 'L-System',
-  'reaction-diffusion': 'React-Diff', 'voronoi': 'Voronoi',
-  'wfc': 'WFC', 'spirograph': 'Spirograph',
-  'attractor': 'Attractor', 'julia': 'Julia Set',
-  'noise': 'Fractal Noise', 'flowfield': 'Flow Field',
-  'magnetic-pendulum': 'Mag Pendulum',
-};
+const HARMONY_OFFSETS={mono:[0],complementary:[0,180],analogous:[-30,0,30],triadic:[0,120,240],split:[0,150,210],tetradic:[0,90,180,270]};
+const TYPE_LABELS={'1d':'Wolfram 1D','2d':'Life-like 2D','lsystem':'L-System','reaction-diffusion':'React-Diff','voronoi':'Voronoi','wfc':'WFC','spirograph':'Spirograph','attractor':'Attractor','julia':'Julia Set','noise':'Fractal Noise','flowfield':'Flow Field','flame':'Flame'};
+const SPECIES_LIST=Object.keys(SPECIES_THEMES);
 
-const UNICODE_PALETTES = [
-  { name: 'Standard', chars: [' ', '\u2591', '\u2592', '\u2593', '\u2588', '\u2571', '\u2572', '\u2573', '\u25CA', '\u25C6', '\u25CF', '\u25CB', '\u25D0', '\u25D1', '\u25D2', '\u25D3'] },
-  { name: 'Minimal', chars: [' ', '\u00B7', '\u2022', '\u25CB', '\u25CF', '\u25C6'] },
-  { name: 'Block', chars: [' ', '\u2591', '\u2592', '\u2593', '\u2588'] },
-  { name: 'Wave', chars: [' ', '~', '\u2248', '\u223F', '\u224B', '\u2307', '\u2301'] },
-  { name: 'Star', chars: [' ', '\u00B7', '\u2726', '\u2727', '\u2605', '\u2736', '\u2739', '\u273A'] },
-  { name: 'Botanical', chars: [' ', '.', ':', '\u2766', '\u273F', '\u2740', '\u2741'] },
-  { name: 'Geometric', chars: [' ', '\u25B3', '\u25BD', '\u25C7', '\u25C8', '\u2B21', '\u2B22'] },
-  { name: 'Braille', chars: [' ', '\u2801', '\u2803', '\u2807', '\u280F', '\u281F', '\u283F', '\u28FF'] },
-  { name: 'Shade', chars: [' ', '\u00B7', ':', '\u2591', '\u2592', '\u2593', '\u2588'] },
-];
-
-// ========== State ==========
-
-let selectedSpecies = '1d';
-let selectedColor = '#6b4edb';
-let activeHarmony = 'complementary';
-let galleryData = null;
-let forgePieceIndex = 0;
-let forgePaletteKey = '1d';
-let allPieces = [];
-
-// ========== Section 1: Species Chromatics ==========
-
-function buildSpeciesGrid() {
-  const grid = document.getElementById('species-grid');
-  grid.innerHTML = '';
-  for (const [type, spec] of Object.entries(SPECIES_COLORS)) {
-    const row = document.createElement('div');
-    row.className = 'species-row' + (type === selectedSpecies ? ' active' : '');
-
-    const label = document.createElement('div');
-    label.className = 'species-label';
-    label.textContent = TYPE_LABELS[type] || type;
-
-    const strip = document.createElement('div');
-    strip.className = 'gradient-strip';
-    spec.colors.forEach((c) => {
-      const sw = document.createElement('div');
-      sw.className = 'swatch';
-      sw.style.background = c;
-      sw.title = c;
-      sw.addEventListener('click', (e) => { e.stopPropagation(); selectColor(c); });
-      strip.appendChild(sw);
-    });
-
-    const hex = document.createElement('div');
-    hex.className = 'species-hex';
-    hex.textContent = spec.colors[4];
-
-    row.appendChild(label);
-    row.appendChild(strip);
-    row.appendChild(hex);
-
-    row.addEventListener('click', () => {
-      selectedSpecies = type;
-      selectColor(spec.colors[4]);
-      buildSpeciesGrid();
-      buildDnaGrid();
-    });
-
-    grid.appendChild(row);
-  }
+function generateThemeGradient(theme,steps){
+  const offsets=HARMONY_OFFSETS[theme.harmony]||[0],hues=offsets.map(o=>(theme.hue+o+360)%360),colors=[];
+  for(let i=0;i<steps;i++){const t=steps===1?0.5:i/(steps-1);const L=theme.lMin+t*(theme.lMax-theme.lMin);
+    const cScale=1-Math.pow(2*t-1,2)*0.4;const hueIdx=t*(hues.length-1);
+    const hLow=hues[Math.floor(hueIdx)],hHigh=hues[Math.min(Math.ceil(hueIdx),hues.length-1)];
+    let dh=hHigh-hLow;if(dh>180)dh-=360;if(dh<-180)dh+=360;
+    colors.push(oklchToHex(L,theme.chroma*cScale,(hLow+dh*(hueIdx-Math.floor(hueIdx))+360)%360));}
+  return colors;
 }
 
-// ========== Section 2: OKLAB Gamut Wheel ==========
+function getSpeciesColors(type){return generateThemeGradient(SPECIES_THEMES[type]||SPECIES_THEMES['2d'],8)}
 
-function drawWheel() {
-  const canvas = document.getElementById('wheel');
-  const ctx = canvas.getContext('2d');
-  const size = 320, cx = size / 2, cy = size / 2, radius = size / 2 - 10;
+let galleryData=null;
 
-  ctx.clearRect(0, 0, size, size);
+// ═══ Utilities ═══
 
-  const imgData = ctx.createImageData(size, size);
-  for (let py = 0; py < size; py++) {
-    for (let px = 0; px < size; px++) {
-      const dx = px - cx, dy = py - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > radius) continue;
-
-      const h = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
-      const C = (dist / radius) * 0.32;
-      const lab = oklchToOklab({ L: 0.7, C, h });
-      const hex = oklabToHex(lab);
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-
-      const idx = (py * size + px) * 4;
-      imgData.data[idx] = r;
-      imgData.data[idx + 1] = g;
-      imgData.data[idx + 2] = b;
-      imgData.data[idx + 3] = 255;
-    }
-  }
-  ctx.putImageData(imgData, 0, 0);
-
-  // Plot species accent colors
-  for (const [type, spec] of Object.entries(SPECIES_COLORS)) {
-    const accent = spec.colors[4];
-    const lch = oklabToOklch(hexToOklab(accent));
-    const r = (lch.C / 0.32) * radius;
-    const angle = lch.h * Math.PI / 180;
-    const x = cx + r * Math.cos(angle);
-    const y = cy + r * Math.sin(angle);
-
-    ctx.beginPath();
-    ctx.arc(x, y, type === selectedSpecies ? 7 : 4, 0, Math.PI * 2);
-    ctx.fillStyle = accent;
-    ctx.fill();
-    ctx.strokeStyle = type === selectedSpecies ? '#ffffff' : 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = type === selectedSpecies ? 2 : 1;
-    ctx.stroke();
-  }
-
-  // Selected color marker
-  const selLch = oklabToOklch(hexToOklab(selectedColor));
-  const selR = (selLch.C / 0.32) * radius;
-  const selAngle = selLch.h * Math.PI / 180;
-  const selX = cx + selR * Math.cos(selAngle);
-  const selY = cy + selR * Math.sin(selAngle);
-  ctx.beginPath();
-  ctx.arc(selX, selY, 9, 0, Math.PI * 2);
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(selX, selY, 6, 0, Math.PI * 2);
-  ctx.fillStyle = selectedColor;
-  ctx.fill();
+function fillSelect(el,def){
+  el.innerHTML='';for(const s of SPECIES_LIST){const opt=document.createElement('option');opt.value=s;opt.textContent=TYPE_LABELS[s]||s;el.appendChild(opt);}
+  if(def)el.value=def;
 }
 
-function selectColor(hex) {
-  selectedColor = hex;
-  const lab = hexToOklab(hex);
-  const lch = oklabToOklch(lab);
-
-  document.getElementById('color-preview').style.background = hex;
-  document.getElementById('val-hex').textContent = hex;
-  document.getElementById('val-L').textContent = lab.L.toFixed(3);
-  document.getElementById('val-a').textContent = lab.a.toFixed(3);
-  document.getElementById('val-b').textContent = lab.b.toFixed(3);
-  document.getElementById('val-C').textContent = lch.C.toFixed(3);
-  document.getElementById('val-h').textContent = lch.h.toFixed(1) + '\u00B0';
-
-  drawWheel();
-  updateHarmony();
+function renderGradBar(id,colors,hexId){
+  const bar=document.getElementById(id);bar.innerHTML='';
+  colors.forEach(c=>{const sw=document.createElement('div');sw.className='swatch';sw.style.background=c;sw.title=c;bar.appendChild(sw);});
+  if(hexId){const hr=document.getElementById(hexId);hr.innerHTML='';colors.forEach(c=>{const sp=document.createElement('span');sp.textContent=colors.length<=12?c:'';hr.appendChild(sp);});}
 }
 
-document.getElementById('wheel').addEventListener('click', (e) => {
-  const rect = e.target.getBoundingClientRect();
-  const px = e.offsetX, py = e.offsetY;
-  const cx = 160, cy = 160, radius = 150;
-  const dx = px - cx, dy = py - cy;
-  if (Math.sqrt(dx * dx + dy * dy) > radius) return;
-
-  const h = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
-  const C = (Math.sqrt(dx * dx + dy * dy) / radius) * 0.32;
-  selectColor(oklabToHex(oklchToOklab({ L: 0.7, C, h })));
-});
-
-// ========== Section 2b: Harmony Engine ==========
-
-function updateHarmony() {
-  const container = document.getElementById('harmony-result');
-  const colors = colorHarmony(selectedColor, activeHarmony);
-  const labels = {
-    'complementary': ['Base', 'Complement'],
-    'analogous': ['-30\u00B0', 'Base', '+30\u00B0'],
-    'triadic': ['Base', '+120\u00B0', '+240\u00B0'],
-    'split-complementary': ['Base', '+150\u00B0', '+210\u00B0'],
-    'tetradic': ['Base', '+90\u00B0', '+180\u00B0', '+270\u00B0'],
-  };
-
-  container.innerHTML = colors.map((c, i) => `
-    <div class="harmony-color">
-      <div class="harmony-swatch" style="background: ${c};" title="${c}" onclick="selectColor('${c}')"></div>
-      <span class="harmony-label">${labels[activeHarmony][i]}</span>
-      <span class="harmony-label">${c}</span>
-    </div>
-  `).join('');
-
-  if (colors.length >= 2) {
-    const gradStops = colors.map((c, i) => `${c} ${(i / (colors.length - 1) * 100).toFixed(0)}%`).join(', ');
-    const bar = document.createElement('div');
-    bar.style.cssText = `width:100%;height:12px;border-radius:6px;margin-top:0.75rem;background:linear-gradient(90deg, ${gradStops});`;
-    container.appendChild(bar);
-  }
+function renderPieceToCanvas(canvas,rendered,colors){
+  const lines=(rendered||'').split('\n').filter(l=>l.length>0);if(!lines.length)return;
+  const rows=lines.length,cols=Math.max(...lines.map(l=>[...l].length));
+  canvas.width=cols;canvas.height=rows;const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#0a0a0f';ctx.fillRect(0,0,cols,rows);
+  const allChars=new Set();lines.forEach(l=>{for(const ch of l)if(ch!==' ')allChars.add(ch);});
+  const sorted=[...allChars].sort((a,b)=>a.charCodeAt(0)-b.charCodeAt(0));
+  const charMap={};sorted.forEach((ch,i)=>{charMap[ch]=sorted.length===1?0.5:i/(sorted.length-1);});
+  for(let y=0;y<rows;y++){const chars=[...(lines[y]||'')];
+    for(let x=0;x<chars.length;x++){const ch=chars[x];if(ch===' ')continue;
+      ctx.fillStyle=colors[Math.min(Math.round((charMap[ch]??0.5)*(colors.length-1)),colors.length-1)];ctx.fillRect(x,y,1,1);}}
 }
 
-document.getElementById('harmony-controls').addEventListener('click', (e) => {
-  if (!e.target.dataset.rule) return;
-  activeHarmony = e.target.dataset.rule;
-  document.querySelectorAll('.harmony-btn').forEach(b => b.classList.remove('active'));
-  e.target.classList.add('active');
-  updateHarmony();
-});
+// ═══ Section 1: Perceptual Uniformity ═══
 
-// ========== Section 3: Gradient Lab ==========
+function updateUniformity(){
+  const a=document.getElementById('uni-a').value,b=document.getElementById('uni-b').value;
+  const steps=parseInt(document.getElementById('uni-steps').value);
+  document.getElementById('uni-steps-val').textContent=steps;
+  const rgb=naiveRgbGradient(a,b,steps),oklch=oklchGradient(a,b,steps);
+  renderGradBar('uni-rgb-bar',rgb);renderGradBar('uni-oklch-bar',oklch);
+  const rgbA=analyzePalette(rgb),oklchA=analyzePalette(oklch);
+  document.getElementById('uni-rgb-score').textContent=`Uniformity: ${rgbA.uniformityScore.toFixed(1)}% \u2022 Avg \u0394E: ${rgbA.avgDeltaE.toFixed(3)}`;
+  document.getElementById('uni-oklch-score').textContent=`Uniformity: ${oklchA.uniformityScore.toFixed(1)}% \u2022 Avg \u0394E: ${oklchA.avgDeltaE.toFixed(3)}`;
 
-function updateGradientLab() {
-  const from = document.getElementById('grad-from').value;
-  const to = document.getElementById('grad-to').value;
-  const steps = parseInt(document.getElementById('grad-steps').value) || 12;
-
-  const oklab = perceptualGradient(from, to, steps);
-  const rgb = rgbGradient(from, to, steps);
-
-  const container = document.getElementById('gradient-comparison');
-  container.innerHTML = '';
-
-  [{ label: 'OKLAB (Perceptual)', colors: oklab }, { label: 'RGB (Naive)', colors: rgb }].forEach(({ label, colors }) => {
-    const row = document.createElement('div');
-    row.className = 'gradient-row';
-
-    const lbl = document.createElement('div');
-    lbl.className = 'gradient-row-label';
-    lbl.textContent = label;
-
-    const bar = document.createElement('div');
-    bar.className = 'gradient-bar';
-    colors.forEach(c => {
-      const sw = document.createElement('div');
-      sw.className = 'swatch';
-      sw.style.background = c;
-      sw.title = c;
-      bar.appendChild(sw);
-    });
-
-    const hexRow = document.createElement('div');
-    hexRow.className = 'gradient-hex-row';
-    colors.forEach(c => {
-      const sp = document.createElement('span');
-      sp.textContent = steps <= 16 ? c : '';
-      hexRow.appendChild(sp);
-    });
-
-    row.appendChild(lbl);
-    row.appendChild(bar);
-    row.appendChild(hexRow);
-    container.appendChild(row);
-  });
-
-  // Lightness comparison chart
-  const chartRow = document.createElement('div');
-  chartRow.className = 'gradient-row';
-  const chartLabel = document.createElement('div');
-  chartLabel.className = 'gradient-row-label';
-  chartLabel.textContent = 'Perceptual lightness (L*)';
-  chartRow.appendChild(chartLabel);
-
-  const chartCanvas = document.createElement('canvas');
-  chartCanvas.width = 600;
-  chartCanvas.height = 80;
-  chartCanvas.style.cssText = 'width:100%;height:60px;border-radius:4px;background:var(--surface);';
-  chartRow.appendChild(chartCanvas);
-  container.appendChild(chartRow);
-
-  const ctx = chartCanvas.getContext('2d');
-  const w = chartCanvas.width, h = chartCanvas.height;
-  ctx.clearRect(0, 0, w, h);
-
-  ctx.strokeStyle = '#1e1e2e';
-  ctx.lineWidth = 1;
-  for (let y = 0; y <= 1; y += 0.25) {
-    const py = h - y * (h - 10) - 5;
-    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(w, py); ctx.stroke();
-  }
-
-  ctx.strokeStyle = '#7c6fe0';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  oklab.forEach((c, i) => {
-    const x = i / (steps - 1) * w;
-    const y = h - hexToOklab(c).L * (h - 10) - 5;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-
-  ctx.strokeStyle = '#4ade80';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([4, 4]);
-  ctx.beginPath();
-  rgb.forEach((c, i) => {
-    const x = i / (steps - 1) * w;
-    const y = h - hexToOklab(c).L * (h - 10) - 5;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctx.font = '10px monospace';
-  ctx.fillStyle = '#7c6fe0'; ctx.fillText('OKLAB', w - 100, 14);
-  ctx.fillStyle = '#4ade80'; ctx.fillText('RGB', w - 45, 14);
+  const canvas=document.getElementById('uni-deltaE-chart'),ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
+  ctx.fillStyle='#0a0a0f';ctx.fillRect(0,0,w,h);
+  const allDEs=[...rgbA.deltaEs,...oklchA.deltaEs],maxDE=Math.max(0.01,...allDEs)*1.15;
+  const n=Math.max(rgbA.deltaEs.length,oklchA.deltaEs.length);
+  ctx.strokeStyle='#1e1e2e';ctx.lineWidth=1;
+  for(let i=1;i<=4;i++){const y=h-(i/4)*h;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+  function drawLine(des,color){if(!des.length)return;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();
+    des.forEach((d,i)=>{const x=(i+0.5)/n*w,y=h-(d/maxDE)*h;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();
+    ctx.fillStyle=color;des.forEach((d,i)=>{const x=(i+0.5)/n*w,y=h-(d/maxDE)*h;ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();});}
+  drawLine(rgbA.deltaEs,'#f87171');drawLine(oklchA.deltaEs,'#4ade80');
 }
 
-document.getElementById('grad-from').addEventListener('input', updateGradientLab);
-document.getElementById('grad-to').addEventListener('input', updateGradientLab);
-document.getElementById('grad-steps').addEventListener('input', updateGradientLab);
-
-// ========== Section 4: Palette Forge ==========
-
-function renderPieceToCanvas(piece, colorPalette) {
-  const canvas = document.getElementById('forge-canvas');
-  const ctx = canvas.getContext('2d');
-  const rendered = piece.rendered || '';
-  const lines = rendered.split('\n').filter(l => l.length > 0);
-  if (lines.length === 0) return;
-
-  const rows = lines.length;
-  const cols = Math.max(...lines.map(l => l.length));
-
-  const palette = piece.genome?.palette || [' ', '.', ':', '#'];
-  const charMap = {};
-  palette.forEach((ch, idx) => { charMap[ch] = idx / Math.max(1, palette.length - 1); });
-
-  const cellW = Math.max(2, Math.floor(400 / cols));
-  const cellH = Math.max(2, Math.floor(300 / rows));
-  const actualW = cols * cellW;
-  const actualH = rows * cellH;
-  canvas.width = actualW;
-  canvas.height = actualH;
-
-  ctx.fillStyle = '#0a0a0f';
-  ctx.fillRect(0, 0, actualW, actualH);
-
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < (lines[y]?.length || 0); x++) {
-      const ch = lines[y][x];
-      if (ch === ' ') continue;
-      const intensity = charMap[ch] !== undefined ? charMap[ch] : 0.5;
-      const colorIdx = Math.round(intensity * (colorPalette.length - 1));
-      ctx.fillStyle = colorPalette[Math.min(colorIdx, colorPalette.length - 1)];
-      ctx.fillRect(x * cellW, y * cellH, cellW - (cellW > 3 ? 1 : 0), cellH - (cellH > 3 ? 1 : 0));
-    }
-  }
+function initUniformity(){
+  ['uni-a','uni-b'].forEach(id=>document.getElementById(id).addEventListener('input',updateUniformity));
+  document.getElementById('uni-steps').addEventListener('input',updateUniformity);
+  updateUniformity();
 }
 
-function buildForge(pieces) {
-  allPieces = pieces;
-  const list = document.getElementById('forge-piece-list');
-  list.innerHTML = '';
+// ═══ Section 2: Gamut Boundary ═══
 
-  pieces.forEach((piece, idx) => {
-    const btn = document.createElement('button');
-    btn.className = 'piece-option' + (idx === forgePieceIndex ? ' active' : '');
-    const type = piece.genome?.type || '?';
-    btn.textContent = `${TYPE_LABELS[type] || type} \u2022 ${(piece.score * 100).toFixed(1)}%`;
-    btn.title = piece.id;
-    btn.addEventListener('click', () => {
-      forgePieceIndex = idx;
-      list.querySelectorAll('.piece-option').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      updateForge();
-    });
-    list.appendChild(btn);
-  });
+function updateGamut(){
+  const L=parseInt(document.getElementById('gamut-L').value)/100;
+  document.getElementById('gamut-L-val').textContent=L.toFixed(2);
+  const canvas=document.getElementById('gamut-canvas'),ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
+  ctx.fillStyle='#0a0a0f';ctx.fillRect(0,0,w,h);
+  const mcArr=[];let totalMax=0,totalAvg=0;
+  for(let hue=0;hue<360;hue++){const mc=gamutMaxChroma(L,hue);mcArr.push(mc);totalMax=Math.max(totalMax,mc);totalAvg+=mc;}
+  totalAvg/=360;const plotMax=Math.max(0.15,totalMax*1.1);
 
-  // Build palette picker
-  const picker = document.getElementById('palette-picker');
-  picker.innerHTML = '';
-  for (const [type, spec] of Object.entries(SPECIES_COLORS)) {
-    const chip = document.createElement('div');
-    chip.className = 'palette-chip' + (type === forgePaletteKey ? ' active' : '');
+  for(let hue=0;hue<360;hue++){const x=Math.floor(hue/360*w),mc=mcArr[hue],yTop=Math.floor(h-(mc/plotMax)*h);
+    for(let py=yTop;py<h;py++){ctx.fillStyle=oklchToHex(L,(1-(py-yTop)/Math.max(1,h-yTop))*mc,hue);ctx.fillRect(x,py,2,1);}}
+  ctx.strokeStyle='#ffffff30';ctx.lineWidth=1;ctx.beginPath();
+  for(let hue=0;hue<360;hue++){const x=hue/360*w,y=h-(mcArr[hue]/plotMax)*h;hue===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();
+  ctx.fillStyle='#6e6e82';ctx.font='9px monospace';ctx.textAlign='center';
+  for(let hue=0;hue<=360;hue+=60)ctx.fillText(hue+'\u00B0',hue/360*w,h-3);
 
-    const label = document.createElement('div');
-    label.className = 'palette-chip-label';
-    label.textContent = TYPE_LABELS[type] || type;
+  const ring=document.getElementById('gamut-ring'),rctx=ring.getContext('2d'),rs=ring.width,rcx=rs/2,rcy=rs/2,rr=rs/2-10;
+  rctx.clearRect(0,0,rs,rs);const imgData=rctx.createImageData(rs,rs);
+  for(let py=0;py<rs;py++)for(let px=0;px<rs;px++){
+    const dx=px-rcx,dy=py-rcy,dist=Math.sqrt(dx*dx+dy*dy);if(dist>rr||dist<rr*0.3)continue;
+    const hue=((Math.atan2(dy,dx)*180/Math.PI)+360)%360,mc=mcArr[Math.round(hue)%360];
+    const hex=oklchToHex(L,((dist-rr*0.3)/(rr*0.7))*mc,hue),[cr,cg,cb]=hexToRgb(hex);
+    const idx=(py*rs+px)*4;imgData.data[idx]=Math.round(cr*255);imgData.data[idx+1]=Math.round(cg*255);imgData.data[idx+2]=Math.round(cb*255);imgData.data[idx+3]=255;}
+  rctx.putImageData(imgData,0,0);rctx.fillStyle='#6e6e82';rctx.font='10px monospace';rctx.textAlign='center';rctx.fillText('L='+L.toFixed(2),rcx,rcy);
 
-    const colors = document.createElement('div');
-    colors.className = 'palette-chip-colors';
-    spec.colors.forEach(c => {
-      const sw = document.createElement('div');
-      sw.className = 'swatch';
-      sw.style.background = c;
-      colors.appendChild(sw);
-    });
-
-    chip.appendChild(label);
-    chip.appendChild(colors);
-    chip.addEventListener('click', () => {
-      forgePaletteKey = type;
-      picker.querySelectorAll('.palette-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      updateForge();
-    });
-    picker.appendChild(chip);
-  }
-
-  updateForge();
+  const peakHue=mcArr.indexOf(totalMax),temp=(peakHue<90||peakHue>300)?'Warm':(peakHue>150&&peakHue<270)?'Cool':'Neutral';
+  document.getElementById('gamut-stats').innerHTML=`
+    <div class="gamut-stat"><span class="val">${totalMax.toFixed(3)}</span><span class="lbl">Peak Chroma</span></div>
+    <div class="gamut-stat"><span class="val">${peakHue}\u00B0</span><span class="lbl">Peak Hue</span></div>
+    <div class="gamut-stat"><span class="val">${totalAvg.toFixed(3)}</span><span class="lbl">Avg Chroma</span></div>
+    <div class="gamut-stat"><span class="val">${temp}</span><span class="lbl">Temperature</span></div>`;
 }
 
-function updateForge() {
-  if (!allPieces.length) return;
-  const piece = allPieces[forgePieceIndex];
-  const palette = SPECIES_COLORS[forgePaletteKey]?.colors || SPECIES_COLORS['1d'].colors;
-  renderPieceToCanvas(piece, palette);
-  updateDensityProfile(piece);
-}
+function initGamut(){document.getElementById('gamut-L').addEventListener('input',updateGamut);updateGamut();}
 
-// ========== Section 5: Hue Generator ==========
+// ═══ Section 3: CVD ═══
 
-function updateHueGenerator() {
-  const hue = parseInt(document.getElementById('hue-slider').value);
-  const steps = parseInt(document.getElementById('hue-steps').value) || 8;
-  document.getElementById('hue-value').textContent = hue + '\u00B0';
-
-  const palette = generatePerceptualPalette(hue, steps);
-
-  const strip = document.getElementById('generated-strip');
-  strip.innerHTML = '';
-  palette.forEach(c => {
-    const sw = document.createElement('div');
-    sw.className = 'swatch';
-    sw.style.background = c;
-    sw.title = c;
-    strip.appendChild(sw);
-  });
-
-  const hexes = document.getElementById('generated-hexes');
-  hexes.innerHTML = '';
-  palette.forEach(c => {
-    const sp = document.createElement('span');
-    sp.textContent = c;
-    sp.style.fontSize = '0.58rem';
-    sp.style.color = 'var(--text-dim)';
-    sp.style.flex = '1';
-    sp.style.textAlign = 'center';
-    hexes.appendChild(sp);
+function updateCVD(){
+  const type=document.getElementById('cvd-species').value,colors=getSpeciesColors(type);
+  renderGradBar('cvd-original',colors);
+  const grid=document.getElementById('cvd-grid');grid.innerHTML='';
+  [{key:'protanopia',label:'Protanopia',desc:'Red-blind (~1% of males)'},
+   {key:'deuteranopia',label:'Deuteranopia',desc:'Green-blind (~1% of males)'},
+   {key:'tritanopia',label:'Tritanopia',desc:'Blue-blind (~0.003%)'},
+   {key:'achromatopsia',label:'Achromatopsia',desc:'Total color blindness'}].forEach(cvd=>{
+    const simColors=colors.map(c=>simCVD(c,cvd.key));
+    let minDE=Infinity;for(let i=0;i<simColors.length-1;i++)minDE=Math.min(minDE,deltaE(simColors[i],simColors[i+1]));
+    const card=document.createElement('div');card.className='cvd-card';
+    const h3=document.createElement('h3');h3.textContent=cvd.label;card.appendChild(h3);
+    const barDiv=document.createElement('div');barDiv.className='grad-bar slim';
+    simColors.forEach(c=>{const sw=document.createElement('div');sw.className='swatch';sw.style.background=c;barDiv.appendChild(sw);});
+    card.appendChild(barDiv);
+    const q=minDE>0.08?'good':minDE>0.04?'warn':'bad',ql=q==='good'?'Distinct':q==='warn'?'Marginal':'Poor';
+    const info=document.createElement('div');info.className='cvd-deltaE';info.style.marginTop='0.35rem';
+    info.innerHTML=`<span class="${q}">${ql}</span> &mdash; min \u0394E: ${minDE.toFixed(3)}<br><span style="font-size:0.55rem;">${cvd.desc}</span>`;
+    card.appendChild(info);grid.appendChild(card);
   });
 }
 
-document.getElementById('hue-slider').addEventListener('input', updateHueGenerator);
-document.getElementById('hue-steps').addEventListener('input', updateHueGenerator);
+function initCVD(){fillSelect(document.getElementById('cvd-species'),'2d');document.getElementById('cvd-species').addEventListener('change',updateCVD);updateCVD();}
 
-// ========== Section 6: Density Profile ==========
+// ═══ Section 4: Scorer ═══
 
-function updateDensityProfile(piece) {
-  const container = document.getElementById('density-bars');
-  container.innerHTML = '';
-
-  const rendered = piece.rendered || '';
-  const lines = rendered.split('\n').filter(l => l.length > 0);
-  const palette = piece.genome?.palette || [' ', '.', ':', '#'];
-  const charMap = {};
-  palette.forEach((ch, idx) => { charMap[ch] = idx; });
-
-  // Count occurrences of each palette state
-  const counts = new Array(palette.length).fill(0);
-  let total = 0;
-  for (const line of lines) {
-    for (const ch of line) {
-      const idx = charMap[ch];
-      if (idx !== undefined) {
-        counts[idx]++;
-        total++;
-      }
-    }
-  }
-
-  const maxFrac = Math.max(...counts.map(c => c / total), 0.01);
-  const colorPalette = SPECIES_COLORS[forgePaletteKey]?.colors || SPECIES_COLORS['1d'].colors;
-
-  counts.forEach((count, i) => {
-    const frac = total > 0 ? count / total : 0;
-    const wrap = document.createElement('div');
-    wrap.className = 'density-bar-wrap';
-
-    const pct = document.createElement('div');
-    pct.className = 'density-pct';
-    pct.textContent = (frac * 100).toFixed(1) + '%';
-
-    const bar = document.createElement('div');
-    bar.className = 'density-bar';
-    const intensity = i / Math.max(1, palette.length - 1);
-    const colorIdx = Math.round(intensity * (colorPalette.length - 1));
-    bar.style.background = colorPalette[Math.min(colorIdx, colorPalette.length - 1)];
-    bar.style.height = (frac / maxFrac * 100) + '%';
-
-    const label = document.createElement('div');
-    label.className = 'density-label';
-    label.textContent = palette[i] === ' ' ? '\u00A0' : palette[i];
-
-    wrap.appendChild(pct);
-    wrap.appendChild(bar);
-    wrap.appendChild(label);
-    container.appendChild(wrap);
-  });
+function renderScoreBars(containerId,scores){
+  const el=document.getElementById(containerId);el.innerHTML='';
+  [{key:'uniformity',label:'Uniformity',color:'#7c6fe0'},{key:'contrast',label:'Contrast',color:'#4ade80'},
+   {key:'chromaRichness',label:'Chroma',color:'#fbbf24'},{key:'hueSpread',label:'Hue Spread',color:'#f87171'}].forEach(d=>{
+    const v=scores[d.key]||0,row=document.createElement('div');row.className='score-row';
+    row.innerHTML=`<span class="score-label">${d.label}</span><div class="score-track"><div class="score-fill" style="width:${v*100}%;background:${d.color};"></div></div><span class="score-val" style="color:${d.color};">${(v*100).toFixed(0)}%</span>`;
+    el.appendChild(row);});
 }
 
-// ========== Section 7: Palette Breeder ==========
-
-function buildBreeder() {
-  const selA = document.getElementById('breeder-a');
-  const selB = document.getElementById('breeder-b');
-  selA.innerHTML = '';
-  selB.innerHTML = '';
-
-  const types = Object.keys(SPECIES_COLORS);
-  types.forEach((type, i) => {
-    const optA = document.createElement('option');
-    optA.value = type;
-    optA.textContent = TYPE_LABELS[type] || type;
-    if (i === 0) optA.selected = true;
-    selA.appendChild(optA);
-
-    const optB = document.createElement('option');
-    optB.value = type;
-    optB.textContent = TYPE_LABELS[type] || type;
-    if (i === 1) optB.selected = true;
-    selB.appendChild(optB);
-  });
-
-  updateBreeder();
+function updateScorer(){
+  const type=document.getElementById('scorer-species').value,colors=getSpeciesColors(type);
+  renderGradBar('scorer-bar',colors);const scores=scorePaletteAesthetics(colors);
+  renderScoreBars('scorer-bars',scores);document.getElementById('scorer-overall').textContent=(scores.overall*100).toFixed(0)+'%';
 }
 
-function updateBreeder() {
-  const typeA = document.getElementById('breeder-a').value;
-  const typeB = document.getElementById('breeder-b').value;
-  const t = parseInt(document.getElementById('breeder-slider').value) / 100;
+function initScorer(){fillSelect(document.getElementById('scorer-species'),'1d');document.getElementById('scorer-species').addEventListener('change',updateScorer);updateScorer();}
 
-  const palA = SPECIES_COLORS[typeA]?.colors || SPECIES_COLORS['1d'].colors;
-  const palB = SPECIES_COLORS[typeB]?.colors || SPECIES_COLORS['1d'].colors;
-  const offspring = blendPalettes(palA, palB, t);
+// ═══ Section 5: HoF DNA ═══
 
-  function fillStrip(id, colors) {
-    const strip = document.getElementById(id);
-    strip.innerHTML = '';
-    colors.forEach(c => {
-      const sw = document.createElement('div');
-      sw.className = 'swatch';
-      sw.style.background = c;
-      strip.appendChild(sw);
-    });
-  }
-
-  fillStrip('breeder-strip-a', palA);
-  fillStrip('breeder-strip-b', palB);
-  fillStrip('breeder-offspring', offspring);
-
-  const hexes = document.getElementById('breeder-hexes');
-  hexes.innerHTML = '';
-  offspring.forEach(c => {
-    const sp = document.createElement('span');
-    sp.textContent = c;
-    hexes.appendChild(sp);
-  });
+function buildDNAGrid(pieces){
+  const grid=document.getElementById('dna-grid');grid.innerHTML='';
+  [...pieces].sort((a,b)=>b.score-a.score).slice(0,24).forEach(piece=>{
+    const type=piece.genome?.type||'2d',colors=getSpeciesColors(type);
+    const card=document.createElement('div');card.className='dna-card';
+    const canvas=document.createElement('canvas');renderPieceToCanvas(canvas,piece.rendered||'',colors);card.appendChild(canvas);
+    const idDiv=document.createElement('div');idDiv.className='dna-id';idDiv.textContent=piece.id;card.appendChild(idDiv);
+    const scoreDiv=document.createElement('div');scoreDiv.className='dna-score';
+    scoreDiv.textContent=(piece.score*100).toFixed(1)+'% \u2022 '+(TYPE_LABELS[type]||type);card.appendChild(scoreDiv);
+    card.addEventListener('click',()=>{document.querySelectorAll('.dna-card').forEach(c=>c.classList.remove('selected'));
+      card.classList.add('selected');showDNADetail(piece);});
+    grid.appendChild(card);});
 }
 
-document.getElementById('breeder-a').addEventListener('change', updateBreeder);
-document.getElementById('breeder-b').addEventListener('change', updateBreeder);
-document.getElementById('breeder-slider').addEventListener('input', updateBreeder);
-
-// ========== Section 8: Hall of Fame Palette Map ==========
-
-function renderHofGrid(pieces) {
-  const grid = document.getElementById('hof-grid');
-  grid.innerHTML = '';
-
-  const sorted = [...pieces].sort((a, b) => b.score - a.score).slice(0, 64);
-
-  sorted.forEach((piece, idx) => {
-    const type = piece.genome?.type || '2d';
-    const theme = SPECIES_COLORS[type] || SPECIES_COLORS['2d'];
-    const rendered = piece.rendered || '';
-    const lines = rendered.split('\n').filter(l => l.length > 0);
-    if (lines.length === 0) return;
-
-    const chip = document.createElement('div');
-    chip.className = 'hof-chip';
-
-    const canvas = document.createElement('canvas');
-    const rows = lines.length;
-    const cols = Math.max(...lines.map(l => l.length));
-    canvas.width = cols;
-    canvas.height = rows;
-
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = theme.bg;
-    ctx.fillRect(0, 0, cols, rows);
-
-    const palette = piece.genome?.palette || [' ', '.', ':', '#'];
-    const charMap = {};
-    palette.forEach((ch, i) => { charMap[ch] = i / Math.max(1, palette.length - 1); });
-
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < (lines[y]?.length || 0); x++) {
-        const ch = lines[y][x];
-        if (ch === ' ') continue;
-        const intensity = charMap[ch] !== undefined ? charMap[ch] : 0.5;
-        const colorIdx = Math.round(intensity * (theme.colors.length - 1));
-        ctx.fillStyle = theme.colors[Math.min(colorIdx, theme.colors.length - 1)];
-        ctx.fillRect(x, y, 1, 1);
-      }
-    }
-
-    const label = document.createElement('div');
-    label.className = 'hof-label';
-    label.textContent = `${TYPE_LABELS[type] || type} \u2022 ${(piece.score * 100).toFixed(1)}%`;
-
-    chip.appendChild(canvas);
-    chip.appendChild(label);
-    chip.addEventListener('click', () => {
-      // Load this piece into the forge
-      const pieceIdx = allPieces.findIndex(p => p.id === piece.id);
-      if (pieceIdx >= 0) {
-        forgePieceIndex = pieceIdx;
-        forgePaletteKey = type;
-        const list = document.getElementById('forge-piece-list');
-        list.querySelectorAll('.piece-option').forEach(b => b.classList.remove('active'));
-        if (list.children[pieceIdx]) list.children[pieceIdx].classList.add('active');
-        const picker = document.getElementById('palette-picker');
-        picker.querySelectorAll('.palette-chip').forEach(c => c.classList.remove('active'));
-        const chips = picker.querySelectorAll('.palette-chip');
-        const typeIdx = Object.keys(SPECIES_COLORS).indexOf(type);
-        if (chips[typeIdx]) chips[typeIdx].classList.add('active');
-        updateForge();
-        document.getElementById('forge-canvas').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    });
-    grid.appendChild(chip);
-  });
+function showDNADetail(piece){
+  document.getElementById('dna-detail').style.display='block';
+  const type=piece.genome?.type||'2d',theme=piece.genome?.colorTheme||SPECIES_THEMES[type]||SPECIES_THEMES['2d'];
+  const colors=theme.stops&&theme.stops.length?theme.stops:getSpeciesColors(type);
+  document.getElementById('dna-title').textContent=`${piece.id} \u2014 ${TYPE_LABELS[type]||type} \u2014 ${(piece.score*100).toFixed(1)}%`;
+  renderGradBar('dna-bar',colors,'dna-hex');
+  const temp=paletteTemperature(colors),tl=temp>0.3?'Warm':temp<-0.3?'Cool':'Neutral',tc=temp>0.3?'#f59d6b':temp<-0.3?'#4ad4f5':'var(--text-dim)';
+  document.getElementById('dna-props').innerHTML=`
+    <div class="dna-prop"><span class="val">${Math.round(theme.hue)}\u00B0</span><span class="lbl">Hue</span></div>
+    <div class="dna-prop"><span class="val">${(theme.chroma||0).toFixed(2)}</span><span class="lbl">Chroma</span></div>
+    <div class="dna-prop"><span class="val">${theme.harmony||'mono'}</span><span class="lbl">Harmony</span></div>
+    <div class="dna-prop"><span class="val">${(theme.lMin||0).toFixed(2)}&ndash;${(theme.lMax||1).toFixed(2)}</span><span class="lbl">L Range</span></div>
+    <div class="dna-prop"><span class="val" style="color:${tc}">${tl}</span><span class="lbl">Temp</span></div>`;
+  renderScoreBars('dna-scores',scorePaletteAesthetics(colors));
 }
 
-// ========== Section 9: Palette DNA ==========
+// ═══ Section 6: Hue Ring ═══
 
-function buildDnaGrid() {
-  const grid = document.getElementById('dna-grid');
-  grid.innerHTML = '';
-
-  const theme = SPECIES_COLORS[selectedSpecies] || SPECIES_COLORS['1d'];
-
-  UNICODE_PALETTES.forEach(pal => {
-    const row = document.createElement('div');
-    row.className = 'dna-row';
-
-    const name = document.createElement('div');
-    name.className = 'dna-name';
-    name.textContent = pal.name + ' (' + pal.chars.length + ' glyphs)';
-
-    const chars = document.createElement('div');
-    chars.className = 'dna-chars';
-
-    const colors = document.createElement('div');
-    colors.className = 'dna-colors';
-
-    pal.chars.forEach((ch, idx) => {
-      const intensity = idx / Math.max(1, pal.chars.length - 1);
-      const colorIdx = Math.round(intensity * (theme.colors.length - 1));
-      const color = theme.colors[colorIdx];
-
-      const charEl = document.createElement('div');
-      charEl.className = 'dna-char';
-      charEl.textContent = ch === ' ' ? '\u00A0' : ch;
-      charEl.style.color = color;
-      charEl.style.background = idx === 0 ? 'transparent' : `${color}15`;
-      chars.appendChild(charEl);
-
-      const colorCell = document.createElement('div');
-      colorCell.className = 'dna-color-cell';
-      colorCell.style.background = color;
-      colors.appendChild(colorCell);
-    });
-
-    row.appendChild(name);
-    row.appendChild(chars);
-    row.appendChild(colors);
-    grid.appendChild(row);
-  });
+function drawSpeciesRing(){
+  const canvas=document.getElementById('species-ring'),ctx=canvas.getContext('2d');
+  const size=canvas.width,cx=size/2,cy=size/2,r=size/2-20;ctx.clearRect(0,0,size,size);
+  const imgData=ctx.createImageData(size,size);
+  for(let py=0;py<size;py++)for(let px=0;px<size;px++){
+    const dx=px-cx,dy=py-cy,dist=Math.sqrt(dx*dx+dy*dy);if(dist>r||dist<r*0.7)continue;
+    const h=((Math.atan2(dy,dx)*180/Math.PI)+360)%360,hex=oklchToHex(0.5,0.08,h),[cr,cg,cb]=hexToRgb(hex);
+    const idx=(py*size+px)*4;imgData.data[idx]=Math.round(cr*255);imgData.data[idx+1]=Math.round(cg*255);imgData.data[idx+2]=Math.round(cb*255);imgData.data[idx+3]=80;}
+  ctx.putImageData(imgData,0,0);
+  const legend=document.getElementById('ring-legend');legend.innerHTML='';const mr=r*0.85;
+  SPECIES_LIST.forEach(type=>{
+    const theme=SPECIES_THEMES[type],offsets=HARMONY_OFFSETS[theme.harmony]||[0],baseColor=oklchToHex(0.65,theme.chroma,theme.hue);
+    if(offsets.length>1){ctx.strokeStyle=baseColor+'40';ctx.lineWidth=2;ctx.beginPath();
+      offsets.forEach((o,i)=>{const a=((theme.hue+o+360)%360)*Math.PI/180;const mx=cx+mr*Math.cos(a),my=cy+mr*Math.sin(a);i===0?ctx.moveTo(mx,my):ctx.lineTo(mx,my);});ctx.stroke();}
+    offsets.forEach((o,i)=>{const h=(theme.hue+o+360)%360,a=h*Math.PI/180,mx=cx+mr*Math.cos(a),my=cy+mr*Math.sin(a);
+      ctx.beginPath();ctx.arc(mx,my,i===0?7:4,0,Math.PI*2);ctx.fillStyle=oklchToHex(0.65,theme.chroma,h);ctx.fill();
+      if(i===0){ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();}});
+    const entry=document.createElement('div');
+    entry.innerHTML=`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${baseColor};vertical-align:middle;margin-right:4px;"></span>${TYPE_LABELS[type]||type} <span style="color:var(--text-dim);">${Math.round(theme.hue)}\u00B0 ${theme.harmony}</span>`;
+    legend.appendChild(entry);});
 }
 
-// ========== Init ==========
+// ═══ Init ═══
 
-async function init() {
-  buildSpeciesGrid();
-  selectColor('#6b4edb');
-  updateGradientLab();
-  updateHueGenerator();
-  buildBreeder();
-  buildDnaGrid();
-
-  try {
-    const res = await fetch('gallery.json');
-    galleryData = await res.json();
-
-    // Combine HoF + archive + pieces for forge
-    const combined = [];
-    const seen = new Set();
-    for (const source of [galleryData.hallOfFame, galleryData.archive, galleryData.pieces]) {
-      if (!source) continue;
-      for (const p of source) {
-        if (p.rendered && p.id && !seen.has(p.id)) {
-          combined.push(p);
-          seen.add(p.id);
-        }
-      }
-    }
-    combined.sort((a, b) => b.score - a.score);
-
-    if (combined.length > 0) {
-      buildForge(combined.slice(0, 50));
-      renderHofGrid(combined);
-    }
-  } catch (e) {
-    document.getElementById('hof-grid').innerHTML = '<p style="color: var(--text-dim); font-size: 0.75rem;">Could not load gallery data.</p>';
-  }
+async function init(){
+  initUniformity();initGamut();initCVD();initScorer();drawSpeciesRing();
+  try{const res=await fetch('gallery.json');if(res.ok){galleryData=await res.json();
+    const pieces=galleryData.hallOfFame||galleryData.archive||[];if(pieces.length)buildDNAGrid(pieces);}}catch(e){}
 }
-
 init();
 </script>
 </body>
