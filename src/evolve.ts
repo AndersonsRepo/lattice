@@ -33,6 +33,9 @@ import {
   evolveFractalFlame,
   evolveSandpile,
   evolveMagneticPendulum,
+  evolveParticleLife,
+  evolveHarmonograph,
+  evolveTurmite,
   render,
   score,
   computeScore,
@@ -74,7 +77,7 @@ const NICHE_BONUS_WEIGHT = 0.08; // scoring bonus for species underrepresented i
 
 // Speciation: minimum slots per genome type (1 per type with 9 types)
 const MIN_SLOTS_PER_TYPE = 1;
-const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield"];
+const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield", "particle-life"];
 
 // Hall of Fame seeding: probability of injecting mutated HoF genetics into offspring
 const HOF_SEEDING_RATE = 0.15;
@@ -274,6 +277,21 @@ function generatePiece(genome: Genome, generation: number, populationMetrics?: P
     case "fractal-flame":
       grid = evolveFractalFlame(genome);
       break;
+    case "sandpile":
+      grid = evolveSandpile(genome);
+      break;
+    case "magnetic-pendulum":
+      grid = evolveMagneticPendulum(genome);
+      break;
+    case "particle-life":
+      grid = evolveParticleLife(genome);
+      break;
+    case "harmonograph":
+      grid = evolveHarmonograph(genome);
+      break;
+    case "turmite":
+      grid = evolveTurmite(genome);
+      break;
     default:
       grid = evolve1D(genome);
   }
@@ -320,6 +338,7 @@ function formatPieceForDiscord(piece: Piece): string {
     : piece.genome.type === "noise" ? "Fractal Noise"
     : piece.genome.type === "flowfield" ? "Flow Field"
     : piece.genome.type === "magnetic-pendulum" ? "Magnetic Pendulum"
+    : piece.genome.type === "harmonograph" ? "Harmonograph"
     : "L-System";
 
   const ruleStr = piece.genome.type === "1d"
@@ -351,7 +370,7 @@ function formatPieceForDiscord(piece: Piece): string {
     `Score: **${(piece.score * 100).toFixed(1)}%** | ` +
       `Novelty: ${(piece.metrics.novelty * 100).toFixed(0)}% | ` +
       `Fractal: ${(piece.metrics.fractalDimension ?? 0).toFixed(2)} | ` +
-      `Info: ${((piece.metrics.informationDensity ?? 0) * 100).toFixed(0)}% | ` +
+      `Harmony: ${((piece.metrics.aestheticHarmony ?? 0) * 100).toFixed(0)}% | ` +
       `Density: ${(piece.metrics.density * 100).toFixed(0)}%`,
     "```",
     piece.rendered,
@@ -857,6 +876,7 @@ async function run(): Promise<void> {
     avgCrowdingDistance: +avgCrowding.toFixed(4),
     agePenaltyApplied: agePenaltyApplied > 0 ? agePenaltyApplied : undefined,
     paretoFrontSize,
+    avgAestheticHarmony: +(survivors.reduce((s, p) => s + (p.metrics.aestheticHarmony ?? 0), 0) / survivors.length).toFixed(4),
   };
   history.push(genRecord);
   writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));

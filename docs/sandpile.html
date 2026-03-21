@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Sandpile</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --magenta: #d44ad4;
+      --cyan: #22d3ee;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    /* --- HUD --- */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      pointer-events: auto;
+    }
+
+    .hud-title .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+      pointer-events: auto;
+    }
+    .hud-title .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+      pointer-events: auto;
+    }
+    .hud-stats .val { color: var(--green); }
+    .hud-stats .accent-val { color: var(--accent); }
+    .hud-stats .magenta-val { color: var(--magenta); }
+
+    .hud-bottom {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .hud-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      pointer-events: auto;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .control-label {
+      font-size: 0.55rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      min-width: 5.5rem;
+    }
+
+    .control-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      padding: 0.2rem 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .control-btn:hover { border-color: var(--accent); color: var(--text); }
+    .control-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(124, 111, 224, 0.1); }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 80px;
+      height: 2px;
+      background: var(--border);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .hud-help {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.6;
+      text-align: right;
+      pointer-events: auto;
+      opacity: 0.6;
+    }
+
+    .hud-help kbd {
+      display: inline-block;
+      padding: 0.05rem 0.25rem;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      font-family: inherit;
+      font-size: 0.5rem;
+      color: var(--text);
+    }
+
+    /* Vignette */
+    .vignette {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 5;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(10,10,15,0.6) 100%);
+    }
+
+    /* Avalanche indicator */
+    .avalanche-bar {
+      position: absolute;
+      top: 3.5rem;
+      right: 1.25rem;
+      width: 3px;
+      height: 0;
+      background: var(--magenta);
+      box-shadow: 0 0 8px var(--magenta);
+      transition: height 0.1s;
+      z-index: 11;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="vignette"></div>
+  <div class="avalanche-bar" id="avalancheBar"></div>
+
+  <div class="hud">
+    <div class="hud-top">
+      <div class="hud-title">
+        <a href="/" class="back-link">&larr; lattice</a>
+        <h1>Sandpile</h1>
+      </div>
+      <div class="hud-stats" id="stats">
+        GRAINS <span class="val" id="statGrains">0</span><br>
+        TOPPLES <span class="magenta-val" id="statTopples">0</span><br>
+        THRESHOLD <span class="accent-val" id="statThreshold">4</span><br>
+        MAX HEIGHT <span class="val" id="statMax">0</span><br>
+        <span id="statMode" style="color: var(--amber)">CLICK TO DROP</span>
+      </div>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="hud-controls">
+        <div class="control-row">
+          <span class="control-label">drop size</span>
+          <input type="range" id="dropSize" min="100" max="50000" value="5000" step="100">
+          <span class="val" id="dropSizeVal" style="font-size:0.55rem">5000</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">threshold</span>
+          <button class="control-btn active" data-thresh="4">4</button>
+          <button class="control-btn" data-thresh="3">3</button>
+          <button class="control-btn" data-thresh="6">6</button>
+          <button class="control-btn" data-thresh="8">8</button>
+        </div>
+        <div class="control-row">
+          <span class="control-label">palette</span>
+          <button class="control-btn active" data-palette="fractal">fractal</button>
+          <button class="control-btn" data-palette="fire">fire</button>
+          <button class="control-btn" data-palette="ocean">ocean</button>
+          <button class="control-btn" data-palette="mono">mono</button>
+        </div>
+        <div class="control-row">
+          <span class="control-label">speed</span>
+          <input type="range" id="speed" min="1" max="5000" value="1000" step="50">
+          <span class="val" id="speedVal" style="font-size:0.55rem">1000</span>
+        </div>
+      </div>
+
+      <div class="hud-help">
+        <kbd>click</kbd> drop sand<br>
+        <kbd>drag</kbd> paint sand<br>
+        <kbd>space</kbd> pause/resume<br>
+        <kbd>r</kbd> reset<br>
+        <kbd>c</kbd> center drop<br>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // --- State ---
+    let cellSize = 3;
+    let cols, rows;
+    let pile; // Int32Array
+    let totalGrains = 0;
+    let totalTopples = 0;
+    let maxHeight = 0;
+    let threshold = 4;
+    let paused = false;
+    let topplesPerFrame = 1000;
+
+    // Color palettes
+    const palettes = {
+      fractal: [
+        '#0a0a0f', '#1a0a2d', '#3b0d6b', '#6b16a8',
+        '#a822db', '#d44af5', '#f088ff', '#ffccff',
+        '#ffffff'
+      ],
+      fire: [
+        '#0a0a0f', '#2d0a0a', '#6b1a0d', '#a83516',
+        '#db5a22', '#f5944a', '#ffc888', '#ffffcc',
+        '#ffffff'
+      ],
+      ocean: [
+        '#0a0a0f', '#0a0a2d', '#0d1a6b', '#1635a8',
+        '#225adb', '#4a94f5', '#88c8ff', '#ccecff',
+        '#ffffff'
+      ],
+      mono: [
+        '#0a0a0f', '#151520', '#202030', '#303045',
+        '#454560', '#606080', '#8080a0', '#b0b0cc',
+        '#ffffff'
+      ],
+    };
+    let currentPalette = 'fractal';
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      const newCols = Math.floor(canvas.width / cellSize);
+      const newRows = Math.floor(canvas.height / cellSize);
+
+      if (pile && newCols === cols && newRows === rows) return;
+
+      const oldPile = pile;
+      const oldCols = cols;
+      const oldRows = rows;
+      cols = newCols;
+      rows = newRows;
+      pile = new Int32Array(cols * rows);
+
+      // Copy old data if resizing
+      if (oldPile) {
+        const minC = Math.min(cols, oldCols);
+        const minR = Math.min(rows, oldRows);
+        for (let y = 0; y < minR; y++) {
+          for (let x = 0; x < minC; x++) {
+            pile[y * cols + x] = oldPile[y * oldCols + x];
+          }
+        }
+      }
+    }
+
+    // --- Toppling engine ---
+    function toppleStep(maxSteps) {
+      let steps = 0;
+      let anyToppled = false;
+
+      for (let i = 0; i < pile.length && steps < maxSteps; i++) {
+        if (pile[i] >= threshold) {
+          const x = i % cols;
+          const y = (i / cols) | 0;
+
+          pile[i] -= threshold;
+          steps++;
+          totalTopples++;
+          anyToppled = true;
+
+          // Distribute to neighbors (open boundary)
+          if (x + 1 < cols) pile[y * cols + x + 1]++;
+          if (x - 1 >= 0) pile[y * cols + x - 1]++;
+          if (y + 1 < rows) pile[(y + 1) * cols + x]++;
+          if (y - 1 >= 0) pile[(y - 1) * cols + x]++;
+        }
+      }
+
+      return anyToppled;
+    }
+
+    // --- Rendering ---
+    function getColor(value) {
+      const pal = palettes[currentPalette];
+      if (value === 0) return pal[0];
+
+      // Map value to palette index
+      // For threshold=4, values 0-3 are stable states
+      const maxStable = threshold - 1;
+      if (value <= maxStable) {
+        const idx = Math.floor((value / maxStable) * (pal.length - 2)) + 1;
+        return pal[Math.min(idx, pal.length - 1)];
+      }
+
+      // Unstable cells glow bright
+      return pal[pal.length - 1];
+    }
+
+    function render() {
+      // Use ImageData for fast pixel rendering
+      const imageData = ctx.createImageData(canvas.width, canvas.height);
+      const data = imageData.data;
+
+      maxHeight = 0;
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const val = pile[y * cols + x];
+          if (val > maxHeight) maxHeight = val;
+
+          const hex = getColor(val);
+          const r = parseInt(hex.slice(1, 3), 16);
+          const g = parseInt(hex.slice(3, 5), 16);
+          const b = parseInt(hex.slice(5, 7), 16);
+
+          // Fill the cell pixels
+          for (let dy = 0; dy < cellSize; dy++) {
+            for (let dx = 0; dx < cellSize; dx++) {
+              const px = x * cellSize + dx;
+              const py = y * cellSize + dy;
+              if (px >= canvas.width || py >= canvas.height) continue;
+              const pi = (py * canvas.width + px) * 4;
+              data[pi] = r;
+              data[pi + 1] = g;
+              data[pi + 2] = b;
+              data[pi + 3] = 255;
+            }
+          }
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    // --- Drop sand ---
+    function dropAt(screenX, screenY, amount) {
+      const cx = Math.floor(screenX / cellSize);
+      const cy = Math.floor(screenY / cellSize);
+      if (cx < 0 || cx >= cols || cy < 0 || cy >= rows) return;
+
+      pile[cy * cols + cx] += amount;
+      totalGrains += amount;
+    }
+
+    function centerDrop(amount) {
+      const cx = Math.floor(cols / 2);
+      const cy = Math.floor(rows / 2);
+      pile[cy * cols + cx] += amount;
+      totalGrains += amount;
+    }
+
+    // --- UI ---
+    function updateStats() {
+      document.getElementById('statGrains').textContent = totalGrains.toLocaleString();
+      document.getElementById('statTopples').textContent = totalTopples.toLocaleString();
+      document.getElementById('statThreshold').textContent = threshold;
+      document.getElementById('statMax').textContent = maxHeight;
+      document.getElementById('statMode').textContent = paused ? 'PAUSED' : (maxHeight >= threshold ? 'TOPPLING...' : 'STABLE');
+      document.getElementById('statMode').style.color =
+        paused ? 'var(--text-dim)' :
+        maxHeight >= threshold ? 'var(--magenta)' : 'var(--green)';
+
+      // Avalanche bar
+      const bar = document.getElementById('avalancheBar');
+      const intensity = Math.min(maxHeight / (threshold * 10), 1);
+      bar.style.height = (intensity * 120) + 'px';
+    }
+
+    // Drop size slider
+    const dropSizeSlider = document.getElementById('dropSize');
+    const dropSizeVal = document.getElementById('dropSizeVal');
+    dropSizeSlider.addEventListener('input', () => {
+      dropSizeVal.textContent = parseInt(dropSizeSlider.value).toLocaleString();
+    });
+
+    // Speed slider
+    const speedSlider = document.getElementById('speed');
+    const speedVal = document.getElementById('speedVal');
+    speedSlider.addEventListener('input', () => {
+      topplesPerFrame = parseInt(speedSlider.value);
+      speedVal.textContent = topplesPerFrame.toLocaleString();
+    });
+
+    // Threshold buttons
+    document.querySelectorAll('[data-thresh]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-thresh]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        threshold = parseInt(btn.dataset.thresh);
+      });
+    });
+
+    // Palette buttons
+    document.querySelectorAll('[data-palette]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-palette]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPalette = btn.dataset.palette;
+      });
+    });
+
+    // Mouse interaction
+    let mouseDown = false;
+    canvas.addEventListener('mousedown', (e) => {
+      mouseDown = true;
+      dropAt(e.clientX, e.clientY, parseInt(dropSizeSlider.value));
+    });
+    canvas.addEventListener('mousemove', (e) => {
+      if (mouseDown) {
+        dropAt(e.clientX, e.clientY, Math.floor(parseInt(dropSizeSlider.value) / 10));
+      }
+    });
+    canvas.addEventListener('mouseup', () => mouseDown = false);
+    canvas.addEventListener('mouseleave', () => mouseDown = false);
+
+    // Touch support
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      dropAt(t.clientX, t.clientY, parseInt(dropSizeSlider.value));
+    });
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      dropAt(t.clientX, t.clientY, Math.floor(parseInt(dropSizeSlider.value) / 10));
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', (e) => {
+      if (e.key === ' ') { e.preventDefault(); paused = !paused; }
+      if (e.key === 'r') {
+        pile.fill(0);
+        totalGrains = 0;
+        totalTopples = 0;
+        maxHeight = 0;
+      }
+      if (e.key === 'c') {
+        centerDrop(parseInt(dropSizeSlider.value));
+      }
+    });
+
+    // --- Main loop ---
+    function frame() {
+      if (!paused) {
+        toppleStep(topplesPerFrame);
+      }
+      render();
+      updateStats();
+      requestAnimationFrame(frame);
+    }
+
+    // --- Init ---
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Start with an interesting initial configuration
+    centerDrop(10000);
+
+    frame();
+  </script>
+</body>
+</html>

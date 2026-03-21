@@ -15,7 +15,7 @@ export { SPECIES_THEMES, getSpeciesColors, themeToColors, generateGradient, anal
 // Import flame engine
 import { FlameRule, FlameTransform, evolveFlame, mutateFlame, crossoverFlame, randomFlameRule, VARIATION_COUNT, VARIATION_NAMES } from "./flame.js";
 export type { FlameRule, FlameTransform };
-export { evolveFlame, VARIATION_NAMES };
+export { evolveFlame, evolveFlame as evolveFractalFlame, VARIATION_NAMES };
 // Import DLA engine
 import { DLARule, evolveDLA, mutateDLA, crossoverDLA, randomDLARule, DLA_SEED_GENOMES } from "./dla.js";
 export type { DLARule };

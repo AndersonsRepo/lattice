@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Basins</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title { pointer-events: auto; }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .hud-title .sub {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      margin-top: 0.2rem;
+      letter-spacing: 0.08em;
+    }
+
+    .hud-title .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .hud-title .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+      pointer-events: auto;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    /* --- Control panel --- */
+    .panel {
+      position: absolute;
+      right: 1.25rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 230px;
+      background: rgba(18, 18, 26, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 1rem;
+      pointer-events: auto;
+      z-index: 20;
+      max-height: 85vh;
+      overflow-y: auto;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+
+    .panel.collapsed {
+      opacity: 0;
+      transform: translateY(-50%) translateX(260px);
+      pointer-events: none;
+    }
+
+    .panel::-webkit-scrollbar { width: 3px; }
+    .panel::-webkit-scrollbar-track { background: transparent; }
+    .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .panel-section {
+      margin-bottom: 0.85rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+    .section-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.5rem;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .slider-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      width: 55px;
+      flex-shrink: 0;
+    }
+
+    .slider-val {
+      font-size: 0.55rem;
+      color: var(--accent);
+      width: 38px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.3);
+    }
+
+    .btn-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+    .btn {
+      font-family: inherit;
+      font-size: 0.55rem;
+      padding: 0.35rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.05em;
+    }
+    .btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(124, 111, 224, 0.08);
+    }
+    .btn.active {
+      border-color: var(--green);
+      color: var(--green);
+      background: rgba(74, 222, 128, 0.08);
+    }
+
+    .magnet-btns { display: flex; gap: 0.3rem; }
+    .magnet-btn {
+      font-family: inherit;
+      font-size: 0.6rem;
+      width: 28px; height: 28px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .magnet-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .magnet-btn.active {
+      border-color: var(--green);
+      color: var(--green);
+      background: rgba(74, 222, 128, 0.08);
+    }
+
+    .toggle-btn {
+      position: absolute;
+      right: 1.25rem;
+      bottom: 1.25rem;
+      font-family: inherit;
+      font-size: 0.6rem;
+      padding: 0.4rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(18, 18, 26, 0.85);
+      color: var(--text-dim);
+      cursor: pointer;
+      z-index: 20;
+      backdrop-filter: blur(8px);
+      pointer-events: auto;
+      transition: all 0.2s;
+    }
+    .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .progress-bar {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      transition: width 0.1s;
+      z-index: 15;
+    }
+
+    .hint {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Color mode selector */
+    .color-btns { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+    .color-btn {
+      font-family: inherit;
+      font-size: 0.5rem;
+      padding: 0.25rem 0.45rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .color-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .color-btn.active { border-color: var(--green); color: var(--green); }
+
+    @media (max-width: 700px) {
+      .panel { width: 180px; right: 0.5rem; padding: 0.75rem; }
+      .hud-top { padding: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="basin"></canvas>
+<canvas id="overlay" style="pointer-events: none;"></canvas>
+
+<div class="hud">
+  <div class="hud-top">
+    <div class="hud-title">
+      <a href="index.html" class="back-link">&larr; lattice</a>
+      <h1>Basins</h1>
+      <div class="sub">magnetic pendulum attractor fractals</div>
+    </div>
+    <div class="hud-stats">
+      <div>magnets <span class="val" id="stat-n">3</span></div>
+      <div>friction <span class="val" id="stat-f">0.080</span></div>
+      <div>strength <span class="val" id="stat-s">1.5</span></div>
+      <div>zoom <span class="val" id="stat-z">1.00x</span></div>
+      <div>render <span class="val" id="stat-t">--</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="panel">
+  <div class="panel-section">
+    <div class="section-label">Magnets</div>
+    <div class="magnet-btns" id="magnet-btns">
+      <button class="magnet-btn" data-n="2">2</button>
+      <button class="magnet-btn active" data-n="3">3</button>
+      <button class="magnet-btn" data-n="4">4</button>
+      <button class="magnet-btn" data-n="5">5</button>
+      <button class="magnet-btn" data-n="6">6</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Physics</div>
+    <div class="slider-row">
+      <span class="slider-label">friction</span>
+      <input type="range" id="sl-fri" min="0.005" max="0.30" step="0.005" value="0.08">
+      <span class="slider-val" id="v-fri">0.080</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">gravity</span>
+      <input type="range" id="sl-grav" min="0.02" max="0.80" step="0.01" value="0.20">
+      <span class="slider-val" id="v-grav">0.20</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">strength</span>
+      <input type="range" id="sl-str" min="0.3" max="5.0" step="0.1" value="1.5">
+      <span class="slider-val" id="v-str">1.5</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">height</span>
+      <input type="range" id="sl-h" min="0.05" max="0.80" step="0.01" value="0.30">
+      <span class="slider-val" id="v-h">0.30</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">damping</span>
+      <input type="range" id="sl-dt" min="0.003" max="0.025" step="0.001" value="0.010">
+      <span class="slider-val" id="v-dt">0.010</span>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Color</div>
+    <div class="color-btns" id="color-btns">
+      <button class="color-btn active" data-mode="basin">basins</button>
+      <button class="color-btn" data-mode="time">settle</button>
+      <button class="color-btn" data-mode="smooth">smooth</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Quality</div>
+    <div class="slider-row">
+      <span class="slider-label">detail</span>
+      <input type="range" id="sl-q" min="1" max="4" step="1" value="2">
+      <span class="slider-val" id="v-q">med</span>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-label">Actions</div>
+    <div class="btn-row">
+      <button class="btn" id="btn-rand">Randomize</button>
+      <button class="btn" id="btn-save">Save PNG</button>
+    </div>
+    <div class="btn-row" style="margin-top: 0.4rem;">
+      <button class="btn active" id="btn-trace">Trace</button>
+      <button class="btn" id="btn-reset">Reset View</button>
+    </div>
+  </div>
+</div>
+
+<button class="toggle-btn" id="toggle-panel">H hide</button>
+<div class="progress-bar" id="prog"></div>
+<div class="hint" id="hint">
+  click to trace pendulum path &middot; scroll to zoom &middot; shift+drag to pan &middot; ? for keys
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const bCanvas = document.getElementById('basin');
+  const oCanvas = document.getElementById('overlay');
+  const bCtx = bCanvas.getContext('2d');
+  const oCtx = oCanvas.getContext('2d');
+
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    bCanvas.width = w; bCanvas.height = h;
+    oCanvas.width = w; oCanvas.height = h;
+  }
+  resize();
+  window.addEventListener('resize', () => { resize(); scheduleRender(); });
+
+  // Magnet palette — perceptually distinct, dark-theme friendly
+  const COLORS = [
+    { r: 124, g: 111, b: 224 },   // accent purple
+    { r: 74,  g: 222, b: 128 },   // green
+    { r: 251, g: 191, b: 36  },   // amber
+    { r: 236, g: 72,  b: 153 },   // pink
+    { r: 56,  g: 189, b: 248 },   // sky
+    { r: 249, g: 115, b: 22  },   // orange
+  ];
+
+  // Smooth gradient palettes for "smooth" mode
+  const GRAD_STEPS = 256;
+  function buildGradient(c) {
+    const steps = [];
+    for (let i = 0; i < GRAD_STEPS; i++) {
+      const t = i / (GRAD_STEPS - 1);
+      // Dark background → color → white highlight
+      const phase = t < 0.6 ? t / 0.6 : 1;
+      const highlight = t > 0.6 ? (t - 0.6) / 0.4 : 0;
+      steps.push({
+        r: Math.floor(10 + (c.r - 10) * phase + (255 - c.r) * highlight * 0.3),
+        g: Math.floor(10 + (c.g - 10) * phase + (255 - c.g) * highlight * 0.3),
+        b: Math.floor(15 + (c.b - 15) * phase + (255 - c.b) * highlight * 0.3),
+      });
+    }
+    return steps;
+  }
+
+  const gradients = COLORS.map(buildGradient);
+
+  // State
+  const S = {
+    magnets: 3,
+    friction: 0.08,
+    gravity: 0.20,
+    strength: 1.5,
+    height: 0.30,
+    dt: 0.010,
+    maxSteps: 2000,
+    zoom: 1.0,
+    cx: 0, cy: 0,
+    quality: 2,
+    colorMode: 'basin',
+    traceMode: true,
+  };
+
+  let magnets = [];
+  let rendering = false;
+  let renderGen = 0;
+
+  function placeMagnets(n) {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const a = (2 * Math.PI * i) / n - Math.PI / 2;
+      out.push({ x: Math.cos(a), y: Math.sin(a) });
+    }
+    return out;
+  }
+  magnets = placeMagnets(S.magnets);
+
+  // --- Physics ---
+  function simulate(sx, sy) {
+    let px = sx, py = sy, vx = 0, vy = 0;
+    const h2 = S.height * S.height;
+    const nm = magnets.length;
+    const maxSteps = S.maxSteps;
+    const dt = S.dt;
+    const fri = S.friction;
+    const grav = S.gravity;
+    const str = S.strength;
+
+    for (let step = 0; step < maxSteps; step++) {
+      let fx = -grav * px;
+      let fy = -grav * py;
+      for (let m = 0; m < nm; m++) {
+        const dx = magnets[m].x - px;
+        const dy = magnets[m].y - py;
+        const d2 = dx * dx + dy * dy + h2;
+        const inv = str / (d2 * Math.sqrt(d2));
+        fx += inv * dx;
+        fy += inv * dy;
+      }
+      fx -= fri * vx;
+      fy -= fri * vy;
+      vx += fx * dt;
+      vy += fy * dt;
+      px += vx * dt;
+      py += vy * dt;
+
+      if (vx * vx + vy * vy < 0.0008) {
+        let best = 0, bestD = Infinity;
+        for (let m = 0; m < nm; m++) {
+          const dx = magnets[m].x - px;
+          const dy = magnets[m].y - py;
+          const d = dx * dx + dy * dy;
+          if (d < bestD) { bestD = d; best = m; }
+        }
+        return { mag: best, t: step / maxSteps };
+      }
+      if (px * px + py * py > 100) return { mag: -1, t: 1 };
+    }
+    let best = 0, bestD = Infinity;
+    for (let m = 0; m < nm; m++) {
+      const dx = magnets[m].x - px;
+      const dy = magnets[m].y - py;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; best = m; }
+    }
+    return { mag: best, t: 1 };
+  }
+
+  function traceFullPath(sx, sy) {
+    const path = [{ x: sx, y: sy }];
+    let px = sx, py = sy, vx = 0, vy = 0;
+    const h2 = S.height * S.height;
+    for (let step = 0; step < S.maxSteps; step++) {
+      let fx = -S.gravity * px, fy = -S.gravity * py;
+      for (let m = 0; m < magnets.length; m++) {
+        const dx = magnets[m].x - px, dy = magnets[m].y - py;
+        const d2 = dx * dx + dy * dy + h2;
+        const inv = S.strength / (d2 * Math.sqrt(d2));
+        fx += inv * dx; fy += inv * dy;
+      }
+      fx -= S.friction * vx; fy -= S.friction * vy;
+      vx += fx * S.dt; vy += fy * S.dt;
+      px += vx * S.dt; py += vy * S.dt;
+      path.push({ x: px, y: py });
+      if (vx * vx + vy * vy < 0.0008) break;
+      if (px * px + py * py > 100) break;
+    }
+    return path;
+  }
+
+  // --- Coordinate transforms ---
+  function w2s(wx, wy) {
+    const sz = Math.min(bCanvas.width, bCanvas.height);
+    return {
+      x: (wx - S.cx) / (S.zoom * 2) * sz + bCanvas.width / 2,
+      y: (wy - S.cy) / (S.zoom * 2) * sz + bCanvas.height / 2,
+    };
+  }
+  function s2w(sx, sy) {
+    const sz = Math.min(bCanvas.width, bCanvas.height);
+    return {
+      x: (sx - bCanvas.width / 2) / sz * S.zoom * 2 + S.cx,
+      y: (sy - bCanvas.height / 2) / sz * S.zoom * 2 + S.cy,
+    };
+  }
+
+  // --- Rendering ---
+  function renderBasin() {
+    if (rendering) { renderGen++; return; }
+    rendering = true;
+    const myGen = ++renderGen;
+
+    const w = bCanvas.width, h = bCanvas.height;
+    const scale = [4, 2, 1, 0.5][S.quality - 1] || 2;
+    const rw = Math.ceil(w / scale), rh = Math.ceil(h / scale);
+    const prog = document.getElementById('prog');
+    const t0 = performance.now();
+
+    const off = document.createElement('canvas');
+    off.width = rw; off.height = rh;
+    const offCtx = off.getContext('2d');
+    const img = offCtx.createImageData(rw, rh);
+    const d = img.data;
+
+    let row = 0;
+    const batch = Math.max(1, Math.floor(rh / 80));
+
+    function tick() {
+      if (myGen !== renderGen) { rendering = false; renderBasin(); return; }
+      const end = Math.min(row + batch, rh);
+
+      for (let y = row; y < end; y++) {
+        for (let x = 0; x < rw; x++) {
+          const world = s2w(x * scale, y * scale);
+          const res = simulate(world.x, world.y);
+          const idx = (y * rw + x) * 4;
+
+          if (res.mag < 0) {
+            d[idx] = 10; d[idx+1] = 10; d[idx+2] = 15; d[idx+3] = 255;
+            continue;
+          }
+
+          const c = COLORS[res.mag % COLORS.length];
+
+          if (S.colorMode === 'basin') {
+            const br = 0.35 + 0.65 * (1 - res.t * 0.7);
+            d[idx]   = Math.floor(c.r * br);
+            d[idx+1] = Math.floor(c.g * br);
+            d[idx+2] = Math.floor(c.b * br);
+          } else if (S.colorMode === 'time') {
+            // Settle time → luminosity, hue from magnet
+            const lum = 1 - res.t;
+            d[idx]   = Math.floor(c.r * 0.2 + c.r * 0.8 * lum);
+            d[idx+1] = Math.floor(c.g * 0.2 + c.g * 0.8 * lum);
+            d[idx+2] = Math.floor(c.b * 0.2 + c.b * 0.8 * lum);
+          } else {
+            // Smooth — gradient based on settle time
+            const gi = Math.min(GRAD_STEPS - 1, Math.floor(res.t * (GRAD_STEPS - 1)));
+            const gc = gradients[res.mag % gradients.length][gi];
+            d[idx] = gc.r; d[idx+1] = gc.g; d[idx+2] = gc.b;
+          }
+          d[idx+3] = 255;
+        }
+      }
+
+      row = end;
+      prog.style.width = (row / rh * 100) + '%';
+
+      if (row < rh) {
+        requestAnimationFrame(tick);
+      } else {
+        offCtx.putImageData(img, 0, 0);
+        bCtx.imageSmoothingEnabled = scale > 1;
+        bCtx.drawImage(off, 0, 0, w, h);
+        drawMagnets();
+        document.getElementById('stat-t').textContent = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+        prog.style.width = '0';
+        rendering = false;
+        if (myGen !== renderGen) renderBasin();
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function drawMagnets() {
+    for (let i = 0; i < magnets.length; i++) {
+      const p = w2s(magnets[i].x, magnets[i].y);
+      const c = COLORS[i % COLORS.length];
+
+      // Outer glow
+      bCtx.beginPath();
+      bCtx.arc(p.x, p.y, 16, 0, Math.PI * 2);
+      const g = bCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 16);
+      g.addColorStop(0, `rgba(${c.r},${c.g},${c.b},0.5)`);
+      g.addColorStop(1, `rgba(${c.r},${c.g},${c.b},0)`);
+      bCtx.fillStyle = g;
+      bCtx.fill();
+
+      // Core
+      bCtx.beginPath();
+      bCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      bCtx.fillStyle = `rgb(${c.r},${c.g},${c.b})`;
+      bCtx.fill();
+
+      // Ring
+      bCtx.beginPath();
+      bCtx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+      bCtx.strokeStyle = `rgba(${c.r},${c.g},${c.b},0.4)`;
+      bCtx.lineWidth = 1;
+      bCtx.stroke();
+
+      // Label
+      bCtx.font = '9px monospace';
+      bCtx.fillStyle = `rgba(${c.r},${c.g},${c.b},0.7)`;
+      bCtx.fillText(String(i + 1), p.x + 10, p.y + 3);
+    }
+  }
+
+  // --- Animated trajectory ---
+  function animateTrace(path, magnetIdx) {
+    oCtx.clearRect(0, 0, oCanvas.width, oCanvas.height);
+    if (path.length < 2) return;
+    const c = magnetIdx >= 0 ? COLORS[magnetIdx % COLORS.length] : { r: 200, g: 200, b: 200 };
+    let frame = 0;
+    const speed = Math.max(2, Math.floor(path.length / 200));
+
+    function step() {
+      frame = Math.min(frame + speed, path.length);
+      oCtx.clearRect(0, 0, oCanvas.width, oCanvas.height);
+
+      // Draw trail with fade
+      for (let seg = 1; seg < frame; seg++) {
+        const p0 = w2s(path[seg - 1].x, path[seg - 1].y);
+        const p1 = w2s(path[seg].x, path[seg].y);
+        const alpha = 0.15 + 0.6 * (seg / frame);
+        oCtx.beginPath();
+        oCtx.moveTo(p0.x, p0.y);
+        oCtx.lineTo(p1.x, p1.y);
+        oCtx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${alpha})`;
+        oCtx.lineWidth = 1.2;
+        oCtx.stroke();
+      }
+
+      // Current position
+      const cur = w2s(path[Math.min(frame, path.length) - 1].x, path[Math.min(frame, path.length) - 1].y);
+
+      // Glow
+      const glow = oCtx.createRadialGradient(cur.x, cur.y, 0, cur.x, cur.y, 18);
+      glow.addColorStop(0, `rgba(${c.r},${c.g},${c.b},0.5)`);
+      glow.addColorStop(1, `rgba(${c.r},${c.g},${c.b},0)`);
+      oCtx.beginPath();
+      oCtx.arc(cur.x, cur.y, 18, 0, Math.PI * 2);
+      oCtx.fillStyle = glow;
+      oCtx.fill();
+
+      // Dot
+      oCtx.beginPath();
+      oCtx.arc(cur.x, cur.y, 3, 0, Math.PI * 2);
+      oCtx.fillStyle = '#fff';
+      oCtx.fill();
+
+      if (frame < path.length) {
+        requestAnimationFrame(step);
+      } else {
+        // Final settle dot
+        const end = w2s(path[path.length - 1].x, path[path.length - 1].y);
+        oCtx.beginPath();
+        oCtx.arc(end.x, end.y, 5, 0, Math.PI * 2);
+        oCtx.fillStyle = `rgb(${c.r},${c.g},${c.b})`;
+        oCtx.fill();
+      }
+    }
+
+    // Start marker
+    const s = w2s(path[0].x, path[0].y);
+    oCtx.beginPath();
+    oCtx.arc(s.x, s.y, 4, 0, Math.PI * 2);
+    oCtx.fillStyle = 'rgba(255,255,255,0.8)';
+    oCtx.fill();
+    step();
+  }
+
+  // --- Interaction ---
+  bCanvas.addEventListener('click', (e) => {
+    if (!S.traceMode) return;
+    const world = s2w(e.clientX, e.clientY);
+    const path = traceFullPath(world.x, world.y);
+    const res = simulate(world.x, world.y);
+    animateTrace(path, res.mag);
+  });
+
+  bCanvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const f = e.deltaY > 0 ? 1.12 : 0.89;
+    const world = s2w(e.clientX, e.clientY);
+    S.zoom *= f;
+    S.zoom = Math.max(0.05, Math.min(15, S.zoom));
+    S.cx += (world.x - S.cx) * (1 - f) * 0.3;
+    S.cy += (world.y - S.cy) * (1 - f) * 0.3;
+    updateStats();
+    scheduleRender();
+  }, { passive: false });
+
+  let panning = false, panSt = {}, panOr = {};
+  bCanvas.addEventListener('mousedown', (e) => {
+    if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+      e.preventDefault();
+      panning = true;
+      panSt = { x: e.clientX, y: e.clientY };
+      panOr = { x: S.cx, y: S.cy };
+      bCanvas.style.cursor = 'grabbing';
+    }
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!panning) return;
+    const sz = Math.min(bCanvas.width, bCanvas.height);
+    S.cx = panOr.x - (e.clientX - panSt.x) / sz * S.zoom * 2;
+    S.cy = panOr.y - (e.clientY - panSt.y) / sz * S.zoom * 2;
+    updateStats();
+    scheduleRender();
+  });
+  window.addEventListener('mouseup', () => {
+    if (panning) { panning = false; bCanvas.style.cursor = 'crosshair'; }
+  });
+
+  // --- UI Bindings ---
+  const SLIDERS = [
+    ['sl-fri', 'v-fri', 'friction', v => v.toFixed(3)],
+    ['sl-grav', 'v-grav', 'gravity', v => v.toFixed(2)],
+    ['sl-str', 'v-str', 'strength', v => v.toFixed(1)],
+    ['sl-h', 'v-h', 'height', v => v.toFixed(2)],
+    ['sl-dt', 'v-dt', 'dt', v => v.toFixed(3)],
+    ['sl-q', 'v-q', 'quality', v => ['fast','med','high','ultra'][v-1]],
+  ];
+  for (const [elId, valId, key, fmt] of SLIDERS) {
+    document.getElementById(elId).addEventListener('input', function() {
+      S[key] = parseFloat(this.value);
+      document.getElementById(valId).textContent = fmt(S[key]);
+      updateStats();
+      scheduleRender();
+    });
+  }
+
+  document.getElementById('magnet-btns').addEventListener('click', (e) => {
+    const btn = e.target.closest('.magnet-btn');
+    if (!btn) return;
+    S.magnets = parseInt(btn.dataset.n);
+    magnets = placeMagnets(S.magnets);
+    document.querySelectorAll('.magnet-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateStats();
+    oCtx.clearRect(0, 0, oCanvas.width, oCanvas.height);
+    scheduleRender();
+  });
+
+  document.getElementById('color-btns').addEventListener('click', (e) => {
+    const btn = e.target.closest('.color-btn');
+    if (!btn) return;
+    S.colorMode = btn.dataset.mode;
+    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    scheduleRender();
+  });
+
+  document.getElementById('btn-rand').addEventListener('click', randomize);
+  document.getElementById('btn-save').addEventListener('click', savePNG);
+  document.getElementById('btn-trace').addEventListener('click', () => {
+    S.traceMode = !S.traceMode;
+    document.getElementById('btn-trace').classList.toggle('active', S.traceMode);
+    if (!S.traceMode) oCtx.clearRect(0, 0, oCanvas.width, oCanvas.height);
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    S.zoom = 1; S.cx = 0; S.cy = 0;
+    updateStats();
+    scheduleRender();
+  });
+
+  const panel = document.getElementById('panel');
+  const togBtn = document.getElementById('toggle-panel');
+  togBtn.addEventListener('click', () => {
+    panel.classList.toggle('collapsed');
+    togBtn.textContent = panel.classList.contains('collapsed') ? 'H show' : 'H hide';
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    switch (e.key.toLowerCase()) {
+      case 'h': togBtn.click(); break;
+      case 'r': randomize(); break;
+      case 's': savePNG(); break;
+      case 't': document.getElementById('btn-trace').click(); break;
+      case '0': S.zoom = 1; S.cx = 0; S.cy = 0; updateStats(); scheduleRender(); break;
+      case '?':
+        const h = document.getElementById('hint');
+        h.style.opacity = h.style.opacity === '0' ? '0.6' : '0';
+        break;
+    }
+  });
+
+  // --- Helpers ---
+  function updateStats() {
+    document.getElementById('stat-n').textContent = S.magnets;
+    document.getElementById('stat-f').textContent = S.friction.toFixed(3);
+    document.getElementById('stat-s').textContent = S.strength.toFixed(1);
+    document.getElementById('stat-z').textContent = S.zoom.toFixed(2) + 'x';
+  }
+
+  let renderTimer = null;
+  function scheduleRender() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(renderBasin, 60);
+  }
+
+  function randomize() {
+    S.magnets = 2 + Math.floor(Math.random() * 5);
+    S.friction = 0.015 + Math.random() * 0.18;
+    S.gravity = 0.06 + Math.random() * 0.45;
+    S.strength = 0.6 + Math.random() * 3.8;
+    S.height = 0.1 + Math.random() * 0.55;
+    S.dt = 0.005 + Math.random() * 0.015;
+    S.zoom = 0.5 + Math.random() * 1.8;
+    S.cx = (Math.random() - 0.5) * 0.4;
+    S.cy = (Math.random() - 0.5) * 0.4;
+    magnets = placeMagnets(S.magnets);
+
+    // Sync UI
+    document.getElementById('sl-fri').value = S.friction;
+    document.getElementById('v-fri').textContent = S.friction.toFixed(3);
+    document.getElementById('sl-grav').value = S.gravity;
+    document.getElementById('v-grav').textContent = S.gravity.toFixed(2);
+    document.getElementById('sl-str').value = S.strength;
+    document.getElementById('v-str').textContent = S.strength.toFixed(1);
+    document.getElementById('sl-h').value = S.height;
+    document.getElementById('v-h').textContent = S.height.toFixed(2);
+    document.getElementById('sl-dt').value = S.dt;
+    document.getElementById('v-dt').textContent = S.dt.toFixed(3);
+
+    document.querySelectorAll('.magnet-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.n) === S.magnets);
+    });
+
+    updateStats();
+    oCtx.clearRect(0, 0, oCanvas.width, oCanvas.height);
+    scheduleRender();
+  }
+
+  function savePNG() {
+    const a = document.createElement('a');
+    a.download = 'lattice-basins-' + S.magnets + 'm-' + Date.now().toString(36) + '.png';
+    a.href = bCanvas.toDataURL('image/png');
+    a.click();
+  }
+
+  // --- Boot ---
+  updateStats();
+  renderBasin();
+})();
+</script>
+</body>
+</html>
