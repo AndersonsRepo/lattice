@@ -525,6 +525,10 @@
 <div id="metrics-panel">
   <div class="mp-header">METRICS</div>
   <canvas id="sparkline" width="320" height="60"></canvas>
+  <div style="margin-bottom:0.4rem">
+    <div style="font-size:0.48rem;color:var(--text-dim);letter-spacing:0.15em;margin-bottom:2px">GENOME DNA</div>
+    <canvas id="genome-barcode" width="320" height="16" style="width:100%;height:16px;border-radius:3px"></canvas>
+  </div>
   <div id="metric-bars"></div>
   <div id="evo-telemetry"></div>
 </div>
@@ -534,6 +538,7 @@
   <div>Space — play / pause</div>
   <div>← → — step frame</div>
   <div>1–4 — jump to epoch</div>
+  <div>L — fitness landscape</div>
   <div>R — species radar</div>
   <div>S — species strata</div>
   <div>M — metrics panel</div>
@@ -735,10 +740,25 @@ function computeEvents(data, sortedArchive) {
     }
   }
 
-  // Extinction events
+  // Extinction events — with trigger info
   for (const h of data.history || []) {
     if (h.extinctionEvent && !ev[h.generation]) {
-      ev[h.generation] = `☄ extinction event — the slate is wiped, survivors adapt`;
+      const trigger = h.extinctionTrigger === 'stagnation'
+        ? '☄ stagnation extinction — forced reset after prolonged plateau'
+        : '☄ extinction event — the slate is wiped, survivors adapt';
+      ev[h.generation] = trigger;
+    }
+  }
+
+  // Niche pressure events
+  for (const h of data.history || []) {
+    if (h.nicheBonus && !ev[h.generation]) {
+      const boosted = Object.entries(h.nicheBonus)
+        .filter(([, v]) => v > 0.03)
+        .map(([t]) => t);
+      if (boosted.length > 0) {
+        ev[h.generation] = `niche pressure — ${boosted.join(', ')} receiving evolutionary boost`;
+      }
     }
   }
 
@@ -863,6 +883,10 @@ function updateHUD() {
   if (radarVisible) drawRadar();
   if (strataVisible) drawSpeciesTimeline();
   if (metricsVisible) updateMetricsPanel();
+  if (landscapeVisible) {
+    drawFitnessLandscape();
+    updateLineageDepth();
+  }
 }
 
 let narrativeTimeout = null;
@@ -1013,6 +1037,8 @@ window.addEventListener('keydown', e => {
   } else if (e.key === 'k') {
     const hint = document.getElementById('kb-hint');
     hint.classList.toggle('show');
+  } else if (e.key === 'l' || e.key === 'L') {
+    document.getElementById('btn-landscape').click();
   } else if (e.key === 'r' || e.key === 'R') {
     document.getElementById('btn-radar').click();
   } else if (e.key === 's' && !e.ctrlKey && !e.metaKey) {
@@ -1023,7 +1049,7 @@ window.addEventListener('keydown', e => {
 });
 
 // ── Toggle panels ────────────────────────────────────────────────────────────
-let radarVisible = false, strataVisible = false, metricsVisible = false;
+let radarVisible = false, strataVisible = false, metricsVisible = false, landscapeVisible = false;
 
 document.getElementById('btn-radar').addEventListener('click', () => {
   radarVisible = !radarVisible;
@@ -1045,6 +1071,184 @@ document.getElementById('btn-metrics').addEventListener('click', () => {
   document.getElementById('btn-metrics').classList.toggle('toggle-active', metricsVisible);
   if (metricsVisible && archive.length > 0) updateMetricsPanel();
 });
+
+document.getElementById('btn-landscape').addEventListener('click', () => {
+  landscapeVisible = !landscapeVisible;
+  document.getElementById('fitness-landscape').classList.toggle('show', landscapeVisible);
+  document.getElementById('lineage-depth').classList.toggle('show', landscapeVisible);
+  document.getElementById('btn-landscape').classList.toggle('toggle-active', landscapeVisible);
+  if (landscapeVisible) drawFitnessLandscape();
+});
+
+// ── Fitness Landscape — mountain silhouette behind the art ──────────────────
+function drawFitnessLandscape() {
+  const lc = document.getElementById('fitness-landscape');
+  lc.width = window.innerWidth * devicePixelRatio;
+  lc.height = (window.innerHeight * 0.45) * devicePixelRatio;
+  lc.style.width = window.innerWidth + 'px';
+  lc.style.height = (window.innerHeight * 0.45) + 'px';
+  const lctx = lc.getContext('2d');
+  lctx.clearRect(0, 0, lc.width, lc.height);
+
+  if (historyData.length < 2) return;
+
+  const W = lc.width, H = lc.height;
+  const piece = archive[currentIndex];
+  const epochColor = EPOCH_COLORS[piece?.epoch] || '#7c6fe0';
+
+  // Compute visible window: show history up to current generation
+  const curGen = piece?.generation ?? 0;
+  const visibleHistory = historyData.filter(h => h.generation <= curGen);
+  if (visibleHistory.length < 2) return;
+
+  const bestScores = visibleHistory.map(h => h.bestScore);
+  const avgScores = visibleHistory.map(h => h.avgScore);
+  const minS = Math.min(...avgScores) * 0.9;
+  const maxS = Math.max(...bestScores) * 1.05;
+  const range = Math.max(maxS - minS, 0.01);
+
+  // Helper: score to Y
+  const toY = (s) => H - ((s - minS) / range) * H * 0.85 - H * 0.05;
+  const toX = (i) => (i / Math.max(historyData.length - 1, 1)) * W;
+
+  // Best score mountain fill
+  lctx.beginPath();
+  lctx.moveTo(0, H);
+  for (let i = 0; i < visibleHistory.length; i++) {
+    const x = toX(historyData.indexOf(visibleHistory[i]));
+    lctx.lineTo(x, toY(bestScores[i]));
+  }
+  const lastX = toX(historyData.indexOf(visibleHistory[visibleHistory.length - 1]));
+  lctx.lineTo(lastX, H);
+  lctx.closePath();
+
+  const grad = lctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, hexToRGBA(epochColor, 0.12));
+  grad.addColorStop(0.5, hexToRGBA(epochColor, 0.06));
+  grad.addColorStop(1, 'rgba(10,10,15,0)');
+  lctx.fillStyle = grad;
+  lctx.fill();
+
+  // Best score ridge line
+  lctx.beginPath();
+  for (let i = 0; i < visibleHistory.length; i++) {
+    const x = toX(historyData.indexOf(visibleHistory[i]));
+    const y = toY(bestScores[i]);
+    if (i === 0) lctx.moveTo(x, y);
+    else lctx.lineTo(x, y);
+  }
+  lctx.strokeStyle = hexToRGBA(epochColor, 0.35);
+  lctx.lineWidth = 1.5 * devicePixelRatio;
+  lctx.stroke();
+
+  // Avg score valley fill
+  lctx.beginPath();
+  lctx.moveTo(0, H);
+  for (let i = 0; i < visibleHistory.length; i++) {
+    const x = toX(historyData.indexOf(visibleHistory[i]));
+    lctx.lineTo(x, toY(avgScores[i]));
+  }
+  lctx.lineTo(lastX, H);
+  lctx.closePath();
+  const grad2 = lctx.createLinearGradient(0, 0, 0, H);
+  grad2.addColorStop(0, 'rgba(74,222,128,0.06)');
+  grad2.addColorStop(1, 'rgba(10,10,15,0)');
+  lctx.fillStyle = grad2;
+  lctx.fill();
+
+  // Avg score line
+  lctx.beginPath();
+  for (let i = 0; i < visibleHistory.length; i++) {
+    const x = toX(historyData.indexOf(visibleHistory[i]));
+    const y = toY(avgScores[i]);
+    if (i === 0) lctx.moveTo(x, y);
+    else lctx.lineTo(x, y);
+  }
+  lctx.strokeStyle = 'rgba(74,222,128,0.2)';
+  lctx.lineWidth = 1 * devicePixelRatio;
+  lctx.stroke();
+
+  // Extinction markers — vertical red pulses
+  for (const h of visibleHistory) {
+    if (h.extinctionEvent) {
+      const x = toX(historyData.indexOf(h));
+      const eGrad = lctx.createLinearGradient(x, 0, x, H);
+      eGrad.addColorStop(0, 'rgba(239,68,68,0.25)');
+      eGrad.addColorStop(1, 'rgba(239,68,68,0)');
+      lctx.fillStyle = eGrad;
+      lctx.fillRect(x - 2 * devicePixelRatio, 0, 4 * devicePixelRatio, H);
+    }
+  }
+
+  // Stagnation zones — dim amber bands
+  for (let i = 0; i < visibleHistory.length; i++) {
+    if (visibleHistory[i].stagnationStreak > 5) {
+      const x = toX(historyData.indexOf(visibleHistory[i]));
+      lctx.fillStyle = 'rgba(251,191,36,0.03)';
+      lctx.fillRect(x - 3 * devicePixelRatio, 0, 6 * devicePixelRatio, H);
+    }
+  }
+
+  // Diversity curve (blue, right-side Y axis, 0-1 mapped to full height)
+  const diversities = visibleHistory.map(h => h.diversityIndex ?? 0);
+  if (diversities.some(d => d > 0)) {
+    lctx.beginPath();
+    for (let i = 0; i < visibleHistory.length; i++) {
+      const x = toX(historyData.indexOf(visibleHistory[i]));
+      const y = H - diversities[i] * H * 0.8 - H * 0.05;
+      if (i === 0) lctx.moveTo(x, y);
+      else lctx.lineTo(x, y);
+    }
+    lctx.strokeStyle = 'rgba(96,165,250,0.35)';
+    lctx.lineWidth = 1 * devicePixelRatio;
+    lctx.setLineDash([4 * devicePixelRatio, 3 * devicePixelRatio]);
+    lctx.stroke();
+    lctx.setLineDash([]);
+
+    // Label
+    const lastDiv = diversities[diversities.length - 1];
+    const labelX = toX(historyData.indexOf(visibleHistory[visibleHistory.length - 1])) + 6 * devicePixelRatio;
+    const labelY = H - lastDiv * H * 0.8 - H * 0.05;
+    lctx.fillStyle = 'rgba(96,165,250,0.5)';
+    lctx.font = `${10 * devicePixelRatio}px monospace`;
+    lctx.fillText('div', Math.min(labelX, W - 30 * devicePixelRatio), labelY + 3 * devicePixelRatio);
+  }
+
+  // Current position glow
+  const curHistIdx = historyData.findIndex(h => h.generation === curGen);
+  if (curHistIdx >= 0) {
+    const x = toX(curHistIdx);
+    const y = toY(bestScores[visibleHistory.length - 1] || 0);
+    lctx.beginPath();
+    lctx.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2);
+    lctx.fillStyle = epochColor;
+    lctx.shadowColor = epochColor;
+    lctx.shadowBlur = 12 * devicePixelRatio;
+    lctx.fill();
+    lctx.shadowBlur = 0;
+  }
+}
+
+function hexToRGBA(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function updateLineageDepth() {
+  if (historyData.length === 0) return;
+  const piece = archive[currentIndex];
+  if (!piece) return;
+  const histEntry = historyData.find(h => h.generation === piece.generation);
+  const depth = histEntry?.maxLineageDepth ?? piece.genome.mutations ?? 0;
+  const maxDepth = Math.max(...historyData.map(h => h.maxLineageDepth || 0), 1);
+  const pct = Math.min((depth / maxDepth) * 100, 100);
+
+  document.getElementById('lineage-label').textContent =
+    `LINEAGE DEPTH ${depth} · STAGNATION ${histEntry?.stagnationStreak ?? 0}`;
+  document.getElementById('depth-bar').style.width = Math.max(pct, 2) + 'px';
+}
 
 // ── Species Radar Chart ─────────────────────────────────────────────────────
 let historyData = [];
@@ -1130,14 +1334,14 @@ function drawRadar() {
   }
 }
 
-// ── Species Stacked Timeline ────────────────────────────────────────────────
+// ── Species Stream Graph (alluvial) ─────────────────────────────────────────
 function drawSpeciesTimeline() {
   const sc = document.getElementById('species-canvas');
   const wrap = document.getElementById('species-timeline');
   sc.width = wrap.clientWidth * devicePixelRatio;
-  sc.height = 50 * devicePixelRatio;
+  sc.height = 60 * devicePixelRatio;
   sc.style.width = wrap.clientWidth + 'px';
-  sc.style.height = '50px';
+  sc.style.height = '60px';
   const sctx = sc.getContext('2d');
   sctx.clearRect(0, 0, sc.width, sc.height);
 
@@ -1145,31 +1349,122 @@ function drawSpeciesTimeline() {
 
   const species = Object.keys(TYPE_COLORS);
   const W = sc.width, H = sc.height;
+  const N = historyData.length;
 
-  // For each generation in history, stack species counts
-  for (let gi = 0; gi < historyData.length; gi++) {
+  // Build normalized stacked data centered around midline (stream graph)
+  const stacks = [];
+  for (let gi = 0; gi < N; gi++) {
     const h = historyData[gi];
-    const x = (gi / Math.max(historyData.length - 1, 1)) * W;
-    const barW = Math.max(W / historyData.length, 1.5);
     const total = Object.values(h.speciesCounts || {}).reduce((s, v) => s + v, 0) || 1;
-    let yOff = 0;
-    for (const sp of species) {
-      const count = (h.speciesCounts || {})[sp] || 0;
-      const segH = (count / total) * H;
-      if (segH > 0) {
-        sctx.fillStyle = (TYPE_COLORS[sp]?.colors[4]) || '#444';
-        sctx.globalAlpha = 0.7;
-        sctx.fillRect(x, yOff, barW, segH);
-        yOff += segH;
+    const fracs = species.map(sp => ((h.speciesCounts || {})[sp] || 0) / total);
+    stacks.push(fracs);
+  }
+
+  // Smooth the data with a 3-point moving average
+  const smoothed = stacks.map((row, gi) => {
+    return row.map((val, si) => {
+      const prev = gi > 0 ? stacks[gi - 1][si] : val;
+      const next = gi < N - 1 ? stacks[gi + 1][si] : val;
+      return (prev + val + next) / 3;
+    });
+  });
+
+  // Compute baseline offsets (wiggle layout centered on midline)
+  const baselines = smoothed.map(row => {
+    const total = row.reduce((s, v) => s + v, 0);
+    return (1 - total) / 2; // center the stack
+  });
+
+  // Draw each species layer as a smooth filled area
+  for (let si = species.length - 1; si >= 0; si--) {
+    const color = (TYPE_COLORS[species[si]]?.colors[4]) || '#444';
+
+    // Compute top and bottom edges for this layer
+    const tops = [], bottoms = [];
+    for (let gi = 0; gi < N; gi++) {
+      let bottom = baselines[gi];
+      for (let k = 0; k < si; k++) bottom += smoothed[gi][k];
+      const top = bottom + smoothed[gi][si];
+      const x = (gi / Math.max(N - 1, 1)) * W;
+      bottoms.push({ x, y: bottom * H });
+      tops.push({ x, y: top * H });
+    }
+
+    // Draw filled shape
+    sctx.beginPath();
+    // Bottom edge (left to right)
+    sctx.moveTo(bottoms[0].x, bottoms[0].y);
+    for (let i = 1; i < bottoms.length; i++) {
+      const cpx = (bottoms[i - 1].x + bottoms[i].x) / 2;
+      sctx.bezierCurveTo(cpx, bottoms[i - 1].y, cpx, bottoms[i].y, bottoms[i].x, bottoms[i].y);
+    }
+    // Top edge (right to left)
+    for (let i = tops.length - 1; i >= 0; i--) {
+      if (i === tops.length - 1) {
+        sctx.lineTo(tops[i].x, tops[i].y);
+      } else {
+        const cpx = (tops[i + 1].x + tops[i].x) / 2;
+        sctx.bezierCurveTo(cpx, tops[i + 1].y, cpx, tops[i].y, tops[i].x, tops[i].y);
       }
     }
+    sctx.closePath();
+    sctx.fillStyle = color;
+    sctx.globalAlpha = 0.55;
+    sctx.fill();
   }
   sctx.globalAlpha = 1;
 
   // Draw playhead
   const playX = (currentIndex / Math.max(archive.length - 1, 1)) * W;
-  sctx.fillStyle = '#fff';
+  sctx.fillStyle = 'rgba(255,255,255,0.8)';
   sctx.fillRect(playX - 1, 0, 2, H);
+}
+
+// ── Genome DNA Barcode ────────────────────────────────────────────────────
+function drawGenomeBarcode() {
+  const bc = document.getElementById('genome-barcode');
+  const bctx = bc.getContext('2d');
+  const W = bc.width, H = bc.height;
+  bctx.clearRect(0, 0, W, H);
+
+  if (archive.length === 0) return;
+  const piece = archive[currentIndex];
+  if (!piece || !piece.genome) return;
+
+  // Serialize genome parameters into a numeric sequence
+  const genome = piece.genome;
+  const rule = genome.rule || {};
+  const values = [];
+
+  // Extract numeric values from the rule (type-agnostic)
+  function extractNumbers(obj, depth) {
+    if (depth > 3) return;
+    for (const v of Object.values(obj)) {
+      if (typeof v === 'number' && isFinite(v)) values.push(v);
+      else if (Array.isArray(v)) v.forEach(x => { if (typeof x === 'number') values.push(x); else if (typeof x === 'object' && x) extractNumbers(x, depth + 1); });
+      else if (typeof v === 'object' && v) extractNumbers(v, depth + 1);
+    }
+  }
+  extractNumbers(rule, 0);
+  values.push(genome.width, genome.height, genome.seed % 1000, genome.mutations);
+
+  if (values.length === 0) return;
+
+  // Get species color palette
+  const theme = TYPE_COLORS[genome.type] || TYPE_COLORS['2d'];
+  const colors = theme.colors;
+
+  // Draw barcode stripes
+  const stripeW = W / values.length;
+  for (let i = 0; i < values.length; i++) {
+    // Hash value to a color index
+    const norm = Math.abs(Math.sin(values[i] * 12.9898 + i * 78.233)) ;
+    const cidx = Math.floor(norm * (colors.length - 1)) + 1;
+    bctx.fillStyle = colors[Math.min(cidx, colors.length - 1)];
+    bctx.globalAlpha = 0.5 + norm * 0.5;
+    bctx.fillRect(i * stripeW, 0, Math.max(stripeW, 1), H);
+  }
+  bctx.globalAlpha = 1;
 }
 
 // ── Fitness Sparkline ───────────────────────────────────────────────────────
@@ -1257,6 +1552,7 @@ function updateMetricsPanel() {
   const m = piece.metrics || {};
 
   drawSparkline();
+  drawGenomeBarcode();
 
   // Metric bars
   const bars = [
@@ -1268,6 +1564,8 @@ function updateMetricsPanel() {
     { label: 'info', val: m.informationDensity || 0, max: 1, color: '#a78bfa' },
     { label: 'struct', val: m.structuralInterest || 0, max: 1, color: '#fb923c' },
     { label: 'cohere', val: m.spatialCoherence || 0, max: 1, color: '#34d399' },
+    { label: 'balance', val: m.compositionBalance || 0, max: 1, color: '#e879f9' },
+    { label: 'rhythm', val: m.rhythmicRegularity || 0, max: 1, color: '#f472b6' },
   ];
 
   const barsEl = document.getElementById('metric-bars');
@@ -1293,7 +1591,14 @@ function updateMetricsPanel() {
       lines.push(`<span class="evo-label">crossover</span> <span class="evo-val">${(histEntry.crossoverRate * 100).toFixed(0)}%</span>`);
     }
     if (histEntry.extinctionEvent) {
-      lines.push(`<span class="evo-extinction">☄ EXTINCTION</span>`);
+      const trigger = histEntry.extinctionTrigger === 'stagnation' ? 'STAGNATION' : 'PERIODIC';
+      lines.push(`<span class="evo-extinction">☄ ${trigger} EXTINCTION</span>`);
+    }
+    if (histEntry.stagnationStreak > 0) {
+      lines.push(`<span class="evo-label">stagnation</span> <span class="evo-val" style="color:${histEntry.stagnationStreak > 15 ? '#ef4444' : '#fbbf24'}">${histEntry.stagnationStreak} gen</span>`);
+    }
+    if (histEntry.maxLineageDepth !== undefined) {
+      lines.push(`<span class="evo-label">lineage</span> <span class="evo-val">${histEntry.maxLineageDepth} deep</span>`);
     }
     // Species momentum
     if (histEntry.speciesMomentum) {
@@ -1352,6 +1657,7 @@ async function init() {
   const typeSet  = new Set(archive.map(p => p.genome.type));
   const bestScore = Math.max(...archive.map(p => p.score));
   const extinctions = historyData.filter(h => h.extinctionEvent).length;
+  const maxLineage = Math.max(...historyData.map(h => h.maxLineageDepth || 0), 0);
   document.getElementById('start-stats').innerHTML = `
     <div class="start-stat">
       <div class="start-stat-val">${archive.length}</div>
@@ -1372,6 +1678,10 @@ async function init() {
     ${extinctions > 0 ? `<div class="start-stat">
       <div class="start-stat-val">${extinctions}</div>
       <div class="start-stat-label">extinctions</div>
+    </div>` : ''}
+    ${maxLineage > 0 ? `<div class="start-stat">
+      <div class="start-stat-val">${maxLineage}</div>
+      <div class="start-stat-label">max lineage</div>
     </div>` : ''}
   `;
 

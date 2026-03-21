@@ -74,6 +74,12 @@ const NICHE_BONUS_WEIGHT = 0.08; // scoring bonus for species underrepresented i
 const MIN_SLOTS_PER_TYPE = 1;
 const GENOME_TYPES: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield"];
 
+// Hall of Fame seeding: probability of injecting mutated HoF genetics into offspring
+const HOF_SEEDING_RATE = 0.15;
+// Age penalty: pieces lose this fraction of score per generation they survive (prevents stagnation)
+const AGE_PENALTY_PER_GEN = 0.003; // 0.3% per gen, caps at ~10% after 33 gens
+const AGE_PENALTY_CAP = 0.10;
+
 interface GenerationRecord {
   generation: number;
   bestScore: number;
@@ -99,6 +105,10 @@ interface GenerationRecord {
   nicheBonus?: Record<string, number>; // niche pressure bonus per species
   maxLineageDepth?: number; // deepest mutation chain in population
   stagnationStreak?: number; // consecutive generations without improvement
+  hofSeedCount?: number; // offspring generated from HoF genetics this gen
+  avgCrowdingDistance?: number; // mean crowding distance in selection pool
+  agePenaltyApplied?: number; // how many pieces received age penalties
+  paretoFrontSize?: number; // pieces on the non-dominated front
 }
 
 interface Population {
@@ -354,6 +364,92 @@ function metricDistance(a: PieceMetrics, b: PieceMetrics): number {
   return Math.sqrt(sum);
 }
 
+// ---------------------------------------------------------------------------
+// Crowding distance (NSGA-II inspired)
+// Assigns each piece a measure of how isolated it is in metric space.
+// Pieces at the extremes get infinite distance (always selected).
+// This preserves diversity along the fitness landscape.
+// ---------------------------------------------------------------------------
+const CROWDING_METRICS: (keyof PieceMetrics)[] = [
+  "complexity", "symmetry", "density", "edgeActivity", "structuralInterest",
+  "fractalDimension", "informationDensity", "compositionBalance", "spatialCoherence"
+];
+
+function computeCrowdingDistances(pieces: Piece[]): Map<string, number> {
+  const distances = new Map<string, number>();
+  for (const p of pieces) distances.set(p.id, 0);
+  if (pieces.length <= 2) {
+    for (const p of pieces) distances.set(p.id, Infinity);
+    return distances;
+  }
+
+  for (const metric of CROWDING_METRICS) {
+    // Sort by this metric
+    const sorted = [...pieces].sort((a, b) => (a.metrics[metric] ?? 0) - (b.metrics[metric] ?? 0));
+    const minVal = sorted[0].metrics[metric] ?? 0;
+    const maxVal = sorted[sorted.length - 1].metrics[metric] ?? 0;
+    const range = maxVal - minVal;
+
+    // Boundary pieces get infinite distance
+    distances.set(sorted[0].id, Infinity);
+    distances.set(sorted[sorted.length - 1].id, Infinity);
+
+    if (range > 0) {
+      for (let i = 1; i < sorted.length - 1; i++) {
+        const prev = distances.get(sorted[i].id) ?? 0;
+        const gap = ((sorted[i + 1].metrics[metric] ?? 0) - (sorted[i - 1].metrics[metric] ?? 0)) / range;
+        if (prev !== Infinity) distances.set(sorted[i].id, prev + gap);
+      }
+    }
+  }
+  return distances;
+}
+
+// ---------------------------------------------------------------------------
+// Pareto dominance check — piece A dominates B if A is >= B in all metrics
+// and strictly > in at least one. Used to identify the non-dominated front.
+// ---------------------------------------------------------------------------
+function dominates(a: PieceMetrics, b: PieceMetrics): boolean {
+  let strictlyBetter = false;
+  for (const k of CROWDING_METRICS) {
+    const va = a[k] ?? 0, vb = b[k] ?? 0;
+    if (va < vb) return false;
+    if (va > vb) strictlyBetter = true;
+  }
+  return strictlyBetter;
+}
+
+function countParetoFront(pieces: Piece[]): number {
+  let count = 0;
+  for (let i = 0; i < pieces.length; i++) {
+    let dominated = false;
+    for (let j = 0; j < pieces.length; j++) {
+      if (i !== j && dominates(pieces[j].metrics, pieces[i].metrics)) {
+        dominated = true;
+        break;
+      }
+    }
+    if (!dominated) count++;
+  }
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// Age penalty — reduce score for long-incumbent pieces to encourage turnover
+// ---------------------------------------------------------------------------
+function applyAgePenalty(pieces: Piece[], currentGen: number): number {
+  let penalizedCount = 0;
+  for (const p of pieces) {
+    const age = currentGen - p.generation;
+    if (age > 0) {
+      const penalty = Math.min(age * AGE_PENALTY_PER_GEN, AGE_PENALTY_CAP);
+      p.score = p.score * (1 - penalty);
+      penalizedCount++;
+    }
+  }
+  return penalizedCount;
+}
+
 async function run(): Promise<void> {
   mkdirSync(GALLERY_DIR, { recursive: true });
 
@@ -521,11 +617,21 @@ async function run(): Promise<void> {
   }
 
   const offspring: Piece[] = [];
+  let hofSeedCount = 0;
   const effOff = isStagnant ? OFFSPRING_PER_RUN + 4 : (isExtinction ? OFFSPRING_PER_RUN + 6 : OFFSPRING_PER_RUN);
   for (let i = 0; i < effOff; i++) {
     let childGenome: Genome;
-    const parent = tournamentSelect(pop.pieces);
-    if (rng() < crossoverRate && pop.pieces.length >= 2) {
+
+    // Hall of Fame seeding: occasionally revive proven genetics from the hall of fame
+    // This injects high-quality genomes back into the gene pool, mutated to explore nearby space
+    if (rng() < HOF_SEEDING_RATE && pop.hallOfFame.length > 0) {
+      const hofParent = pop.hallOfFame[Math.floor(rng() * pop.hallOfFame.length)];
+      childGenome = adaptiveMutate(hofParent.genome, hofParent.score);
+      childGenome.lineage = [...hofParent.genome.lineage.slice(-2), "HoF"];
+      hofSeedCount++;
+      console.log(`  HoF seed: ${hofParent.genome.type}@${(hofParent.score*100).toFixed(1)}% → mutated offspring`);
+    } else if (rng() < crossoverRate && pop.pieces.length >= 2) {
+      const parent = tournamentSelect(pop.pieces);
       // Prefer inter-species crossover when diversity is low
       let other = tournamentSelect(pop.pieces);
       let att = 0;
@@ -538,12 +644,18 @@ async function run(): Promise<void> {
       if (rng() < 0.5) childGenome = mutateGenome(childGenome, rng);
       console.log(`  Crossover ${parent.genome.type}\u00d7${other.genome.type} \u2192 ${childGenome.type}`);
     } else {
+      const parent = tournamentSelect(pop.pieces);
       childGenome = adaptiveMutate(parent.genome, parent.score);
     }
     const child = generatePiece(childGenome, gen, popMetrics);
     offspring.push(child);
     console.log(`  Offspring ${child.id}: ${child.genome.type} \u2192 ${(child.score*100).toFixed(1)}% (novelty: ${(child.metrics.novelty*100).toFixed(0)}%)`);
   }
+  if (hofSeedCount > 0) console.log(`  Hall of Fame seeding: ${hofSeedCount} offspring from proven genetics`);
+
+  // Age penalty on incumbent population (not offspring — they're generation 0)
+  const agePenaltyApplied = applyAgePenalty(pop.pieces, gen);
+  if (agePenaltyApplied > 0) console.log(`  Age penalty applied to ${agePenaltyApplied} incumbent pieces`);
 
   // Fitness sharing + niche pressure
   const allPieces = [...pop.pieces, ...offspring];
@@ -557,11 +669,31 @@ async function run(): Promise<void> {
     const bonus = nicheBonus[piece.genome.type] ?? 0;
     sharedScores.set(piece.id, (piece.score + bonus) / Math.max(nc, 1));
   }
-  allPieces.sort((a, b) => (sharedScores.get(b.id) ?? b.score) - (sharedScores.get(a.id) ?? a.score));
 
-    // Elitism: top N pieces survive unchanged (prevents regression)
+  // Crowding distance — NSGA-II style diversity preservation
+  const crowdingDistances = computeCrowdingDistances(allPieces);
+  const avgCrowding = [...crowdingDistances.values()].filter(v => v !== Infinity).reduce((s, v) => s + v, 0) /
+    Math.max([...crowdingDistances.values()].filter(v => v !== Infinity).length, 1);
+
+  // Combined ranking: shared score as primary, crowding distance as tiebreaker
+  // When two pieces have similar shared scores (within 2%), prefer the more isolated one
+  allPieces.sort((a, b) => {
+    const sa = sharedScores.get(a.id) ?? a.score;
+    const sb = sharedScores.get(b.id) ?? b.score;
+    if (Math.abs(sa - sb) > 0.02) return sb - sa; // clear winner by score
+    // Tiebreak: prefer higher crowding distance (more isolated in metric space)
+    const ca = crowdingDistances.get(a.id) ?? 0;
+    const cb = crowdingDistances.get(b.id) ?? 0;
+    return cb - ca;
+  });
+
+  // Pareto front size for telemetry
+  const paretoFrontSize = countParetoFront(allPieces);
+
+  // Elitism: top N pieces survive unchanged (prevents regression)
   const elites = allPieces.slice(0, ELITE_COUNT);
   console.log(`  Elites preserved: ${elites.map(e => `${e.genome.type}@${(e.score*100).toFixed(1)}%`).join(", ")}`);
+  console.log(`  Pareto front: ${paretoFrontSize} pieces | Avg crowding: ${avgCrowding.toFixed(3)}`);
 
   // Speciation-aware selection
   const survivors: Piece[] = [];
@@ -674,6 +806,10 @@ async function run(): Promise<void> {
     nicheBonus: hasNicheBonus ? nicheBonus : undefined,
     maxLineageDepth,
     stagnationStreak: isStagnant ? stagnationStreak : 0,
+    hofSeedCount: hofSeedCount > 0 ? hofSeedCount : undefined,
+    avgCrowdingDistance: +avgCrowding.toFixed(4),
+    agePenaltyApplied: agePenaltyApplied > 0 ? agePenaltyApplied : undefined,
+    paretoFrontSize,
   };
   history.push(genRecord);
   writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));

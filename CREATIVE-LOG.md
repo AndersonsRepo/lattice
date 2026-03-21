@@ -4,6 +4,22 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Evolution Engine Improvements + Origin Visualization Upgrade
+- **What**: Enhanced the evolution system in `src/evolve.ts` with three new mechanisms, and upgraded `docs/origin.html` with two new data visualizations
+- **Evolution changes**:
+  - **Niche pressure**: Species underrepresented in the Hall of Fame receive a scoring bonus (up to 8%), encouraging the system to explore neglected genome types instead of optimizing only what already works
+  - **Adaptive extinction**: Prolonged stagnation (25+ generations without improvement) now triggers extinction events automatically, not just at fixed intervals. Extinction trigger type (periodic vs stagnation) is tracked in telemetry
+  - **Lineage depth tracking**: Each generation records the deepest mutation chain in the population and consecutive stagnation streak length, enabling richer visualization
+  - **New telemetry fields**: `extinctionTrigger`, `nicheBonus`, `maxLineageDepth`, `stagnationStreak` added to GenerationRecord
+- **Origin.html changes**:
+  - **Fitness landscape**: Mountain-range silhouette behind the art showing best/avg score history with epoch-colored fills, extinction red pulses, stagnation amber zones, and a glowing position marker (toggle with L key or ▲ button)
+  - **Species stream graph**: Replaced the blocky stacked bar chart with a smooth alluvial/stream graph using bezier curves and centered layout — species populations flow like rivers
+  - **Lineage depth indicator**: Shows current lineage depth and stagnation streak when landscape is active
+  - **Enhanced narratives**: Stagnation extinctions, niche pressure events displayed in the timeline narrative
+  - **Richer metrics panel**: Shows extinction trigger type, stagnation streak with color coding, lineage depth
+  - **Start overlay**: Now shows max lineage depth stat
+- **Files**: `src/evolve.ts` (modified), `docs/origin.html` (modified)
+
 ### 2026-03-21 — Petri / Reaction-Diffusion Laboratory
 - **What**: Full-screen interactive Gray-Scott reaction-diffusion playground (`docs/petri.html`) — paint living chemicals and watch patterns self-organize
 - **Details**: WebGL ping-pong framebuffer simulation at 512x512. Two chemicals (U activator, V inhibitor) diffuse and react according to the Gray-Scott model. 9-point weighted Laplacian for smooth diffusion. **Brushes**: Seed (inject chemical V) and Erase (restore to U=1, V=0) with adjustable radius and smooth falloff. **8 curated presets**: Mitosis, Coral, Spirals, Spots, Stripes, Worms, Maze, Bubbles — each a known-beautiful parameter region. **4 tunable parameters**: feed rate, kill rate, Du/Dv diffusion coefficients. **Speed control**: 1-40 simulation steps per frame. **8 color palettes**: Void (purple), Ember, Ocean, Neon, Mono, Blood, Frost, Lattice (project colors). 5-stop gradient color mapping with vignette. **Audio reactivity**: microphone input modulates feed/kill rates — bass shifts feed, treble shifts kill, with adjustable mix. Frequency spectrum bar. **Interaction**: click+drag to paint, scroll wheel for brush size, touch support. **Export**: PNG download. Keyboard shortcuts: Space (pause), H (panel), C (clear), R (scatter seeds), S (export), M (mic), B (toggle brush), 1-8 (presets). Frosted-glass collapsible panel. ~32KB total, no dependencies beyond WebGL.
