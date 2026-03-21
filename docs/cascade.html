@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Cascade</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    /* --- HUD --- */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      pointer-events: auto;
+    }
+
+    .hud-title .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+      pointer-events: auto;
+    }
+    .hud-title .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+      pointer-events: auto;
+    }
+    .hud-stats .val { color: var(--green); }
+    .hud-stats .accent-val { color: var(--accent); }
+
+    /* --- Control Panel --- */
+    .panel {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      pointer-events: auto;
+      z-index: 20;
+      max-width: 720px;
+      width: calc(100% - 2.5rem);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+
+    .panel.hidden {
+      opacity: 0;
+      transform: translateX(-50%) translateY(20px);
+      pointer-events: none;
+    }
+
+    .panel-row {
+      display: flex;
+      gap: 1.25rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 0.6rem;
+    }
+    .panel-row:last-child { margin-bottom: 0; }
+
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      flex: 1;
+      min-width: 100px;
+    }
+
+    .ctrl-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      display: flex;
+      justify-content: space-between;
+    }
+    .ctrl-label .ctrl-val { color: var(--green); }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.3rem 0.6rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+    .btn.active {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: rgba(124, 111, 224, 0.1);
+    }
+
+    .palette-btn {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+      padding: 0;
+    }
+    .palette-btn:hover, .palette-btn.active {
+      border-color: var(--text);
+      box-shadow: 0 0 6px rgba(255,255,255,0.15);
+      transform: scale(1.2);
+    }
+
+    /* --- Rule preview strip --- */
+    .rule-strip {
+      position: absolute;
+      top: 3.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 2px;
+      pointer-events: auto;
+      z-index: 15;
+      background: rgba(18, 18, 26, 0.7);
+      backdrop-filter: blur(8px);
+      border-radius: 6px;
+      padding: 0.4rem 0.6rem;
+      border: 1px solid var(--border);
+    }
+
+    .rule-cell {
+      width: 8px;
+      height: 8px;
+      border-radius: 1px;
+    }
+
+    /* --- Start overlay --- */
+    .start-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(10, 10, 15, 0.92);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: opacity 0.6s;
+    }
+    .start-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .start-overlay h2 {
+      font-size: 1.2rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.8rem;
+    }
+    .start-overlay p {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      max-width: 360px;
+      text-align: center;
+      line-height: 1.8;
+    }
+    .start-overlay .start-hint {
+      margin-top: 1.5rem;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    /* --- Mic indicator --- */
+    .mic-dot {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-right: 3px;
+      animation: pulse 1s ease-in-out infinite;
+      vertical-align: middle;
+    }
+
+    /* --- Vignette --- */
+    .vignette {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 5;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(10, 10, 15, 0.5) 100%);
+    }
+
+    /* --- Mobile --- */
+    @media (max-width: 600px) {
+      .panel {
+        padding: 0.75rem 1rem;
+        bottom: 0.75rem;
+      }
+      .panel-row { gap: 0.75rem; }
+      .ctrl-group { min-width: 80px; }
+      .rule-strip { top: 3rem; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="vignette"></div>
+
+  <div class="hud">
+    <div class="hud-top">
+      <div class="hud-title">
+        <h1>Cascade</h1>
+        <a href="index.html" class="back-link">back to gallery</a>
+      </div>
+      <div class="hud-stats">
+        <div>RULE <span class="accent-val" id="stat-rule">110</span></div>
+        <div>GEN <span class="val" id="stat-gen">0</span></div>
+        <div>CLASS <span class="val" id="stat-class">—</span></div>
+        <div id="mic-status"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rule-strip" id="rule-strip"></div>
+
+  <div class="panel" id="panel">
+    <div class="panel-row">
+      <div class="ctrl-group">
+        <div class="ctrl-label"><span>Rule</span><span class="ctrl-val" id="lbl-rule">110</span></div>
+        <input type="range" id="sl-rule" min="0" max="255" value="110">
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label"><span>Speed</span><span class="ctrl-val" id="lbl-speed">12</span></div>
+        <input type="range" id="sl-speed" min="1" max="60" value="12">
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label"><span>Cell Size</span><span class="ctrl-val" id="lbl-cell">3</span></div>
+        <input type="range" id="sl-cell" min="1" max="8" value="3">
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label"><span>Noise</span><span class="ctrl-val" id="lbl-noise">0%</span></div>
+        <input type="range" id="sl-noise" min="0" max="30" value="0">
+      </div>
+    </div>
+    <div class="panel-row">
+      <div class="btn-row">
+        <button class="btn" id="btn-init-center" title="Single center cell">Center</button>
+        <button class="btn active" id="btn-init-random" title="Random initial state">Random</button>
+        <button class="btn" id="btn-init-alt" title="Alternating pattern">Alt</button>
+        <button class="btn" id="btn-famous" title="Famous rules cycle">Famous</button>
+        <button class="btn" id="btn-mic">Mic</button>
+        <button class="btn" id="btn-pause">Pause</button>
+        <button class="btn" id="btn-clear">Clear</button>
+        <button class="btn" id="btn-save">PNG</button>
+      </div>
+      <div class="btn-row" id="palette-row"></div>
+    </div>
+  </div>
+
+  <div class="start-overlay" id="start-overlay">
+    <h2>Cascade</h2>
+    <p>
+      256 Wolfram rules rendered as an infinite waterfall of computation.
+      Move your mouse to morph between rules. Click to inject perturbations.
+      Enable the microphone to let sound shape the initial conditions.
+    </p>
+    <div class="start-hint">click anywhere to begin</div>
+  </div>
+
+  <script>
+  (() => {
+    // --- Canvas setup ---
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let W, H, cols, rows;
+
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+      cols = Math.floor(W / cellSize);
+      rows = Math.floor(H / cellSize);
+      resetGrid();
+    }
+
+    // --- State ---
+    let rule = 110;
+    let speed = 12;          // generations per second
+    let cellSize = 3;
+    let noisePct = 0;
+    let paused = false;
+    let initMode = 'random'; // center | random | alt
+    let generation = 0;
+    let currentRow = [];
+    let grid = [];            // 2D array for display
+    let gridRow = 0;          // current row index in the grid
+    let micEnabled = false;
+    let analyser = null;
+    let micData = null;
+    let panelVisible = true;
+    let mouseX = -1, mouseY = -1;
+    let mouseDown = false;
+    let started = false;
+
+    // --- Famous rules ---
+    const famousRules = [30, 45, 54, 60, 73, 90, 105, 110, 124, 126, 150, 184, 193, 225];
+    let famousIdx = famousRules.indexOf(110);
+
+    // --- Wolfram rule classes (approximate) ---
+    const ruleClasses = {};
+    [0,8,32,40,64,96,128,136,160,168,192,224,234,235,236,237,238,239,248,249,250,251,252,253,254,255].forEach(r => ruleClasses[r] = 'I');
+    [1,2,3,4,5,6,7,9,10,11,12,13,14,15,19,23,27,29,33,36,37,38,42,43,44,46,50,51,56,57,58,72,74,76,77,78,94,104,108,130,132,133,134,138,140,142,152,156,162,164,170,172,176,184,200,204,232].forEach(r => ruleClasses[r] = 'II');
+    [18,22,26,30,45,54,60,62,73,75,82,86,89,90,101,102,105,107,109,110,118,120,121,122,124,126,129,131,135,137,145,146,149,150,151,153,154,161,169,181,182,183,193,195,225].forEach(r => ruleClasses[r] = 'III/IV');
+
+    function getClass(r) { return ruleClasses[r] || 'II'; }
+
+    // --- Color palettes ---
+    const palettes = [
+      { name: 'Amethyst',  bg: [10,10,15],   on: [124,111,224] },
+      { name: 'Emerald',   bg: [8,15,10],     on: [74,222,128]  },
+      { name: 'Ember',     bg: [15,10,8],     on: [251,146,60]  },
+      { name: 'Frost',     bg: [8,12,18],     on: [96,165,250]  },
+      { name: 'Plasma',    bg: [15,8,15],     on: [232,121,249] },
+      { name: 'Bone',      bg: [10,10,10],    on: [200,200,212] },
+      { name: 'Spectrum',  bg: [10,10,15],    on: null          }, // special: hue from position
+    ];
+    let paletteIdx = 0;
+
+    // --- Rule lookup table ---
+    let ruleTable = new Uint8Array(8);
+
+    function buildRuleTable(r) {
+      for (let i = 0; i < 8; i++) {
+        ruleTable[i] = (r >> i) & 1;
+      }
+    }
+
+    function applyRule(left, center, right) {
+      const idx = (left << 2) | (center << 1) | right;
+      return ruleTable[idx];
+    }
+
+    // --- Grid init ---
+    function makeInitRow() {
+      const row = new Uint8Array(cols);
+      if (initMode === 'center') {
+        row[Math.floor(cols / 2)] = 1;
+      } else if (initMode === 'random') {
+        for (let i = 0; i < cols; i++) row[i] = Math.random() < 0.5 ? 1 : 0;
+      } else if (initMode === 'alt') {
+        for (let i = 0; i < cols; i++) row[i] = i % 2;
+      }
+      return row;
+    }
+
+    function resetGrid() {
+      buildRuleTable(rule);
+      currentRow = makeInitRow();
+      grid = [];
+      gridRow = 0;
+      generation = 0;
+      // Fill canvas with bg
+      const pal = palettes[paletteIdx];
+      ctx.fillStyle = `rgb(${pal.bg[0]},${pal.bg[1]},${pal.bg[2]})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // --- Step ---
+    function stepGeneration() {
+      // Apply noise
+      if (noisePct > 0) {
+        for (let i = 0; i < cols; i++) {
+          if (Math.random() * 100 < noisePct) currentRow[i] ^= 1;
+        }
+      }
+
+      // Apply mic data to current row if enabled
+      if (micEnabled && analyser && micData) {
+        analyser.getByteFrequencyData(micData);
+        // Map frequency bins to cell columns
+        const binRatio = micData.length / cols;
+        for (let i = 0; i < cols; i++) {
+          const bin = Math.floor(i * binRatio);
+          if (micData[bin] > 160) {
+            currentRow[i] ^= 1;
+          }
+        }
+      }
+
+      // Draw current row
+      drawRow(currentRow, gridRow);
+
+      // Compute next row
+      const nextRow = new Uint8Array(cols);
+      for (let i = 0; i < cols; i++) {
+        const l = currentRow[(i - 1 + cols) % cols];
+        const c = currentRow[i];
+        const r = currentRow[(i + 1) % cols];
+        nextRow[i] = applyRule(l, c, r);
+      }
+
+      currentRow = nextRow;
+      gridRow++;
+      generation++;
+
+      // Wrap around: when we reach the bottom, scroll effect
+      if (gridRow * cellSize >= H) {
+        // Shift canvas up and continue
+        const shiftPx = cellSize;
+        const imageData = ctx.getImageData(0, shiftPx, W, H - shiftPx);
+        const pal = palettes[paletteIdx];
+        ctx.fillStyle = `rgb(${pal.bg[0]},${pal.bg[1]},${pal.bg[2]})`;
+        ctx.fillRect(0, 0, W, H);
+        ctx.putImageData(imageData, 0, 0);
+        gridRow = Math.floor((H - shiftPx) / cellSize);
+      }
+    }
+
+    function drawRow(row, rowIdx) {
+      const pal = palettes[paletteIdx];
+      const y = rowIdx * cellSize;
+
+      for (let i = 0; i < cols; i++) {
+        if (row[i]) {
+          let r, g, b;
+          if (pal.on === null) {
+            // Spectrum mode: hue based on column position
+            const hue = (i / cols) * 360;
+            [r, g, b] = hslToRgb(hue, 80, 65);
+          } else {
+            r = pal.on[0]; g = pal.on[1]; b = pal.on[2];
+          }
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+        } else {
+          ctx.fillStyle = `rgb(${pal.bg[0]},${pal.bg[1]},${pal.bg[2]})`;
+        }
+        ctx.fillRect(i * cellSize, y, cellSize, cellSize);
+      }
+    }
+
+    function hslToRgb(h, s, l) {
+      s /= 100; l /= 100;
+      const k = n => (n + h / 30) % 12;
+      const a = s * Math.min(l, 1 - l);
+      const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+      return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+    }
+
+    // --- Rule strip preview ---
+    function updateRuleStrip() {
+      const strip = document.getElementById('rule-strip');
+      strip.innerHTML = '';
+      for (let i = 7; i >= 0; i--) {
+        // Show the neighborhood → result
+        const l = (i >> 2) & 1, c = (i >> 1) & 1, r = i & 1;
+        const result = ruleTable[i];
+
+        // Neighborhood cells
+        [l, c, r].forEach(v => {
+          const d = document.createElement('div');
+          d.className = 'rule-cell';
+          const pal = palettes[paletteIdx];
+          d.style.background = v ? `rgb(${(pal.on||[124,111,224]).join(',')})` : `rgb(${pal.bg.join(',')})`;
+          d.style.border = `1px solid ${v ? 'transparent' : 'var(--border)'}`;
+          strip.appendChild(d);
+        });
+
+        // Arrow
+        const arrow = document.createElement('div');
+        arrow.style.cssText = 'width:6px;height:8px;display:flex;align-items:center;justify-content:center;font-size:6px;color:var(--text-dim);';
+        arrow.textContent = '→';
+        strip.appendChild(arrow);
+
+        // Result
+        const rd = document.createElement('div');
+        rd.className = 'rule-cell';
+        const pal = palettes[paletteIdx];
+        rd.style.background = result ? `rgb(${(pal.on||[124,111,224]).join(',')})` : `rgb(${pal.bg.join(',')})`;
+        rd.style.border = `1px solid ${result ? 'transparent' : 'var(--border)'}`;
+        strip.appendChild(rd);
+
+        // Spacer between groups
+        if (i > 0) {
+          const sp = document.createElement('div');
+          sp.style.width = '6px';
+          strip.appendChild(sp);
+        }
+      }
+    }
+
+    // --- Palette buttons ---
+    function buildPaletteButtons() {
+      const row = document.getElementById('palette-row');
+      row.innerHTML = '';
+      palettes.forEach((pal, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'palette-btn' + (idx === paletteIdx ? ' active' : '');
+        if (pal.on) {
+          btn.style.background = `rgb(${pal.on.join(',')})`;
+        } else {
+          btn.style.background = 'linear-gradient(135deg, #f00, #0f0, #00f)';
+        }
+        btn.title = pal.name;
+        btn.addEventListener('click', () => {
+          paletteIdx = idx;
+          buildPaletteButtons();
+          resetGrid();
+          updateRuleStrip();
+        });
+        row.appendChild(btn);
+      });
+    }
+
+    // --- Mouse interaction ---
+    canvas.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+
+      // If mouse morph: map X position to rule number when holding shift
+      if (e.shiftKey) {
+        const newRule = Math.floor((mouseX / W) * 256);
+        if (newRule !== rule) {
+          rule = Math.max(0, Math.min(255, newRule));
+          buildRuleTable(rule);
+          updateSlider('rule', rule);
+          updateRuleStrip();
+        }
+      }
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+      mouseDown = true;
+      injectPerturbation(e.clientX);
+    });
+
+    canvas.addEventListener('mouseup', () => { mouseDown = false; });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (mouseDown) injectPerturbation(e.clientX);
+    });
+
+    function injectPerturbation(px) {
+      const col = Math.floor(px / cellSize);
+      const radius = Math.max(3, Math.floor(cols * 0.02));
+      for (let i = col - radius; i <= col + radius; i++) {
+        const ci = ((i % cols) + cols) % cols;
+        currentRow[ci] ^= 1;
+      }
+    }
+
+    // --- Touch support ---
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      injectPerturbation(t.clientX);
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      injectPerturbation(t.clientX);
+    }, { passive: false });
+
+    // --- Mic ---
+    async function toggleMic() {
+      if (micEnabled) {
+        micEnabled = false;
+        document.getElementById('btn-mic').classList.remove('active');
+        document.getElementById('mic-status').innerHTML = '';
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(stream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        micData = new Uint8Array(analyser.frequencyBinCount);
+        micEnabled = true;
+        document.getElementById('btn-mic').classList.add('active');
+        document.getElementById('mic-status').innerHTML = '<span class="mic-dot"></span>MIC';
+      } catch (e) {
+        console.warn('Mic access denied');
+      }
+    }
+
+    // --- Slider updates ---
+    function updateSlider(name, val) {
+      document.getElementById(`sl-${name}`).value = val;
+      document.getElementById(`lbl-${name}`).textContent = val;
+    }
+
+    function setupSliders() {
+      const sl = (id, cb) => {
+        const el = document.getElementById(`sl-${id}`);
+        el.addEventListener('input', () => cb(el));
+      };
+
+      sl('rule', (el) => {
+        rule = parseInt(el.value);
+        buildRuleTable(rule);
+        document.getElementById('lbl-rule').textContent = rule;
+        document.getElementById('stat-rule').textContent = rule;
+        document.getElementById('stat-class').textContent = getClass(rule);
+        updateRuleStrip();
+      });
+
+      sl('speed', (el) => {
+        speed = parseInt(el.value);
+        document.getElementById('lbl-speed').textContent = speed;
+      });
+
+      sl('cell', (el) => {
+        cellSize = parseInt(el.value);
+        document.getElementById('lbl-cell').textContent = cellSize;
+        resize();
+      });
+
+      sl('noise', (el) => {
+        noisePct = parseInt(el.value);
+        document.getElementById('lbl-noise').textContent = noisePct + '%';
+      });
+    }
+
+    // --- Buttons ---
+    function setupButtons() {
+      const setInit = (mode) => {
+        initMode = mode;
+        document.getElementById('btn-init-center').classList.toggle('active', mode === 'center');
+        document.getElementById('btn-init-random').classList.toggle('active', mode === 'random');
+        document.getElementById('btn-init-alt').classList.toggle('active', mode === 'alt');
+        resetGrid();
+      };
+
+      document.getElementById('btn-init-center').addEventListener('click', () => setInit('center'));
+      document.getElementById('btn-init-random').addEventListener('click', () => setInit('random'));
+      document.getElementById('btn-init-alt').addEventListener('click', () => setInit('alt'));
+
+      document.getElementById('btn-famous').addEventListener('click', () => {
+        famousIdx = (famousIdx + 1) % famousRules.length;
+        rule = famousRules[famousIdx];
+        buildRuleTable(rule);
+        updateSlider('rule', rule);
+        document.getElementById('stat-rule').textContent = rule;
+        document.getElementById('stat-class').textContent = getClass(rule);
+        updateRuleStrip();
+        resetGrid();
+      });
+
+      document.getElementById('btn-mic').addEventListener('click', toggleMic);
+
+      document.getElementById('btn-pause').addEventListener('click', () => {
+        paused = !paused;
+        document.getElementById('btn-pause').textContent = paused ? 'Play' : 'Pause';
+        document.getElementById('btn-pause').classList.toggle('active', paused);
+      });
+
+      document.getElementById('btn-clear').addEventListener('click', resetGrid);
+
+      document.getElementById('btn-save').addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = `cascade-rule${rule}-gen${generation}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+    }
+
+    // --- Keyboard ---
+    document.addEventListener('keydown', (e) => {
+      if (!started) return;
+      switch (e.key.toLowerCase()) {
+        case 'tab':
+          e.preventDefault();
+          panelVisible = !panelVisible;
+          document.getElementById('panel').classList.toggle('hidden', !panelVisible);
+          break;
+        case ' ':
+          e.preventDefault();
+          paused = !paused;
+          document.getElementById('btn-pause').textContent = paused ? 'Play' : 'Pause';
+          document.getElementById('btn-pause').classList.toggle('active', paused);
+          break;
+        case 'r':
+          resetGrid();
+          break;
+        case 'm':
+          toggleMic();
+          break;
+        case 'f':
+          famousIdx = (famousIdx + 1) % famousRules.length;
+          rule = famousRules[famousIdx];
+          buildRuleTable(rule);
+          updateSlider('rule', rule);
+          document.getElementById('stat-rule').textContent = rule;
+          document.getElementById('stat-class').textContent = getClass(rule);
+          updateRuleStrip();
+          resetGrid();
+          break;
+        case 'arrowleft':
+          rule = Math.max(0, rule - 1);
+          buildRuleTable(rule);
+          updateSlider('rule', rule);
+          document.getElementById('stat-rule').textContent = rule;
+          document.getElementById('stat-class').textContent = getClass(rule);
+          updateRuleStrip();
+          resetGrid();
+          break;
+        case 'arrowright':
+          rule = Math.min(255, rule + 1);
+          buildRuleTable(rule);
+          updateSlider('rule', rule);
+          document.getElementById('stat-rule').textContent = rule;
+          document.getElementById('stat-class').textContent = getClass(rule);
+          updateRuleStrip();
+          resetGrid();
+          break;
+        case 's':
+          document.getElementById('btn-save').click();
+          break;
+      }
+    });
+
+    // --- Main loop ---
+    let lastStep = 0;
+    let frameCount = 0;
+
+    function animate(timestamp) {
+      requestAnimationFrame(animate);
+      if (!started || paused) return;
+
+      const interval = 1000 / speed;
+      const elapsed = timestamp - lastStep;
+
+      if (elapsed >= interval) {
+        // Run multiple steps if needed to catch up (max 4)
+        const steps = Math.min(4, Math.floor(elapsed / interval));
+        for (let i = 0; i < steps; i++) {
+          stepGeneration();
+        }
+        lastStep = timestamp - (elapsed % interval);
+
+        // Update stats
+        if (++frameCount % 5 === 0) {
+          document.getElementById('stat-gen').textContent = generation;
+        }
+      }
+    }
+
+    // --- Start ---
+    document.getElementById('start-overlay').addEventListener('click', () => {
+      started = true;
+      document.getElementById('start-overlay').classList.add('hidden');
+    });
+
+    // --- Init ---
+    function init() {
+      buildRuleTable(rule);
+      setupSliders();
+      setupButtons();
+      buildPaletteButtons();
+      updateRuleStrip();
+      document.getElementById('stat-class').textContent = getClass(rule);
+      resize();
+      requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('resize', resize);
+    init();
+  })();
+  </script>
+</body>
+</html>
