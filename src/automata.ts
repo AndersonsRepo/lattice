@@ -1389,6 +1389,72 @@ export function extractDominantColors(pieces: Array<{ genome: { type: string }; 
 }
 
 
+
+export function oklchGradient(hex1: string, hex2: string, steps: number, longPath: boolean = false): string[] {
+  const lch1 = oklabToOklch(hexToOklab(hex1));
+  const lch2 = oklabToOklch(hexToOklab(hex2));
+  let dh = lch2.h - lch1.h;
+  if (longPath) {
+    if (Math.abs(dh) < 180) dh = dh > 0 ? dh - 360 : dh + 360;
+  } else {
+    if (dh > 180) dh -= 360;
+    if (dh < -180) dh += 360;
+  }
+  return Array.from({ length: steps }, (_, i) => {
+    const t = steps === 1 ? 0 : i / (steps - 1);
+    return oklabToHex(oklchToOklab({
+      L: lch1.L + (lch2.L - lch1.L) * t,
+      C: lch1.C + (lch2.C - lch1.C) * t,
+      h: ((lch1.h + dh * t) % 360 + 360) % 360,
+    }));
+  });
+}
+
+export function paletteFromHarmony(baseHex: string, rule: HarmonyRule, stepsPerStop: number = 4): string[] {
+  const harmonyColors = colorHarmony(baseHex, rule);
+  const result: string[] = [];
+  for (let i = 0; i < harmonyColors.length; i++) {
+    const from = harmonyColors[i];
+    const to = harmonyColors[(i + 1) % harmonyColors.length];
+    const segment = oklchGradient(from, to, stepsPerStop + 1);
+    result.push(...(i === harmonyColors.length - 1 ? segment : segment.slice(0, -1)));
+  }
+  return result;
+}
+
+export function blendPalettes(type1: string, type2: string, t: number, steps: number = 8): string[] {
+  const p1 = speciesGradient(type1, steps);
+  const p2 = speciesGradient(type2, steps);
+  return p1.map((c1, i) => {
+    const lab1 = hexToOklab(c1), lab2 = hexToOklab(p2[i]);
+    return oklabToHex({
+      L: lab1.L + (lab2.L - lab1.L) * t,
+      a: lab1.a + (lab2.a - lab1.a) * t,
+      b: lab1.b + (lab2.b - lab1.b) * t,
+    });
+  });
+}
+
+export function paletteContrast(colors: string[]): { min: number; max: number; avg: number } {
+  if (colors.length < 2) return { min: 0, max: 0, avg: 0 };
+  const deltas: number[] = [];
+  for (let i = 1; i < colors.length; i++) {
+    const a = hexToOklab(colors[i - 1]), b = hexToOklab(colors[i]);
+    deltas.push(Math.sqrt((a.L - b.L) ** 2 + (a.a - b.a) ** 2 + (a.b - b.b) ** 2));
+  }
+  return {
+    min: Math.min(...deltas),
+    max: Math.max(...deltas),
+    avg: deltas.reduce((s, d) => s + d, 0) / deltas.length,
+  };
+}
+
+export function paletteUniformity(colors: string[]): number {
+  const { min, max } = paletteContrast(colors);
+  return max === 0 ? 1 : min / max;
+}
+
+
 // --- Rendering ---
 export function render(grid: number[][], palette: string[]): string {
   return grid
@@ -1833,7 +1899,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     } else {
       const keys = Object.keys(rule.rules);
       const key = keys[Math.floor(rng() * keys.length)];
-      const chars = "F+-[]G~!|";
+      const chars = "F+-[]G~!|@{}";
       const pos = Math.floor(rng() * (rule.rules[key].length + 1));
       const ch = chars[Math.floor(rng() * chars.length)];
       rule.rules[key] =
@@ -1860,7 +1926,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     if (rng() < 0.1) {
       const keys = Object.keys(rule.rules);
       const key = keys[Math.floor(rng() * keys.length)];
-      const chars = "F+-[]G~!|";
+      const chars = "F+-[]G~!|@{}";
       let variant = "";
       const len = 3 + Math.floor(rng() * 8);
       for (let c = 0; c < len; c++) variant += chars[Math.floor(rng() * chars.length)];
@@ -2115,7 +2181,13 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     }
     if (rng() < 0.1) {
       rule.turbulence = Math.max(1, Math.min(4, rule.turbulence + (rng() > 0.5 ? 1 : -1)));
-    }
+    // Crossover color themes if both parents have them
+    if (a.colorTheme && b.colorTheme) {
+      child.colorTheme = crossoverColorThemes(a.colorTheme, b.colorTheme, rng);
+      child.colorTheme = { ...child.colorTheme, stops: themeToColors(child.colorTheme) };
+    } else {
+      child.colorTheme = (a.colorTheme || b.colorTheme) ? { ...(a.colorTheme || b.colorTheme)! } : undefined;
+    }    }
   } else if (mutated.type === "dla") {
     const rule = mutated.rule as DLARule;
     const param = rng();
@@ -2192,7 +2264,13 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
   child.lineage = [...a.lineage.slice(-2), ...b.lineage.slice(-2), "×"];
   child.palette = rng() > 0.5 ? a.palette : b.palette;
   child.width = Math.round((a.width + b.width) / 2);
-  child.height = Math.round((a.height + b.height) / 2);
+  // Crossover color themes if both parents have them
+  if (a.colorTheme && b.colorTheme) {
+    child.colorTheme = crossoverColorThemes(a.colorTheme, b.colorTheme, rng);
+    child.colorTheme = { ...child.colorTheme, stops: themeToColors(child.colorTheme) };
+  } else {
+    child.colorTheme = (a.colorTheme || b.colorTheme) ? { ...(a.colorTheme || b.colorTheme)! } : undefined;
+  }  child.height = Math.round((a.height + b.height) / 2);
 
   if (child.type === "2d") {
     const ra = a.rule as Rule2D, rb = b.rule as Rule2D;
@@ -2381,21 +2459,52 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
     };
   } else if (type === "lsystem") {
-    const axioms = ["F", "F+F", "F-F+F"];
+    const axioms = ["F", "F+F", "F-F+F", "X", "F-F-F-F"];
     const ruleTemplates = [
-      { F: "F+F-F-F+F" },
-      { F: "FF+[+F-F-F]-[-F+F+F]" },
-      { F: "F[+F]F[-F]F" },
-      { F: "F[+F][-F]F[+F]" },
+      // Classic fractals
+      { F: "F+F-F-F+F" },                           // Koch curve
+      { F: "FF+[+F-F-F]-[-F+F+F]" },               // Realistic tree
+      { F: "F[+F]F[-F]F" },                          // Weed
+      { F: "F[+F][-F]F[+F]" },                       // Bush
+      // Botanical forms
+      { F: "FF-[-F+F+F]+[+F-F-F]" },                // Stochastic plant
+      { X: "F+[[X]-X]-F[-FX]+X", F: "FF" },         // Fractal plant
+      { X: "F[+X][-X]FX", F: "FF" },                // Binary tree
+      { X: "F[+X]F[-X]+X", F: "FF" },               // Asymmetric tree
+      // Geometric / snowflake
+      { F: "F+F-F-FF+F+F-F" },                       // Koch island
+      { F: "F-F+F+F-F" },                            // Minkowski sausage
+      // Branching fractals
+      { F: "F[-F]F[+F][F]" },                        // Dense canopy
+      { F: "FF[+F+F+F][-F-F-F]" },                  // Symmetric bush
+      // New: botanical with leaves ({} polygon fill)
+      { X: "F[+X{F-F}][-X{F+F}]", F: "FF" },       // Tree with leaves
+      { F: "FF[+F{~F~F}][-F{~F~F}]" },              // Flowering bush
+      // New: botanical with flowers (@ dot marker)
+      { X: "F[+X][-X]@", F: "FF" },                 // Fruiting tree
+      { F: "F[+F@]F[-F@]F" },                        // Blooming weed
+      // New: organic with sinusoidal tendrils (~)
+      { F: "F[+~F~F][-~F~F]F" },                    // Vine tendrils
+      { X: "~F[+X]~F[-X]~FX", F: "~F~F" },         // Coral growth
+      // New: with width reduction (!) for taper
+      { F: "F!F[+F!F][-F!F]" },                      // Tapering branches
+      { X: "F!F[+X][-X]!F@", F: "F!F" },            // Fruiting taper tree
     ];
+    const template = ruleTemplates[Math.floor(rng() * ruleTemplates.length)];
+    const hasX = "X" in template;
+    const lsRule: LSystemRule = {
+      axiom: hasX ? (rng() > 0.5 ? "X" : "F") : axioms[Math.floor(rng() * axioms.length)],
+      rules: template,
+      angle: [15, 20, 22.5, 25, 30, 36, 45, 60, 72, 90, 120][Math.floor(rng() * 11)],
+      iterations: 3 + Math.floor(rng() * 3),
+      angleJitter: rng() < 0.4 ? rng() * 8 : 0,
+      lengthScale: rng() < 0.5 ? 0.7 + rng() * 0.3 : 1,
+      tropism: rng() < 0.3 ? (rng() - 0.5) * 0.2 : 0,
+      widthDecay: rng() < 0.4 ? 0.7 + rng() * 0.2 : 0.85,
+    };
     return {
       type: "lsystem",
-      rule: {
-        axiom: axioms[Math.floor(rng() * axioms.length)],
-        rules: ruleTemplates[Math.floor(rng() * ruleTemplates.length)],
-        angle: [15, 22.5, 25, 30, 45, 60, 72, 90, 120][Math.floor(rng() * 9)],
-        iterations: 3 + Math.floor(rng() * 2),
-      },
+      rule: lsRule,
       width: 48 + Math.floor(rng() * 16),
       height: 32 + Math.floor(rng() * 8),
       palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
@@ -3146,6 +3255,56 @@ export const SEED_GENOMES: Genome[] = [
     height: 30,
     palette: BRAILLE_PALETTE,
     seed: 66666,
+    mutations: 0,
+    lineage: [],
+  },
+  // Fractal Flame — swirling IFS with sinusoidal variation
+  {
+    type: "fractal-flame",
+    rule: {
+      xforms: [
+        { a: 0.6, b: -0.4, c: 0.1, d: 0.4, e: 0.6, f: 0.0, variation: 3, color: 0.2, weight: 1.2 },
+        { a: -0.5, b: 0.3, c: -0.1, d: -0.3, e: -0.5, f: 0.2, variation: 1, color: 0.7, weight: 0.8 },
+        { a: 0.3, b: 0.5, c: 0.0, d: -0.5, e: 0.3, f: 0.0, variation: 5, color: 0.5, weight: 1.0 },
+      ],
+      iterations: 200000,
+      symmetry: 1,
+      gamma: 4,
+      brightness: 2,
+      quantize: 6,
+      zoom: 1.2,
+      centerX: 0,
+      centerY: 0,
+    },
+    width: 56,
+    height: 32,
+    palette: STAR_PALETTE,
+    seed: 77777,
+    mutations: 0,
+    lineage: [],
+  },
+  // Fractal Flame — 3-fold symmetric diamond flame
+  {
+    type: "fractal-flame",
+    rule: {
+      xforms: [
+        { a: 0.4, b: -0.3, c: 0.0, d: 0.3, e: 0.4, f: 0.0, variation: 11, color: 0.0, weight: 1.3 },
+        { a: -0.5, b: 0.5, c: 0.0, d: -0.5, e: -0.5, f: 0.0, variation: 10, color: 0.5, weight: 1.0 },
+        { a: 0.3, b: 0.0, c: 0.2, d: 0.0, e: 0.3, f: -0.2, variation: 12, color: 1.0, weight: 0.8 },
+      ],
+      iterations: 250000,
+      symmetry: 3,
+      gamma: 3.5,
+      brightness: 2.5,
+      quantize: 5,
+      zoom: 1.0,
+      centerX: 0,
+      centerY: 0,
+    },
+    width: 52,
+    height: 30,
+    palette: WAVE_PALETTE,
+    seed: 88888,
     mutations: 0,
     lineage: [],
   },
