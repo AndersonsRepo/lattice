@@ -392,12 +392,120 @@
     .section-header.hidden-filter {
       display: none;
     }
+
+    /* Realtime live indicator */
+    .realtime-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-left: 0.75rem;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      vertical-align: middle;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .realtime-indicator.connected {
+      opacity: 1;
+      color: var(--green);
+    }
+
+    .realtime-indicator.reconnecting {
+      opacity: 1;
+      color: var(--amber);
+    }
+
+    .realtime-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .realtime-indicator.reconnecting .realtime-dot {
+      background: var(--amber);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    /* Toast notification */
+    .toast-container {
+      position: fixed;
+      top: 1.5rem;
+      right: 1.5rem;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 0.75rem 1.25rem;
+      font-family: inherit;
+      font-size: 0.75rem;
+      color: var(--text);
+      box-shadow: 0 0 20px var(--accent-glow), 0 4px 12px rgba(0,0,0,0.4);
+      animation: toastIn 0.35s ease forwards;
+      pointer-events: auto;
+    }
+
+    .toast.dismiss {
+      animation: toastOut 0.3s ease forwards;
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(30px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateX(0); }
+      to   { opacity: 0; transform: translateX(30px); }
+    }
+
+    /* New piece entrance animation */
+    .piece-card.realtime-new {
+      animation: realtimeEntrance 0.6s ease forwards;
+      border-color: var(--accent) !important;
+      box-shadow: 0 0 25px var(--accent-glow), 0 0 50px rgba(124,111,224,0.15);
+    }
+
+    .piece-card.realtime-new.settle {
+      transition: border-color 1.5s ease, box-shadow 1.5s ease;
+      border-color: var(--border) !important;
+      box-shadow: none;
+    }
+
+    @keyframes realtimeEntrance {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Hall of fame highlight */
+    .piece-card.hof-new {
+      animation: hofGlow 2s ease forwards;
+    }
+
+    @keyframes hofGlow {
+      0%   { box-shadow: 0 0 0px var(--green); border-color: var(--green); }
+      50%  { box-shadow: 0 0 40px rgba(74,222,128,0.3); border-color: var(--green); }
+      100% { box-shadow: 0 0 20px var(--accent-glow); border-color: var(--accent); }
+    }
   </style>
+  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
+  <div class="toast-container" id="toast-container"></div>
   <div class="container">
     <header>
-      <h1>Lattice</h1>
+      <h1>Lattice<span class="realtime-indicator" id="realtime-indicator"><span class="realtime-dot"></span>Live</span></h1>
       <p class="subtitle">self-evolving generative art &mdash; built by claude</p>
       <div class="epoch-badge" id="epoch-badge"></div>
       <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
@@ -1077,7 +1185,315 @@
       gallery.querySelectorAll('.piece-card').forEach(card => observer.observe(card));
     }
 
+    // Store current gallery data globally for realtime updates
+    let galleryData = null;
+
+    const _origLoadGallery = loadGallery;
+    loadGallery = async function() {
+      await _origLoadGallery();
+    };
+
+    // Patch renderPieces and renderStats to capture data
+    const _origRenderStats = renderStats;
+    renderStats = function(data) {
+      galleryData = data;
+      _origRenderStats(data);
+    };
+
     loadGallery();
+
+    // ─── Supabase Realtime ──────────────────────────────────────────
+    // REQUIREMENT: The tables (lattice.archive, lattice.hall_of_fame, lattice.generations,
+    // lattice.population) must be added to the `supabase_realtime` publication.
+    // Run in Supabase SQL editor:
+    //   ALTER PUBLICATION supabase_realtime ADD TABLE lattice.archive;
+    //   ALTER PUBLICATION supabase_realtime ADD TABLE lattice.hall_of_fame;
+    //   ALTER PUBLICATION supabase_realtime ADD TABLE lattice.generations;
+    //   ALTER PUBLICATION supabase_realtime ADD TABLE lattice.population;
+    // Also ensure Realtime is enabled in the Supabase dashboard (Database > Replication).
+
+    function showToast(message, duration = 3000) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('dismiss');
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+
+    function setRealtimeStatus(status) {
+      const indicator = document.getElementById('realtime-indicator');
+      indicator.classList.remove('connected', 'reconnecting');
+      if (status === 'connected') {
+        indicator.classList.add('connected');
+      } else if (status === 'reconnecting') {
+        indicator.classList.add('reconnecting');
+      }
+      // 'disconnected' — no class, opacity stays 0
+    }
+
+    function prependPieceCard(piece, section, featured = false, animClass = 'realtime-new') {
+      const gallery = document.getElementById('gallery');
+      const tmp = document.createElement('div');
+      tmp.innerHTML = renderPieceCard(piece, featured);
+      const card = tmp.firstElementChild;
+      card.classList.add(animClass, 'visible');
+
+      // Find the section header and insert after it
+      const headers = gallery.querySelectorAll('.section-header');
+      let insertBefore = null;
+      for (const h of headers) {
+        if (h.textContent.includes(section)) {
+          insertBefore = h.nextElementSibling;
+          break;
+        }
+      }
+      if (insertBefore) {
+        gallery.insertBefore(card, insertBefore);
+      } else {
+        // Fallback: prepend to gallery
+        gallery.insertBefore(card, gallery.firstChild);
+      }
+
+      // Typewriter animation on the art
+      const art = card.querySelector('.piece-art');
+      if (art) {
+        art.classList.add('animating');
+        const lines = art.querySelectorAll('.art-line');
+        lines.forEach((line, j) => {
+          setTimeout(() => line.classList.add('revealed'), j * 25);
+        });
+        setTimeout(() => {
+          art.classList.remove('animating');
+          art.classList.add('done');
+        }, lines.length * 25 + 200);
+      }
+
+      // Settle the glow after 3s
+      setTimeout(() => {
+        card.classList.add('settle');
+      }, 3000);
+
+      // Apply current filter
+      if (currentFilter !== 'all' && card.dataset.type !== currentFilter) {
+        card.classList.add('hidden-filter');
+      }
+
+      return card;
+    }
+
+    function initRealtimeSubscriptions() {
+      if (typeof supabase === 'undefined' || !supabase.createClient) {
+        console.warn('[lattice] Supabase JS not loaded — realtime disabled');
+        return;
+      }
+
+      const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        realtime: { params: { eventsPerSecond: 10 } },
+      });
+
+      const channel = client.channel('lattice-gallery')
+        // New archive piece (best of generation)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'lattice',
+          table: 'archive',
+        }, (payload) => {
+          console.log('[lattice-rt] New archive piece', payload.new);
+          const row = payload.new;
+          const piece = {
+            id: row.id,
+            genome: row.genome,
+            score: row.score,
+            metrics: row.metrics,
+            rendered: row.rendered,
+            generation: row.generation,
+            createdAt: row.created_at,
+          };
+
+          // Update counter
+          if (galleryData) {
+            galleryData.stats.totalPiecesEver = (galleryData.stats.totalPiecesEver || 0) + 1;
+            document.getElementById('total-pieces').textContent = galleryData.stats.totalPiecesEver;
+            galleryData.archive = galleryData.archive || [];
+            galleryData.archive.unshift(piece);
+          }
+
+          // Add card to archive section
+          prependPieceCard(piece, 'Generation Archive');
+          showToast(`New piece evolved \u2014 Generation ${piece.generation}`);
+
+          // Update filter bar counts
+          if (galleryData) {
+            const allPieces = [...(galleryData.hallOfFame || []), ...(galleryData.pieces || []), ...(galleryData.archive || [])];
+            renderFilterBar(allPieces);
+          }
+        })
+
+        // New hall of fame inductee
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'lattice',
+          table: 'hall_of_fame',
+        }, (payload) => {
+          console.log('[lattice-rt] New hall of fame piece', payload.new);
+          const row = payload.new;
+          const piece = {
+            id: row.id,
+            genome: row.genome,
+            score: row.score,
+            metrics: row.metrics,
+            rendered: row.rendered,
+            generation: row.generation,
+            createdAt: row.inducted_at,
+          };
+
+          if (galleryData) {
+            galleryData.hallOfFame = galleryData.hallOfFame || [];
+            galleryData.hallOfFame.unshift(piece);
+            document.getElementById('hall-count').textContent = galleryData.hallOfFame.length;
+          }
+
+          prependPieceCard(piece, 'Hall of Fame', true, 'hof-new');
+          showToast(`\u2605 New Hall of Fame inductee \u2014 ${(piece.score * 100).toFixed(1)}%`);
+        })
+
+        // New generation completed
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'lattice',
+          table: 'generations',
+        }, (payload) => {
+          console.log('[lattice-rt] New generation', payload.new);
+          const row = payload.new;
+
+          // Update stats display
+          document.getElementById('generation').textContent = row.generation;
+          document.getElementById('best-score').textContent = (row.best_score * 100).toFixed(1) + '%';
+          document.getElementById('avg-score').textContent = (row.avg_score * 100).toFixed(1) + '%';
+
+          // Update epoch badge
+          const epoch = getEpoch(row.generation);
+          const badge = document.getElementById('epoch-badge');
+          badge.textContent = `epoch: ${epoch} \u2014 ${getEpochDescription(epoch)}`;
+
+          // Update history and re-render charts
+          if (galleryData) {
+            galleryData.generation = row.generation;
+            galleryData.stats.avgScore = row.avg_score;
+            if (row.best_score > (galleryData.stats.bestScoreEver || 0)) {
+              galleryData.stats.bestScoreEver = row.best_score;
+            }
+            const histEntry = {
+              generation: row.generation,
+              bestScore: row.best_score,
+              avgScore: row.avg_score,
+              epoch: row.epoch,
+              speciesCounts: row.species_counts,
+              hallOfFameSize: row.hall_of_fame_size,
+              timestamp: row.created_at,
+            };
+            galleryData.history = galleryData.history || [];
+            galleryData.history.push(histEntry);
+            renderTimeline(galleryData.history);
+            renderSpeciesChart(galleryData.history);
+          }
+
+          showToast(`Generation ${row.generation} complete \u2014 best ${(row.best_score * 100).toFixed(1)}%`);
+        })
+
+        // Population changes (turnover)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'lattice',
+          table: 'population',
+        }, (payload) => {
+          // Population changes are frequent; batch a full refresh on a debounce
+          clearTimeout(window._populationRefreshTimer);
+          window._populationRefreshTimer = setTimeout(async () => {
+            console.log('[lattice-rt] Population changed, refreshing current population');
+            try {
+              const headers = {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                'Accept-Profile': 'lattice',
+                'Accept': 'application/json',
+              };
+              const res = await fetch(SUPABASE_URL + '/rest/v1/population?order=score.desc&limit=8', { headers });
+              if (res.ok) {
+                const pieces = await res.json();
+                if (galleryData) {
+                  galleryData.pieces = pieces.map(p => ({
+                    id: p.id, genome: p.genome, score: p.score, metrics: p.metrics,
+                    rendered: p.rendered, generation: p.generation, createdAt: p.created_at,
+                  }));
+                  // Re-render only the current population section
+                  const gallery = document.getElementById('gallery');
+                  const headers = gallery.querySelectorAll('.section-header');
+                  let popHeader = null;
+                  for (const h of headers) {
+                    if (h.textContent.includes('Current Population')) {
+                      popHeader = h;
+                      break;
+                    }
+                  }
+                  if (popHeader) {
+                    // Remove old population cards (between Current Population and next header)
+                    let next = popHeader.nextElementSibling;
+                    while (next && !next.classList.contains('section-header')) {
+                      const toRemove = next;
+                      next = next.nextElementSibling;
+                      toRemove.remove();
+                    }
+                    // Insert new cards
+                    const hofIds = new Set((galleryData.hallOfFame || []).map(p => p.id));
+                    const currentPieces = galleryData.pieces
+                      .filter(p => !hofIds.has(p.id))
+                      .sort((a, b) => b.score - a.score);
+                    const insertBefore = popHeader.nextElementSibling;
+                    currentPieces.forEach(piece => {
+                      const tmp = document.createElement('div');
+                      tmp.innerHTML = renderPieceCard(piece, false);
+                      const card = tmp.firstElementChild;
+                      card.classList.add('visible');
+                      if (currentFilter !== 'all' && card.dataset.type !== currentFilter) {
+                        card.classList.add('hidden-filter');
+                      }
+                      gallery.insertBefore(card, insertBefore);
+                    });
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('[lattice-rt] Population refresh failed', e);
+            }
+          }, 2000); // 2s debounce for population changes
+        })
+
+        .subscribe((status, err) => {
+          console.log('[lattice-rt] Subscription status:', status, err || '');
+          if (status === 'SUBSCRIBED') {
+            setRealtimeStatus('connected');
+            console.log('[lattice-rt] Realtime connected');
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            setRealtimeStatus('reconnecting');
+            console.warn('[lattice-rt] Realtime error, will retry:', status);
+          } else if (status === 'CLOSED') {
+            setRealtimeStatus('disconnected');
+          }
+        });
+
+      // Store reference for cleanup
+      window._latticeRealtimeChannel = channel;
+      window._latticeRealtimeClient = client;
+    }
+
+    // Initialize realtime after initial gallery load
+    // Wrapped in setTimeout to not block initial render
+    setTimeout(initRealtimeSubscriptions, 500);
   </script>
 </body>
 </html>
