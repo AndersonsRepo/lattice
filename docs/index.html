@@ -207,6 +207,36 @@
       transition: none;
     }
 
+    .piece-actions {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0 1.25rem 0.5rem;
+      justify-content: flex-end;
+    }
+
+    .piece-action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.3rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .piece-action-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     .piece-meta {
       display: flex;
       align-items: center;
@@ -498,6 +528,51 @@
       50%  { box-shadow: 0 0 40px rgba(74,222,128,0.3); border-color: var(--green); }
       100% { box-shadow: 0 0 20px var(--accent-glow); border-color: var(--accent); }
     }
+
+    /* Vote buttons */
+    .vote-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.15rem;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    .vote-btn {
+      background: none;
+      border: 1px solid transparent;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      cursor: pointer;
+      padding: 0.2rem 0.35rem;
+      border-radius: 4px;
+      font-family: inherit;
+      line-height: 1;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .vote-btn:hover {
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .vote-btn.active-up {
+      color: var(--green);
+      border-color: var(--green);
+    }
+
+    .vote-btn.active-down {
+      color: #ef4444;
+      border-color: #ef4444;
+    }
+
+    .vote-count {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      min-width: 1.2em;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -650,6 +725,125 @@
     const SUPABASE_URL = 'https://fwwjtlafcrzeqfuqmexs.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ3d2p0bGFmY3J6ZXFmdXFtZXhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNjAzNTAsImV4cCI6MjA4MzczNjM1MH0.caaW2yQl0o9WGfwvNRrcdPZXmYIZKgBaCpqzc-gXt5M';
 
+    // ─── Voting System ──────────────────────────────────────────────
+    // Browser fingerprint: deterministic hash of user agent + screen + timezone
+    async function generateFingerprint() {
+      const stored = localStorage.getItem('lattice-fingerprint');
+      if (stored) return stored;
+      const raw = [
+        navigator.userAgent,
+        screen.width + 'x' + screen.height,
+        screen.colorDepth,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+        navigator.language,
+        navigator.hardwareConcurrency || 0,
+      ].join('|');
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+      const fp = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('lattice-fingerprint', fp);
+      return fp;
+    }
+
+    let voterFingerprint = '';
+    generateFingerprint().then(fp => { voterFingerprint = fp; });
+
+    // Vote state: { pieceId: 1|-1 } stored in localStorage
+    function getMyVotes() {
+      try { return JSON.parse(localStorage.getItem('lattice-votes') || '{}'); } catch { return {}; }
+    }
+    function getMyVote(pieceId) { return getMyVotes()[pieceId] || 0; }
+    function setMyVote(pieceId, vote) {
+      const votes = getMyVotes();
+      if (vote === 0) { delete votes[pieceId]; } else { votes[pieceId] = vote; }
+      localStorage.setItem('lattice-votes', JSON.stringify(votes));
+    }
+
+    // Vote counts cache: { pieceId: netScore }
+    const voteCounts = {};
+
+    async function fetchVoteCounts() {
+      try {
+        const res = await fetch(SUPABASE_URL + '/rest/v1/vote_counts', {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'Accept-Profile': 'lattice',
+            'Accept': 'application/json',
+          },
+        });
+        if (res.ok) {
+          const rows = await res.json();
+          rows.forEach(r => { voteCounts[r.piece_id] = r.net_score; });
+        }
+      } catch (e) {
+        console.warn('[lattice] Failed to fetch vote counts:', e);
+      }
+    }
+
+    let voteInFlight = {};
+    async function castVote(pieceId, direction, btnEl) {
+      if (voteInFlight[pieceId]) return;
+      voteInFlight[pieceId] = true;
+
+      const currentVote = getMyVote(pieceId);
+      // Toggle: clicking same direction removes vote (set to opposite then back would be weird, so just toggle off)
+      const newVote = currentVote === direction ? 0 : direction;
+
+      // Optimistic UI
+      const card = btnEl.closest('.piece-card');
+      const countEl = card.querySelector('.vote-count');
+      const oldNet = voteCounts[pieceId] || 0;
+      const optimisticNet = oldNet - currentVote + (newVote || 0);
+      countEl.textContent = optimisticNet;
+      voteCounts[pieceId] = optimisticNet;
+
+      // Update button states
+      const upBtn = card.querySelector('[data-vote="1"]');
+      const downBtn = card.querySelector('[data-vote="-1"]');
+      upBtn.classList.toggle('active-up', newVote === 1);
+      downBtn.classList.toggle('active-down', newVote === -1);
+
+      if (newVote === 0) {
+        // Remove vote — just update local state, no API for delete needed
+        // Actually send vote as opposite to cancel, or just store 0
+        setMyVote(pieceId, 0);
+        voteInFlight[pieceId] = false;
+        return;
+      }
+
+      setMyVote(pieceId, newVote);
+
+      try {
+        const res = await fetch('/api/vote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pieceId, vote: newVote, fingerprint: voterFingerprint }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          voteCounts[pieceId] = data.netScore;
+          countEl.textContent = data.netScore;
+        } else {
+          // Revert on failure
+          voteCounts[pieceId] = oldNet;
+          countEl.textContent = oldNet;
+          setMyVote(pieceId, currentVote);
+          upBtn.classList.toggle('active-up', currentVote === 1);
+          downBtn.classList.toggle('active-down', currentVote === -1);
+        }
+      } catch (e) {
+        // Revert on error
+        voteCounts[pieceId] = oldNet;
+        countEl.textContent = oldNet;
+        setMyVote(pieceId, currentVote);
+        upBtn.classList.toggle('active-up', currentVote === 1);
+        downBtn.classList.toggle('active-down', currentVote === -1);
+      } finally {
+        voteInFlight[pieceId] = false;
+      }
+    }
+    // ─── End Voting System ───────────────────────────────────────────
+
     async function fetchSupabaseLive() {
       const headers = {
         'apikey': SUPABASE_ANON_KEY,
@@ -701,6 +895,7 @@
           data = await res.json();
           console.log('[lattice] Loaded static gallery.json (Supabase unavailable)');
         }
+        await fetchVoteCounts();
         renderStats(data);
         renderTimeline(data.history);
         renderSpeciesChart(data.history);
@@ -1053,9 +1248,11 @@
       const art = piece.rendered || '';
       const m = piece.metrics || {};
       const colorizedArt = art ? colorizeArt(art, piece.genome.type) : '';
+      const myVote = getMyVote(piece.id);
+      const netScore = voteCounts[piece.id] || 0;
 
       return `
-        <div class="piece-card ${featured ? 'featured' : ''}" data-type="${piece.genome.type}">
+        <div class="piece-card ${featured ? 'featured' : ''}" data-type="${piece.genome.type}" data-piece-id="${piece.id}">
           <div class="piece-header">
             <span class="piece-type">
               ${featured ? '\u2605 ' : ''}${typeLabel(piece.genome.type)} &mdash; ${ruleStr(piece.genome)}
@@ -1107,6 +1304,16 @@
               </div>
               <span style="margin-top: 0.1rem">gen ${piece.generation} &bull; ${piece.genome.mutations}mut${piece.epoch ? ` &bull; ${piece.epoch}` : ''}</span>
             </div>
+            <div class="vote-controls">
+              <button class="vote-btn${myVote === 1 ? ' active-up' : ''}" data-vote="1" data-piece="${piece.id}" onclick="castVote('${piece.id}', 1, this)" title="Upvote">&#9650;</button>
+              <span class="vote-count" id="vc-${piece.id}">${netScore}</span>
+              <button class="vote-btn${myVote === -1 ? ' active-down' : ''}" data-vote="-1" data-piece="${piece.id}" onclick="castVote('${piece.id}', -1, this)" title="Downvote">&#9660;</button>
+            </div>
+          </div>
+          <div class="piece-actions">
+            <a class="piece-action-btn" href="/piece?id=${piece.id}" title="View details">&#8599; View</a>
+            <a class="piece-action-btn" href="/api/render?id=${piece.id}&size=2048" download="lattice-${piece.id.slice(0,8)}.svg" title="Download SVG">&#8615; Download</a>
+            <a class="piece-action-btn" href="/print?id=${piece.id}" title="Print options">&#9998; Print</a>
           </div>
         </div>
       `;

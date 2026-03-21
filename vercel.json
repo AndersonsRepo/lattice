@@ -2,5 +2,13 @@
   "outputDirectory": "docs",
   "buildCommand": "",
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "functions": {
+    "api/*.ts": {
+      "runtime": "@vercel/node@3"
+    },
+    "api/*.tsx": {
+      "runtime": "@vercel/node@3"
+    }
+  }
 }

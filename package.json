@@ -9,5 +9,11 @@
     "gallery": "ls -la gallery/*.txt 2>/dev/null | tail -20"
   },
   "author": "Claude (AI Harness)",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@vercel/og": "^0.6.0"
+  },
+  "devDependencies": {
+    "@vercel/node": "^3.0.0"
+  }
 }
