@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Rift</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas#gl {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* --- HUD --- */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      pointer-events: auto;
+    }
+
+    .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+      pointer-events: auto;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    /* --- Control panel --- */
+    .panel {
+      position: absolute;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: auto;
+      z-index: 20;
+      background: rgba(10, 10, 15, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      min-width: 420px;
+      max-width: 90vw;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+
+    .panel.collapsed {
+      opacity: 0;
+      transform: translateX(-50%) translateY(20px);
+      pointer-events: none;
+    }
+
+    .panel-toggle {
+      position: absolute;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      pointer-events: auto;
+      z-index: 20;
+      background: rgba(10, 10, 15, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.4rem 0.6rem;
+      cursor: pointer;
+    }
+    .panel-toggle:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* Preset buttons */
+    .presets {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .preset-btn:hover { color: var(--text); border-color: var(--text-dim); }
+    .preset-btn.active {
+      color: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    /* Sliders */
+    .sliders {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem 1.2rem;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .slider-row label {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      min-width: 60px;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    .slider-row .slider-val {
+      font-size: 0.5rem;
+      color: var(--green);
+      min-width: 28px;
+      text-align: right;
+    }
+
+    /* Action buttons row */
+    .actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 0.6rem;
+      align-items: center;
+    }
+
+    .action-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.5rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .action-btn:hover { color: var(--text); border-color: var(--text-dim); }
+    .action-btn.active { color: var(--green); border-color: var(--green); }
+
+    /* Vignette */
+    .vignette {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-overlay h2 {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+      margin-bottom: 1rem;
+    }
+    .start-overlay p {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .start-overlay .hint {
+      margin-top: 2rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      opacity: 0.5;
+    }
+
+    /* Audio spectrum ring */
+    .audio-ring {
+      position: absolute;
+      pointer-events: none;
+      z-index: 8;
+    }
+
+    /* Keyboard hint */
+    .kb-hint {
+      position: absolute;
+      bottom: 5.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.45rem;
+      color: var(--text-dim);
+      opacity: 0.4;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      pointer-events: none;
+      z-index: 20;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 600px) {
+      .panel { min-width: unset; width: 95vw; padding: 0.75rem; }
+      .sliders { grid-template-columns: 1fr; }
+      .kb-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div class="vignette"></div>
+
+<div class="start-overlay" id="startOverlay">
+  <h2>Rift</h2>
+  <p>GPU shader landscapes — move to explore</p>
+  <div class="hint">click anywhere to enter</div>
+</div>
+
+<div class="hud">
+  <div class="hud-top">
+    <div class="hud-title">
+      <h1>Rift</h1>
+      <a href="index.html" class="back-link">&larr; lattice</a>
+    </div>
+    <div class="hud-stats">
+      <div>preset <span class="val" id="statPreset">nebula</span></div>
+      <div>fps <span class="val" id="statFps">60</span></div>
+      <div id="audioStatus" style="display:none">mic <span class="val">on</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="kb-hint">1-6 presets &middot; Tab panel &middot; M mic &middot; Space pause &middot; P screenshot</div>
+
+<button class="panel-toggle" id="panelToggle">Tab — Controls</button>
+
+<div class="panel" id="panel">
+  <div class="presets" id="presets"></div>
+  <div class="sliders" id="sliders"></div>
+  <div class="actions">
+    <button class="action-btn" id="btnMic">Mic</button>
+    <button class="action-btn" id="btnPause">Pause</button>
+    <button class="action-btn" id="btnScreenshot">PNG</button>
+    <button class="action-btn" id="btnRandomize">Randomize</button>
+  </div>
+</div>
+
+<canvas id="audioRing" class="audio-ring"></canvas>
+
+<script>
+// ==================== SHADER PRESETS ====================
+
+const PRESETS = {
+  nebula: {
+    name: 'Nebula',
+    color: '#7c6fe0',
+    desc: 'Swirling cosmic gas clouds',
+    fragment: `
+      precision highp float;
+      uniform float u_time;
+      uniform vec2 u_resolution;
+      uniform vec2 u_mouse;
+      uniform float u_speed;
+      uniform float u_complexity;
+      uniform float u_zoom;
+      uniform float u_colorShift;
+      uniform float u_distortion;
+      uniform float u_audio;
+      uniform float u_bass;
+      uniform float u_treble;
+
+      vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
+      vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
+      vec4 perm(vec4 x){return mod289(((x*34.)+1.)*x);}
+      float noise(vec3 p){
+        vec3 a=floor(p),d=p-a;a=mod289(a);
+        vec4 b=a.xxyy+vec4(0,1,0,1),k1=perm(b.xyxy),k2=perm(k1.xyxy+b.zzww);
+        vec4 c=clamp(vec4(2)-abs(k2*(1./41.)-d.zzzz),0.,1.);
+        vec4 k3=c*c*c*(c*(c*6.-15.)+10.);
+        vec4 o1=fract(perm(k2+0.)*7.1)*d.xxxx,o2=fract(perm(k2+1.)*7.1)*d.yyyy;
+        vec4 o3=o1+o2;
+        vec2 o4=mix(o3.xz,o3.yw,k3.y);
+        return mix(o4.x,o4.y,k3.x);
+      }
+
+      float fbm(vec3 p, float oct){
+        float v=0.,a=.5;
+        for(float i=0.;i<8.;i++){
+          if(i>=oct) break;
+          v+=a*noise(p);
+          p*=2.1;
+          a*=.48;
+        }
+        return v;
+      }
+
+      void main(){
+        vec2 uv=(gl_FragCoord.xy-u_resolution*.5)/min(u_resolution.x,u_resolution.y);
+        uv/=u_zoom;
+        float t=u_time*u_speed*.3;
+        vec2 m=(u_mouse-.5)*2.;
+
+        float md=length(uv-m*.5);
+        uv+=normalize(uv-m*.5+.001)*u_distortion*.3/(md+.3);
+
+        uv+=vec2(sin(uv.y*10.+t),cos(uv.x*10.+t))*u_bass*.05;
+
+        vec3 p=vec3(uv*3.,t);
+        float n1=fbm(p,u_complexity*8.);
+        float n2=fbm(p+vec3(5.2,1.3,t*.5),u_complexity*8.);
+        float n3=fbm(p+vec3(n1,n2,0.)*u_distortion*2.,u_complexity*8.);
+
+        float hue=n3*.6+u_colorShift+u_treble*.1;
+        vec3 col=.5+.5*cos(6.28318*(hue+vec3(0.,.33,.67)));
+        col*=smoothstep(-.1,.8,n3);
+        col+=vec3(.7,.5,1.)*.05/(md+.1)*u_distortion;
+
+        col*=1.+u_audio*.5;
+
+        gl_FragColor=vec4(col,1.);
+      }
+    `
+  },
+
+  wormhole: {
+    name: 'Wormhole',
+    color: '#4ade80',
+    desc: 'Spiraling gravitational tunnel',
+    fragment: `
+      precision highp float;
+      uniform float u_time;
+      uniform vec2 u_resolution;
+      uniform vec2 u_mouse;
+      uniform float u_speed;
+      uniform float u_complexity;
+      uniform float u_zoom;
+      uniform float u_colorShift;
+      uniform float u_distortion;
+      uniform float u_audio;
+      uniform float u_bass;
+      uniform float u_treble;
+
+      void main(){
+        vec2 uv=(gl_FragCoord.xy-u_resolution*.5)/min(u_resolution.x,u_resolution.y);
+        uv/=u_zoom;
+        float t=u_time*u_speed*.4;
+        vec2 m=(u_mouse-.5)*1.5;
+
+        vec2 d=uv-m*.3;
+        float r=length(d);
+        float a=atan(d.y,d.x);
+
+        float spiral=a+r*u_distortion*8.-t*2.;
+        float rings=sin(r*20./u_zoom-t*3.+u_bass*3.)*
+                     cos(spiral*u_complexity*6.);
+
+        float depth=.1/(r+.05);
+        float tunnel=sin(depth*5.+t+a*u_complexity*6.)*.5+.5;
+
+        float v=mix(rings,tunnel,.5+u_distortion*.3);
+        v=smoothstep(-.2,.8,v);
+
+        float hue=a/6.28+u_colorShift+depth*.1;
+        vec3 col=.5+.5*cos(6.28*(hue+vec3(0.,.15,.35)));
+        col*=v;
+        col+=vec3(.3,1.,.5)*.15/(r+.08);
+        col*=1.+u_audio*.4;
+
+        gl_FragColor=vec4(col,1.);
+      }
+    `
+  },
+
+  crystal: {
+    name: 'Crystal',
+    color: '#4ad4f5',
+    desc: 'Voronoi facets refracting light',
+    fragment: `
+      precision highp float;
+      uniform float u_time;
+      uniform vec2 u_resolution;
+      uniform vec2 u_mouse;
+      uniform float u_speed;
+      uniform float u_complexity;
+      uniform float u_zoom;
+      uniform float u_colorShift;
+      uniform float u_distortion;
+      uniform float u_audio;
+      uniform float u_bass;
+      uniform float u_treble;
+
+      vec2 hash(vec2 p){
+        p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));
+        return fract(sin(p)*43758.5453);
+      }
+
+      float voronoi(vec2 p, float t){
+        vec2 n=floor(p),f=fract(p);
+        float md=8.;
+        for(int j=-1;j<=1;j++)
+        for(int i=-1;i<=1;i++){
+          vec2 g=vec2(float(i),float(j));
+          vec2 o=hash(n+g);
+          o=.5+.5*sin(t+6.28*o);
+          vec2 r=g+o-f;
+          float d=dot(r,r);
+          md=min(md,d);
+        }
+        return sqrt(md);
+      }
+
+      void main(){
+        vec2 uv=(gl_FragCoord.xy-u_resolution*.5)/min(u_resolution.x,u_resolution.y);
+        uv/=u_zoom;
+        float t=u_time*u_speed*.5;
+        vec2 m=(u_mouse-.5)*2.;
+
+        vec2 d=uv-m*.3;
+        float md=length(d);
+        uv+=d*u_distortion*.5/(md*md+.3);
+
+        float scale=3.+u_complexity*12.;
+        float v1=voronoi(uv*scale,t);
+        float v2=voronoi(uv*scale*2.+5.2,t*1.3);
+        float v3=voronoi(uv*scale*.5+vec2(v1,v2)*u_distortion,t*.7);
+
+        float edge=smoothstep(.0,.08+u_treble*.05,v1);
+        float inner=v3;
+
+        float hue=v1*v2+u_colorShift;
+        vec3 col=.5+.5*cos(6.28*(hue+vec3(0.,.25,.5)));
+        col*=edge;
+        col+=vec3(.3,.8,1.)*(1.-edge)*.6;
+        col*=.7+inner*.5;
+        col*=1.+u_audio*.3;
+        col+=vec3(.3,.6,1.)*.1/(md+.15)*u_distortion;
+
+        gl_FragColor=vec4(col,1.);
+      }
+    `
+  },
+
+  mycelium: {
+    name: 'Mycelium',
+    color: '#22d3ee',
+    desc: 'Branching organic networks',
+    fragment: `
+      precision highp float;
+      uniform float u_time;
+      uniform vec2 u_resolution;
+      uniform vec2 u_mouse;
+      uniform float u_speed;
+      uniform float u_complexity;
+      uniform float u_zoom;
+      uniform float u_colorShift;
+      uniform float u_distortion;
+      uniform float u_audio;
+      uniform float u_bass;
+      uniform float u_treble;
+
+      float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+
+      float vnoise(vec2 p){
+        vec2 i=floor(p),f=fract(p);
+        f=f*f*(3.-2.*f);
+        float a=hash(i),b=hash(i+vec2(1,0)),c=hash(i+vec2(0,1)),d=hash(i+vec2(1,1));
+        return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
+      }
+
+      float fbm(vec2 p){
+        float v=0.,a=.5;
+        mat2 m=mat2(1.6,1.2,-1.2,1.6);
+        for(int i=0;i<6;i++){v+=a*vnoise(p);p=m*p;a*=.5;}
+        return v;
+      }
+
+      void main(){
+        vec2 uv=(gl_FragCoord.xy-u_resolution*.5)/min(u_resolution.x,u_resolution.y);
+        uv/=u_zoom;
+        float t=u_time*u_speed*.2;
+        vec2 m=(u_mouse-.5)*2.;
+
+        vec2 p=uv*3.;
+        p+=m*.4;
+        float n1=fbm(p+t*.3);
+        float n2=fbm(p+vec2(n1)*u_distortion*3.+t*.2);
+        float n3=fbm(p+vec2(n2,n1)*u_distortion*2.+t*.1);
+
+        float branch=abs(n3-.5)*2.;
+        branch=pow(branch,2.+u_complexity*8.);
+        float net=1.-branch;
+
+        net=smoothstep(.1-u_bass*.1,.6,net);
+
+        float md=length(uv-m*.3);
+        float glow=.08/(md+.1);
+
+        float hue=n2*.4+u_colorShift;
+        vec3 col=.5+.5*cos(6.28*(hue+vec3(0.,.2,.4)));
+        col*=net;
+        col+=vec3(.1,.8,.7)*glow*u_distortion;
+        col+=vec3(.1,.5,.4)*net*u_audio*.5;
+
+        gl_FragColor=vec4(col,1.);
+      }
+    `
+  },
+
+  singularity: {
+    name: 'Singularity',
+    color: '#ef4444',
+    desc: 'Event horizon gravitational lensing',
+    fragment: `
+      precision highp float;
+      uniform float u_time;
+      uniform vec2 u_resolution;
+      uniform vec2 u_mouse;
+      uniform float u_speed;
+      uniform float u_complexity;
+      uniform float u_zoom;
+      uniform float u_colorShift;
+      uniform float u_distortion;
+      uniform float u_audio;
+      uniform float u_bass;
+      uniform float u_treble;
+
+      float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+
+      void main(){
+        vec2 uv=(gl_FragCoord.xy-u_resolution*.5)/min(u_resolution.x,u_resolution.y);
+        uv/=u_zoom;
+        float t=u_time*u_speed*.3;
+        vec2 center=u_mouse*.8-.4;
+
+        vec2 d=uv-center;
+        float r=length(d);
+        float a=atan(d.y,d.x);
+
+        float warp=u_distortion*.15/(r*r+.01);
+        vec2 warped=uv+d*warp;
+
+        float diskR=r;
+        float diskA=a+t*2.+warp*5.;
+        float disk=sin(diskA*u_complexity*9.+diskR*30.-t*5.)*.5+.5;
+        disk*=smoothstep(.0,.15,diskR)*smoothstep(.8,.2,diskR);
+        disk=pow(disk,1.5);
+
+        float stars=0.;
+        for(float i=0.;i<40.;i++){
+          vec2 sp=vec2(hash(vec2(i,0.))-.5,hash(vec2(0.,i))-.5)*2.;
+          float sd=length(warped-sp);
+          stars+=.003/(sd*sd+.001);
+        }
+        stars=min(stars,2.);
+
+        float horizon=smoothstep(.04,.06+u_bass*.02,r);
+
+        float hawking=.02/(r+.01)*smoothstep(.04,.08,r);
+
+        float hue=a/6.28+t*.1+u_colorShift;
+        vec3 diskCol=.5+.5*cos(6.28*(hue+vec3(0.,.1,.25)));
+        diskCol=mix(diskCol,vec3(1.,.4,.2),disk*.5);
+
+        vec3 col=vec3(0.);
+        col+=diskCol*disk*horizon;
+        col+=vec3(.9,.95,1.)*stars*horizon;
+        col+=vec3(1.,.5,.3)*hawking;
+        col*=1.+u_audio*.5;
+
+        gl_FragColor=vec4(col,1.);
+      }
+    `
+  },
+
+  aurora: {
+    name: 'Aurora',
+    color: '#a78bfa',
+    desc: 'Shimmering curtains of light',
+    fragment: `
+      precision highp float;
+      uniform float u_time;
+      uniform vec2 u_resolution;
+      uniform vec2 u_mouse;
+      uniform float u_speed;
+      uniform float u_complexity;
+      uniform float u_zoom;
+      uniform float u_colorShift;
+      uniform float u_distortion;
+      uniform float u_audio;
+      uniform float u_bass;
+      uniform float u_treble;
+
+      float hash(float n){return fract(sin(n)*43758.5453);}
+
+      float noise1d(float p){
+        float i=floor(p),f=fract(p);
+        f=f*f*(3.-2.*f);
+        return mix(hash(i),hash(i+1.),f);
+      }
+
+      void main(){
+        vec2 uv=(gl_FragCoord.xy-u_resolution*.5)/min(u_resolution.x,u_resolution.y);
+        uv/=u_zoom;
+        float t=u_time*u_speed*.25;
+        vec2 m=(u_mouse-.5)*2.;
+
+        float x=uv.x+m.x*.2;
+        float y=uv.y;
+
+        float curtain=0.;
+        for(float i=1.;i<=6.;i++){
+          if(i>u_complexity*6.) break;
+          float freq=i*2.5;
+          float sway=noise1d(x*freq+t*(.3+i*.1)+i*10.)*.5+.5;
+          sway*=noise1d(t*.5+i*5.)*.3+.7;
+
+          float yOff=sway*u_distortion*.4;
+          float curtainY=smoothstep(.8+yOff,.0+yOff,y+.3);
+          curtainY*=smoothstep(-1.,-0.3,y);
+
+          float shimmer=noise1d(x*freq*3.+t*2.+i*20.);
+          shimmer=shimmer*shimmer;
+
+          curtain+=curtainY*(0.3+shimmer*0.4)/u_complexity*1.5;
+        }
+
+        curtain+=u_bass*.2*curtain;
+
+        float hue=x*.3+t*.05+u_colorShift;
+        vec3 col1=.5+.5*cos(6.28*(hue+vec3(0.,.15,.3)));
+        vec3 col2=.5+.5*cos(6.28*(hue+.3+vec3(0.,.2,.45)));
+
+        vec3 col=mix(col1,col2,curtain);
+        col*=curtain;
+
+        float starField=0.;
+        for(float i=0.;i<50.;i++){
+          vec2 sp=vec2(hash(i+.1)-.5,hash(i+.2)*-.8-.2)*2.;
+          float sd=length(uv-sp);
+          float twinkle=.5+.5*sin(t*hash(i+.3)*5.+i);
+          starField+=.001*twinkle/(sd*sd+.0005);
+        }
+        col+=vec3(.9,.95,1.)*starField*(1.-curtain*.5);
+
+        col*=1.+u_audio*.3;
+
+        gl_FragColor=vec4(col,1.);
+      }
+    `
+  }
+};
+
+// ==================== WEBGL SETUP ====================
+
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true, antialias: false });
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Fullscreen quad
+const vsSrc = 'attribute vec2 a_pos; void main(){gl_Position=vec4(a_pos,0,1);}';
+const quadBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+// ==================== SHADER COMPILATION ====================
+
+let currentProgram = null;
+let uniforms = {};
+
+function compileShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(s));
+    gl.deleteShader(s);
+    return null;
+  }
+  return s;
+}
+
+function buildProgram(fragSrc) {
+  const vs = compileShader(gl.VERTEX_SHADER, vsSrc);
+  const fs = compileShader(gl.FRAGMENT_SHADER, fragSrc);
+  if (!vs || !fs) return null;
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(prog));
+    return null;
+  }
+
+  const u = {};
+  const names = ['u_time','u_resolution','u_mouse','u_speed','u_complexity','u_zoom',
+                 'u_colorShift','u_distortion','u_audio','u_bass','u_treble'];
+
+  gl.useProgram(prog);
+  for (const n of names) u[n] = gl.getUniformLocation(prog, n);
+
+  return { program: prog, uniforms: u };
+}
+
+// ==================== STATE ====================
+
+const state = {
+  preset: 'nebula',
+  paused: false,
+  panelOpen: true,
+  mouse: { x: 0.5, y: 0.5 },
+  smoothMouse: { x: 0.5, y: 0.5 },
+  params: {
+    speed: 0.5,
+    complexity: 0.6,
+    zoom: 1.0,
+    colorShift: 0.0,
+    distortion: 0.5
+  },
+  audio: { enabled: false, level: 0, bass: 0, treble: 0, bands: new Float32Array(8) },
+  time: 0,
+  programs: {},
+  fps: { frames: 0, last: performance.now(), value: 60 }
+};
+
+// Pre-compile all shaders
+for (const [key, preset] of Object.entries(PRESETS)) {
+  state.programs[key] = buildProgram(preset.fragment);
+}
+
+function switchPreset(name) {
+  if (!PRESETS[name] || !state.programs[name]) return;
+  state.preset = name;
+  const built = state.programs[name];
+  currentProgram = built.program;
+  uniforms = built.uniforms;
+  gl.useProgram(currentProgram);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  const aPos = gl.getAttribLocation(currentProgram, 'a_pos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  document.getElementById('statPreset').textContent = name;
+  document.querySelectorAll('.preset-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.preset === name));
+}
+
+// ==================== UI ====================
+
+// Preset buttons
+const presetsEl = document.getElementById('presets');
+for (const [key, p] of Object.entries(PRESETS)) {
+  const btn = document.createElement('button');
+  btn.className = 'preset-btn';
+  btn.dataset.preset = key;
+  btn.textContent = p.name;
+  btn.title = p.desc;
+  btn.addEventListener('click', () => switchPreset(key));
+  presetsEl.appendChild(btn);
+}
+
+// Sliders
+const sliderDefs = [
+  { key: 'speed', label: 'Speed', min: 0, max: 2, step: 0.01 },
+  { key: 'complexity', label: 'Detail', min: 0.1, max: 1, step: 0.01 },
+  { key: 'zoom', label: 'Zoom', min: 0.2, max: 3, step: 0.01 },
+  { key: 'colorShift', label: 'Hue', min: 0, max: 1, step: 0.01 },
+  { key: 'distortion', label: 'Warp', min: 0, max: 1.5, step: 0.01 },
+];
+
+const slidersEl = document.getElementById('sliders');
+const sliderInputs = {};
+
+for (const def of sliderDefs) {
+  const row = document.createElement('div');
+  row.className = 'slider-row';
+
+  const label = document.createElement('label');
+  label.textContent = def.label;
+
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = def.min;
+  input.max = def.max;
+  input.step = def.step;
+  input.value = state.params[def.key];
+
+  const val = document.createElement('span');
+  val.className = 'slider-val';
+  val.textContent = Number(state.params[def.key]).toFixed(2);
+
+  input.addEventListener('input', () => {
+    state.params[def.key] = parseFloat(input.value);
+    val.textContent = Number(input.value).toFixed(2);
+  });
+
+  sliderInputs[def.key] = { input, val };
+  row.append(label, input, val);
+  slidersEl.appendChild(row);
+}
+
+// Panel toggle
+const panel = document.getElementById('panel');
+const panelToggle = document.getElementById('panelToggle');
+
+function togglePanel() {
+  state.panelOpen = !state.panelOpen;
+  panel.classList.toggle('collapsed', !state.panelOpen);
+}
+panelToggle.addEventListener('click', togglePanel);
+
+// Action buttons
+document.getElementById('btnPause').addEventListener('click', function() {
+  state.paused = !state.paused;
+  this.classList.toggle('active', state.paused);
+  this.textContent = state.paused ? 'Play' : 'Pause';
+});
+
+document.getElementById('btnScreenshot').addEventListener('click', () => {
+  render(performance.now());
+  canvas.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'rift-' + state.preset + '-' + Date.now() + '.png';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+});
+
+document.getElementById('btnRandomize').addEventListener('click', () => {
+  state.params.speed = 0.1 + Math.random() * 1.5;
+  state.params.complexity = 0.2 + Math.random() * 0.8;
+  state.params.zoom = 0.3 + Math.random() * 2.2;
+  state.params.colorShift = Math.random();
+  state.params.distortion = Math.random() * 1.2;
+  for (const def of sliderDefs) {
+    sliderInputs[def.key].input.value = state.params[def.key];
+    sliderInputs[def.key].val.textContent = state.params[def.key].toFixed(2);
+  }
+});
+
+// ==================== AUDIO ====================
+
+let audioCtx, analyser, micStream, freqData;
+
+async function toggleMic() {
+  const btn = document.getElementById('btnMic');
+  const statusEl = document.getElementById('audioStatus');
+
+  if (state.audio.enabled) {
+    state.audio.enabled = false;
+    btn.classList.remove('active');
+    statusEl.style.display = 'none';
+    if (micStream) {
+      micStream.getTracks().forEach(t => t.stop());
+      micStream = null;
+    }
+    return;
+  }
+
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+    source.connect(analyser);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    state.audio.enabled = true;
+    btn.classList.add('active');
+    statusEl.style.display = '';
+  } catch (e) {
+    console.warn('Mic access denied:', e);
+  }
+}
+
+document.getElementById('btnMic').addEventListener('click', toggleMic);
+
+function updateAudio() {
+  if (!state.audio.enabled || !analyser) {
+    state.audio.level = state.audio.bass = state.audio.treble = 0;
+    return;
+  }
+  analyser.getByteFrequencyData(freqData);
+  const n = freqData.length;
+
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += freqData[i];
+  state.audio.level = sum / n / 255;
+
+  let bass = 0;
+  const bassEnd = Math.floor(n / 4);
+  for (let i = 0; i < bassEnd; i++) bass += freqData[i];
+  state.audio.bass = bass / bassEnd / 255;
+
+  let treb = 0;
+  const trebStart = Math.floor(n * 3 / 4);
+  for (let i = trebStart; i < n; i++) treb += freqData[i];
+  state.audio.treble = treb / (n - trebStart) / 255;
+
+  const bandSize = Math.floor(n / 8);
+  for (let b = 0; b < 8; b++) {
+    let s = 0;
+    for (let i = b * bandSize; i < (b + 1) * bandSize; i++) s += freqData[i];
+    state.audio.bands[b] = s / bandSize / 255;
+  }
+}
+
+// Audio ring canvas
+const ringCanvas = document.getElementById('audioRing');
+const ringCtx = ringCanvas.getContext('2d');
+ringCanvas.width = 200;
+ringCanvas.height = 200;
+ringCanvas.style.width = '200px';
+ringCanvas.style.height = '200px';
+
+function drawAudioRing() {
+  ringCtx.clearRect(0, 0, 200, 200);
+  if (!state.audio.enabled) {
+    ringCanvas.style.display = 'none';
+    return;
+  }
+  ringCanvas.style.display = '';
+  const mx = state.mouse.x * window.innerWidth;
+  const my = (1 - state.mouse.y) * window.innerHeight;
+  ringCanvas.style.left = (mx - 100) + 'px';
+  ringCanvas.style.top = (my - 100) + 'px';
+
+  const cx = 100, cy = 100, r = 60;
+  for (let b = 0; b < 8; b++) {
+    const a1 = (b / 8) * Math.PI * 2 - Math.PI / 2;
+    const a2 = ((b + 1) / 8) * Math.PI * 2 - Math.PI / 2;
+    const amp = state.audio.bands[b];
+    const outerR = r + amp * 35;
+    ringCtx.beginPath();
+    ringCtx.arc(cx, cy, r, a1, a2);
+    ringCtx.arc(cx, cy, outerR, a2, a1, true);
+    ringCtx.closePath();
+    const hue = (b / 8) * 0.3 + parseFloat(sliderInputs.colorShift.input.value);
+    const rgb = hslToRgb(hue % 1, 0.7, 0.5 + amp * 0.3);
+    ringCtx.fillStyle = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + (0.3 + amp * 0.5) + ')';
+    ringCtx.fill();
+  }
+}
+
+function hslToRgb(h, s, l) {
+  let r, g, b;
+  if (s === 0) { r = g = b = l; }
+  else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+// ==================== MOUSE ====================
+
+canvas.addEventListener('mousemove', e => {
+  state.mouse.x = e.clientX / window.innerWidth;
+  state.mouse.y = 1 - e.clientY / window.innerHeight;
+});
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  state.mouse.x = t.clientX / window.innerWidth;
+  state.mouse.y = 1 - t.clientY / window.innerHeight;
+}, { passive: false });
+
+// ==================== KEYBOARD ====================
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const key = e.key.toLowerCase();
+
+  if (key === 'tab') { e.preventDefault(); togglePanel(); }
+  else if (key === ' ') {
+    e.preventDefault();
+    state.paused = !state.paused;
+    const btn = document.getElementById('btnPause');
+    btn.classList.toggle('active', state.paused);
+    btn.textContent = state.paused ? 'Play' : 'Pause';
+  }
+  else if (key === 'm') toggleMic();
+  else if (key === 'p') document.getElementById('btnScreenshot').click();
+  else if (key === 'r') document.getElementById('btnRandomize').click();
+  else if (key >= '1' && key <= '6') {
+    const names = Object.keys(PRESETS);
+    const idx = parseInt(key) - 1;
+    if (idx < names.length) switchPreset(names[idx]);
+  }
+});
+
+// ==================== RENDER ====================
+
+let lastTime = 0;
+
+function render(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+
+  if (!state.paused) {
+    state.time += dt;
+  }
+
+  // Smooth mouse
+  state.smoothMouse.x += (state.mouse.x - state.smoothMouse.x) * 0.08;
+  state.smoothMouse.y += (state.mouse.y - state.smoothMouse.y) * 0.08;
+
+  updateAudio();
+
+  if (currentProgram) {
+    gl.uniform1f(uniforms.u_time, state.time);
+    gl.uniform2f(uniforms.u_resolution, canvas.width, canvas.height);
+    gl.uniform2f(uniforms.u_mouse, state.smoothMouse.x, state.smoothMouse.y);
+    gl.uniform1f(uniforms.u_speed, state.params.speed);
+    gl.uniform1f(uniforms.u_complexity, state.params.complexity);
+    gl.uniform1f(uniforms.u_zoom, state.params.zoom);
+    gl.uniform1f(uniforms.u_colorShift, state.params.colorShift);
+    gl.uniform1f(uniforms.u_distortion, state.params.distortion);
+    gl.uniform1f(uniforms.u_audio, state.audio.level);
+    gl.uniform1f(uniforms.u_bass, state.audio.bass);
+    gl.uniform1f(uniforms.u_treble, state.audio.treble);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  drawAudioRing();
+
+  // FPS counter
+  state.fps.frames++;
+  if (now - state.fps.last >= 1000) {
+    state.fps.value = state.fps.frames;
+    state.fps.frames = 0;
+    state.fps.last = now;
+    document.getElementById('statFps').textContent = state.fps.value;
+  }
+
+  requestAnimationFrame(render);
+}
+
+// ==================== START ====================
+
+const overlay = document.getElementById('startOverlay');
+overlay.addEventListener('click', () => {
+  overlay.classList.add('hidden');
+  switchPreset('nebula');
+  lastTime = performance.now();
+  requestAnimationFrame(render);
+});
+
+document.addEventListener('keydown', function startOnKey(e) {
+  if (!overlay.classList.contains('hidden')) {
+    overlay.classList.add('hidden');
+    switchPreset('nebula');
+    lastTime = performance.now();
+    requestAnimationFrame(render);
+    document.removeEventListener('keydown', startOnKey);
+  }
+});
+</script>
+</body>
+</html>
