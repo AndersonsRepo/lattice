@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Chromatic</title>
+  <style>
+    :root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;--text:#c8c8d4;--text-dim:#6e6e82;--accent:#7c6fe0;--accent-glow:#7c6fe040;--green:#4ade80;--amber:#fbbf24;--red:#ef4444}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code','Cascadia Code',monospace;min-height:100vh;overflow-x:hidden}
+    .container{max-width:1040px;margin:0 auto;padding:2rem 1.5rem}
+    header{text-align:center;padding:3rem 0 2rem;border-bottom:1px solid var(--border);margin-bottom:2.5rem}
+    h1{font-size:2.5rem;font-weight:300;letter-spacing:0.3em;text-transform:uppercase;color:var(--accent);text-shadow:0 0 30px var(--accent-glow);margin-bottom:0.5rem}
+    .subtitle{color:var(--text-dim);font-size:0.85rem;letter-spacing:0.1em}
+    h2{font-size:1.05rem;font-weight:400;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)}
+    .section{margin-bottom:3rem}
+    .desc{font-size:0.75rem;color:var(--text-dim);margin-bottom:1rem;line-height:1.6}
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.5rem}
+    .back-link{display:inline-block;margin-top:0.75rem;color:var(--accent);text-decoration:none;font-size:0.75rem;letter-spacing:0.08em}
+    .back-link:hover{text-decoration:underline}
+    footer{text-align:center;padding:2rem 0;color:var(--text-dim);font-size:0.7rem;border-top:1px solid var(--border);margin-top:2rem}
+    footer a{color:var(--accent);text-decoration:none}
+
+    /* HoF Archaeology */
+    .hof-list{display:flex;flex-direction:column;gap:1rem}
+    .hof-card{display:grid;grid-template-columns:120px 1fr;gap:1.25rem;padding:1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color 0.2s}
+    .hof-card:hover,.hof-card.active{border-color:var(--accent)}
+    .hof-art{font-size:3.5px;line-height:1.1;white-space:pre;overflow:hidden;border-radius:4px;padding:4px;background:var(--bg);max-height:80px}
+    .hof-info{display:flex;flex-direction:column;gap:0.5rem}
+    .hof-meta{font-size:0.7rem;color:var(--text-dim)}
+    .hof-meta span{color:var(--accent)}
+    .palette-row{display:flex;gap:0;height:28px;border-radius:4px;overflow:hidden}
+    .palette-row .swatch{flex:1;position:relative;transition:transform 0.15s}
+    .palette-row .swatch:hover{transform:scaleY(1.3);z-index:1}
+    .palette-row .swatch .tip{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:0.55rem;color:var(--text-dim);opacity:0;transition:opacity 0.15s;white-space:nowrap;pointer-events:none}
+    .palette-row .swatch:hover .tip{opacity:1}
+    .palette-label{font-size:0.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem}
+    .score-bar{display:flex;align-items:center;gap:0.5rem;font-size:0.65rem}
+    .score-track{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+    .score-fill{height:100%;border-radius:2px;transition:width 0.4s}
+    .temp-indicator{display:inline-flex;align-items:center;gap:0.3rem;font-size:0.65rem;padding:0.15rem 0.5rem;border-radius:10px;border:1px solid var(--border)}
+
+    /* Uniformity Comparator */
+    .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+    .compare-col h3{font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem}
+    .gradient-bar{height:48px;border-radius:6px;overflow:hidden;display:flex}
+    .gradient-bar .swatch{flex:1}
+    .delta-chart{width:100%;height:80px;margin-top:0.5rem}
+    .compare-controls{display:flex;gap:1rem;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap}
+    input[type="color"]{width:36px;height:36px;border:2px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:0}
+    input[type="color"]::-webkit-color-swatch-wrapper{padding:2px}
+    input[type="color"]::-webkit-color-swatch{border:none;border-radius:3px}
+    .control-label{font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em}
+    input[type="range"]{height:6px;-webkit-appearance:none;appearance:none;background:var(--border);border-radius:3px;outline:none}
+    input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer}
+
+    /* Harmony Wheel */
+    .wheel-layout{display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap}
+    .wheel-wrap{position:relative;width:300px;height:300px;flex-shrink:0}
+    .wheel-wrap canvas{border-radius:50%;box-shadow:0 0 30px rgba(124,111,224,0.12)}
+    .harmony-panel{flex:1;min-width:280px}
+    .harmony-modes{display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1rem}
+    .hm-btn{padding:0.35rem 0.75rem;border:1px solid var(--border);border-radius:14px;background:transparent;color:var(--text-dim);font-family:inherit;font-size:0.68rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;transition:all 0.2s}
+    .hm-btn:hover{border-color:var(--accent);color:var(--text)}
+    .hm-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+    .harmony-swatches{display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem}
+    .h-swatch{display:flex;flex-direction:column;align-items:center;gap:0.3rem}
+    .h-swatch-color{width:56px;height:56px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.4);transition:transform 0.2s;cursor:pointer}
+    .h-swatch-color:hover{transform:scale(1.1)}
+    .h-swatch-label{font-size:0.58rem;color:var(--text-dim)}
+    .harmony-ramp{margin-top:1rem}
+
+    /* Evolution Lab */
+    .evo-layout{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+    .evo-col{display:flex;flex-direction:column;gap:0.75rem}
+    .evo-genome{padding:1rem;background:var(--bg);border:1px solid var(--border);border-radius:6px}
+    .evo-genome-label{font-size:0.65rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem}
+    .evo-params{display:grid;grid-template-columns:1fr 1fr;gap:0.3rem 1rem;font-size:0.68rem;margin-bottom:0.5rem}
+    .evo-params dt{color:var(--text-dim)}
+    .evo-params dd{text-align:right}
+    .evo-btn{padding:0.5rem 1.2rem;border:1px solid var(--accent);border-radius:6px;background:transparent;color:var(--accent);font-family:inherit;font-size:0.72rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;transition:all 0.2s}
+    .evo-btn:hover{background:var(--accent);color:#fff}
+    .evo-actions{display:flex;gap:0.5rem;flex-wrap:wrap}
+    .evo-history{display:flex;flex-direction:column;gap:0.5rem;max-height:300px;overflow-y:auto}
+    .evo-history::-webkit-scrollbar{width:4px}
+    .evo-history::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+    .evo-history-entry{display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0}
+    .evo-history-num{font-size:0.6rem;color:var(--text-dim);width:20px;text-align:right}
+    .evo-mini-ramp{display:flex;gap:0;flex:1;height:20px;border-radius:3px;overflow:hidden}
+    .evo-mini-ramp div{flex:1}
+
+    /* Gamut Slices */
+    .gamut-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:1rem}
+    .gamut-slice{text-align:center}
+    .gamut-slice canvas{border-radius:6px;width:100%;aspect-ratio:1}
+    .gamut-slice-label{font-size:0.65rem;color:var(--text-dim);margin-top:0.3rem}
+    .gamut-controls{display:flex;gap:1rem;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap}
+
+    @media(max-width:700px){
+      .compare-grid{grid-template-columns:1fr}
+      .wheel-layout{flex-direction:column;align-items:center}
+      .evo-layout{grid-template-columns:1fr}
+      .hof-card{grid-template-columns:1fr}
+      h1{font-size:1.6rem}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Chromatic</h1>
+      <p class="subtitle">Palette archaeology, perceptual color science, and evolutionary chromatics</p>
+      <a href="index.html" class="back-link">&larr; Back to Gallery</a>
+    </header>
+
+    <!-- Section 1: Hall of Fame Palette Archaeology -->
+    <div class="section" id="sec-archaeology">
+      <h2>Hall of Fame Palette Archaeology</h2>
+      <p class="desc">Each evolved piece carries a palette DNA. Here we extract dominant colors using k-means clustering in OKLAB perceptual space, score aesthetic quality, and measure color temperature.</p>
+      <div class="hof-list" id="hof-list"></div>
+    </div>
+
+    <!-- Section 2: Perceptual Uniformity Comparator -->
+    <div class="section" id="sec-uniformity">
+      <h2>Perceptual Uniformity</h2>
+      <p class="desc">RGB interpolation produces uneven perceptual steps &mdash; some transitions look huge, others invisible. OKLCH interpolation distributes perceived difference uniformly. The bar charts below show deltaE (perceptual distance) between adjacent stops.</p>
+      <div class="panel">
+        <div class="compare-controls">
+          <div><span class="control-label">From</span><br><input type="color" id="cmp-from" value="#1a0533"></div>
+          <div><span class="control-label">To</span><br><input type="color" id="cmp-to" value="#4ade80"></div>
+          <div><span class="control-label">Steps</span><br><input type="range" id="cmp-steps" min="4" max="16" value="8" style="width:100px"><span id="cmp-steps-val" style="font-size:0.7rem;margin-left:0.3rem;color:var(--text-dim)">8</span></div>
+        </div>
+        <div class="compare-grid">
+          <div class="compare-col">
+            <h3>RGB Linear</h3>
+            <div class="gradient-bar" id="rgb-bar"></div>
+            <canvas class="delta-chart" id="rgb-delta" width="400" height="80"></canvas>
+            <div class="score-bar" style="margin-top:0.5rem"><span>Uniformity</span><div class="score-track"><div class="score-fill" id="rgb-score" style="background:var(--red)"></div></div><span id="rgb-score-val"></span></div>
+          </div>
+          <div class="compare-col">
+            <h3>OKLCH Perceptual</h3>
+            <div class="gradient-bar" id="oklch-bar"></div>
+            <canvas class="delta-chart" id="oklch-delta" width="400" height="80"></canvas>
+            <div class="score-bar" style="margin-top:0.5rem"><span>Uniformity</span><div class="score-track"><div class="score-fill" id="oklch-score" style="background:var(--green)"></div></div><span id="oklch-score-val"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Harmony Wheel -->
+    <div class="section" id="sec-harmony">
+      <h2>Harmony Wheel</h2>
+      <p class="desc">Drag around the wheel to set a base hue. Select a harmony mode to see how hues relate in OKLCH space, then view the full gradient ramp generated from that harmony.</p>
+      <div class="panel">
+        <div class="wheel-layout">
+          <div class="wheel-wrap"><canvas id="hwheel" width="300" height="300"></canvas></div>
+          <div class="harmony-panel">
+            <div class="harmony-modes" id="hmodes"></div>
+            <div class="harmony-swatches" id="hswatches"></div>
+            <div class="harmony-ramp">
+              <div class="palette-label">Generated 8-Stop Ramp</div>
+              <div class="palette-row" id="hramp" style="height:40px"></div>
+            </div>
+            <div style="margin-top:1rem">
+              <div class="palette-label">Cusp Gradient (Max Chroma at Each Lightness)</div>
+              <div class="palette-row" id="hcusp" style="height:32px;margin-top:0.25rem"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: Palette Evolution Lab -->
+    <div class="section" id="sec-evolution">
+      <h2>Palette Evolution Lab</h2>
+      <p class="desc">Watch how color themes evolve. Start with a species palette, then mutate or crossover. Each generation is a small OKLCH perturbation &mdash; hue shifts, chroma adjustments, harmony mode swaps, lightness range tweaks.</p>
+      <div class="panel">
+        <div class="evo-layout">
+          <div class="evo-col">
+            <div class="evo-genome" id="evo-parent-a">
+              <div class="evo-genome-label">Parent A</div>
+              <dl class="evo-params" id="evo-pa-params"></dl>
+              <div class="palette-row" id="evo-pa-ramp" style="height:32px"></div>
+            </div>
+            <div class="evo-genome" id="evo-parent-b">
+              <div class="evo-genome-label">Parent B</div>
+              <dl class="evo-params" id="evo-pb-params"></dl>
+              <div class="palette-row" id="evo-pb-ramp" style="height:32px"></div>
+            </div>
+            <div class="evo-actions">
+              <button class="evo-btn" id="evo-mutate-a">Mutate A</button>
+              <button class="evo-btn" id="evo-mutate-b">Mutate B</button>
+              <button class="evo-btn" id="evo-crossover">Crossover A&times;B</button>
+              <button class="evo-btn" id="evo-random">Random</button>
+            </div>
+            <div class="evo-genome" id="evo-offspring" style="border-color:var(--accent)">
+              <div class="evo-genome-label" style="color:var(--green)">Offspring</div>
+              <dl class="evo-params" id="evo-off-params"></dl>
+              <div class="palette-row" id="evo-off-ramp" style="height:32px"></div>
+            </div>
+          </div>
+          <div class="evo-col">
+            <div class="evo-genome-label">Evolution History</div>
+            <div class="evo-history" id="evo-history"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 5: Gamut Slices -->
+    <div class="section" id="sec-gamut">
+      <h2>Gamut Slices</h2>
+      <p class="desc">The sRGB gamut mapped in OKLCH space. Each slice shows which hue/chroma combinations are displayable at a given lightness. Bright regions represent in-gamut colors; dark regions exceed sRGB.</p>
+      <div class="panel">
+        <div class="gamut-controls">
+          <span class="control-label">Slices</span>
+          <input type="range" id="gamut-count" min="3" max="9" value="6" style="width:100px">
+          <span id="gamut-count-val" style="font-size:0.7rem;color:var(--text-dim)">6</span>
+        </div>
+        <div class="gamut-grid" id="gamut-grid"></div>
+      </div>
+    </div>
+
+    <footer>
+      <a href="palette.html">Palette Lab</a> &middot; <a href="index.html">Gallery</a> &middot; <a href="about.html">About</a>
+    </footer>
+  </div>
+
+<script>
+// === Color Science (self-contained, mirrors palette.ts) ===
+function srgbToLinear(c){return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
+function linearToSrgb(c){return c<=0.0031308?12.92*c:1.055*Math.pow(c,1/2.4)-0.055}
+function linearRgbToOklab(r,g,b){
+  const l_=0.4122214708*r+0.5363325363*g+0.0514459929*b,m_=0.2119034982*r+0.6806995451*g+0.1073969566*b,s_=0.0883024619*r+0.2024326293*g+0.6892650189*b;
+  const l=Math.cbrt(l_),m=Math.cbrt(m_),s=Math.cbrt(s_);
+  return[0.2104542553*l+0.7936177850*m-0.0040720468*s,1.9779984951*l-2.4285922050*m+0.4505937099*s,0.0259040371*l+0.7827717662*m-0.8086757660*s];
+}
+function oklabToLinearRgb(L,a,b){
+  const l_=L+0.3963377774*a+0.2158037573*b,m_=L-0.1055613458*a-0.0638541728*b,s_=L-0.0894841775*a-1.2914855480*b;
+  return[+4.0767416621*l_*l_*l_-3.3077115913*m_*m_*m_+0.2309699292*s_*s_*s_,-1.2684380046*l_*l_*l_+2.6097574011*m_*m_*m_-0.3413193965*s_*s_*s_,-0.0041960863*l_*l_*l_-0.7034186147*m_*m_*m_+1.7076147010*s_*s_*s_];
+}
+function oklchToOklab(L,C,H){const r=H*Math.PI/180;return[L,C*Math.cos(r),C*Math.sin(r)]}
+function oklabToOklch(L,a,b){const C=Math.sqrt(a*a+b*b);let H=Math.atan2(b,a)*180/Math.PI;if(H<0)H+=360;return[L,C,H]}
+function hexToRgb(h){return[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255]}
+function hexToOklab(h){const[r,g,b]=hexToRgb(h);return linearRgbToOklab(srgbToLinear(r),srgbToLinear(g),srgbToLinear(b))}
+function hexToOklch(h){const[L,a,b]=hexToOklab(h);return oklabToOklch(L,a,b)}
+function oklchToHex(L,C,H){
+  let c=C;
+  for(let i=0;i<25;i++){
+    const[lL,la,lb]=oklchToOklab(L,c,H),r_=oklabToLinearRgb(lL,la,lb);
+    if(r_[0]>=-0.001&&r_[0]<=1.001&&r_[1]>=-0.001&&r_[1]<=1.001&&r_[2]>=-0.001&&r_[2]<=1.001){
+      const th=v=>{const s=Math.round(linearToSrgb(Math.max(0,Math.min(1,v)))*255).toString(16);return s.length===1?'0'+s:s};
+      return'#'+th(r_[0])+th(r_[1])+th(r_[2]);
+    }
+    c*=0.95;
+  }
+  const g=Math.round(Math.max(0,Math.min(1,L))*255).toString(16).padStart(2,'0');
+  return'#'+g+g+g;
+}
+function deltaE(a,b){const x=hexToOklab(a),y=hexToOklab(b);return Math.sqrt((x[0]-y[0])**2+(x[1]-y[1])**2+(x[2]-y[2])**2)}
+
+// Naive RGB gradient
+function rgbGradient(h1,h2,n){
+  const[r1,g1,b1]=hexToRgb(h1),[r2,g2,b2]=hexToRgb(h2);
+  return Array.from({length:n},(_,i)=>{
+    const t=n===1?0.5:i/(n-1);
+    return'#'+[r1+(r2-r1)*t,g1+(g2-g1)*t,b1+(b2-b1)*t].map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('');
+  });
+}
+// OKLCH gradient
+function oklchGrad(h1,h2,n){
+  const[L1,C1,hh1]=hexToOklch(h1),[L2,C2,hh2]=hexToOklch(h2);
+  let dh=hh2-hh1;if(dh>180)dh-=360;if(dh<-180)dh+=360;
+  return Array.from({length:n},(_,i)=>{const t=n===1?0.5:i/(n-1);return oklchToHex(L1+(L2-L1)*t,C1+(C2-C1)*t,(hh1+dh*t+360)%360)});
+}
+
+// Harmony
+const HARMONIES={mono:{label:'Mono',offsets:[0]},complementary:{label:'Complementary',offsets:[0,180]},analogous:{label:'Analogous',offsets:[-30,0,30]},triadic:{label:'Triadic',offsets:[0,120,240]},split:{label:'Split-Comp',offsets:[0,150,210]},tetradic:{label:'Tetradic',offsets:[0,90,180,270]}};
+function harmonyHues(base,mode){return HARMONIES[mode].offsets.map(o=>(base+o+360)%360)}
+
+// Species themes
+const SPECIES_THEMES={
+  '1d':{hue:270,chroma:0.18,harmony:'mono',lMin:0.05,lMax:1.0},
+  '2d':{hue:145,chroma:0.18,harmony:'mono',lMin:0.05,lMax:0.95},
+  'lsystem':{hue:35,chroma:0.16,harmony:'mono',lMin:0.05,lMax:0.95},
+  'reaction-diffusion':{hue:300,chroma:0.19,harmony:'mono',lMin:0.05,lMax:0.95},
+  'voronoi':{hue:200,chroma:0.16,harmony:'mono',lMin:0.05,lMax:0.92},
+  'wfc':{hue:340,chroma:0.18,harmony:'mono',lMin:0.05,lMax:0.93},
+  'spirograph':{hue:90,chroma:0.17,harmony:'mono',lMin:0.05,lMax:0.95},
+  'attractor':{hue:20,chroma:0.14,harmony:'mono',lMin:0.05,lMax:0.92},
+  'julia':{hue:170,chroma:0.16,harmony:'mono',lMin:0.05,lMax:0.92},
+  'noise':{hue:65,chroma:0.15,harmony:'mono',lMin:0.05,lMax:0.95},
+  'flowfield':{hue:185,chroma:0.14,harmony:'mono',lMin:0.05,lMax:0.92},
+};
+function themeToColors(th,steps){
+  steps=steps||8;
+  const hues=harmonyHues(th.hue,th.harmony),colors=[];
+  for(let i=0;i<steps;i++){
+    const t=steps===1?0.5:i/(steps-1),L=th.lMin+t*(th.lMax-th.lMin);
+    const cScale=1-Math.pow(2*t-1,2)*0.4;
+    const hIdx=t*(hues.length-1),hL=hues[Math.floor(hIdx)],hH=hues[Math.min(Math.ceil(hIdx),hues.length-1)];
+    const hFrac=hIdx-Math.floor(hIdx);let dh=hH-hL;if(dh>180)dh-=360;if(dh<-180)dh+=360;
+    colors.push(oklchToHex(L,th.chroma*cScale,(hL+dh*hFrac+360)%360));
+  }
+  return colors;
+}
+function speciesColors(type){return themeToColors(SPECIES_THEMES[type]||SPECIES_THEMES['2d'])}
+
+// K-means in OKLAB
+function charIntensity(ch){
+  if(ch===' ')return 0;
+  const l='\u00B7.:~\u2801',m1='\u2591\u2022\u2248\u2803\u25B3\u25BD\u2726',m2='\u2592\u25CB\u223F\u2807\u25C7\u2727\u2766',m3='\u2593\u25CF\u224B\u280F\u25C8\u2605\u273F',hv='\u2588\u25C6\u2307\u281F\u2B21\u2736\u2740\u2741',mx='\u2573\u25D0\u25D1\u25D2\u25D3\u2301\u283F\u28FF\u2B22\u2739\u273A';
+  if(l.includes(ch))return 1;if(m1.includes(ch))return 2;if(m2.includes(ch))return 3;
+  if(m3.includes(ch))return 4;if(hv.includes(ch))return 5;if(mx.includes(ch))return 6;return 3;
+}
+function extractPalette(rendered,typeColors,k){
+  k=k||6;
+  var pixels=[];
+  var lines=rendered.split('\n');
+  for(var li=0;li<lines.length;li++){
+    var line=lines[li];
+    for(var ci=0;ci<line.length;ci++){
+      var ch=line[ci];
+      var int_=charIntensity(ch);if(int_===0)continue;
+      pixels.push(hexToOklab(typeColors[Math.min(int_,typeColors.length-1)]));
+    }
+  }
+  if(pixels.length<k)return typeColors.slice(0,k);
+  // k-means++ init
+  var centroids=[pixels[Math.floor(Math.random()*pixels.length)]];
+  for(var c=1;c<k;c++){
+    var dists=pixels.map(function(p){var mn=Infinity;for(var j=0;j<centroids.length;j++){var d=(p[0]-centroids[j][0])**2+(p[1]-centroids[j][1])**2+(p[2]-centroids[j][2])**2;if(d<mn)mn=d;}return mn;});
+    var total=dists.reduce(function(a,b){return a+b;},0);var r=Math.random()*total,acc=0;
+    for(var i=0;i<dists.length;i++){acc+=dists[i];if(acc>=r){centroids.push([pixels[i][0],pixels[i][1],pixels[i][2]]);break;}}
+  }
+  for(var iter=0;iter<15;iter++){
+    var clusters=[];for(var c2=0;c2<k;c2++)clusters.push([]);
+    for(var pi=0;pi<pixels.length;pi++){var p=pixels[pi];var mn=Infinity,mc=0;for(var c3=0;c3<k;c3++){var d2=(p[0]-centroids[c3][0])**2+(p[1]-centroids[c3][1])**2+(p[2]-centroids[c3][2])**2;if(d2<mn){mn=d2;mc=c3;}}clusters[mc].push(p);}
+    for(var c4=0;c4<k;c4++){if(!clusters[c4].length)continue;var n=clusters[c4].length;centroids[c4]=[clusters[c4].reduce(function(a,p){return a+p[0];},0)/n,clusters[c4].reduce(function(a,p){return a+p[1];},0)/n,clusters[c4].reduce(function(a,p){return a+p[2];},0)/n];}
+  }
+  return centroids.map(function(ct){var lch=oklabToOklch(ct[0],ct[1],ct[2]);return oklchToHex(lch[0],lch[1],lch[2]);}).sort(function(a,b){return hexToOklab(a)[0]-hexToOklab(b)[0];});
+}
+
+// Gamut boundary
+function gamutMaxChroma(L,h){var lo=0,hi=0.4;for(var i=0;i<20;i++){var mid=(lo+hi)/2;var lab=oklchToOklab(L,mid,h);var rgb=oklabToLinearRgb(lab[0],lab[1],lab[2]);if(rgb[0]>=-0.001&&rgb[0]<=1.001&&rgb[1]>=-0.001&&rgb[1]<=1.001&&rgb[2]>=-0.001&&rgb[2]<=1.001)lo=mid;else hi=mid;}return lo;}
+
+// Cusp gradient
+function cuspGradient(hue,steps){steps=steps||8;return Array.from({length:steps},function(_,i){var L=0.08+(i/(steps-1))*0.87;var mx=gamutMaxChroma(L,hue);return oklchToHex(L,mx*0.85,hue);});}
+
+// Temperature
+function colorTemp(hex){
+  var lch=hexToOklch(hex);var h=lch[2];
+  var warm=[{c:30,w:60,wt:1},{c:60,w:40,wt:0.7},{c:330,w:50,wt:0.6}];
+  var cool=[{c:210,w:60,wt:1},{c:170,w:40,wt:0.8},{c:270,w:40,wt:0.5}];
+  var t=0;
+  for(var i=0;i<warm.length;i++){var z=warm[i];var d=Math.abs(h-z.c);if(d>180)d=360-d;t+=Math.max(0,1-d/z.w)*z.wt;}
+  for(var i=0;i<cool.length;i++){var z=cool[i];var d=Math.abs(h-z.c);if(d>180)d=360-d;t-=Math.max(0,1-d/z.w)*z.wt;}
+  return Math.max(-1,Math.min(1,t));
+}
+function paletteTemp(colors){
+  var chrom=colors.filter(function(c){return hexToOklch(c)[1]>0.02;});
+  if(!chrom.length)return 0;
+  return chrom.reduce(function(s,c){return s+colorTemp(c);},0)/chrom.length;
+}
+
+// Aesthetic score
+function aestheticScore(colors){
+  if(colors.length<2)return{uniformity:0,contrast:0,overall:0,deltas:[]};
+  var deltas=[];
+  for(var i=0;i<colors.length-1;i++)deltas.push(deltaE(colors[i],colors[i+1]));
+  var avg=deltas.reduce(function(a,b){return a+b;},0)/deltas.length;
+  var variance=deltas.reduce(function(a,d){return a+(d-avg)*(d-avg);},0)/deltas.length;
+  var uniformity=avg>0?Math.max(0,1-Math.sqrt(variance)/avg):0;
+  var lums=colors.map(function(c){return hexToOklab(c)[0];});
+  var contrast=Math.min(1,(Math.max.apply(null,lums)-Math.min.apply(null,lums))/0.8);
+  return{uniformity:uniformity,contrast:contrast,overall:uniformity*0.5+contrast*0.5,deltas:deltas};
+}
+
+// Mutation / Crossover
+var ALL_MODES=['mono','complementary','analogous','triadic','split','tetradic'];
+function mutateTheme(th,intensity){
+  intensity=intensity||1;
+  var m={hue:th.hue,chroma:th.chroma,harmony:th.harmony,lMin:th.lMin,lMax:th.lMax};
+  if(Math.random()<0.7)m.hue=(m.hue+(Math.random()-0.5)*60*intensity+360)%360;
+  if(Math.random()<0.4)m.chroma=Math.max(0.04,Math.min(0.3,m.chroma+(Math.random()-0.5)*0.12*intensity));
+  if(Math.random()<0.15)m.harmony=ALL_MODES[Math.floor(Math.random()*ALL_MODES.length)];
+  if(Math.random()<0.25){var sh=(Math.random()-0.5)*0.15*intensity;m.lMin=Math.max(0.02,Math.min(0.3,m.lMin+sh));m.lMax=Math.max(0.6,Math.min(1,m.lMax+sh*0.5));}
+  return m;
+}
+function crossoverThemes(a,b){
+  var dh=b.hue-a.hue;if(dh>180)dh-=360;if(dh<-180)dh+=360;var t=Math.random();
+  return{hue:(a.hue+dh*t+360)%360,chroma:a.chroma+(b.chroma-a.chroma)*t,harmony:Math.random()>0.5?a.harmony:b.harmony,lMin:a.lMin+(b.lMin-a.lMin)*t,lMax:a.lMax+(b.lMax-a.lMax)*t};
+}
+
+// === Build swatches ===
+function buildSwatchRow(container,colors){
+  container.innerHTML='';
+  colors.forEach(function(c){
+    var d=document.createElement('div');d.className='swatch';d.style.background=c;
+    var tip=document.createElement('span');tip.className='tip';tip.textContent=c;d.appendChild(tip);
+    container.appendChild(d);
+  });
+}
+
+// === Section 1: HoF Archaeology ===
+var galleryData=null;
+function loadGallery(){
+  return fetch('gallery.json').then(function(r){return r.json();}).then(function(d){galleryData=d;}).catch(function(){console.warn('gallery.json not found');});
+}
+function buildHoF(){
+  var list=document.getElementById('hof-list');
+  if(!galleryData||!galleryData.hallOfFame)return;
+  var hof=galleryData.hallOfFame.slice(0,12);
+  hof.forEach(function(entry,i){
+    var genome=entry.genome||{};
+    var type=genome.type||'2d';
+    var specColors=speciesColors(type);
+    var rendered=entry.rendered||'';
+    var extracted=extractPalette(rendered,specColors,6);
+    var score=aestheticScore(extracted);
+    var temp=paletteTemp(extracted);
+
+    var card=document.createElement('div');card.className='hof-card';
+    var artLines=rendered.split('\n').slice(0,20);
+    var artHtml=artLines.map(function(line){
+      var html='';
+      for(var ci=0;ci<line.length;ci++){
+        var ch=line[ci];
+        var int_=charIntensity(ch);
+        var color=specColors[Math.min(int_,specColors.length-1)];
+        html+='<span style="color:'+color+'">'+(ch==='<'?'&lt;':ch==='>'?'&gt;':ch===' '?'&nbsp;':ch)+'</span>';
+      }
+      return html;
+    }).join('\n');
+
+    var tempLabel=temp>0.2?'warm':temp<-0.2?'cool':'neutral';
+    var tempColor=temp>0.2?'var(--amber)':temp<-0.2?'#6cacff':'var(--text-dim)';
+
+    card.innerHTML='<div class="hof-art">'+artHtml+'</div>'
+      +'<div class="hof-info">'
+      +'<div class="hof-meta"><span>'+type+'</span> &middot; gen '+entry.generation+' &middot; score '+(entry.score*100).toFixed(1)+'%</div>'
+      +'<div><div class="palette-label">Species Default</div><div class="palette-row" id="hof-spec-'+i+'"></div></div>'
+      +'<div><div class="palette-label">Extracted (K-Means OKLAB)</div><div class="palette-row" id="hof-ext-'+i+'"></div></div>'
+      +'<div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">'
+      +'<div class="score-bar" style="flex:1;min-width:120px"><span style="font-size:0.6rem">Aesthetic</span><div class="score-track"><div class="score-fill" style="width:'+score.overall*100+'%;background:'+(score.overall>0.6?'var(--green)':score.overall>0.3?'var(--amber)':'var(--red)')+'"></div></div><span style="font-size:0.6rem">'+(score.overall*100).toFixed(0)+'%</span></div>'
+      +'<div class="temp-indicator" style="border-color:'+tempColor+'"><span style="color:'+tempColor+'">'+tempLabel+'</span><span style="font-size:0.55rem;color:var(--text-dim)">'+temp.toFixed(2)+'</span></div>'
+      +'</div></div>';
+    list.appendChild(card);
+
+    requestAnimationFrame(function(){
+      var specRow=document.getElementById('hof-spec-'+i);
+      var extRow=document.getElementById('hof-ext-'+i);
+      if(specRow)buildSwatchRow(specRow,specColors);
+      if(extRow)buildSwatchRow(extRow,extracted);
+    });
+  });
+}
+
+// === Section 2: Uniformity Comparator ===
+function updateUniformity(){
+  var from=document.getElementById('cmp-from').value;
+  var to=document.getElementById('cmp-to').value;
+  var steps=parseInt(document.getElementById('cmp-steps').value);
+  document.getElementById('cmp-steps-val').textContent=steps;
+
+  var rgb=rgbGradient(from,to,steps);
+  var oklch=oklchGrad(from,to,steps);
+  var rgbScore=aestheticScore(rgb);
+  var oklchScore=aestheticScore(oklch);
+
+  buildSwatchRow(document.getElementById('rgb-bar'),rgb);
+  buildSwatchRow(document.getElementById('oklch-bar'),oklch);
+
+  document.getElementById('rgb-score').style.width=(rgbScore.uniformity*100)+'%';
+  document.getElementById('rgb-score-val').textContent=(rgbScore.uniformity*100).toFixed(0)+'%';
+  document.getElementById('oklch-score').style.width=(oklchScore.uniformity*100)+'%';
+  document.getElementById('oklch-score-val').textContent=(oklchScore.uniformity*100).toFixed(0)+'%';
+
+  drawDeltaChart('rgb-delta',rgbScore.deltas||[]);
+  drawDeltaChart('oklch-delta',oklchScore.deltas||[]);
+}
+function drawDeltaChart(id,deltas){
+  var cvs=document.getElementById(id);var ctx=cvs.getContext('2d');
+  var w=cvs.width,h=cvs.height;ctx.clearRect(0,0,w,h);
+  if(!deltas.length)return;
+  var max=Math.max.apply(null,deltas.concat([0.01]));
+  var barW=w/(deltas.length*2+1);
+  ctx.fillStyle='#1e1e2e';ctx.fillRect(0,0,w,h);
+  var avg=deltas.reduce(function(a,b){return a+b;},0)/deltas.length;
+  var avgY=h-avg/max*(h-10);
+  ctx.strokeStyle='#6e6e8244';ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(0,avgY);ctx.lineTo(w,avgY);ctx.stroke();ctx.setLineDash([]);
+  deltas.forEach(function(d,i){
+    var bh=d/max*(h-10);
+    var x=barW*(2*i+1);
+    var deviation=Math.abs(d-avg)/avg;
+    var color=deviation<0.15?'#4ade80':deviation<0.4?'#fbbf24':'#ef4444';
+    ctx.fillStyle=color;
+    ctx.beginPath();ctx.roundRect(x,h-bh,barW,bh,2);ctx.fill();
+  });
+}
+
+// === Section 3: Harmony Wheel ===
+var wheelHue=270,wheelMode='complementary';
+function drawWheel(){
+  var cvs=document.getElementById('hwheel');var ctx=cvs.getContext('2d');
+  var w=cvs.width,h=cvs.height,cx=w/2,cy=h/2,r=w/2-2;
+  ctx.clearRect(0,0,w,h);
+  for(var a=0;a<360;a+=1){
+    var rad=a*Math.PI/180;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,rad-0.02,rad+0.02);ctx.closePath();
+    ctx.fillStyle=oklchToHex(0.7,0.15,a);ctx.fill();
+  }
+  ctx.beginPath();ctx.arc(cx,cy,r*0.45,0,Math.PI*2);ctx.fillStyle='#0a0a0f';ctx.fill();
+  var hues=harmonyHues(wheelHue,wheelMode);
+  // Lines connecting harmony points
+  if(hues.length>1){
+    ctx.beginPath();ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=1;
+    hues.forEach(function(hue,i){
+      var rad2=hue*Math.PI/180;
+      var dx=cx+Math.cos(rad2)*r*0.72,dy=cy+Math.sin(rad2)*r*0.72;
+      if(i===0)ctx.moveTo(dx,dy);else ctx.lineTo(dx,dy);
+    });
+    ctx.closePath();ctx.stroke();
+  }
+  hues.forEach(function(hue,i){
+    var rad2=hue*Math.PI/180;
+    var dx=cx+Math.cos(rad2)*r*0.72,dy=cy+Math.sin(rad2)*r*0.72;
+    ctx.beginPath();ctx.arc(dx,dy,i===0?10:7,0,Math.PI*2);
+    ctx.fillStyle=oklchToHex(0.7,0.18,hue);ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+  });
+}
+function updateHarmony(){
+  drawWheel();
+  var hues=harmonyHues(wheelHue,wheelMode);
+  var cont=document.getElementById('hswatches');cont.innerHTML='';
+  hues.forEach(function(hue){
+    var hex=oklchToHex(0.7,0.18,hue);
+    var div=document.createElement('div');div.className='h-swatch';
+    div.innerHTML='<div class="h-swatch-color" style="background:'+hex+'" title="'+hex+'"></div><span class="h-swatch-label">'+Math.round(hue)+'&deg;</span>';
+    cont.appendChild(div);
+  });
+  var theme={hue:wheelHue,chroma:0.18,harmony:wheelMode,lMin:0.05,lMax:0.95};
+  var ramp=themeToColors(theme);
+  buildSwatchRow(document.getElementById('hramp'),ramp);
+  buildSwatchRow(document.getElementById('hcusp'),cuspGradient(wheelHue));
+}
+function initHarmony(){
+  var modesDiv=document.getElementById('hmodes');
+  Object.keys(HARMONIES).forEach(function(key){
+    var val=HARMONIES[key];
+    var btn=document.createElement('button');btn.className='hm-btn'+(key===wheelMode?' active':'');
+    btn.textContent=val.label;btn.onclick=function(){
+      modesDiv.querySelectorAll('.hm-btn').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active');wheelMode=key;updateHarmony();
+    };
+    modesDiv.appendChild(btn);
+  });
+  var cvs=document.getElementById('hwheel');
+  var dragging=false;
+  function updateFromMouse(e){
+    var rect=cvs.getBoundingClientRect();
+    var x=e.clientX-rect.left-rect.width/2,y=e.clientY-rect.top-rect.height/2;
+    wheelHue=(Math.atan2(y,x)*180/Math.PI+360)%360;
+    updateHarmony();
+  }
+  cvs.addEventListener('mousedown',function(e){dragging=true;updateFromMouse(e);});
+  window.addEventListener('mousemove',function(e){if(dragging)updateFromMouse(e);});
+  window.addEventListener('mouseup',function(){dragging=false;});
+  cvs.addEventListener('touchstart',function(e){e.preventDefault();updateFromMouse(e.touches[0]);},{passive:false});
+  cvs.addEventListener('touchmove',function(e){e.preventDefault();updateFromMouse(e.touches[0]);},{passive:false});
+  updateHarmony();
+}
+
+// === Section 4: Evolution Lab ===
+var evoA={hue:270,chroma:0.18,harmony:'mono',lMin:0.05,lMax:1.0};
+var evoB={hue:145,chroma:0.18,harmony:'mono',lMin:0.05,lMax:0.95};
+var evoOff=null;
+var evoHistoryList=[];
+function renderThemeParams(containerId,theme){
+  var el=document.getElementById(containerId);
+  el.innerHTML='<dt>Hue</dt><dd>'+theme.hue.toFixed(1)+'&deg;</dd><dt>Chroma</dt><dd>'+theme.chroma.toFixed(3)+'</dd><dt>Harmony</dt><dd>'+theme.harmony+'</dd><dt>L range</dt><dd>'+theme.lMin.toFixed(2)+'&ndash;'+theme.lMax.toFixed(2)+'</dd>';
+}
+function updateEvo(){
+  renderThemeParams('evo-pa-params',evoA);
+  renderThemeParams('evo-pb-params',evoB);
+  buildSwatchRow(document.getElementById('evo-pa-ramp'),themeToColors(evoA));
+  buildSwatchRow(document.getElementById('evo-pb-ramp'),themeToColors(evoB));
+  if(evoOff){
+    renderThemeParams('evo-off-params',evoOff);
+    buildSwatchRow(document.getElementById('evo-off-ramp'),themeToColors(evoOff));
+  }
+}
+function addEvoHistory(theme,label){
+  evoHistoryList.push({theme:{hue:theme.hue,chroma:theme.chroma,harmony:theme.harmony,lMin:theme.lMin,lMax:theme.lMax},label:label});
+  var hist=document.getElementById('evo-history');
+  var entry=document.createElement('div');entry.className='evo-history-entry';
+  var num=document.createElement('span');num.className='evo-history-num';num.textContent=evoHistoryList.length;
+  var ramp=document.createElement('div');ramp.className='evo-mini-ramp';
+  var colors=themeToColors(theme);
+  colors.forEach(function(c){var d=document.createElement('div');d.style.background=c;ramp.appendChild(d);});
+  var lbl=document.createElement('span');lbl.style.cssText='font-size:0.58rem;color:var(--text-dim);width:60px;flex-shrink:0';lbl.textContent=label;
+  entry.appendChild(num);entry.appendChild(ramp);entry.appendChild(lbl);
+  hist.appendChild(entry);
+  hist.scrollTop=hist.scrollHeight;
+}
+function initEvolution(){
+  document.getElementById('evo-mutate-a').onclick=function(){
+    evoOff=mutateTheme(evoA);addEvoHistory(evoOff,'mut A');
+    evoA={hue:evoOff.hue,chroma:evoOff.chroma,harmony:evoOff.harmony,lMin:evoOff.lMin,lMax:evoOff.lMax};updateEvo();
+  };
+  document.getElementById('evo-mutate-b').onclick=function(){
+    evoOff=mutateTheme(evoB);addEvoHistory(evoOff,'mut B');
+    evoB={hue:evoOff.hue,chroma:evoOff.chroma,harmony:evoOff.harmony,lMin:evoOff.lMin,lMax:evoOff.lMax};updateEvo();
+  };
+  document.getElementById('evo-crossover').onclick=function(){
+    evoOff=crossoverThemes(evoA,evoB);addEvoHistory(evoOff,'cross');updateEvo();
+  };
+  document.getElementById('evo-random').onclick=function(){
+    var types=Object.keys(SPECIES_THEMES);
+    var ta=SPECIES_THEMES[types[Math.floor(Math.random()*types.length)]];
+    var tb=SPECIES_THEMES[types[Math.floor(Math.random()*types.length)]];
+    evoA={hue:ta.hue,chroma:ta.chroma,harmony:ta.harmony,lMin:ta.lMin,lMax:ta.lMax};
+    evoB={hue:tb.hue,chroma:tb.chroma,harmony:tb.harmony,lMin:tb.lMin,lMax:tb.lMax};
+    evoOff=null;updateEvo();
+  };
+  addEvoHistory(evoA,'init A');addEvoHistory(evoB,'init B');
+  updateEvo();
+}
+
+// === Section 5: Gamut Slices ===
+function drawGamutSlice(canvas,L,size){
+  var ctx=canvas.getContext('2d');canvas.width=size;canvas.height=size;
+  var img=ctx.createImageData(size,size);
+  for(var y=0;y<size;y++){
+    for(var x=0;x<size;x++){
+      var hue=(x/size)*360;
+      var chroma=(1-y/size)*0.4;
+      var lab=oklchToOklab(L,chroma,hue);
+      var rgb=oklabToLinearRgb(lab[0],lab[1],lab[2]);
+      var idx=(y*size+x)*4;
+      if(rgb[0]>=-0.001&&rgb[0]<=1.001&&rgb[1]>=-0.001&&rgb[1]<=1.001&&rgb[2]>=-0.001&&rgb[2]<=1.001){
+        img.data[idx]=Math.round(linearToSrgb(Math.max(0,Math.min(1,rgb[0])))*255);
+        img.data[idx+1]=Math.round(linearToSrgb(Math.max(0,Math.min(1,rgb[1])))*255);
+        img.data[idx+2]=Math.round(linearToSrgb(Math.max(0,Math.min(1,rgb[2])))*255);
+        img.data[idx+3]=255;
+      } else {
+        img.data[idx]=10;img.data[idx+1]=10;img.data[idx+2]=15;img.data[idx+3]=255;
+      }
+    }
+  }
+  ctx.putImageData(img,0,0);
+  ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='10px monospace';
+  ctx.fillText('0\u00B0',2,size-4);ctx.fillText('360\u00B0',size-30,size-4);
+  ctx.fillText('C=0.4',2,12);
+}
+function buildGamutSlices(){
+  var count=parseInt(document.getElementById('gamut-count').value);
+  document.getElementById('gamut-count-val').textContent=count;
+  var grid=document.getElementById('gamut-grid');grid.innerHTML='';
+  for(var i=0;i<count;i++){
+    var L=0.1+i/(count-1)*0.8;
+    var wrap=document.createElement('div');wrap.className='gamut-slice';
+    var cvs=document.createElement('canvas');cvs.style.width='100%';cvs.style.aspectRatio='1';
+    var label=document.createElement('div');label.className='gamut-slice-label';label.textContent='L = '+L.toFixed(2);
+    wrap.appendChild(cvs);wrap.appendChild(label);grid.appendChild(wrap);
+    (function(canvas,lightness){
+      requestAnimationFrame(function(){drawGamutSlice(canvas,lightness,140);});
+    })(cvs,L);
+  }
+}
+
+// === Init ===
+function init(){
+  loadGallery().then(function(){
+    buildHoF();
+  });
+  updateUniformity();
+  initHarmony();
+  initEvolution();
+  buildGamutSlices();
+
+  ['cmp-from','cmp-to','cmp-steps'].forEach(function(id){
+    document.getElementById(id).addEventListener('input',updateUniformity);
+  });
+  document.getElementById('gamut-count').addEventListener('input',buildGamutSlices);
+}
+init();
+</script>
+</body>
+</html>

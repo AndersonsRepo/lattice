@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Breath</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    canvas { display: block; }
+
+    .hud {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .hud h1 {
+      font-size: 1.2rem;
+      font-weight: 300;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      margin-bottom: 0.3rem;
+    }
+
+    .hud-sub {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+    }
+
+    .back {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 10;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      padding: 0.4rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .back:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Controls */
+    .controls {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-size: 0.65rem;
+    }
+
+    .ctrl-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.65rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .ctrl-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .ctrl-label { color: var(--text-dim); }
+
+    .ctrl-slider {
+      -webkit-appearance: none;
+      width: 80px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .ctrl-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    /* Stats */
+    .stats-bar {
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.4rem 1rem;
+      font-size: 0.6rem;
+      pointer-events: none;
+    }
+
+    .stat-item { text-align: center; }
+    .stat-val { color: var(--green); font-size: 0.85rem; font-weight: 600; }
+    .stat-lbl { color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.5rem; }
+
+    /* Spectrum */
+    .spectrum {
+      position: fixed;
+      bottom: 3.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    /* Start overlay */
+    .start {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: opacity 0.5s;
+    }
+
+    .start h2 {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+    }
+
+    .start p {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 0.4rem;
+    }
+
+    .start .hint {
+      margin-top: 1.5rem;
+      color: var(--accent);
+      font-size: 0.7rem;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <canvas id="spectrum" class="spectrum" width="200" height="40"></canvas>
+
+  <div class="hud" id="hud">
+    <h1>Breath</h1>
+    <div class="hud-sub" id="rule-label">Life B3/S23</div>
+  </div>
+
+  <a href="index.html" class="back">&larr; Gallery</a>
+
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat-item"><div class="stat-val" id="s-gen">0</div><div class="stat-lbl">Generation</div></div>
+    <div class="stat-item"><div class="stat-val" id="s-alive">0</div><div class="stat-lbl">Alive</div></div>
+    <div class="stat-item"><div class="stat-val" id="s-density">0%</div><div class="stat-lbl">Density</div></div>
+    <div class="stat-item"><div class="stat-val" id="s-births">0</div><div class="stat-lbl">Births</div></div>
+    <div class="stat-item"><div class="stat-val" id="s-deaths">0</div><div class="stat-lbl">Deaths</div></div>
+  </div>
+
+  <div class="controls" id="controls">
+    <button class="ctrl-btn active" data-rule="life" id="btn-life">Life</button>
+    <button class="ctrl-btn" data-rule="seeds" id="btn-seeds">Seeds</button>
+    <button class="ctrl-btn" data-rule="1d" id="btn-1d">1D R110</button>
+    <span class="ctrl-label">|</span>
+    <span class="ctrl-label">Speed</span>
+    <input type="range" class="ctrl-slider" id="speed" min="1" max="30" value="10">
+    <span class="ctrl-label">Vol</span>
+    <input type="range" class="ctrl-slider" id="volume" min="0" max="100" value="40">
+    <button class="ctrl-btn" id="btn-draw">Draw</button>
+    <button class="ctrl-btn" id="btn-clear">Clear</button>
+    <button class="ctrl-btn" id="btn-seed">Reseed</button>
+  </div>
+
+  <div class="start" id="start">
+    <h2>Breath</h2>
+    <p>Living computation sonification</p>
+    <p>Watch cellular automata breathe — hear each birth and death</p>
+    <p class="hint">Click to begin</p>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const specCanvas = document.getElementById('spectrum');
+    const specCtx = specCanvas.getContext('2d');
+
+    let W, H, dpr;
+    const COLS = 96;
+    const ROWS = 64;
+    let cellW, cellH;
+    let grid, nextGrid;
+    let generation = 0;
+    let births = 0, deaths = 0;
+    let running = false;
+    let drawMode = false;
+    let currentRule = 'life';
+    let audioCtx, masterGain, compressor, reverb, droneOsc, droneGain;
+    let analyser, analyserData;
+    let lastStepTime = 0;
+
+    // Pentatonic scale C3-C6
+    const SCALE = [];
+    const BASE = 130.81; // C3
+    const PENTA = [0, 2, 4, 7, 9]; // semitone offsets
+    for (let oct = 0; oct < 3; oct++) {
+      PENTA.forEach(s => SCALE.push(BASE * Math.pow(2, oct + s / 12)));
+    }
+
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cellW = W / COLS;
+      cellH = H / ROWS;
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    function initGrid() {
+      grid = Array.from({ length: ROWS }, () => new Uint8Array(COLS));
+      nextGrid = Array.from({ length: ROWS }, () => new Uint8Array(COLS));
+      generation = 0;
+      births = 0;
+      deaths = 0;
+    }
+
+    function seedRandom(density = 0.25) {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          grid[r][c] = Math.random() < density ? 1 : 0;
+        }
+      }
+    }
+
+    function seedFromArchive() {
+      // Load a piece from gallery.json and use its rendered art as initial state
+      fetch('gallery.json').then(r => r.json()).then(data => {
+        const pieces = [...(data.archive || []), ...(data.hallOfFame || [])].filter(p => p.rendered);
+        if (pieces.length === 0) { seedRandom(); return; }
+        const piece = pieces[Math.floor(Math.random() * pieces.length)];
+        const lines = piece.rendered.split('\n');
+        initGrid();
+        for (let r = 0; r < Math.min(ROWS, lines.length); r++) {
+          for (let c = 0; c < Math.min(COLS, lines[r].length); c++) {
+            grid[r][c] = lines[r][c] !== ' ' ? 1 : 0;
+          }
+        }
+      }).catch(() => seedRandom());
+    }
+
+    // Rules
+    function stepLife() {
+      births = 0; deaths = 0;
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          let neighbors = 0;
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              if (dr === 0 && dc === 0) continue;
+              const nr = (r + dr + ROWS) % ROWS;
+              const nc = (c + dc + COLS) % COLS;
+              neighbors += grid[nr][nc];
+            }
+          }
+          const alive = grid[r][c];
+          if (alive) {
+            nextGrid[r][c] = (neighbors === 2 || neighbors === 3) ? 1 : 0;
+          } else {
+            nextGrid[r][c] = neighbors === 3 ? 1 : 0;
+          }
+          if (!alive && nextGrid[r][c]) births++;
+          if (alive && !nextGrid[r][c]) deaths++;
+        }
+      }
+      [grid, nextGrid] = [nextGrid, grid];
+    }
+
+    function stepSeeds() {
+      births = 0; deaths = 0;
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          let neighbors = 0;
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              if (dr === 0 && dc === 0) continue;
+              neighbors += grid[(r + dr + ROWS) % ROWS][(c + dc + COLS) % COLS];
+            }
+          }
+          if (grid[r][c]) {
+            nextGrid[r][c] = 0; // all die
+            deaths++;
+          } else {
+            nextGrid[r][c] = neighbors === 2 ? 1 : 0; // B2
+            if (nextGrid[r][c]) births++;
+          }
+        }
+      }
+      [grid, nextGrid] = [nextGrid, grid];
+    }
+
+    // 1D automaton (Rule 110)
+    let row1d = 0;
+    function step1D() {
+      births = 0; deaths = 0;
+      if (row1d === 0) {
+        // Seed first row
+        grid[0] = new Uint8Array(COLS);
+        grid[0][Math.floor(COLS / 2)] = 1;
+        births = 1;
+        row1d = 1;
+        return;
+      }
+
+      const rule = 110;
+      const prevRow = (row1d - 1 + ROWS) % ROWS;
+      const r = row1d % ROWS;
+      grid[r] = new Uint8Array(COLS);
+
+      for (let c = 0; c < COLS; c++) {
+        const l = grid[prevRow][(c - 1 + COLS) % COLS];
+        const m = grid[prevRow][c];
+        const ri = grid[prevRow][(c + 1) % COLS];
+        const idx = (l << 2) | (m << 1) | ri;
+        grid[r][c] = (rule >> idx) & 1;
+        if (grid[r][c]) births++;
+      }
+      row1d++;
+    }
+
+    function step() {
+      if (currentRule === 'life') stepLife();
+      else if (currentRule === 'seeds') stepSeeds();
+      else if (currentRule === '1d') step1D();
+      generation++;
+
+      // Auto-reseed if extinct (for Life/Seeds)
+      if (currentRule !== '1d') {
+        let alive = 0;
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) alive += grid[r][c];
+        }
+        if (alive === 0) seedRandom(0.2);
+      }
+    }
+
+    // Audio
+    function initAudio() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+      compressor = audioCtx.createDynamicsCompressor();
+      compressor.threshold.value = -24;
+      compressor.ratio.value = 8;
+      compressor.connect(audioCtx.destination);
+
+      // Reverb
+      const irLen = audioCtx.sampleRate * 4;
+      const irBuf = audioCtx.createBuffer(2, irLen, audioCtx.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = irBuf.getChannelData(ch);
+        for (let i = 0; i < irLen; i++) {
+          d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 1.2));
+        }
+      }
+      reverb = audioCtx.createConvolver();
+      reverb.buffer = irBuf;
+      reverb.connect(compressor);
+
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.4;
+      masterGain.connect(compressor);
+      masterGain.connect(reverb);
+
+      // Sub-bass drone
+      droneOsc = audioCtx.createOscillator();
+      droneOsc.type = 'sine';
+      droneOsc.frequency.value = 32.7; // C1
+      droneGain = audioCtx.createGain();
+      droneGain.gain.value = 0.06;
+      droneOsc.connect(droneGain);
+      droneGain.connect(compressor);
+      droneOsc.start();
+
+      // Analyser
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyserData = new Uint8Array(analyser.frequencyBinCount);
+      masterGain.connect(analyser);
+    }
+
+    function playBirth(row, col) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const freqIdx = Math.floor((row / ROWS) * SCALE.length);
+      const freq = SCALE[SCALE.length - 1 - Math.min(freqIdx, SCALE.length - 1)]; // top = high
+      const pan = (col / COLS) * 2 - 1;
+
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+
+      const gain = audioCtx.createGain();
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+      const panner = audioCtx.createStereoPanner();
+      panner.pan.value = pan;
+
+      osc.connect(gain);
+      gain.connect(panner);
+      panner.connect(masterGain);
+
+      osc.start(now);
+      osc.stop(now + 0.3);
+    }
+
+    function playDeath(row, col) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+
+      // Filtered noise whisper
+      const bufSize = audioCtx.sampleRate * 0.15;
+      const noiseBuf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.3));
+
+      const src = audioCtx.createBufferSource();
+      src.buffer = noiseBuf;
+
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 200 + (row / ROWS) * 600;
+      filter.Q.value = 2;
+
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.015;
+
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(reverb);
+
+      src.start(now);
+    }
+
+    function sonifyStep() {
+      if (!audioCtx) return;
+
+      // Sonify a sample of births and deaths (throttle to prevent audio flood)
+      const maxNotes = 6;
+      let birthCount = 0, deathCount = 0;
+
+      for (let r = 0; r < ROWS && (birthCount < maxNotes || deathCount < maxNotes); r++) {
+        for (let c = 0; c < COLS; c++) {
+          // Detect births and deaths by comparing grid vs nextGrid
+          // Since we already swapped, compare with what we know
+          if (grid[r][c] && birthCount < maxNotes && Math.random() < 0.15) {
+            playBirth(r, c);
+            birthCount++;
+          }
+        }
+      }
+
+      // Modulate drone by density
+      let alive = 0;
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) alive += grid[r][c];
+      }
+      const density = alive / (ROWS * COLS);
+      if (droneGain) {
+        droneGain.gain.setTargetAtTime(0.03 + density * 0.08, audioCtx.currentTime, 0.1);
+      }
+    }
+
+    // Drawing
+    function drawGrid() {
+      ctx.clearRect(0, 0, W, H);
+
+      // Draw cells
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (grid[r][c]) {
+            const x = c * cellW;
+            const y = r * cellH;
+            ctx.fillStyle = '#7c6fe0';
+            ctx.globalAlpha = 0.7 + Math.random() * 0.3;
+            ctx.fillRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      // Vignette
+      const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.7);
+      vg.addColorStop(0, 'rgba(10, 10, 15, 0)');
+      vg.addColorStop(1, 'rgba(10, 10, 15, 0.5)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
+
+      // Update stats
+      let alive = 0;
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) alive += grid[r][c];
+      }
+      document.getElementById('s-gen').textContent = generation;
+      document.getElementById('s-alive').textContent = alive;
+      document.getElementById('s-density').textContent = (alive / (ROWS * COLS) * 100).toFixed(0) + '%';
+      document.getElementById('s-births').textContent = births;
+      document.getElementById('s-deaths').textContent = deaths;
+
+      // Spectrum
+      if (analyser) {
+        analyser.getByteFrequencyData(analyserData);
+        specCtx.clearRect(0, 0, 200, 40);
+        const barW = 200 / analyserData.length * 2;
+        for (let i = 0; i < analyserData.length / 2; i++) {
+          const h = (analyserData[i] / 255) * 36;
+          specCtx.fillStyle = `rgba(124, 111, 224, ${0.3 + analyserData[i] / 400})`;
+          specCtx.fillRect(i * barW, 40 - h, barW - 1, h);
+        }
+      }
+    }
+
+    // Main loop
+    function loop(ts) {
+      if (!running) return;
+
+      const speed = parseInt(document.getElementById('speed').value);
+      const interval = 1000 / speed;
+
+      if (ts - lastStepTime >= interval) {
+        step();
+        sonifyStep();
+        lastStepTime = ts;
+      }
+
+      drawGrid();
+      requestAnimationFrame(loop);
+    }
+
+    // Drawing interaction
+    let isDrawing = false;
+
+    canvas.addEventListener('mousedown', e => {
+      if (drawMode) {
+        isDrawing = true;
+        toggleCell(e);
+      }
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      if (isDrawing && drawMode) toggleCell(e);
+    });
+
+    canvas.addEventListener('mouseup', () => { isDrawing = false; });
+
+    function toggleCell(e) {
+      const c = Math.floor(e.clientX / cellW);
+      const r = Math.floor(e.clientY / cellH);
+      if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+        grid[r][c] = 1;
+      }
+    }
+
+    // Controls
+    document.querySelectorAll('[data-rule]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-rule]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentRule = btn.dataset.rule;
+        document.getElementById('rule-label').textContent =
+          currentRule === 'life' ? 'Life B3/S23' :
+          currentRule === 'seeds' ? 'Seeds B2/S' : '1D Rule 110';
+        initGrid();
+        if (currentRule === '1d') { row1d = 0; }
+        else seedRandom(0.25);
+      });
+    });
+
+    document.getElementById('btn-draw').addEventListener('click', function() {
+      drawMode = !drawMode;
+      this.classList.toggle('active', drawMode);
+      canvas.style.cursor = drawMode ? 'crosshair' : 'default';
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      initGrid();
+      if (currentRule === '1d') row1d = 0;
+    });
+
+    document.getElementById('btn-seed').addEventListener('click', () => {
+      if (currentRule === '1d') {
+        initGrid();
+        row1d = 0;
+      } else {
+        seedRandom(0.25);
+      }
+      generation = 0;
+    });
+
+    document.getElementById('volume').addEventListener('input', function() {
+      if (masterGain) masterGain.gain.value = this.value / 100;
+    });
+
+    // Start
+    document.getElementById('start').addEventListener('click', () => {
+      const startEl = document.getElementById('start');
+      startEl.style.opacity = '0';
+      setTimeout(() => startEl.remove(), 500);
+
+      initAudio();
+      initGrid();
+      seedFromArchive();
+      running = true;
+      lastStepTime = performance.now();
+      requestAnimationFrame(loop);
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', e => {
+      if (e.key === ' ') { e.preventDefault(); running = !running; if (running) requestAnimationFrame(loop); }
+      if (e.key === 'n' || e.key === 'N') { step(); sonifyStep(); drawGrid(); }
+      if (e.key === '1') document.getElementById('btn-life').click();
+      if (e.key === '2') document.getElementById('btn-seeds').click();
+      if (e.key === '3') document.getElementById('btn-1d').click();
+    });
+  </script>
+</body>
+</html>

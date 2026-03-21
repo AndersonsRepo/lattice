@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Sediment</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    canvas { display: block; cursor: crosshair; }
+
+    .hud {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .hud h1 {
+      font-size: 1.2rem;
+      font-weight: 300;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      margin-bottom: 0.3rem;
+    }
+
+    .hud-sub {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+    }
+
+    .back {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 10;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      padding: 0.4rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .back:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Tooltip */
+    .tooltip {
+      position: fixed;
+      z-index: 20;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.65rem;
+      max-width: 280px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+
+    .tooltip.visible { opacity: 1; }
+
+    .tooltip-gen {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+
+    .tooltip-epoch {
+      display: inline-block;
+      padding: 0.1rem 0.4rem;
+      border-radius: 8px;
+      font-size: 0.55rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.3rem;
+    }
+
+    .tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      color: var(--text-dim);
+      margin-top: 0.1rem;
+    }
+
+    .tooltip-row span:last-child { color: var(--text); }
+
+    .tooltip-species {
+      margin-top: 0.3rem;
+      display: flex;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+    }
+
+    .tooltip-species-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 6px;
+      font-size: 0.55rem;
+      background: #1e1e2e;
+    }
+
+    .tooltip-species-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+
+    /* Detail panel */
+    .detail-panel {
+      position: fixed;
+      right: 0;
+      top: 0;
+      width: 320px;
+      height: 100vh;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      z-index: 15;
+      padding: 3.5rem 1.2rem 1.5rem;
+      overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      font-size: 0.7rem;
+    }
+
+    .detail-panel.open { transform: translateX(0); }
+
+    .detail-panel h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: var(--accent);
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.3rem 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .detail-cell {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .detail-cell span:first-child { color: var(--text-dim); }
+
+    .detail-bar-wrap {
+      margin-top: 0.5rem;
+    }
+
+    .detail-bar-label {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-dim);
+      font-size: 0.6rem;
+      margin-bottom: 0.15rem;
+    }
+
+    .detail-bar-track {
+      height: 6px;
+      background: var(--bg);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 0.4rem;
+    }
+
+    .detail-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+
+    .close-detail {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .close-detail:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Legend */
+    .legend {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      z-index: 10;
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      max-width: 400px;
+    }
+
+    .legend-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    /* Epoch key */
+    .epoch-key {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      z-index: 10;
+      display: flex;
+      gap: 0.5rem;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+    }
+
+    .epoch-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+    }
+
+    .epoch-line {
+      width: 12px;
+      height: 2px;
+      border-radius: 1px;
+    }
+
+    /* Start overlay */
+    .start {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: opacity 0.5s;
+    }
+
+    .start h2 {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+      margin-bottom: 0.5rem;
+    }
+
+    .start p {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 0.3rem;
+    }
+
+    .start .stats {
+      display: flex;
+      gap: 2rem;
+      margin-top: 1.5rem;
+    }
+
+    .start .stat-val {
+      font-size: 1.5rem;
+      color: var(--green);
+      text-align: center;
+    }
+
+    .start .stat-lbl {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      text-align: center;
+    }
+
+    .start .hint {
+      margin-top: 1.5rem;
+      color: var(--accent);
+      font-size: 0.7rem;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div class="hud" id="hud">
+    <h1>Sediment</h1>
+    <div class="hud-sub" id="hud-info">geological cross-section of evolution</div>
+  </div>
+
+  <a href="index.html" class="back">&larr; Gallery</a>
+
+  <div class="tooltip" id="tooltip">
+    <div class="tooltip-gen" id="tt-gen"></div>
+    <div class="tooltip-epoch" id="tt-epoch"></div>
+    <div class="tooltip-row"><span>Best score</span><span id="tt-best"></span></div>
+    <div class="tooltip-row"><span>Avg score</span><span id="tt-avg"></span></div>
+    <div class="tooltip-row"><span>Population</span><span id="tt-pop"></span></div>
+    <div class="tooltip-row"><span>HoF entries</span><span id="tt-hof"></span></div>
+    <div class="tooltip-species" id="tt-species"></div>
+  </div>
+
+  <div class="detail-panel" id="detail">
+    <button class="close-detail" id="close-detail">Esc</button>
+    <h2 id="detail-title">Generation</h2>
+    <div class="detail-grid" id="detail-grid"></div>
+    <div id="detail-bars"></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+  <div class="epoch-key" id="epoch-key"></div>
+
+  <div class="start" id="start">
+    <h2>Sediment</h2>
+    <p>A geological cross-section drilled through digital bedrock</p>
+    <p>Each stratum is one generation of evolution</p>
+    <div class="stats" id="start-stats"></div>
+    <p class="hint">Click to enter</p>
+  </div>
+
+  <script>
+    const TYPE_COLORS = {
+      '1d': '#9d7af5', '2d': '#4ade80', 'lsystem': '#fbbf24',
+      'reaction-diffusion': '#d44af5', 'voronoi': '#4ad4f5', 'wfc': '#f54a9d',
+      'spirograph': '#a8db22', 'attractor': '#f59d6b', 'julia': '#4af5d4',
+      'noise': '#d4d44a', 'flowfield': '#4ad4d4',
+    };
+
+    const TYPE_SHORT = {
+      '1d': '1D', '2d': 'Life', 'lsystem': 'L-Sys',
+      'reaction-diffusion': 'RD', 'voronoi': 'Vor', 'wfc': 'WFC',
+      'spirograph': 'Spiro', 'attractor': 'Attr', 'julia': 'Julia',
+      'noise': 'Noise', 'flowfield': 'Flow',
+    };
+
+    const EPOCH_COLORS = {
+      emergence: '#7c6fe0',
+      order: '#4ade80',
+      chaos: '#ef4444',
+      harmony: '#fbbf24',
+    };
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const tooltipEl = document.getElementById('tooltip');
+    const detailPanel = document.getElementById('detail');
+    const startEl = document.getElementById('start');
+
+    let W, H, dpr;
+    let history = [];
+    let archive = [];
+    let hofEntries = [];
+    let layerRects = []; // { y, h, gen } for hit testing
+    let animProgress = 0;
+    let animStart = 0;
+    let started = false;
+
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (started) drawCore();
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    function getEpoch(gen) {
+      const epochs = ['emergence', 'order', 'chaos', 'harmony'];
+      return epochs[Math.floor(gen / 10) % epochs.length];
+    }
+
+    // Load data
+    async function loadData() {
+      const res = await fetch('gallery.json');
+      const data = await res.json();
+      history = data.history || [];
+      archive = data.archive || [];
+      hofEntries = data.hallOfFame || [];
+
+      // Start overlay stats
+      document.getElementById('start-stats').innerHTML = `
+        <div><div class="stat-val">${history.length}</div><div class="stat-lbl">Generations</div></div>
+        <div><div class="stat-val">${archive.length}</div><div class="stat-lbl">Archived</div></div>
+        <div><div class="stat-val">${hofEntries.length}</div><div class="stat-lbl">Hall of Fame</div></div>
+        <div><div class="stat-val">${(data.stats?.bestScoreEver * 100 || 0).toFixed(1)}%</div><div class="stat-lbl">Peak Fitness</div></div>
+      `;
+
+      buildLegend();
+      buildEpochKey();
+    }
+
+    function buildLegend() {
+      const legendEl = document.getElementById('legend');
+      let html = '';
+      Object.entries(TYPE_COLORS).forEach(([type, color]) => {
+        html += `<div class="legend-chip"><div class="legend-swatch" style="background: ${color};"></div>${TYPE_SHORT[type] || type}</div>`;
+      });
+      legendEl.innerHTML = html;
+    }
+
+    function buildEpochKey() {
+      const el = document.getElementById('epoch-key');
+      let html = '';
+      Object.entries(EPOCH_COLORS).forEach(([name, color]) => {
+        html += `<div class="epoch-chip"><div class="epoch-line" style="background: ${color};"></div>${name}</div>`;
+      });
+      el.innerHTML = html;
+    }
+
+    // Build species counts per generation from archive
+    function getSpeciesCounts(gen) {
+      // First try history speciesCounts
+      const h = history.find(h => h.generation === gen);
+      if (h && h.speciesCounts && Object.keys(h.speciesCounts).length > 0) {
+        return h.speciesCounts;
+      }
+      // Fallback: count from archive pieces at this generation
+      const counts = {};
+      archive.forEach(p => {
+        if (p.generation === gen && p.genome?.type) {
+          counts[p.genome.type] = (counts[p.genome.type] || 0) + 1;
+        }
+      });
+      return counts;
+    }
+
+    // HoF inductions per generation
+    function getHofGens() {
+      const gens = new Set();
+      hofEntries.forEach(p => { if (p.generation) gens.add(p.generation); });
+      return gens;
+    }
+
+    function drawCore() {
+      ctx.clearRect(0, 0, W, H);
+
+      if (history.length === 0) return;
+
+      const margin = { left: 50, right: 60, top: 60, bottom: 50 };
+      const coreW = W - margin.left - margin.right;
+      const coreH = H - margin.top - margin.bottom;
+      const numGens = history.length;
+      const layerH = coreH / numGens;
+      const hofGens = getHofGens();
+
+      // How many layers to show based on animation
+      const visibleLayers = Math.min(numGens, Math.floor(animProgress * numGens));
+
+      layerRects = [];
+
+      // Draw strata bottom-up (oldest at bottom)
+      for (let i = 0; i < visibleLayers; i++) {
+        const h = history[i];
+        const gen = h.generation;
+        const epoch = h.epoch || getEpoch(gen);
+        const y = margin.top + coreH - (i + 1) * layerH;
+        const speciesCounts = h.speciesCounts || getSpeciesCounts(gen);
+        const totalPop = Object.values(speciesCounts).reduce((s, c) => s + c, 0);
+        const bestScore = h.bestScore || 0;
+
+        layerRects.push({ y, h: layerH, gen: gen, idx: i });
+
+        if (totalPop === 0) {
+          // Pre-speciation: dark sediment with crystalline noise
+          const noiseIntensity = 0.03 + Math.sin(i * 0.7) * 0.01;
+          ctx.fillStyle = `rgba(18, 18, 26, ${0.8 + noiseIntensity})`;
+          ctx.fillRect(margin.left, y, coreW, layerH);
+
+          // Faint crystalline texture
+          ctx.fillStyle = `rgba(30, 30, 46, ${0.3 + Math.sin(i * 1.3) * 0.15})`;
+          for (let x = 0; x < coreW; x += 8) {
+            const shimmer = Math.sin((x + i * 17) * 0.1) * 0.5 + 0.5;
+            if (shimmer > 0.6) {
+              ctx.fillRect(margin.left + x, y, 2, layerH);
+            }
+          }
+        } else {
+          // Species-colored segments proportional to population
+          let x = margin.left;
+          const sortedSpecies = Object.entries(speciesCounts).sort((a, b) => b[1] - a[1]);
+
+          sortedSpecies.forEach(([type, count]) => {
+            const segW = (count / totalPop) * coreW;
+            const color = TYPE_COLORS[type] || '#6e6e82';
+
+            // Alpha modulated by fitness score
+            const alpha = 0.4 + bestScore * 0.5;
+            ctx.fillStyle = color;
+            ctx.globalAlpha = alpha;
+            ctx.fillRect(x, y, segW, layerH);
+
+            // Subtle noise texture within segment
+            ctx.globalAlpha = 0.05;
+            for (let nx = 0; nx < segW; nx += 4) {
+              const h = Math.random() * layerH * 0.6;
+              ctx.fillRect(x + nx, y + (layerH - h) / 2, 2, h);
+            }
+
+            ctx.globalAlpha = 1;
+            x += segW;
+          });
+        }
+
+        // Best fitness bar on right edge
+        ctx.fillStyle = '#fbbf24';
+        ctx.globalAlpha = 0.6;
+        const barW = bestScore * 40;
+        ctx.fillRect(margin.left + coreW + 4, y, barW, Math.max(layerH - 0.5, 1));
+        ctx.globalAlpha = 1;
+
+        // HoF diamond on left edge
+        if (hofGens.has(gen)) {
+          ctx.fillStyle = '#fbbf24';
+          const cy = y + layerH / 2;
+          const cx = margin.left - 10;
+          const s = 4;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - s);
+          ctx.lineTo(cx + s, cy);
+          ctx.lineTo(cx, cy + s);
+          ctx.lineTo(cx - s, cy);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Epoch boundary markers
+        if (i > 0) {
+          const prevEpoch = history[i - 1].epoch || getEpoch(history[i - 1].generation);
+          if (epoch !== prevEpoch) {
+            ctx.strokeStyle = EPOCH_COLORS[epoch] || '#7c6fe0';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(margin.left, y + layerH);
+            ctx.lineTo(margin.left + coreW, y + layerH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Epoch label
+            ctx.font = '9px monospace';
+            ctx.fillStyle = EPOCH_COLORS[epoch] || '#7c6fe0';
+            ctx.globalAlpha = 0.7;
+            ctx.textAlign = 'right';
+            ctx.fillText(epoch, margin.left + coreW - 4, y + layerH - 3);
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+
+      // "PRESENT" marker at top
+      if (visibleLayers >= numGens) {
+        ctx.strokeStyle = '#4ade80';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(margin.left, margin.top);
+        ctx.lineTo(margin.left + coreW, margin.top);
+        ctx.stroke();
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#4ade80';
+        ctx.textAlign = 'left';
+        ctx.fillText('PRESENT', margin.left + 4, margin.top - 6);
+      }
+
+      // "BEDROCK" at bottom
+      ctx.font = '9px monospace';
+      ctx.fillStyle = '#6e6e82';
+      ctx.textAlign = 'left';
+      ctx.fillText('BEDROCK', margin.left + 4, margin.top + coreH + 14);
+
+      // Generation axis labels
+      ctx.textAlign = 'right';
+      ctx.font = '8px monospace';
+      ctx.fillStyle = '#6e6e82';
+      const step = numGens > 50 ? 10 : numGens > 20 ? 5 : 1;
+      for (let i = 0; i < numGens; i += step) {
+        const y = margin.top + coreH - (i + 0.5) * layerH;
+        ctx.fillText(`${history[i].generation}`, margin.left - 14, y + 3);
+      }
+
+      // Fitness scale
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#fbbf24';
+      ctx.globalAlpha = 0.6;
+      ctx.font = '8px monospace';
+      ctx.fillText('fitness →', margin.left + coreW + 4, margin.top - 6);
+      ctx.globalAlpha = 1;
+
+      // Vignette
+      const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.7);
+      vg.addColorStop(0, 'rgba(10, 10, 15, 0)');
+      vg.addColorStop(1, 'rgba(10, 10, 15, 0.4)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Hover tooltip
+    let mouseX = 0, mouseY = 0;
+
+    function getLayerAtY(sy) {
+      for (const lr of layerRects) {
+        if (sy >= lr.y && sy < lr.y + lr.h) return lr;
+      }
+      return null;
+    }
+
+    canvas.addEventListener('mousemove', e => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+
+      const layer = getLayerAtY(mouseY);
+      if (!layer || !started) {
+        tooltipEl.classList.remove('visible');
+        return;
+      }
+
+      const h = history[layer.idx];
+      if (!h) return;
+
+      const gen = h.generation;
+      const epoch = h.epoch || getEpoch(gen);
+      const speciesCounts = h.speciesCounts || getSpeciesCounts(gen);
+      const totalPop = Object.values(speciesCounts).reduce((s, c) => s + c, 0);
+
+      document.getElementById('tt-gen').textContent = `Generation ${gen}`;
+      const epochEl = document.getElementById('tt-epoch');
+      epochEl.textContent = epoch;
+      epochEl.style.background = (EPOCH_COLORS[epoch] || '#7c6fe0') + '30';
+      epochEl.style.color = EPOCH_COLORS[epoch] || '#7c6fe0';
+      document.getElementById('tt-best').textContent = (h.bestScore * 100).toFixed(1) + '%';
+      document.getElementById('tt-avg').textContent = (h.avgScore * 100).toFixed(1) + '%';
+      document.getElementById('tt-pop').textContent = totalPop || '—';
+      document.getElementById('tt-hof').textContent = h.hallOfFameSize || '—';
+
+      // Species chips
+      const speciesHtml = Object.entries(speciesCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([type, count]) => `<div class="tooltip-species-chip"><div class="tooltip-species-dot" style="background: ${TYPE_COLORS[type] || '#6e6e82'};"></div>${TYPE_SHORT[type] || type}: ${count}</div>`)
+        .join('');
+      document.getElementById('tt-species').innerHTML = speciesHtml;
+
+      // Position tooltip
+      const tx = mouseX + 15;
+      const ty = Math.min(mouseY - 10, H - 200);
+      tooltipEl.style.left = Math.min(tx, W - 300) + 'px';
+      tooltipEl.style.top = Math.max(ty, 10) + 'px';
+      tooltipEl.classList.add('visible');
+
+      // Redraw with highlight
+      drawCore();
+
+      // Draw crosshair line
+      ctx.strokeStyle = '#7c6fe040';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.moveTo(0, mouseY);
+      ctx.lineTo(W, mouseY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      tooltipEl.classList.remove('visible');
+    });
+
+    // Click to open detail panel
+    canvas.addEventListener('click', e => {
+      if (!started) return;
+      const layer = getLayerAtY(e.clientY);
+      if (!layer) return;
+      openDetail(layer.idx);
+    });
+
+    function openDetail(idx) {
+      const h = history[idx];
+      if (!h) return;
+
+      const gen = h.generation;
+      const epoch = h.epoch || getEpoch(gen);
+      const speciesCounts = h.speciesCounts || getSpeciesCounts(gen);
+      const totalPop = Object.values(speciesCounts).reduce((s, c) => s + c, 0);
+
+      document.getElementById('detail-title').textContent = `Generation ${gen}`;
+      document.getElementById('detail-title').style.color = EPOCH_COLORS[epoch] || '#7c6fe0';
+
+      // Grid stats
+      const prevH = idx > 0 ? history[idx - 1] : null;
+      const delta = prevH ? ((h.bestScore - prevH.bestScore) * 100).toFixed(1) : '—';
+      const deltaSign = prevH && h.bestScore > prevH.bestScore ? '+' : '';
+
+      document.getElementById('detail-grid').innerHTML = `
+        <div class="detail-cell"><span>Epoch</span><span style="color: ${EPOCH_COLORS[epoch]}">${epoch}</span></div>
+        <div class="detail-cell"><span>Population</span><span>${totalPop || '—'}</span></div>
+        <div class="detail-cell"><span>Best score</span><span>${(h.bestScore * 100).toFixed(1)}%</span></div>
+        <div class="detail-cell"><span>Avg score</span><span>${(h.avgScore * 100).toFixed(1)}%</span></div>
+        <div class="detail-cell"><span>Fitness delta</span><span style="color: ${delta > 0 ? '#4ade80' : delta < 0 ? '#ef4444' : '#6e6e82'}">${deltaSign}${delta}%</span></div>
+        <div class="detail-cell"><span>HoF entries</span><span>${h.hallOfFameSize || 0}</span></div>
+      `;
+
+      // Species distribution bars
+      let barsHtml = '';
+      Object.entries(speciesCounts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([type, count]) => {
+          const pct = totalPop > 0 ? (count / totalPop * 100) : 0;
+          const color = TYPE_COLORS[type] || '#6e6e82';
+          barsHtml += `
+            <div class="detail-bar-wrap">
+              <div class="detail-bar-label"><span>${TYPE_SHORT[type] || type}</span><span>${count} (${pct.toFixed(0)}%)</span></div>
+              <div class="detail-bar-track"><div class="detail-bar-fill" style="width: ${pct}%; background: ${color};"></div></div>
+            </div>
+          `;
+        });
+
+      if (!barsHtml) {
+        barsHtml = '<div style="color: var(--text-dim); margin-top: 0.5rem;">Pre-speciation era — no species data</div>';
+      }
+      document.getElementById('detail-bars').innerHTML = barsHtml;
+
+      detailPanel.classList.add('open');
+    }
+
+    document.getElementById('close-detail').addEventListener('click', () => {
+      detailPanel.classList.remove('open');
+    });
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') detailPanel.classList.remove('open');
+    });
+
+    // Start overlay
+    startEl.addEventListener('click', () => {
+      startEl.style.opacity = '0';
+      setTimeout(() => startEl.remove(), 500);
+      started = true;
+      animStart = performance.now();
+      animate();
+    });
+
+    function animate() {
+      const elapsed = performance.now() - animStart;
+      const duration = 2000; // 2s build-in
+      animProgress = Math.min(1, easeOutCubic(elapsed / duration));
+      drawCore();
+      if (animProgress < 1) requestAnimationFrame(animate);
+    }
+
+    function easeOutCubic(t) {
+      return 1 - Math.pow(1 - t, 3);
+    }
+
+    // Init
+    loadData().then(() => {
+      drawCore(); // Initial dark render behind overlay
+    });
+  </script>
+</body>
+</html>
