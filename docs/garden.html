@@ -15,8 +15,6 @@
       --accent-glow: #7c6fe040;
       --green: #4ade80;
       --amber: #fbbf24;
-      --leaf: #2d8a4e;
-      --bark: #8b6b3d;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -51,8 +49,7 @@
       line-height: 1.6;
       pointer-events: none;
     }
-    .canvas-info .species-name { color: var(--green); text-transform: uppercase; letter-spacing: 0.12em; }
-    .canvas-info .detail { color: var(--text-dim); }
+    .canvas-info .preset-name { color: var(--green); text-transform: uppercase; letter-spacing: 0.12em; }
 
     .sidebar {
       width: 340px;
@@ -75,1043 +72,760 @@
       letter-spacing: 0.2em;
       text-transform: uppercase;
       color: var(--green);
-      margin-bottom: 0.25rem;
-    }
-
-    .sidebar-header .subtitle {
-      font-size: 0.6rem;
-      color: var(--text-dim);
-      letter-spacing: 0.08em;
+      text-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
     }
 
     .sidebar-header .back-link {
-      font-size: 0.65rem;
+      font-size: 0.6rem;
       color: var(--text-dim);
       text-decoration: none;
       letter-spacing: 0.05em;
     }
     .sidebar-header .back-link:hover { color: var(--accent); }
 
-    /* Preset selector */
-    .preset-section {
-      padding: 1rem 1.25rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .section-label {
-      font-size: 0.6rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      margin-bottom: 0.5rem;
-    }
-
-    .preset-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.35rem;
-    }
-
-    .preset-btn {
-      padding: 0.45rem 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: transparent;
-      color: var(--text-dim);
-      font-family: inherit;
-      font-size: 0.58rem;
-      letter-spacing: 0.03em;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-align: left;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .preset-btn:hover { border-color: var(--green); color: var(--text); }
-    .preset-btn.active {
-      background: var(--green);
-      border-color: var(--green);
-      color: #0a0a0f;
-      font-weight: 600;
-    }
-
-    .preset-btn .preset-icon {
-      margin-right: 0.3rem;
-    }
-
-    /* Controls */
-    .controls {
+    .sidebar-scroll {
       flex: 1;
       overflow-y: auto;
       padding: 1rem 1.25rem;
     }
 
-    .controls::-webkit-scrollbar { width: 4px; }
-    .controls::-webkit-scrollbar-track { background: transparent; }
-    .controls::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+    .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+    .sidebar-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-    .control-group { margin-bottom: 0.9rem; }
+    .section-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    .section-label:first-child { margin-top: 0; }
+
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.4rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .preset-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.45rem 0.5rem;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.6rem;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s ease;
+      letter-spacing: 0.03em;
+    }
+    .preset-btn:hover {
+      border-color: var(--green);
+      background: rgba(34, 197, 94, 0.06);
+    }
+    .preset-btn.active {
+      border-color: var(--green);
+      background: rgba(34, 197, 94, 0.1);
+      color: var(--green);
+    }
+    .preset-btn .pi { font-size: 0.9rem; display: block; margin-bottom: 0.15rem; }
+    .preset-btn .pl { display: block; font-size: 0.5rem; color: var(--text-dim); }
+
+    .control-group { margin-bottom: 0.6rem; }
 
     .control-label {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
-      font-size: 0.65rem;
+      align-items: center;
+      font-size: 0.6rem;
       color: var(--text-dim);
-      margin-bottom: 0.35rem;
+      margin-bottom: 0.2rem;
       letter-spacing: 0.03em;
     }
-
-    .control-value {
-      color: var(--green);
-      font-variant-numeric: tabular-nums;
-    }
+    .control-label .val { color: var(--green); font-size: 0.55rem; }
 
     input[type="range"] {
       -webkit-appearance: none;
       width: 100%;
-      height: 4px;
+      height: 3px;
       background: var(--border);
       border-radius: 2px;
       outline: none;
-      cursor: pointer;
     }
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
+      width: 12px;
+      height: 12px;
       background: var(--green);
+      border-radius: 50%;
       cursor: pointer;
-      transition: transform 0.15s;
-      box-shadow: 0 0 8px rgba(74, 222, 128, 0.3);
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
     }
-    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
-    input[type="range"]::-webkit-slider-thumb:active { transform: scale(1.3); background: var(--accent); }
+
+    .rule-input, .axiom-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.35rem 0.5rem;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.6rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .rule-input:focus, .axiom-input:focus { border-color: var(--green); }
+    .axiom-input { color: var(--accent); font-size: 0.65rem; letter-spacing: 0.05em; }
+
+    .rules-container { display: flex; flex-direction: column; gap: 0.3rem; }
+
+    .rule-row {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .rule-row .rule-sym {
+      width: 24px;
+      text-align: center;
+      color: var(--accent);
+      font-size: 0.7rem;
+      flex-shrink: 0;
+    }
+    .rule-row .arrow {
+      color: var(--text-dim);
+      font-size: 0.55rem;
+      flex-shrink: 0;
+    }
+    .rule-row .del-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 0.7rem;
+      padding: 0 0.2rem;
+    }
+    .rule-row .del-btn:hover { color: #f87171; }
+
+    .btn-row {
+      display: flex;
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 0.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.6rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+    .action-btn:hover {
+      border-color: var(--accent);
+      background: rgba(124, 111, 224, 0.08);
+    }
+    .action-btn.primary {
+      background: linear-gradient(135deg, var(--green), #059669);
+      border-color: transparent;
+      color: #0a0a0f;
+      font-weight: 600;
+    }
+    .action-btn.primary:hover { box-shadow: 0 0 20px rgba(34, 197, 94, 0.3); }
 
     .toggle-row {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.6rem;
+      justify-content: space-between;
+      margin-bottom: 0.4rem;
     }
-
+    .toggle-label { font-size: 0.6rem; color: var(--text-dim); letter-spacing: 0.03em; }
     .toggle {
       width: 32px;
-      height: 18px;
-      border-radius: 9px;
+      height: 16px;
       background: var(--border);
-      cursor: pointer;
+      border-radius: 8px;
       position: relative;
+      cursor: pointer;
       transition: background 0.2s;
-      flex-shrink: 0;
     }
     .toggle.on { background: var(--green); }
     .toggle::after {
       content: '';
       position: absolute;
+      width: 12px;
+      height: 12px;
+      background: var(--text);
+      border-radius: 50%;
       top: 2px;
       left: 2px;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: #fff;
       transition: transform 0.2s;
     }
-    .toggle.on::after { transform: translateX(14px); }
+    .toggle.on::after { transform: translateX(16px); background: #0a0a0f; }
 
-    .toggle-label {
-      font-size: 0.62rem;
-      color: var(--text-dim);
-      letter-spacing: 0.03em;
-    }
-
-    /* Grammar display */
-    .grammar-display {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.6rem 0.8rem;
-      font-size: 0.58rem;
-      color: var(--text);
-      letter-spacing: 0.02em;
-      line-height: 1.7;
-      margin-bottom: 0.8rem;
-      max-height: 120px;
-      overflow-y: auto;
-    }
-    .grammar-display .sym { color: var(--green); font-weight: 600; }
-    .grammar-display .arrow { color: var(--text-dim); margin: 0 0.2rem; }
-    .grammar-display .prob { color: var(--amber); font-size: 0.52rem; }
-
-    /* Actions */
-    .actions {
-      padding: 1rem 1.25rem;
-      border-top: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .action-row { display: flex; gap: 0.5rem; }
-
-    .btn {
-      flex: 1;
-      padding: 0.55rem 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: transparent;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 0.65rem;
-      letter-spacing: 0.06em;
+    .color-row { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+    .color-chip {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 2px solid transparent;
       cursor: pointer;
       transition: all 0.2s;
-      text-align: center;
     }
-    .btn:hover { border-color: var(--green); color: #fff; }
+    .color-chip:hover { transform: scale(1.15); }
+    .color-chip.active { border-color: var(--text); box-shadow: 0 0 8px rgba(200,200,212,0.2); }
 
-    .btn-primary {
-      background: linear-gradient(135deg, #2d8a4e, var(--green));
-      border-color: transparent;
-      color: #0a0a0f;
-      font-weight: 600;
+    .vignette {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 5;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(10,10,15,0.7) 100%);
     }
-    .btn-primary:hover { box-shadow: 0 0 20px rgba(74, 222, 128, 0.3); transform: translateY(-1px); }
 
-    .shortcuts {
-      padding: 0.75rem 1.25rem;
-      border-top: 1px solid var(--border);
-      font-size: 0.55rem;
-      color: var(--text-dim);
-      line-height: 1.8;
-    }
-    .shortcuts kbd {
-      display: inline-block;
-      padding: 0.1rem 0.3rem;
-      border-radius: 3px;
-      background: rgba(74, 222, 128, 0.1);
-      border: 1px solid rgba(74, 222, 128, 0.2);
-      font-family: inherit;
+    .key-hint {
+      position: absolute;
+      bottom: 1.25rem;
+      right: 360px;
       font-size: 0.5rem;
-      color: var(--text);
-      margin-right: 0.2rem;
-    }
-
-    .seed-display {
-      font-size: 0.6rem;
       color: var(--text-dim);
-      text-align: center;
-      padding: 0.35rem;
       letter-spacing: 0.05em;
-      font-variant-numeric: tabular-nums;
-      cursor: pointer;
-      transition: color 0.2s;
-    }
-    .seed-display:hover { color: var(--green); }
-
-    @media (max-width: 700px) {
-      body { flex-direction: column-reverse; }
-      .sidebar {
-        width: 100%;
-        min-width: unset;
-        max-height: 50vh;
-        border-left: none;
-        border-top: 1px solid var(--border);
-      }
-      .canvas-area { min-height: 50vh; }
+      opacity: 0.5;
+      pointer-events: none;
     }
 
-    @keyframes grow {
-      from { opacity: 0; transform: scale(0.95); }
-      to { opacity: 1; transform: scale(1); }
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      .sidebar { width: 100%; min-width: 100%; max-height: 45vh; border-left: none; border-top: 1px solid var(--border); }
+      .key-hint { display: none; }
     }
-    .growing { animation: grow 0.5s ease-out; }
   </style>
 </head>
 <body>
   <div class="canvas-area">
     <canvas id="canvas"></canvas>
     <div class="canvas-info">
-      <span class="species-name" id="info-name"></span><br>
-      <span class="detail" id="info-detail"></span>
+      <span class="preset-name" id="infoPreset">FRACTAL PLANT</span><br>
+      <span id="infoDetail">iterations: 5 &middot; angle: 25&deg; &middot; symbols: 0</span>
     </div>
+    <div class="key-hint">R randomize &middot; G grow &middot; S save &middot; Space mutate</div>
   </div>
+  <div class="vignette"></div>
 
   <div class="sidebar">
     <div class="sidebar-header">
-      <h1>Garden</h1>
-      <div class="subtitle">Botanical L-System Laboratory</div>
-      <a href="index.html" class="back-link">&larr; back to gallery</a>
+      <a href="index.html" class="back-link">&larr; lattice</a>
+      <h1>&#9752; Garden</h1>
     </div>
+    <div class="sidebar-scroll">
+      <div class="section-label">Presets</div>
+      <div class="preset-grid" id="presetGrid"></div>
 
-    <div class="preset-section">
-      <div class="section-label">Species</div>
-      <div class="preset-grid" id="preset-grid"></div>
-    </div>
-
-    <div class="controls" id="controls">
-      <div class="section-label" style="margin-bottom: 0.6rem;">Grammar</div>
-      <div class="grammar-display" id="grammar-display"></div>
-
-      <div class="section-label" style="margin-bottom: 0.6rem;">Parameters</div>
-
+      <div class="section-label">Axiom</div>
       <div class="control-group">
-        <div class="control-label">Branching Angle <span class="control-value" id="val-angle"></span></div>
-        <input type="range" id="sl-angle" min="5" max="120" step="0.5">
+        <input type="text" class="axiom-input" id="axiomInput" value="X" spellcheck="false">
       </div>
 
-      <div class="control-group">
-        <div class="control-label">Iterations <span class="control-value" id="val-iter"></span></div>
-        <input type="range" id="sl-iter" min="1" max="7" step="1">
+      <div class="section-label">Production Rules</div>
+      <div class="rules-container" id="rulesContainer"></div>
+      <div style="margin-top: 0.3rem;">
+        <button class="action-btn" id="addRuleBtn" style="flex: none; width: 100%; font-size: 0.5rem;">+ Add Rule</button>
       </div>
 
+      <div class="section-label">Geometry</div>
       <div class="control-group">
-        <div class="control-label">Angle Jitter <span class="control-value" id="val-jitter"></span></div>
-        <input type="range" id="sl-jitter" min="0" max="15" step="0.5">
+        <div class="control-label"><span>Angle</span><span class="val" id="angleVal">25&deg;</span></div>
+        <input type="range" id="angleSlider" min="1" max="180" value="25" step="0.5">
+      </div>
+      <div class="control-group">
+        <div class="control-label"><span>Iterations</span><span class="val" id="iterVal">5</span></div>
+        <input type="range" id="iterSlider" min="1" max="8" value="5" step="1">
       </div>
 
+      <div class="section-label">Parametric</div>
       <div class="control-group">
-        <div class="control-label">Branch Taper <span class="control-value" id="val-taper"></span></div>
-        <input type="range" id="sl-taper" min="0.5" max="1.0" step="0.01">
+        <div class="control-label"><span>Angle Jitter</span><span class="val" id="jitterVal">0&deg;</span></div>
+        <input type="range" id="jitterSlider" min="0" max="15" value="0" step="0.5">
+      </div>
+      <div class="control-group">
+        <div class="control-label"><span>Length Scale</span><span class="val" id="scaleVal">0.85</span></div>
+        <input type="range" id="scaleSlider" min="0.4" max="1.0" value="0.85" step="0.01">
+      </div>
+      <div class="control-group">
+        <div class="control-label"><span>Tropism</span><span class="val" id="tropismVal">0.00</span></div>
+        <input type="range" id="tropismSlider" min="-0.3" max="0.3" value="0" step="0.01">
+      </div>
+      <div class="control-group">
+        <div class="control-label"><span>Width Decay</span><span class="val" id="widthVal">0.85</span></div>
+        <input type="range" id="widthSlider" min="0.4" max="1.0" value="0.85" step="0.01">
       </div>
 
-      <div class="control-group">
-        <div class="control-label">Tropism <span class="control-value" id="val-tropism"></span></div>
-        <input type="range" id="sl-tropism" min="-0.3" max="0.3" step="0.01">
-      </div>
-
+      <div class="section-label">Stochastic Grammar</div>
       <div class="toggle-row">
-        <div class="toggle" id="tog-stochastic"></div>
-        <span class="toggle-label">Stochastic (probabilistic branching)</span>
+        <span class="toggle-label">Enable randomness</span>
+        <div class="toggle" id="stochToggle"></div>
+      </div>
+      <div class="control-group" id="stochWeightGroup" style="display:none;">
+        <div class="control-label"><span>Variant Weight</span><span class="val" id="stochWeightVal">0.30</span></div>
+        <input type="range" id="stochWeightSlider" min="0.05" max="0.95" value="0.30" step="0.05">
       </div>
 
-      <div class="toggle-row">
-        <div class="toggle" id="tog-animate"></div>
-        <span class="toggle-label">Animated growth</span>
-      </div>
-    </div>
+      <div class="section-label">Color Scheme</div>
+      <div class="color-row" id="colorRow"></div>
 
-    <div class="seed-display" id="seed-display" title="Click to copy seed"></div>
-
-    <div class="actions">
-      <div class="action-row">
-        <button class="btn btn-primary" id="btn-grow">Grow</button>
-        <button class="btn" id="btn-mutate">Mutate</button>
+      <div class="btn-row">
+        <button class="action-btn primary" id="growBtn">&#9752; Grow</button>
+        <button class="action-btn" id="mutateBtn">Mutate</button>
+        <button class="action-btn" id="randomBtn">Random</button>
       </div>
-      <div class="action-row">
-        <button class="btn" id="btn-download">Save PNG</button>
-        <button class="btn" id="btn-random">Random</button>
+      <div class="btn-row">
+        <button class="action-btn" id="saveBtn">&#8595; PNG</button>
+        <button class="action-btn" id="animateBtn">&#9654; Animate</button>
       </div>
-    </div>
-
-    <div class="shortcuts">
-      <kbd>G</kbd> Grow <kbd>M</kbd> Mutate <kbd>R</kbd> Random <kbd>S</kbd> Save
-      <kbd>1</kbd>-<kbd>9</kbd> Preset <kbd>A</kbd> Animate
     </div>
   </div>
 
 <script>
-// ============================================================
-//  Lattice Garden — Botanical L-System Laboratory
-// ============================================================
-
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-
-// --- PRNG ---
-function mulberry32(seed) {
-  let s = seed | 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+/* --- PRNG --- */
+function mulberry32(s) {
+  return function() {
+    s |= 0; s = s + 0x6D2B79F5 | 0;
+    var t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
 
-// --- Color palettes for L-systems ---
-const PALETTES = {
-  botanical: {
-    bg: [10, 10, 15],
-    trunk: [139, 107, 61],
-    branch: [107, 82, 48],
-    leaf: [45, 138, 78],
-    leafTip: [74, 222, 128],
-    bloom: [180, 120, 200],
-  },
-  frost: {
-    bg: [8, 12, 20],
-    trunk: [140, 170, 210],
-    branch: [100, 140, 190],
-    leaf: [180, 210, 240],
-    leafTip: [220, 240, 255],
-    bloom: [160, 200, 255],
-  },
-  ember: {
-    bg: [15, 8, 5],
-    trunk: [160, 80, 30],
-    branch: [180, 100, 40],
-    leaf: [220, 140, 50],
-    leafTip: [255, 190, 80],
-    bloom: [255, 120, 60],
-  },
-  void: {
-    bg: [5, 5, 15],
-    trunk: [100, 80, 160],
-    branch: [120, 90, 180],
-    leaf: [140, 110, 200],
-    leafTip: [180, 150, 240],
-    bloom: [200, 120, 255],
-  },
-  moss: {
-    bg: [8, 15, 10],
-    trunk: [80, 100, 60],
-    branch: [60, 90, 50],
-    leaf: [90, 160, 70],
-    leafTip: [130, 200, 90],
-    bloom: [200, 220, 100],
-  },
-};
-
-let currentPaletteName = 'botanical';
-
-// --- Botanical Presets ---
-const PRESETS = [
-  {
-    name: 'Willow',
-    axiom: 'F',
-    rules: { F: 'FF+[+F-F-F]-[-F+F+F]' },
-    angle: 22.5,
-    iterations: 4,
-    angleJitter: 3,
-    lengthScale: 0.85,
-    tropism: 0.08,
-    palette: 'botanical',
-  },
-  {
-    name: 'Fern',
-    axiom: 'X',
-    rules: { X: 'F+[[X]-X]-F[-FX]+X', F: 'FF' },
-    angle: 25,
-    iterations: 5,
-    angleJitter: 2,
-    lengthScale: 0.78,
-    tropism: 0.04,
-    palette: 'botanical',
-  },
-  {
-    name: 'Sakura',
-    axiom: 'F',
-    rules: { F: 'FF-[-F+F+F]+[+F-F-F]' },
-    angle: 22,
-    iterations: 4,
-    angleJitter: 5,
-    lengthScale: 0.82,
-    tropism: 0.02,
-    palette: 'ember',
-    stochastic: {
-      F: [
-        { production: 'FF-[-F+F+F]+[+F-F-F]', weight: 0.7 },
-        { production: 'FF-[-F+F]+[+F-F]', weight: 0.3 },
-      ]
-    },
-  },
-  {
-    name: 'Seaweed',
-    axiom: 'F',
-    rules: { F: 'F[+F]F[-F]+F' },
-    angle: 28,
-    iterations: 5,
-    angleJitter: 6,
-    lengthScale: 0.9,
-    tropism: -0.06,
-    palette: 'moss',
-  },
-  {
-    name: 'Frost',
-    axiom: 'F+F+F+F+F+F',
-    rules: { F: 'F+F-F-F+F' },
-    angle: 60,
-    iterations: 4,
-    angleJitter: 1,
-    lengthScale: 1.0,
-    tropism: 0,
-    palette: 'frost',
-  },
-  {
-    name: 'Canopy',
-    axiom: 'F',
-    rules: { F: 'FF[+F+F+F][-F-F-F]' },
-    angle: 20,
-    iterations: 4,
-    angleJitter: 4,
-    lengthScale: 0.75,
-    tropism: 0.05,
-    palette: 'botanical',
-    stochastic: {
-      F: [
-        { production: 'FF[+F+F+F][-F-F-F]', weight: 0.6 },
-        { production: 'FF[+F+F][-F-F]', weight: 0.25 },
-        { production: 'F[-F]F', weight: 0.15 },
-      ]
-    },
-  },
-  {
-    name: 'Dragon',
-    axiom: 'FX',
-    rules: { X: 'X+YF+', Y: '-FX-Y' },
-    angle: 90,
-    iterations: 12,
-    angleJitter: 0,
-    lengthScale: 1.0,
-    tropism: 0,
-    palette: 'void',
-  },
-  {
-    name: 'Vine',
-    axiom: 'X',
-    rules: { X: 'F[+X][-X]FX', F: 'FF' },
-    angle: 30,
-    iterations: 5,
-    angleJitter: 7,
-    lengthScale: 0.8,
-    tropism: 0.12,
-    palette: 'moss',
-    stochastic: {
-      X: [
-        { production: 'F[+X][-X]FX', weight: 0.5 },
-        { production: 'F[+X]FX', weight: 0.3 },
-        { production: 'F[-X]FX', weight: 0.2 },
-      ]
-    },
-  },
-  {
-    name: 'Coral',
-    axiom: 'F-F-F-F',
-    rules: { F: 'FF-[-F+F]+[+F-F]' },
-    angle: 45,
-    iterations: 4,
-    angleJitter: 3,
-    lengthScale: 0.88,
-    tropism: -0.03,
-    palette: 'ember',
-    stochastic: {
-      F: [
-        { production: 'FF-[-F+F]+[+F-F]', weight: 0.6 },
-        { production: 'F[-F+F]+F', weight: 0.4 },
-      ]
-    },
-  },
-  {
-    name: 'Spiral',
-    axiom: 'AAAA',
-    rules: { A: 'F[+++A]F[---A]+A', F: 'FF' },
-    angle: 14,
-    iterations: 5,
-    angleJitter: 2,
-    lengthScale: 0.85,
-    tropism: 0,
-    palette: 'void',
-  },
-  {
-    name: 'Hilbert',
-    axiom: 'X',
-    rules: { X: '-YF+XFX+FY-', Y: '+XF-YFY-FX+' },
-    angle: 90,
-    iterations: 5,
-    angleJitter: 0,
-    lengthScale: 1.0,
-    tropism: 0,
-    palette: 'frost',
-  },
-  {
-    name: 'Meadow',
-    axiom: 'F',
-    rules: { F: 'F[+F]F[-F]F' },
-    angle: 25.7,
-    iterations: 4,
-    angleJitter: 8,
-    lengthScale: 0.82,
-    tropism: 0.06,
-    palette: 'botanical',
-    stochastic: {
-      F: [
-        { production: 'F[+F]F[-F]F', weight: 0.5 },
-        { production: 'F[-F]F[+F]', weight: 0.3 },
-        { production: 'FF', weight: 0.2 },
-      ]
-    },
-  },
+/* --- Color schemes --- */
+var SCHEMES = [
+  { name:'Emerald',  bg:'#0a0a0f', c:['#064e3b','#059669','#34d399','#6ee7b7','#a7f3d0','#d1fae5'] },
+  { name:'Twilight', bg:'#0a0a0f', c:['#312e81','#4338ca','#6366f1','#818cf8','#a5b4fc','#c7d2fe'] },
+  { name:'Autumn',   bg:'#0a0a0f', c:['#78350f','#b45309','#d97706','#f59e0b','#fbbf24','#fde68a'] },
+  { name:'Sakura',   bg:'#0a0a0f', c:['#831843','#be185d','#ec4899','#f472b6','#f9a8d4','#fce7f3'] },
+  { name:'Frost',    bg:'#0a0a0f', c:['#164e63','#0891b2','#22d3ee','#67e8f9','#a5f3fc','#cffafe'] },
+  { name:'Moss',     bg:'#0a0a0f', c:['#1a2e05','#3f6212','#65a30d','#84cc16','#a3e635','#d9f99d'] },
+  { name:'Lavender', bg:'#0a0a0f', c:['#2e1065','#6d28d9','#8b5cf6','#a78bfa','#c4b5fd','#ede9fe'] },
+  { name:'Ember',    bg:'#0a0a0f', c:['#450a0a','#991b1b','#dc2626','#f87171','#fca5a5','#fee2e2'] },
 ];
 
-// --- State ---
-let state = {
-  seed: Date.now() & 0xffffffff,
-  presetIdx: 0,
-  angle: PRESETS[0].angle,
-  iterations: PRESETS[0].iterations,
-  angleJitter: PRESETS[0].angleJitter,
-  lengthScale: PRESETS[0].lengthScale,
-  tropism: PRESETS[0].tropism,
-  stochasticOn: !!PRESETS[0].stochastic,
-  animateOn: false,
-};
+/* --- Presets --- */
+var PRESETS = [
+  { name:'Fractal Plant',  icon:'\u{1F331}', axiom:'X', rules:{X:'F+[[X]-X]-F[-FX]+X',F:'FF'}, angle:25, iter:6, jitter:2, scale:0.88, tropism:0.03, width:0.82 },
+  { name:'Fern',           icon:'\u{1F33F}', axiom:'X', rules:{X:'F[+X][-X]FX',F:'FF'}, angle:25.7, iter:6, jitter:3, scale:0.85, tropism:0.05, width:0.80 },
+  { name:'Binary Tree',    icon:'\u{1F333}', axiom:'F', rules:{F:'FF+[+F-F-F]-[-F+F+F]'}, angle:22.5, iter:4, jitter:1, scale:0.90, tropism:0, width:0.85 },
+  { name:'Willow',         icon:'\u{1F343}', axiom:'F', rules:{F:'FF-[-F+F+F]+[+F-F-F]'}, angle:22, iter:4, jitter:5, scale:0.82, tropism:0.15, width:0.78 },
+  { name:'Bush',           icon:'\u{1F334}', axiom:'F', rules:{F:'FF[+F+F+F][-F-F-F]'}, angle:20, iter:4, jitter:2, scale:0.88, tropism:-0.02, width:0.83 },
+  { name:'Koch Snowflake', icon:'\u2744',    axiom:'F-F-F-F-F-F', rules:{F:'F+F-F-F+F'}, angle:60, iter:4, jitter:0, scale:1.0, tropism:0, width:1.0 },
+  { name:'Dragon Curve',   icon:'\u{1F409}', axiom:'FX', rules:{X:'X+YF+',Y:'-FX-Y'}, angle:90, iter:10, jitter:0, scale:1.0, tropism:0, width:1.0 },
+  { name:'Canopy',         icon:'\u{1F332}', axiom:'F', rules:{F:'F[-F]F[+F][F]'}, angle:30, iter:5, jitter:4, scale:0.80, tropism:0.02, width:0.75 },
+  { name:'Vine',           icon:'\u{1F338}', axiom:'F', rules:{F:'~F[+~F][-~F]~F'}, angle:28, iter:5, jitter:6, scale:0.83, tropism:0.08, width:0.80 },
+  { name:'Hilbert',        icon:'\u2637',    axiom:'X', rules:{X:'-YF+XFX+FY-',Y:'+XF-YFY-FX+'}, angle:90, iter:5, jitter:0, scale:1.0, tropism:0, width:1.0 },
+  { name:'Sierpinski',     icon:'\u25B2',    axiom:'F-G-G', rules:{F:'F-G+F+G-F',G:'GG'}, angle:120, iter:6, jitter:0, scale:1.0, tropism:0, width:1.0 },
+  { name:'Bonsai',         icon:'\u{1F335}', axiom:'X', rules:{X:'F[+X]!F[-X]!FX',F:'FF'}, angle:30, iter:5, jitter:3, scale:0.78, tropism:0.06, width:0.70 },
+];
 
-// --- L-System Engine ---
-function expandLSystem(axiom, rules, stochastic, iterations, rng, stochasticOn) {
-  let current = axiom;
-  for (let i = 0; i < iterations; i++) {
-    let next = '';
-    for (const ch of current) {
-      if (stochasticOn && stochastic && stochastic[ch]) {
-        const alts = stochastic[ch];
-        const total = alts.reduce((s, a) => s + a.weight, 0);
-        let r = rng() * total;
-        let chosen = alts[0].production;
-        for (const alt of alts) {
-          r -= alt.weight;
-          if (r <= 0) { chosen = alt.production; break; }
+/* --- State --- */
+var curPreset = 0, schemeIdx = 0, stochOn = false, stochW = 0.3, seed = Date.now(), anim = false;
+
+var canvas = document.getElementById('canvas');
+var ctx = canvas.getContext('2d');
+
+function getParams() {
+  var rules = {};
+  document.querySelectorAll('.rule-row').forEach(function(row) {
+    var sym = row.querySelector('.rule-sym').textContent.trim();
+    var prod = row.querySelector('.rule-input').value;
+    if (sym && prod) rules[sym] = prod;
+  });
+  return {
+    axiom: document.getElementById('axiomInput').value || 'F',
+    rules: rules,
+    angle: parseFloat(document.getElementById('angleSlider').value),
+    iterations: parseInt(document.getElementById('iterSlider').value),
+    angleJitter: parseFloat(document.getElementById('jitterSlider').value),
+    lengthScale: parseFloat(document.getElementById('scaleSlider').value),
+    tropism: parseFloat(document.getElementById('tropismSlider').value),
+    widthDecay: parseFloat(document.getElementById('widthSlider').value),
+  };
+}
+
+/* --- L-System Engine --- */
+function generateString(p) {
+  var rng = mulberry32(seed);
+  var cur = p.axiom, maxLen = 200000;
+  for (var i = 0; i < p.iterations; i++) {
+    var next = '';
+    for (var ci = 0; ci < cur.length; ci++) {
+      var ch = cur[ci];
+      if (stochOn && p.rules[ch] && rng() < stochW) {
+        var orig = p.rules[ch], variant = '';
+        for (var c = 0; c < orig.length; c++) {
+          if (rng() < 0.3) {
+            var chars = 'F+-[]G~!|';
+            variant += chars[Math.floor(rng() * chars.length)];
+          } else { variant += orig[c]; }
         }
-        next += chosen;
-      } else {
-        next += rules[ch] ?? ch;
-      }
+        next += variant;
+      } else { next += p.rules[ch] || ch; }
     }
-    current = next;
-    if (current.length > 30000) break;
+    cur = next;
+    if (cur.length > maxLen) break;
   }
-  return current;
+  return cur;
 }
 
-function traceTurtle(str, angle, angleJitter, lengthScale, tropism, rng) {
-  const points = [];
-  const segments = [];
-  let tx = 0, ty = 0, tAngle = -90, tDepth = 0;
-  const stack = [];
-
-  for (const ch of str) {
-    switch (ch) {
-      case 'F':
-      case 'G': {
-        const depthFactor = Math.pow(lengthScale, tDepth);
-        const step = depthFactor;
-        const jitter = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
-        const tropismBend = tropism * tDepth * 2;
-        const finalAngle = tAngle + jitter + tropismBend;
-        const rad = finalAngle * Math.PI / 180;
-        const nx = tx + step * Math.cos(rad);
-        const ny = ty + step * Math.sin(rad);
-        segments.push({ x0: tx, y0: ty, x1: nx, y1: ny, depth: tDepth });
-        points.push({ x: nx, y: ny, depth: tDepth });
-        tx = nx; ty = ny;
-        break;
-      }
-      case '+': tAngle += angle; break;
-      case '-': tAngle -= angle; break;
-      case '[':
-        stack.push({ x: tx, y: ty, angle: tAngle, depth: tDepth });
-        tDepth++;
-        break;
-      case ']': {
-        const s = stack.pop();
-        if (s) { tx = s.x; ty = s.y; tAngle = s.angle; tDepth = s.depth; }
-        break;
-      }
+function traceTurtle(str, p) {
+  var rng = mulberry32(seed + 7);
+  var pts = [], tx = 0, ty = 0, ta = -90, td = 0, tw = 1.0;
+  var stack = [], sc = 0;
+  for (var i = 0; i < str.length; i++) {
+    var ch = str[i];
+    if (ch === 'F' || ch === 'G') {
+      var df = Math.pow(p.lengthScale, td);
+      var j = p.angleJitter > 0 ? (rng() - 0.5) * 2 * p.angleJitter : 0;
+      var tb = p.tropism * td * 2;
+      var fa = ta + j + tb;
+      var rad = fa * Math.PI / 180;
+      var nx = tx + df * Math.cos(rad), ny = ty + df * Math.sin(rad);
+      pts.push({ x: tx, y: ty, nx: nx, ny: ny, d: td, w: tw });
+      tx = nx; ty = ny; sc++;
+    } else if (ch === '~') {
+      var df = Math.pow(p.lengthScale, td);
+      var wave = Math.sin(sc * 0.8) * 0.3;
+      var j = p.angleJitter > 0 ? (rng() - 0.5) * 2 * p.angleJitter : 0;
+      var tb = p.tropism * td * 2;
+      var fa = ta + j + wave * p.angle + tb;
+      var rad = fa * Math.PI / 180;
+      var nx = tx + df * Math.cos(rad), ny = ty + df * Math.sin(rad);
+      pts.push({ x: tx, y: ty, nx: nx, ny: ny, d: td, w: tw });
+      tx = nx; ty = ny; sc++;
+    } else if (ch === '+') { ta += p.angle; }
+    else if (ch === '-') { ta -= p.angle; }
+    else if (ch === '|') { ta += 180; }
+    else if (ch === '!') { tw *= p.widthDecay; }
+    else if (ch === '[') {
+      stack.push({ x: tx, y: ty, a: ta, d: td, w: tw });
+      td++; tw *= p.widthDecay;
+    } else if (ch === ']') {
+      var s = stack.pop();
+      if (s) { tx = s.x; ty = s.y; ta = s.a; td = s.d; tw = s.w; }
     }
   }
-  return { points, segments };
+  return pts;
 }
 
-// --- Rendering ---
-function renderLSystem(segments, maxSegments) {
-  if (segments.length === 0) return;
-
-  const segs = maxSegments != null ? segments.slice(0, maxSegments) : segments;
-  if (segs.length === 0) return;
-
-  const pal = PALETTES[currentPaletteName];
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.width / dpr;
-  const h = canvas.height / dpr;
-
-  // Find bounding box
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const s of segs) {
-    minX = Math.min(minX, s.x0, s.x1);
-    maxX = Math.max(maxX, s.x0, s.x1);
-    minY = Math.min(minY, s.y0, s.y1);
-    maxY = Math.max(maxY, s.y0, s.y1);
+function getBBox(pts) {
+  var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (var i = 0; i < pts.length; i++) {
+    var p = pts[i];
+    if (p.x < x0) x0 = p.x; if (p.nx < x0) x0 = p.nx;
+    if (p.x > x1) x1 = p.x; if (p.nx > x1) x1 = p.nx;
+    if (p.y < y0) y0 = p.y; if (p.ny < y0) y0 = p.ny;
+    if (p.y > y1) y1 = p.y; if (p.ny > y1) y1 = p.ny;
   }
-
-  const bboxW = maxX - minX || 1;
-  const bboxH = maxY - minY || 1;
-  const margin = 40;
-  const scale = Math.min((w - margin * 2) / bboxW, (h - margin * 2) / bboxH);
-  const offX = (w - bboxW * scale) / 2 - minX * scale;
-  const offY = (h - bboxH * scale) / 2 - minY * scale;
-
-  // Find max depth
-  let maxDepth = 0;
-  for (const s of segs) maxDepth = Math.max(maxDepth, s.depth);
-  maxDepth = Math.max(maxDepth, 1);
-
-  // Clear
-  ctx.fillStyle = `rgb(${pal.bg[0]}, ${pal.bg[1]}, ${pal.bg[2]})`;
-  ctx.fillRect(0, 0, w, h);
-
-  // Draw segments
-  for (const seg of segs) {
-    const x0 = seg.x0 * scale + offX;
-    const y0 = seg.y0 * scale + offY;
-    const x1 = seg.x1 * scale + offX;
-    const y1 = seg.y1 * scale + offY;
-    const t = seg.depth / maxDepth;
-
-    // Interpolate color: trunk → branch → leaf → leafTip
-    let r, g, b;
-    if (t < 0.3) {
-      const f = t / 0.3;
-      r = pal.trunk[0] + (pal.branch[0] - pal.trunk[0]) * f;
-      g = pal.trunk[1] + (pal.branch[1] - pal.trunk[1]) * f;
-      b = pal.trunk[2] + (pal.branch[2] - pal.trunk[2]) * f;
-    } else if (t < 0.7) {
-      const f = (t - 0.3) / 0.4;
-      r = pal.branch[0] + (pal.leaf[0] - pal.branch[0]) * f;
-      g = pal.branch[1] + (pal.leaf[1] - pal.branch[1]) * f;
-      b = pal.branch[2] + (pal.leaf[2] - pal.branch[2]) * f;
-    } else {
-      const f = (t - 0.7) / 0.3;
-      r = pal.leaf[0] + (pal.leafTip[0] - pal.leaf[0]) * f;
-      g = pal.leaf[1] + (pal.leafTip[1] - pal.leaf[1]) * f;
-      b = pal.leaf[2] + (pal.leafTip[2] - pal.leaf[2]) * f;
-    }
-
-    // Width tapers with depth
-    const lineWidth = Math.max(0.5, (1 - t * 0.8) * 3.5);
-
-    ctx.strokeStyle = `rgb(${r|0}, ${g|0}, ${b|0})`;
-    ctx.lineWidth = lineWidth;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-
-    // Leaf dots at branch tips (high depth, short segments)
-    if (t > 0.75) {
-      const len = Math.hypot(x1 - x0, y1 - y0);
-      if (len < 8) {
-        ctx.fillStyle = `rgba(${pal.leafTip[0]}, ${pal.leafTip[1]}, ${pal.leafTip[2]}, ${0.4 + t * 0.4})`;
-        ctx.beginPath();
-        ctx.arc(x1, y1, Math.max(1, (1 - t) * 4 + 1), 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-  }
-
-  // Bloom glow overlay on leaf tips
-  ctx.globalCompositeOperation = 'screen';
-  for (const seg of segs) {
-    if (seg.depth / maxDepth > 0.8) {
-      const x1 = seg.x1 * scale + offX;
-      const y1 = seg.y1 * scale + offY;
-      const grad = ctx.createRadialGradient(x1, y1, 0, x1, y1, 6);
-      grad.addColorStop(0, `rgba(${pal.bloom[0]}, ${pal.bloom[1]}, ${pal.bloom[2]}, 0.15)`);
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(x1 - 6, y1 - 6, 12, 12);
-    }
-  }
-  ctx.globalCompositeOperation = 'source-over';
-
-  // Vignette
-  const vg = ctx.createRadialGradient(w/2, h/2, w * 0.3, w/2, h/2, w * 0.75);
-  vg.addColorStop(0, 'rgba(0,0,0,0)');
-  vg.addColorStop(1, 'rgba(0,0,0,0.5)');
-  ctx.fillStyle = vg;
-  ctx.fillRect(0, 0, w, h);
+  return { x0: x0, x1: x1, y0: y0, y1: y1 };
 }
 
-// --- UI ---
-function resizeCanvas() {
-  const dpr = window.devicePixelRatio || 1;
-  const area = document.querySelector('.canvas-area');
-  const w = area.clientWidth;
-  const h = area.clientHeight;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
+function renderCanvas(pts, scheme, ratio) {
+  var dpr = window.devicePixelRatio || 1;
+  var area = document.querySelector('.canvas-area');
+  var w = area.clientWidth, h = area.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  ctx.fillStyle = scheme.bg;
+  ctx.fillRect(0, 0, w, h);
+
+  if (!pts.length) return;
+
+  var bb = getBBox(pts);
+  var bw = bb.x1 - bb.x0 || 1, bh = bb.y1 - bb.y0 || 1;
+  var margin = 60;
+  var sc = Math.min((w - margin * 2) / bw, (h - margin * 2) / bh);
+  var ox = (w - bw * sc) / 2 - bb.x0 * sc;
+  var oy = (h - bh * sc) / 2 - bb.y0 * sc;
+
+  var maxD = 1;
+  for (var i = 0; i < pts.length; i++) if (pts[i].d + 1 > maxD) maxD = pts[i].d + 1;
+
+  var colors = scheme.c;
+  var count = Math.floor(pts.length * ratio);
+  var dimScale = 50 / (bw + bh);
+
+  // Glow pass
+  ctx.globalAlpha = 0.12;
+  ctx.lineCap = 'round';
+  for (var i = 0; i < count; i++) {
+    var p = pts[i];
+    var ci = Math.min(Math.floor((p.d / maxD) * colors.length), colors.length - 1);
+    var lw = Math.max(0.5, p.w * 6 * sc * dimScale);
+    ctx.strokeStyle = colors[ci];
+    ctx.lineWidth = lw + 4;
+    ctx.beginPath();
+    ctx.moveTo(p.x * sc + ox, p.y * sc + oy);
+    ctx.lineTo(p.nx * sc + ox, p.ny * sc + oy);
+    ctx.stroke();
+  }
+
+  // Main pass
+  ctx.globalAlpha = 1;
+  for (var i = 0; i < count; i++) {
+    var p = pts[i];
+    var ci = Math.min(Math.floor((p.d / maxD) * colors.length), colors.length - 1);
+    var lw = Math.max(0.5, p.w * 3 * sc * dimScale);
+    ctx.strokeStyle = colors[ci];
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(p.x * sc + ox, p.y * sc + oy);
+    ctx.lineTo(p.nx * sc + ox, p.ny * sc + oy);
+    ctx.stroke();
+  }
+
+  // Leaf tips
+  ctx.globalAlpha = 0.6;
+  for (var i = 0; i < count; i++) {
+    var p = pts[i];
+    if (p.d >= maxD - 2 && p.w < 0.5) {
+      var ci = Math.min(colors.length - 1, Math.floor((p.d / maxD) * colors.length));
+      ctx.fillStyle = colors[ci];
+      ctx.beginPath();
+      ctx.arc(p.nx * sc + ox, p.ny * sc + oy, Math.max(1, 2.5 - p.d * 0.15), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
-function buildPresetGrid() {
-  const grid = document.getElementById('preset-grid');
+/* --- Render --- */
+function render(ratio) {
+  if (ratio === undefined) ratio = 1;
+  var p = getParams();
+  var str = generateString(p);
+  var pts = traceTurtle(str, p);
+  renderCanvas(pts, SCHEMES[schemeIdx], ratio);
+  document.getElementById('infoDetail').innerHTML =
+    'iterations: ' + p.iterations + ' &middot; angle: ' + p.angle + '&deg; &middot; symbols: ' + str.length.toLocaleString();
+}
+
+/* --- UI --- */
+function buildPresets() {
+  var grid = document.getElementById('presetGrid');
   grid.innerHTML = '';
-  PRESETS.forEach((p, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'preset-btn' + (i === state.presetIdx ? ' active' : '');
-    btn.textContent = p.name;
-    btn.onclick = () => selectPreset(i);
+  PRESETS.forEach(function(p, i) {
+    var btn = document.createElement('button');
+    btn.className = 'preset-btn' + (i === curPreset ? ' active' : '');
+    var ruleStr = Object.keys(p.rules).map(function(k) { return k + '\u2192' + p.rules[k].substring(0, 10); }).join(', ');
+    btn.innerHTML = '<span class="pi">' + p.icon + '</span>' + p.name + '<span class="pl">' + ruleStr + '</span>';
+    btn.onclick = function() { loadPreset(i); };
     grid.appendChild(btn);
   });
 }
 
-function selectPreset(idx) {
-  state.presetIdx = idx;
-  const p = PRESETS[idx];
-  state.angle = p.angle;
-  state.iterations = p.iterations;
-  state.angleJitter = p.angleJitter;
-  state.lengthScale = p.lengthScale;
-  state.tropism = p.tropism;
-  state.stochasticOn = !!p.stochastic;
-  currentPaletteName = p.palette || 'botanical';
-  state.seed = (Date.now() ^ (Math.random() * 0xffffffff)) & 0xffffffff;
-  syncUI();
-  grow();
+function buildRules(rules) {
+  var container = document.getElementById('rulesContainer');
+  container.innerHTML = '';
+  Object.keys(rules).forEach(function(sym) { addRuleRow(sym, rules[sym]); });
 }
 
-function syncUI() {
-  const sl = (id, val) => { document.getElementById(id).value = val; };
-  const sv = (id, val) => { document.getElementById(id).textContent = val; };
+function addRuleRow(sym, prod) {
+  var container = document.getElementById('rulesContainer');
+  var row = document.createElement('div');
+  row.className = 'rule-row';
+  row.innerHTML = '<span class="rule-sym">' + (sym || 'F') + '</span>' +
+    '<span class="arrow">&rarr;</span>' +
+    '<input type="text" class="rule-input" value="' + (prod || 'F') + '" spellcheck="false">' +
+    '<button class="del-btn">&times;</button>';
+  row.querySelector('.rule-input').addEventListener('input', function() { render(); });
+  row.querySelector('.del-btn').addEventListener('click', function() { row.remove(); render(); });
+  container.appendChild(row);
+}
 
-  sl('sl-angle', state.angle);
-  sv('val-angle', state.angle + '\u00b0');
-  sl('sl-iter', state.iterations);
-  sv('val-iter', state.iterations);
-  sl('sl-jitter', state.angleJitter);
-  sv('val-jitter', state.angleJitter.toFixed(1) + '\u00b0');
-  sl('sl-taper', state.lengthScale);
-  sv('val-taper', state.lengthScale.toFixed(2));
-  sl('sl-tropism', state.tropism);
-  sv('val-tropism', state.tropism.toFixed(2));
-
-  const togSto = document.getElementById('tog-stochastic');
-  togSto.className = 'toggle' + (state.stochasticOn ? ' on' : '');
-  const togAnim = document.getElementById('tog-animate');
-  togAnim.className = 'toggle' + (state.animateOn ? ' on' : '');
-
-  document.getElementById('seed-display').textContent = 'seed: 0x' + (state.seed >>> 0).toString(16).padStart(8, '0');
-
-  // Update preset buttons
-  document.querySelectorAll('.preset-btn').forEach((btn, i) => {
-    btn.className = 'preset-btn' + (i === state.presetIdx ? ' active' : '');
+function buildColors() {
+  var row = document.getElementById('colorRow');
+  row.innerHTML = '';
+  SCHEMES.forEach(function(s, i) {
+    var chip = document.createElement('div');
+    chip.className = 'color-chip' + (i === schemeIdx ? ' active' : '');
+    chip.style.background = 'linear-gradient(135deg, ' + s.c[0] + ', ' + s.c[s.c.length - 1] + ')';
+    chip.title = s.name;
+    chip.onclick = function() { schemeIdx = i; buildColors(); render(); };
+    row.appendChild(chip);
   });
-
-  // Update grammar display
-  updateGrammarDisplay();
-
-  // Update info
-  const p = PRESETS[state.presetIdx];
-  document.getElementById('info-name').textContent = p.name;
-  const symCount = Object.keys(p.rules).length;
-  document.getElementById('info-detail').textContent =
-    `${symCount} production rule${symCount > 1 ? 's' : ''} \u00b7 ${state.iterations} iterations \u00b7 ${state.angle}\u00b0`;
 }
 
-function updateGrammarDisplay() {
-  const p = PRESETS[state.presetIdx];
-  const el = document.getElementById('grammar-display');
-  let html = `<span class="sym">axiom</span><span class="arrow">\u2192</span>${escHtml(p.axiom)}<br>`;
-
-  for (const [sym, prod] of Object.entries(p.rules)) {
-    html += `<span class="sym">${escHtml(sym)}</span><span class="arrow">\u2192</span>${escHtml(prod)}<br>`;
-  }
-
-  if (state.stochasticOn && p.stochastic) {
-    html += '<br><span style="color: var(--amber); font-size: 0.52rem;">STOCHASTIC VARIANTS</span><br>';
-    for (const [sym, alts] of Object.entries(p.stochastic)) {
-      for (const alt of alts) {
-        html += `<span class="sym">${escHtml(sym)}</span><span class="arrow">\u2192</span>${escHtml(alt.production)} <span class="prob">(${(alt.weight * 100).toFixed(0)}%)</span><br>`;
-      }
-    }
-  }
-
-  el.innerHTML = html;
+function loadPreset(idx) {
+  curPreset = idx;
+  var p = PRESETS[idx];
+  document.getElementById('axiomInput').value = p.axiom;
+  document.getElementById('angleSlider').value = p.angle;
+  document.getElementById('iterSlider').value = p.iter;
+  document.getElementById('jitterSlider').value = p.jitter;
+  document.getElementById('scaleSlider').value = p.scale;
+  document.getElementById('tropismSlider').value = p.tropism;
+  document.getElementById('widthSlider').value = p.width;
+  updateLabels();
+  buildRules(p.rules);
+  document.getElementById('infoPreset').textContent = p.name.toUpperCase();
+  buildPresets();
+  seed = Date.now();
+  render();
 }
 
-function escHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function updateLabels() {
+  document.getElementById('angleVal').innerHTML = parseFloat(document.getElementById('angleSlider').value).toFixed(1) + '&deg;';
+  document.getElementById('iterVal').textContent = document.getElementById('iterSlider').value;
+  document.getElementById('jitterVal').innerHTML = parseFloat(document.getElementById('jitterSlider').value).toFixed(1) + '&deg;';
+  document.getElementById('scaleVal').textContent = parseFloat(document.getElementById('scaleSlider').value).toFixed(2);
+  document.getElementById('tropismVal').textContent = parseFloat(document.getElementById('tropismSlider').value).toFixed(2);
+  document.getElementById('widthVal').textContent = parseFloat(document.getElementById('widthSlider').value).toFixed(2);
+  document.getElementById('stochWeightVal').textContent = parseFloat(document.getElementById('stochWeightSlider').value).toFixed(2);
 }
 
-// --- Core grow ---
-let allSegments = [];
-let animFrame = null;
-let animIdx = 0;
+/* --- Events --- */
+['angleSlider','iterSlider','jitterSlider','scaleSlider','tropismSlider','widthSlider','stochWeightSlider'].forEach(function(id) {
+  document.getElementById(id).addEventListener('input', function() { updateLabels(); render(); });
+});
+document.getElementById('axiomInput').addEventListener('input', function() { render(); });
+document.getElementById('stochWeightSlider').addEventListener('input', function() {
+  stochW = parseFloat(this.value);
+});
 
-function grow() {
-  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+document.getElementById('stochToggle').addEventListener('click', function() {
+  stochOn = !stochOn;
+  this.classList.toggle('on', stochOn);
+  document.getElementById('stochWeightGroup').style.display = stochOn ? 'block' : 'none';
+  render();
+});
 
-  const p = PRESETS[state.presetIdx];
-  const rng = mulberry32(state.seed);
-  const str = expandLSystem(
-    p.axiom,
-    p.rules,
-    p.stochastic,
-    state.iterations,
-    rng,
-    state.stochasticOn
-  );
+document.getElementById('addRuleBtn').addEventListener('click', function() {
+  var used = {};
+  document.querySelectorAll('.rule-sym').forEach(function(el) { used[el.textContent.trim()] = true; });
+  var avail = 'XYZABCDEFG'.split('').filter(function(c) { return !used[c]; })[0] || 'A';
+  addRuleRow(avail, 'F');
+});
 
-  const rng2 = mulberry32(state.seed ^ 0x5f3759df);
-  const { segments } = traceTurtle(str, state.angle, state.angleJitter, state.lengthScale, state.tropism, rng2);
-  allSegments = segments;
-
-  if (state.animateOn && segments.length > 0) {
-    animIdx = 0;
-    animateGrow();
-  } else {
-    resizeCanvas();
-    renderLSystem(segments);
-    canvas.classList.remove('growing');
-    void canvas.offsetWidth;
-    canvas.classList.add('growing');
-  }
+/* --- Actions --- */
+function startGrow() {
+  var p = getParams();
+  var str = generateString(p);
+  var pts = traceTurtle(str, p);
+  var scheme = SCHEMES[schemeIdx];
+  var total = pts.length, drawn = 0;
+  var step = Math.max(1, Math.floor(total / 120));
+  (function tick() {
+    drawn = Math.min(drawn + step, total);
+    renderCanvas(pts, scheme, drawn / total);
+    if (drawn < total) requestAnimationFrame(tick);
+  })();
 }
 
-function animateGrow() {
-  const step = Math.max(1, Math.ceil(allSegments.length / 120));
-  animIdx = Math.min(animIdx + step, allSegments.length);
-  resizeCanvas();
-  renderLSystem(allSegments, animIdx);
-
-  if (animIdx < allSegments.length) {
-    animFrame = requestAnimationFrame(animateGrow);
-  } else {
-    animFrame = null;
-  }
+function toggleAnimate() {
+  anim = !anim;
+  document.getElementById('animateBtn').innerHTML = anim ? '&#9724; Stop' : '&#9654; Animate';
+  if (anim) (function loop() { if (!anim) return; seed++; render(); requestAnimationFrame(loop); })();
 }
 
 function mutate() {
-  const rng = mulberry32(state.seed);
-  // Perturb angle
-  state.angle = Math.max(5, Math.min(120, state.angle + (rng() - 0.5) * 10));
-  // Perturb jitter
-  state.angleJitter = Math.max(0, Math.min(15, state.angleJitter + (rng() - 0.5) * 4));
-  // Perturb taper
-  state.lengthScale = Math.max(0.5, Math.min(1.0, state.lengthScale + (rng() - 0.5) * 0.1));
-  // Perturb tropism
-  state.tropism = Math.max(-0.3, Math.min(0.3, state.tropism + (rng() - 0.5) * 0.06));
-  // New seed
-  state.seed = (state.seed * 1103515245 + 12345) & 0x7fffffff;
-  syncUI();
-  grow();
+  [{id:'angleSlider',r:5},{id:'jitterSlider',r:2},{id:'scaleSlider',r:0.05},{id:'tropismSlider',r:0.04},{id:'widthSlider',r:0.05}].forEach(function(s) {
+    var el = document.getElementById(s.id);
+    el.value = Math.max(parseFloat(el.min), Math.min(parseFloat(el.max), parseFloat(el.value) + (Math.random() - 0.5) * s.r));
+  });
+  var inputs = document.querySelectorAll('.rule-input');
+  if (inputs.length) {
+    var t = inputs[Math.floor(Math.random() * inputs.length)];
+    var v = t.value, chars = 'F+-[]G~!|';
+    var pos = Math.floor(Math.random() * (v.length + 1));
+    t.value = v.slice(0, pos) + chars[Math.floor(Math.random() * chars.length)] + v.slice(pos);
+  }
+  seed = Date.now();
+  updateLabels();
+  document.getElementById('infoPreset').textContent = 'MUTANT';
+  render();
 }
 
 function randomize() {
-  state.presetIdx = Math.floor(Math.random() * PRESETS.length);
-  const p = PRESETS[state.presetIdx];
-  state.angle = p.angle + (Math.random() - 0.5) * 15;
-  state.iterations = p.iterations;
-  state.angleJitter = p.angleJitter + Math.random() * 3;
-  state.lengthScale = Math.max(0.5, Math.min(1.0, p.lengthScale + (Math.random() - 0.5) * 0.15));
-  state.tropism = Math.max(-0.3, Math.min(0.3, p.tropism + (Math.random() - 0.5) * 0.1));
-  state.stochasticOn = !!p.stochastic;
-  currentPaletteName = p.palette || 'botanical';
-  state.seed = (Date.now() ^ (Math.random() * 0xffffffff)) & 0xffffffff;
-  syncUI();
-  grow();
+  loadPreset(Math.floor(Math.random() * PRESETS.length));
+  seed = Date.now();
+  document.getElementById('angleSlider').value = 10 + Math.random() * 80;
+  document.getElementById('jitterSlider').value = Math.random() * 10;
+  document.getElementById('scaleSlider').value = 0.6 + Math.random() * 0.4;
+  document.getElementById('tropismSlider').value = (Math.random() - 0.5) * 0.3;
+  document.getElementById('widthSlider').value = 0.5 + Math.random() * 0.5;
+  schemeIdx = Math.floor(Math.random() * SCHEMES.length);
+  buildColors(); updateLabels();
+  document.getElementById('infoPreset').textContent = 'RANDOM';
+  render();
 }
 
-function downloadPNG() {
-  // Re-render at 4x for high quality
-  const origW = canvas.width;
-  const origH = canvas.height;
-  const dpr = window.devicePixelRatio || 1;
-  const w = (origW / dpr) * 4;
-  const h = (origH / dpr) * 4;
-  canvas.width = w;
-  canvas.height = h;
-  ctx.setTransform(4, 0, 0, 4, 0, 0);
-  renderLSystem(allSegments);
+function savePNG() {
+  var p = getParams(), str = generateString(p), pts = traceTurtle(str, p), scheme = SCHEMES[schemeIdx];
+  var area = document.querySelector('.canvas-area');
+  var w = area.clientWidth, h = area.clientHeight, sc = 4;
+  var tc = document.createElement('canvas');
+  tc.width = w * sc; tc.height = h * sc;
+  var tctx = tc.getContext('2d');
+  tctx.setTransform(sc, 0, 0, sc, 0, 0);
+  tctx.fillStyle = scheme.bg;
+  tctx.fillRect(0, 0, w, h);
 
-  const link = document.createElement('a');
-  link.download = `lattice-garden-${PRESETS[state.presetIdx].name.toLowerCase()}-${(state.seed >>> 0).toString(16)}.png`;
-  link.href = canvas.toDataURL('image/png');
-  link.click();
-
-  // Restore
-  canvas.width = origW;
-  canvas.height = origH;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  renderLSystem(allSegments);
-}
-
-// --- Wire up controls ---
-function wireSlider(id, valId, prop, fmt, onChange) {
-  const sl = document.getElementById(id);
-  sl.addEventListener('input', () => {
-    state[prop] = parseFloat(sl.value);
-    document.getElementById(valId).textContent = fmt(state[prop]);
-    if (onChange) onChange();
-  });
-}
-
-function init() {
-  resizeCanvas();
-  buildPresetGrid();
-
-  wireSlider('sl-angle', 'val-angle', 'angle', v => v + '\u00b0', grow);
-  wireSlider('sl-iter', 'val-iter', 'iterations', v => v, grow);
-  wireSlider('sl-jitter', 'val-jitter', 'angleJitter', v => v.toFixed(1) + '\u00b0', grow);
-  wireSlider('sl-taper', 'val-taper', 'lengthScale', v => v.toFixed(2), grow);
-  wireSlider('sl-tropism', 'val-tropism', 'tropism', v => v.toFixed(2), grow);
-
-  document.getElementById('tog-stochastic').onclick = () => {
-    state.stochasticOn = !state.stochasticOn;
-    syncUI();
-    grow();
-  };
-
-  document.getElementById('tog-animate').onclick = () => {
-    state.animateOn = !state.animateOn;
-    syncUI();
-  };
-
-  document.getElementById('btn-grow').onclick = () => { state.seed = (Date.now() ^ (Math.random() * 0xffffffff)) & 0xffffffff; syncUI(); grow(); };
-  document.getElementById('btn-mutate').onclick = mutate;
-  document.getElementById('btn-random').onclick = randomize;
-  document.getElementById('btn-download').onclick = downloadPNG;
-
-  document.getElementById('seed-display').onclick = () => {
-    const hex = '0x' + (state.seed >>> 0).toString(16).padStart(8, '0');
-    navigator.clipboard.writeText(hex).then(() => {
-      document.getElementById('seed-display').textContent = 'copied!';
-      setTimeout(() => { document.getElementById('seed-display').textContent = 'seed: ' + hex; }, 800);
-    });
-  };
-
-  // Keyboard shortcuts
-  document.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT') return;
-    switch (e.key.toLowerCase()) {
-      case 'g': document.getElementById('btn-grow').click(); break;
-      case 'm': mutate(); break;
-      case 'r': randomize(); break;
-      case 's': downloadPNG(); break;
-      case 'a':
-        state.animateOn = !state.animateOn;
-        syncUI();
-        break;
-      case '1': case '2': case '3': case '4': case '5':
-      case '6': case '7': case '8': case '9': {
-        const idx = parseInt(e.key) - 1;
-        if (idx < PRESETS.length) selectPreset(idx);
-        break;
-      }
+  if (pts.length) {
+    var bb = getBBox(pts), bw = bb.x1 - bb.x0 || 1, bh = bb.y1 - bb.y0 || 1;
+    var margin = 60, s = Math.min((w - margin * 2) / bw, (h - margin * 2) / bh);
+    var ox = (w - bw * s) / 2 - bb.x0 * s, oy = (h - bh * s) / 2 - bb.y0 * s;
+    var maxD = 1;
+    for (var i = 0; i < pts.length; i++) if (pts[i].d + 1 > maxD) maxD = pts[i].d + 1;
+    var colors = scheme.c, dimScale = 50 / (bw + bh);
+    tctx.lineCap = 'round';
+    tctx.globalAlpha = 0.12;
+    for (var i = 0; i < pts.length; i++) {
+      var pt = pts[i], ci = Math.min(Math.floor((pt.d / maxD) * colors.length), colors.length - 1);
+      tctx.strokeStyle = colors[ci]; tctx.lineWidth = Math.max(0.5, pt.w * 6 * s * dimScale) + 4;
+      tctx.beginPath(); tctx.moveTo(pt.x * s + ox, pt.y * s + oy); tctx.lineTo(pt.nx * s + ox, pt.ny * s + oy); tctx.stroke();
     }
-  });
-
-  window.addEventListener('resize', () => { resizeCanvas(); renderLSystem(allSegments); });
-
-  syncUI();
-  grow();
+    tctx.globalAlpha = 1;
+    for (var i = 0; i < pts.length; i++) {
+      var pt = pts[i], ci = Math.min(Math.floor((pt.d / maxD) * colors.length), colors.length - 1);
+      tctx.strokeStyle = colors[ci]; tctx.lineWidth = Math.max(0.5, pt.w * 3 * s * dimScale);
+      tctx.beginPath(); tctx.moveTo(pt.x * s + ox, pt.y * s + oy); tctx.lineTo(pt.nx * s + ox, pt.ny * s + oy); tctx.stroke();
+    }
+  }
+  var link = document.createElement('a');
+  link.download = 'lattice-garden-' + Date.now() + '.png';
+  link.href = tc.toDataURL('image/png');
+  link.click();
 }
 
-init();
+document.getElementById('growBtn').addEventListener('click', startGrow);
+document.getElementById('animateBtn').addEventListener('click', toggleAnimate);
+document.getElementById('mutateBtn').addEventListener('click', mutate);
+document.getElementById('randomBtn').addEventListener('click', randomize);
+document.getElementById('saveBtn').addEventListener('click', savePNG);
+
+/* Keyboard */
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'r' || e.key === 'R') randomize();
+  if (e.key === 'g' || e.key === 'G') startGrow();
+  if (e.key === 's' || e.key === 'S') savePNG();
+  if (e.key === ' ') { e.preventDefault(); mutate(); }
+});
+
+window.addEventListener('resize', function() { render(); });
+
+/* --- Init --- */
+buildPresets(); buildColors(); loadPreset(0);
 </script>
 </body>
 </html>

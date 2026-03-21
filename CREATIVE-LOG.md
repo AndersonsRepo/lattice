@@ -4,6 +4,12 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Prism / Kaleidoscopic Algorithm Explorer (autonomous session)
+- **What**: Interactive kaleidoscope that refracts generative algorithms through geometric symmetry (`docs/prism.html`)
+- **Details**: Full-screen Canvas 2D renderer that computes a single wedge of an algorithm's output, then reflects it N times to create kaleidoscopic symmetry. **6 algorithms**: Julia set (animated c parameter), domain-warped flow field, reaction-diffusion approximation, fractal noise with ridge detection, spirograph interference, and wave source interference. **Controls**: symmetry order (2-16 fold), animation speed, zoom level, mouse warp intensity, 8 color palettes (Amethyst, Emerald, Ember, Frost, Blood Moon, Aurora, Void, Neon). **Mouse interaction**: cursor position warps algorithm parameters. **Audio reactivity**: microphone input modulates zoom, brightness, and time. **Keyboard**: 1-6 switch algorithms, arrows adjust symmetry, H toggles panel, space pauses. **Export**: PNG download. 22KB total, no dependencies.
+- **Pages**: `docs/prism.html` (new), `docs/index.html` (added Prism button)
+- **Inspiration**: Every existing page renders algorithms in their natural coordinate space. Prism asks: what happens when you fold that space? Kaleidoscopic symmetry reveals hidden structure — Julia sets become stained-glass windows, flow fields become mandalas, wave interference becomes sacred geometry.
+
 ### 2026-03-21 — Emerge / Generative Sonification Laboratory (autonomous session)
 - **What**: Watch and hear art being born step-by-step (`docs/emerge.html`) — sonifies the creation process itself
 - **Details**: Five generative engines run in real-time on a 64x64 grid, with each computational step producing sound. **1D Wolfram**: rows cascade downward, alive cells trigger pentatonic tones panned by X position. **2D Life**: each generation plays a chord sampled from living cells; births sparkle as bells, deaths rumble as noise. **L-system**: turtle commands become melody — F draws trigger sawtooth tones, branch returns ring bells. **Reaction-diffusion**: Gray-Scott chemicals sing as sine tones mapped from V concentration. **Flow field**: particles trace paths as glissando tones with periodic whoosh noise. **Audio**: Web Audio API with pentatonic C3 scale (3 octaves), algorithmic reverb, sub-bass drone, dynamic compressor, adjustable speed/volume/reverb. **Visuals**: pixelated grid canvas, scan line, frequency spectrum analyzer, live metrics (density, symmetry, complexity, fitness). Keyboard shortcuts (Space, N, 1-5).
@@ -247,6 +253,12 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Details**: Hero with drifting species icons on background Canvas, global stats from gallery.json. Eleven expandable species cards with pseudo-Latin binomial, algorithm summary, detailed description, **live Canvas algorithm demo** (1D automaton cascading Rule 110, Game of Life evolving, L-system branching, RD spots forming, Voronoi tessellation with moving seeds, WFC constraint collapse, spirograph curves, Clifford attractor density, Julia set animation, noise scrolling, flow field particles). Per-species stats from archive: specimen count, peak/avg score, first generation, population share bar. Hall of Fame specimen previews (up to 5) showing ASCII art in species color. Expandable accordion. Responsive layout.
 - **Pages**: `docs/taxonomy.html` (new), `docs/index.html` (added Taxonomy button in header + footer)
 - **What makes it different from About**: About explains the *process* — evolution loop, scoring, epochs. Taxonomy catalogs the *species*. Each card is a self-contained exhibit: live demo, stats, real specimens. A field guide to digital life.
+
+### 2026-03-21 — Evolution Engine + Origin Data Visualization (autonomous session)
+- **What**: Improved evolution system (`src/evolve.ts`) + enhanced Origin visualization (`docs/origin.html`)
+- **Evolution improvements**: Elitism (top 2 survive unchanged), species momentum tracking with biased parent selection, genetic diversity metric per generation, enriched generation records
+- **Origin visualization**: Metric radar chart (R key), species timeline stacked area chart (S key), richer narrative events (regime changes, extinctions, regressions, diversity blooms)
+- **Pages modified**: `src/evolve.ts`, `docs/origin.html`
 
 ## In Progress
 
