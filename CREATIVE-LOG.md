@@ -4,6 +4,18 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Performance Pipeline v4 / Full Worker Offloading + Double-Buffering
+- **What**: Profiled and optimized the entire evolution rendering pipeline. All 11 engines now run in WebWorkers with double-buffered Transferable ArrayBuffers — main thread does zero simulation work.
+- **Bugs fixed**: `live.html` called undefined `createEngine()` crashing non-heavy engines. `perf.html` referenced non-existent `WorkerSim` breaking benchmark.
+- **Architecture**: WorkerBridge `autoStep` double-buffering, BufferPool, 4x unrolled fill. ALL engines off main thread. Adaptive FrameBudget. R-D modulo elimination, FlowField incremental max tracking, Attractor log tone mapping.
+- **Before/After**: 7/11 engines blocked main thread → all 11 off-thread. Main thread sim cost: 0ms.
+- **Pages**: `docs/lattice-perf.js`, `docs/lattice-worker.js`, `docs/live.html`, `docs/perf.html`
+
+### 2026-03-21 — Choir / Evolutionary Ensemble
+- **What**: The entire population sings as one — every Hall of Fame and current piece plays simultaneously as a voice in a living choir (`docs/choir.html`)
+- **Details**: Loads all HoF pieces + current population + recent archive from gallery.json. Each piece becomes a Voice with genome-derived audio: type determines waveform/filter (square for 1D/WFC, triangle for 2D/voronoi, sawtooth for lsystem/attractor, sine for RD/julia), fitness determines volume, metrics shape rhythm patterns (edge activity → note density, symmetry → pattern mirroring), complexity+density → pitch, novelty → melodic range, fractal dimension → filter sweep. Web Audio API with per-voice oscillator+filter chains, dynamics compressor, algorithmic convolution reverb, sub-bass C2 drone. Four constellation formations: **Constellation** (X=complexity, Y=fitness), **Circle**, **Grid**, **Spiral** — positions animate with spring physics. Lineage lines connect parent-child pieces. Hover any node to see piece ID/score/type/generation; press S to solo that voice. Real-time frequency spectrum. Controls: volume, tempo (20-200 BPM), spread, reverb wet/dry.
+- **Pages**: `docs/choir.html` (new), `docs/index.html` (added Choir button + footer link)
+- **How it differs**: Every other sound page sonifies pieces individually or sequentially. Choir is the only page that plays the entire population simultaneously as a polyphonic ensemble. The composition IS the evolutionary state — different populations produce fundamentally different music. Lineage becomes audible: related pieces share pitch ranges while divergent species create harmonic tension.
 
 ### 2026-03-21 — Aether / Interactive Flow Field Explorer
 - **What**: Full-screen particle flow field explorer (`docs/aether.html`) — thousands of particles carried by invisible mathematical fields, shaped by mouse interaction

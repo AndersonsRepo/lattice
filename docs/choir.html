@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Choir</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    canvas#sky {
+      position: fixed;
+      inset: 0;
+      width: 100%; height: 100%;
+    }
+
+    #vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center,
+        transparent 30%,
+        rgba(10,10,15,0.4) 65%,
+        rgba(10,10,15,0.85) 100%);
+      z-index: 2;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.94);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-title {
+      font-size: 3rem;
+      font-weight: 200;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+      margin-bottom: 0.5rem;
+    }
+    .start-sub {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      margin-bottom: 2rem;
+    }
+    .start-prompt {
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    /* HUD panel */
+    .panel {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 0.8rem 1.4rem;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      transition: opacity 0.4s;
+    }
+    .panel.hidden { opacity: 0; pointer-events: none; }
+
+    .panel label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+    }
+    .panel input[type="range"] {
+      width: 70px;
+      accent-color: var(--accent);
+      height: 4px;
+    }
+    .panel button {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: all 0.2s;
+    }
+    .panel button:hover, .panel button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Info tooltip */
+    .tooltip {
+      position: fixed;
+      top: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 18, 26, 0.9);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.6rem 1rem;
+      z-index: 10;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      max-width: 400px;
+    }
+    .tooltip.visible { opacity: 1; }
+    .tooltip .name {
+      color: var(--accent);
+      font-size: 0.7rem;
+      margin-bottom: 0.2rem;
+    }
+    .tooltip .meta {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+    }
+    .tooltip .val { color: var(--text); }
+
+    /* Spectrum */
+    canvas#spectrum {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 240px;
+      height: 32px;
+      z-index: 5;
+      opacity: 0.5;
+    }
+
+    /* Back link */
+    .back {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 10;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      transition: color 0.2s;
+    }
+    .back:hover { color: var(--accent); }
+
+    /* Key hints */
+    .keys {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 10;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-align: right;
+      line-height: 1.6;
+      opacity: 0.5;
+      transition: opacity 0.3s;
+    }
+    .keys:hover { opacity: 1; }
+    .keys kbd {
+      display: inline-block;
+      padding: 0.1em 0.4em;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: inherit;
+    }
+  </style>
+</head>
+<body>
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-title">Choir</div>
+    <div class="start-sub">the population sings as one</div>
+    <div class="start-prompt">click to begin</div>
+  </div>
+
+  <canvas id="sky"></canvas>
+  <div id="vignette"></div>
+  <canvas id="spectrum"></canvas>
+
+  <a href="index.html" class="back">&larr; lattice</a>
+
+  <div class="keys" id="keys">
+    <kbd>Space</kbd> play/pause<br>
+    <kbd>H</kbd> toggle panel<br>
+    <kbd>M</kbd> mute/unmute<br>
+    <kbd>S</kbd> solo hovered<br>
+    <kbd>R</kbd> randomize positions<br>
+    <kbd>1-4</kbd> change formation
+  </div>
+
+  <div class="tooltip" id="tooltip">
+    <div class="name" id="tipName"></div>
+    <div class="meta">
+      <span>score <span class="val" id="tipScore"></span></span>
+      <span>type <span class="val" id="tipType"></span></span>
+      <span>gen <span class="val" id="tipGen"></span></span>
+    </div>
+  </div>
+
+  <div class="panel" id="panel">
+    <button id="btnPlay" class="active">&#9654;</button>
+    <label>vol <input type="range" id="volSlider" min="0" max="100" value="60"></label>
+    <label>tempo <input type="range" id="tempoSlider" min="20" max="200" value="72"></label>
+    <label>spread <input type="range" id="spreadSlider" min="10" max="100" value="60"></label>
+    <label>reverb <input type="range" id="reverbSlider" min="0" max="100" value="50"></label>
+    <button id="btnFormation">constellation</button>
+    <span id="voiceCount"></span>
+  </div>
+
+<script>
+// ── Data ──
+let allPieces = [];
+let voices = [];
+let hoveredVoice = null;
+let soloVoice = null;
+let playing = false;
+let formation = 0;
+const FORMATIONS = ['constellation', 'circle', 'grid', 'spiral'];
+
+// Type → color (HSL hue)
+const TYPE_HUE = {
+  '1d': 280, '2d': 140, 'lsystem': 60, 'reaction-diffusion': 200,
+  'voronoi': 320, 'wfc': 170, 'spirograph': 30, 'attractor': 350,
+  'julia': 260, 'noise': 90, 'flowfield': 120, 'magnetic-pendulum': 45,
+  'flame': 15, 'dla': 190, 'cymatics': 220
+};
+
+// Type → waveform + character
+const TYPE_VOICE = {
+  '1d':                  { wave: 'square',   detune: 0,   filterQ: 2,  filterFreq: 800 },
+  '2d':                  { wave: 'triangle', detune: 5,   filterQ: 1,  filterFreq: 1200 },
+  'lsystem':             { wave: 'sawtooth', detune: 8,   filterQ: 3,  filterFreq: 600 },
+  'reaction-diffusion':  { wave: 'sine',     detune: 12,  filterQ: 4,  filterFreq: 400 },
+  'voronoi':             { wave: 'triangle', detune: 3,   filterQ: 2,  filterFreq: 1000 },
+  'wfc':                 { wave: 'square',   detune: 0,   filterQ: 1,  filterFreq: 900 },
+  'spirograph':          { wave: 'sine',     detune: 15,  filterQ: 5,  filterFreq: 500 },
+  'attractor':           { wave: 'sawtooth', detune: 20,  filterQ: 6,  filterFreq: 350 },
+  'julia':               { wave: 'sine',     detune: 10,  filterQ: 3,  filterFreq: 700 },
+  'noise':               { wave: 'sawtooth', detune: 25,  filterQ: 8,  filterFreq: 300 },
+  'flowfield':           { wave: 'triangle', detune: 7,   filterQ: 2,  filterFreq: 1100 },
+  'magnetic-pendulum':   { wave: 'sine',     detune: 6,   filterQ: 4,  filterFreq: 550 },
+  'flame':               { wave: 'sawtooth', detune: 18,  filterQ: 5,  filterFreq: 450 },
+  'dla':                 { wave: 'triangle', detune: 4,   filterQ: 2,  filterFreq: 950 },
+  'cymatics':            { wave: 'sine',     detune: 2,   filterQ: 3,  filterFreq: 650 }
+};
+
+// Pentatonic scale degrees from C2
+const SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33, 36];
+const C2 = 65.41;
+
+// ── Audio ──
+let ctx, masterGain, reverbGain, dryGain, convolver, analyser, compressor;
+let droneOsc1, droneOsc2, droneGain;
+let reverbAmount = 0.5;
+
+function initAudio() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+  // Master chain: compressor → master gain → destination
+  compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = -24;
+  compressor.knee.value = 12;
+  compressor.ratio.value = 8;
+  compressor.attack.value = 0.005;
+  compressor.release.value = 0.15;
+
+  masterGain = ctx.createGain();
+  masterGain.gain.value = 0.6;
+
+  // Analyser
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+
+  // Reverb send
+  convolver = ctx.createConvolver();
+  const len = ctx.sampleRate * 3;
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+    }
+  }
+  convolver.buffer = buf;
+
+  reverbGain = ctx.createGain();
+  reverbGain.gain.value = reverbAmount;
+  dryGain = ctx.createGain();
+  dryGain.gain.value = 1 - reverbAmount * 0.3;
+
+  // Routing
+  compressor.connect(dryGain);
+  compressor.connect(convolver);
+  convolver.connect(reverbGain);
+  dryGain.connect(masterGain);
+  reverbGain.connect(masterGain);
+  masterGain.connect(analyser);
+  analyser.connect(ctx.destination);
+
+  // Sub-bass drone
+  droneGain = ctx.createGain();
+  droneGain.gain.value = 0.04;
+  droneOsc1 = ctx.createOscillator();
+  droneOsc1.type = 'sine';
+  droneOsc1.frequency.value = C2;
+  droneOsc2 = ctx.createOscillator();
+  droneOsc2.type = 'sine';
+  droneOsc2.frequency.value = C2 * 1.5; // perfect fifth
+  droneOsc1.connect(droneGain);
+  droneOsc2.connect(droneGain);
+  droneGain.connect(compressor);
+  droneOsc1.start();
+  droneOsc2.start();
+}
+
+// ── Voice class ──
+class Voice {
+  constructor(piece, index, total) {
+    this.piece = piece;
+    this.index = index;
+    this.type = piece.genome.type;
+    this.score = piece.score || 0.5;
+    this.metrics = piece.metrics || {};
+    this.gen = piece.generation || 0;
+    this.id = piece.id;
+    this.hue = TYPE_HUE[this.type] || 200;
+    this.voiceConfig = TYPE_VOICE[this.type] || TYPE_VOICE['2d'];
+
+    // Position (will be set by formation)
+    this.x = 0; this.y = 0;
+    this.targetX = 0; this.targetY = 0;
+    this.vx = 0; this.vy = 0;
+
+    // Visual
+    this.radius = 4 + this.score * 12;
+    this.glowRadius = this.radius * 3;
+    this.brightness = 0;
+    this.phase = Math.random() * Math.PI * 2;
+
+    // Audio params derived from genome
+    this.baseNote = this.computeBaseNote();
+    this.rhythm = this.computeRhythm();
+    this.stepIndex = Math.floor(Math.random() * this.rhythm.length);
+
+    // Audio nodes (created when playing)
+    this.osc = null;
+    this.gain = null;
+    this.filter = null;
+    this.active = false;
+    this.muted = false;
+    this.currentGainTarget = 0;
+  }
+
+  computeBaseNote() {
+    // Map complexity + density to a scale position
+    const complexity = this.metrics.complexity || 1;
+    const density = this.metrics.density || 0.5;
+    const idx = Math.floor((complexity / 4 + density) / 2 * (SCALE.length - 1));
+    return SCALE[Math.max(0, Math.min(SCALE.length - 1, idx))];
+  }
+
+  computeRhythm() {
+    // Generate a rhythm pattern from genome properties
+    const edgeActivity = this.metrics.edgeActivity || 0.5;
+    const symmetry = this.metrics.symmetry || 0.5;
+    const len = 8 + Math.floor(edgeActivity * 8); // 8-16 steps
+    const pattern = [];
+    for (let i = 0; i < len; i++) {
+      // Higher symmetry → more regular patterns
+      // Higher edge activity → more notes
+      const threshold = 0.3 + (1 - edgeActivity) * 0.4;
+      if (symmetry > 0.6 && len > 4) {
+        // Mirror pattern for symmetric pieces
+        if (i < len / 2) {
+          pattern.push(Math.random() < (1 - threshold) ? 1 : 0);
+        } else {
+          pattern.push(pattern[len - 1 - i] || 0);
+        }
+      } else {
+        pattern.push(Math.random() < (1 - threshold) ? 1 : 0);
+      }
+    }
+    // Ensure at least one note
+    if (pattern.every(p => p === 0)) pattern[0] = 1;
+    return pattern;
+  }
+
+  createNodes() {
+    if (this.osc) return;
+    this.gain = ctx.createGain();
+    this.gain.gain.value = 0;
+
+    this.filter = ctx.createBiquadFilter();
+    this.filter.type = 'lowpass';
+    this.filter.frequency.value = this.voiceConfig.filterFreq;
+    this.filter.Q.value = this.voiceConfig.filterQ;
+
+    this.osc = ctx.createOscillator();
+    this.osc.type = this.voiceConfig.wave;
+    this.osc.detune.value = this.voiceConfig.detune * (Math.random() * 2 - 1);
+    this.osc.frequency.value = C2 * Math.pow(2, this.baseNote / 12);
+
+    this.osc.connect(this.filter);
+    this.filter.connect(this.gain);
+    this.gain.connect(compressor);
+    this.osc.start();
+    this.active = true;
+  }
+
+  destroyNodes() {
+    if (!this.osc) return;
+    try { this.osc.stop(); } catch(e) {}
+    this.osc.disconnect();
+    this.filter.disconnect();
+    this.gain.disconnect();
+    this.osc = null;
+    this.filter = null;
+    this.gain = null;
+    this.active = false;
+  }
+
+  step(beatTime) {
+    if (!this.active || this.muted) {
+      this.currentGainTarget = 0;
+      if (this.gain) this.gain.gain.setTargetAtTime(0, beatTime, 0.05);
+      return;
+    }
+
+    const hit = this.rhythm[this.stepIndex % this.rhythm.length];
+    this.stepIndex++;
+
+    // Volume: fitness-proportional, scaled down by voice count
+    const baseVol = 0.03 + this.score * 0.07;
+    const soloMul = soloVoice === this ? 3 : (soloVoice ? 0.08 : 1);
+    const vol = hit ? baseVol * soloMul : 0;
+
+    this.currentGainTarget = vol;
+    if (this.gain) {
+      // Note envelope
+      this.gain.gain.setTargetAtTime(vol, beatTime, 0.01);
+      if (hit) {
+        this.gain.gain.setTargetAtTime(vol * 0.3, beatTime + 0.15, 0.1);
+      }
+    }
+
+    // Pitch variation: slight wander based on metrics
+    if (hit && this.osc) {
+      const novelty = this.metrics.novelty || 0.5;
+      const interval = SCALE[Math.floor(Math.random() * Math.min(SCALE.length, 3 + novelty * 8))];
+      const freq = C2 * Math.pow(2, (this.baseNote + interval) / 12);
+      this.osc.frequency.setTargetAtTime(freq, beatTime, 0.02);
+    }
+
+    // Filter modulation from fractal dimension
+    if (this.filter) {
+      const fd = this.metrics.fractalDimension || 1.5;
+      const sweep = this.voiceConfig.filterFreq * (0.5 + fd * 0.5);
+      this.filter.frequency.setTargetAtTime(sweep, beatTime, 0.05);
+    }
+
+    this.brightness = hit ? 1 : Math.max(0, this.brightness - 0.1);
+  }
+
+  updatePosition(dt) {
+    const dx = this.targetX - this.x;
+    const dy = this.targetY - this.y;
+    this.vx += dx * 0.02;
+    this.vy += dy * 0.02;
+    this.vx *= 0.92;
+    this.vy *= 0.92;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.phase += dt * (0.5 + this.score);
+  }
+
+  draw(c, t) {
+    const glow = this.brightness * 0.6 + 0.15 + Math.sin(this.phase) * 0.08;
+    const isSolo = soloVoice === this;
+    const isHovered = hoveredVoice === this;
+    const dimmed = soloVoice && !isSolo;
+    const alpha = dimmed ? 0.12 : glow;
+
+    // Outer glow
+    const grad = c.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.glowRadius);
+    const glowAlpha = (isHovered ? 0.4 : 0.15) * alpha;
+    grad.addColorStop(0, `hsla(${this.hue}, 70%, 65%, ${glowAlpha})`);
+    grad.addColorStop(1, `hsla(${this.hue}, 70%, 65%, 0)`);
+    c.fillStyle = grad;
+    c.beginPath();
+    c.arc(this.x, this.y, this.glowRadius, 0, Math.PI * 2);
+    c.fill();
+
+    // Core
+    const coreAlpha = dimmed ? 0.2 : (0.5 + this.brightness * 0.5);
+    const coreR = this.radius * (1 + this.brightness * 0.3);
+    c.fillStyle = `hsla(${this.hue}, 70%, ${55 + this.brightness * 25}%, ${coreAlpha})`;
+    c.beginPath();
+    c.arc(this.x, this.y, coreR, 0, Math.PI * 2);
+    c.fill();
+
+    // Bright center
+    if (!dimmed) {
+      c.fillStyle = `hsla(${this.hue}, 50%, 90%, ${0.3 + this.brightness * 0.7})`;
+      c.beginPath();
+      c.arc(this.x, this.y, coreR * 0.35, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Ring for hovered/solo
+    if (isHovered || isSolo) {
+      c.strokeStyle = `hsla(${this.hue}, 70%, 70%, ${0.4 + Math.sin(t * 3) * 0.2})`;
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.arc(this.x, this.y, coreR + 6, 0, Math.PI * 2);
+      c.stroke();
+    }
+  }
+}
+
+// ── Formations ──
+function applyFormation(idx, w, h, spread) {
+  const cx = w / 2, cy = h / 2;
+  const s = Math.min(w, h) * 0.35 * (spread / 100);
+
+  voices.forEach((v, i) => {
+    const n = voices.length;
+    switch(idx) {
+      case 0: // Constellation — spread by metrics
+        v.targetX = cx + (v.metrics.complexity || 1) / 4 * s * 2 - s;
+        v.targetY = cy + (1 - v.score) * s * 2 - s;
+        // Jitter to prevent overlap
+        v.targetX += (Math.sin(i * 7.3) * s * 0.15);
+        v.targetY += (Math.cos(i * 5.1) * s * 0.15);
+        break;
+      case 1: // Circle
+        const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+        v.targetX = cx + Math.cos(a) * s;
+        v.targetY = cy + Math.sin(a) * s;
+        break;
+      case 2: // Grid
+        const cols = Math.ceil(Math.sqrt(n));
+        const gx = i % cols, gy = Math.floor(i / cols);
+        const spacing = s * 2 / cols;
+        v.targetX = cx - s + gx * spacing + spacing / 2;
+        v.targetY = cy - s + gy * spacing + spacing / 2;
+        break;
+      case 3: // Spiral
+        const t = i / n;
+        const angle = t * Math.PI * 6;
+        const r = t * s;
+        v.targetX = cx + Math.cos(angle) * r;
+        v.targetY = cy + Math.sin(angle) * r;
+        break;
+    }
+  });
+}
+
+// ── Lineage lines ──
+function drawLineage(c) {
+  const idMap = {};
+  voices.forEach(v => { idMap[v.id] = v; });
+
+  c.lineWidth = 0.5;
+  voices.forEach(v => {
+    const lineage = v.piece.genome.lineage;
+    if (!lineage) return;
+    const parents = Array.isArray(lineage) ? lineage : (lineage.parents || []);
+    parents.forEach(pid => {
+      const parent = idMap[pid];
+      if (!parent) return;
+      const dimmed = soloVoice && soloVoice !== v && soloVoice !== parent;
+      c.strokeStyle = `rgba(124, 111, 224, ${dimmed ? 0.02 : 0.08})`;
+      c.beginPath();
+      c.moveTo(v.x, v.y);
+      c.lineTo(parent.x, parent.y);
+      c.stroke();
+    });
+  });
+}
+
+// ── Spectrum ──
+const specCanvas = document.getElementById('spectrum');
+const specCtx = specCanvas.getContext('2d');
+function drawSpectrum() {
+  if (!analyser) return;
+  const W = 240, H = 32;
+  specCanvas.width = W;
+  specCanvas.height = H;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  specCtx.clearRect(0, 0, W, H);
+  const bars = 48;
+  const bw = W / bars;
+  for (let i = 0; i < bars; i++) {
+    const idx = Math.floor(i / bars * data.length);
+    const val = data[idx] / 255;
+    const h = val * H;
+    specCtx.fillStyle = `hsla(260, 60%, ${50 + val * 30}%, ${0.3 + val * 0.5})`;
+    specCtx.fillRect(i * bw, H - h, bw - 1, h);
+  }
+}
+
+// ── Canvas ──
+const sky = document.getElementById('sky');
+const c = sky.getContext('2d');
+let W, H;
+
+function resize() {
+  W = sky.width = window.innerWidth;
+  H = sky.height = window.innerHeight;
+  if (voices.length) applyFormation(formation, W, H, +spreadSlider.value);
+}
+window.addEventListener('resize', resize);
+
+// ── Mouse ──
+let mouseX = -1000, mouseY = -1000;
+sky.addEventListener('mousemove', e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  // Find nearest voice
+  let nearest = null, minD = Infinity;
+  voices.forEach(v => {
+    const d = Math.hypot(v.x - mouseX, v.y - mouseY);
+    if (d < v.glowRadius && d < minD) { minD = d; nearest = v; }
+  });
+  hoveredVoice = nearest;
+  updateTooltip();
+});
+sky.addEventListener('mouseleave', () => { hoveredVoice = null; updateTooltip(); });
+
+function updateTooltip() {
+  const tip = document.getElementById('tooltip');
+  if (!hoveredVoice) { tip.classList.remove('visible'); return; }
+  const v = hoveredVoice;
+  document.getElementById('tipName').textContent = v.id;
+  document.getElementById('tipScore').textContent = (v.score * 100).toFixed(1) + '%';
+  document.getElementById('tipType').textContent = v.type;
+  document.getElementById('tipGen').textContent = v.gen;
+  tip.classList.add('visible');
+}
+
+// ── Controls ──
+const volSlider = document.getElementById('volSlider');
+const tempoSlider = document.getElementById('tempoSlider');
+const spreadSlider = document.getElementById('spreadSlider');
+const reverbSlider = document.getElementById('reverbSlider');
+const btnPlay = document.getElementById('btnPlay');
+const btnFormation = document.getElementById('btnFormation');
+const panel = document.getElementById('panel');
+
+volSlider.addEventListener('input', () => {
+  if (masterGain) masterGain.gain.setTargetAtTime(+volSlider.value / 100, ctx.currentTime, 0.05);
+});
+tempoSlider.addEventListener('input', () => {}); // Used in beat loop
+spreadSlider.addEventListener('input', () => {
+  applyFormation(formation, W, H, +spreadSlider.value);
+});
+reverbSlider.addEventListener('input', () => {
+  reverbAmount = +reverbSlider.value / 100;
+  if (reverbGain) reverbGain.gain.setTargetAtTime(reverbAmount, ctx.currentTime, 0.05);
+  if (dryGain) dryGain.gain.setTargetAtTime(1 - reverbAmount * 0.3, ctx.currentTime, 0.05);
+});
+btnPlay.addEventListener('click', togglePlay);
+btnFormation.addEventListener('click', () => {
+  formation = (formation + 1) % FORMATIONS.length;
+  btnFormation.textContent = FORMATIONS[formation];
+  applyFormation(formation, W, H, +spreadSlider.value);
+});
+
+function togglePlay() {
+  if (!playing) {
+    playing = true;
+    btnPlay.innerHTML = '&#9646;&#9646;';
+    voices.forEach(v => v.createNodes());
+    startBeatLoop();
+  } else {
+    playing = false;
+    btnPlay.innerHTML = '&#9654;';
+    voices.forEach(v => {
+      if (v.gain) v.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+    });
+    if (beatTimer) clearTimeout(beatTimer);
+  }
+}
+
+// ── Beat loop ──
+let beatTimer = null;
+function startBeatLoop() {
+  if (!playing) return;
+  const bpm = +tempoSlider.value;
+  const interval = 60000 / bpm / 2; // eighth notes
+  const now = ctx.currentTime;
+
+  voices.forEach(v => v.step(now));
+
+  beatTimer = setTimeout(() => startBeatLoop(), interval);
+}
+
+// ── Keyboard ──
+document.addEventListener('keydown', e => {
+  if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  if (e.key === 'h' || e.key === 'H') panel.classList.toggle('hidden');
+  if (e.key === 'm' || e.key === 'M') {
+    if (masterGain) {
+      const muted = masterGain.gain.value < 0.01;
+      masterGain.gain.setTargetAtTime(muted ? +volSlider.value / 100 : 0, ctx.currentTime, 0.05);
+    }
+  }
+  if (e.key === 's' || e.key === 'S') {
+    soloVoice = (soloVoice === hoveredVoice) ? null : hoveredVoice;
+  }
+  if (e.key === 'r' || e.key === 'R') {
+    voices.forEach(v => {
+      v.targetX = Math.random() * W;
+      v.targetY = Math.random() * H;
+    });
+  }
+  if (e.key >= '1' && e.key <= '4') {
+    formation = +e.key - 1;
+    btnFormation.textContent = FORMATIONS[formation];
+    applyFormation(formation, W, H, +spreadSlider.value);
+  }
+});
+
+// ── Render loop ──
+let lastTime = 0;
+function render(t) {
+  const dt = Math.min(0.05, (t - lastTime) / 1000);
+  lastTime = t;
+
+  c.fillStyle = 'rgba(10, 10, 15, 0.15)';
+  c.fillRect(0, 0, W, H);
+
+  // Lineage connections
+  drawLineage(c);
+
+  // Voices
+  voices.forEach(v => {
+    v.updatePosition(dt);
+    v.draw(c, t / 1000);
+  });
+
+  drawSpectrum();
+  requestAnimationFrame(render);
+}
+
+// ── Load data ──
+async function loadData() {
+  try {
+    const res = await fetch('gallery.json');
+    const data = await res.json();
+
+    // Combine HoF + current pieces, deduplicate by id
+    const seen = new Set();
+    const all = [];
+    for (const p of [...(data.hallOfFame || []), ...(data.pieces || []), ...(data.archive || []).slice(-30)]) {
+      if (!seen.has(p.id) && p.genome) {
+        seen.add(p.id);
+        all.push(p);
+      }
+    }
+    allPieces = all;
+
+    // Create voices
+    voices = allPieces.map((p, i) => new Voice(p, i, allPieces.length));
+    document.getElementById('voiceCount').textContent = `${voices.length} voices`;
+
+    resize();
+    requestAnimationFrame(render);
+  } catch(e) {
+    console.error('Failed to load gallery data:', e);
+  }
+}
+
+// ── Start ──
+document.getElementById('startOverlay').addEventListener('click', () => {
+  document.getElementById('startOverlay').classList.add('hidden');
+  initAudio();
+  togglePlay();
+});
+
+loadData();
+</script>
+</body>
+</html>
