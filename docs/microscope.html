@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Microscope — Lattice</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #ef4444;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: grab;
+      user-select: none;
+    }
+
+    body.dragging { cursor: grabbing; }
+
+    /* ── Back button ── */
+    #back-btn {
+      position: fixed;
+      top: 1.25rem;
+      left: 1.5rem;
+      font-family: inherit;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      text-decoration: none;
+      text-transform: uppercase;
+      z-index: 200;
+      transition: color 0.2s;
+    }
+    #back-btn:hover { color: var(--text); }
+
+    /* ── Main canvas ── */
+    #grid-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+
+    /* ── Overlay: start screen ── */
+    #start-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 10, 15, 0.92);
+      z-index: 300;
+      transition: opacity 0.6s ease;
+    }
+
+    #start-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #start-overlay h1 {
+      font-size: 2.2rem;
+      font-weight: 200;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+      margin-bottom: 0.6rem;
+    }
+
+    #start-overlay p {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      letter-spacing: 0.06em;
+      margin-bottom: 2rem;
+    }
+
+    .start-btn {
+      padding: 0.7rem 2rem;
+      border-radius: 24px;
+      border: none;
+      font-family: inherit;
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #fff;
+      background: linear-gradient(135deg, #7c6fe0 0%, #4ade80 100%);
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.3s;
+      box-shadow: 0 0 20px #7c6fe030;
+    }
+
+    .start-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 0 30px #7c6fe060;
+    }
+
+    /* ── HUD ── */
+    .hud {
+      position: fixed;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    .hud > * { pointer-events: auto; }
+
+    /* Top-right: piece info */
+    #piece-info {
+      position: fixed;
+      top: 1.25rem;
+      right: 1.5rem;
+      z-index: 100;
+      text-align: right;
+    }
+
+    .piece-type-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      margin-bottom: 0.3rem;
+    }
+
+    .piece-score {
+      font-size: 0.75rem;
+      color: var(--green);
+    }
+
+    .piece-gen {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+
+    /* Bottom: piece selector */
+    #piece-strip {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+    }
+
+    .piece-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1.5px solid var(--text-dim);
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      padding: 0;
+    }
+
+    .piece-dot:hover {
+      border-color: var(--accent);
+      transform: scale(1.3);
+    }
+
+    .piece-dot.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    /* Top-left: zoom indicator */
+    #zoom-indicator {
+      position: fixed;
+      bottom: 4rem;
+      right: 1.5rem;
+      z-index: 100;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+    }
+
+    /* Cell tooltip */
+    #cell-tooltip {
+      position: fixed;
+      z-index: 150;
+      padding: 0.4rem 0.7rem;
+      background: rgba(18, 18, 26, 0.92);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.6rem;
+      color: var(--text);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    #cell-tooltip.visible { opacity: 1; }
+
+    /* Bottom-left: radar chart */
+    #radar-panel {
+      position: fixed;
+      bottom: 4rem;
+      left: 1.5rem;
+      z-index: 100;
+      width: 140px;
+      height: 140px;
+      background: rgba(18, 18, 26, 0.7);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem;
+      transition: opacity 0.3s;
+    }
+
+    #radar-panel canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Help ── */
+    #help-text {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 90;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      text-align: center;
+      line-height: 2;
+      opacity: 0;
+      transition: opacity 0.5s;
+      pointer-events: none;
+    }
+
+    #help-text.visible { opacity: 1; }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      #radar-panel { display: none; }
+      #start-overlay h1 { font-size: 1.5rem; letter-spacing: 0.2em; }
+    }
+  </style>
+</head>
+<body>
+
+<a id="back-btn" href="index.html">&larr; Lattice</a>
+
+<canvas id="grid-canvas"></canvas>
+
+<div id="start-overlay">
+  <h1>Microscope</h1>
+  <p>Examine the cellular structure of evolved organisms</p>
+  <button class="start-btn" id="start-btn">Begin Examination</button>
+</div>
+
+<div id="piece-info">
+  <div class="piece-type-badge" id="type-badge">—</div>
+  <div class="piece-score" id="score-display">—</div>
+  <div class="piece-gen" id="gen-display">—</div>
+</div>
+
+<div id="piece-strip"></div>
+
+<div id="zoom-indicator">1.0&times;</div>
+
+<div id="cell-tooltip"></div>
+
+<div id="radar-panel">
+  <canvas id="radar-canvas" width="130" height="130"></canvas>
+</div>
+
+<div id="help-text">
+  Scroll to zoom &middot; Drag to pan &middot; Hover cells to inspect<br>
+  Arrow keys: next/prev piece &middot; R: reset view &middot; H: hide/show HUD
+</div>
+
+<script>
+const TYPE_COLORS = {
+  '1d':                  { h: 142, s: 70, l: 55 },
+  '2d':                  { h: 187, s: 80, l: 55 },
+  'lsystem':             { h: 263, s: 70, l: 68 },
+  'reaction-diffusion':  { h: 330, s: 75, l: 65 },
+  'voronoi':             { h: 200, s: 80, l: 60 },
+  'wfc':                 { h: 348, s: 85, l: 65 },
+  'spirograph':          { h: 270, s: 80, l: 70 },
+  'attractor':           { h: 45,  s: 90, l: 55 },
+  'julia':               { h: 24,  s: 90, l: 55 },
+  'noise':               { h: 80,  s: 75, l: 55 },
+  'flowfield':           { h: 170, s: 70, l: 55 },
+};
+
+const PALETTES = [
+  ' .:-=+*#%@',
+  ' ░▒▓█',
+  ' ·∘○◎●',
+  ' ╌╍═║╬',
+  ' ⠁⠃⠇⡇⣇⣧⣷⣿',
+  ' .oO08@#',
+  ' .:;+=xX$&',
+  ' -~:;=!*#$@',
+  ' ⋅∙•◦○◎●⬤',
+];
+
+const METRIC_NAMES = ['Complexity', 'Symmetry', 'Density', 'Novelty', 'Edge', 'Structure', 'Fractal', 'Info'];
+const METRIC_KEYS = ['complexity', 'symmetry', 'density', 'novelty', 'edgeActivity', 'structuralInterest', 'fractalDimension', 'informationDensity'];
+
+let pieces = [];
+let currentIdx = 0;
+let camera = { x: 0, y: 0, zoom: 1 };
+let targetCamera = { x: 0, y: 0, zoom: 1 };
+let isDragging = false;
+let dragStart = { x: 0, y: 0 };
+let dragCamStart = { x: 0, y: 0 };
+let hudVisible = true;
+let started = false;
+
+const canvas = document.getElementById('grid-canvas');
+const ctx = canvas.getContext('2d');
+const radarCanvas = document.getElementById('radar-canvas');
+const radarCtx = radarCanvas.getContext('2d');
+
+function resize() {
+  const dpr = devicePixelRatio || 1;
+  canvas.width = innerWidth * dpr;
+  canvas.height = innerHeight * dpr;
+  ctx.scale(dpr, dpr);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── Load data ──
+fetch('gallery.json').then(r => r.json()).then(data => {
+  pieces = (data.hallOfFame || []).filter(p => p.rendered || p.grid);
+  if (pieces.length === 0) return;
+
+  // Sort by score descending
+  pieces.sort((a, b) => b.score - a.score);
+
+  // Build piece strip
+  const strip = document.getElementById('piece-strip');
+  pieces.forEach((p, i) => {
+    const dot = document.createElement('button');
+    dot.className = 'piece-dot';
+    dot.title = `${p.genome?.type || '?'} — ${(p.score * 100).toFixed(1)}%`;
+    const tc = TYPE_COLORS[p.genome?.type] || { h: 0, s: 0, l: 50 };
+    dot.style.borderColor = `hsl(${tc.h}, ${tc.s}%, ${tc.l}%)`;
+    if (i === 0) dot.classList.add('active');
+    dot.addEventListener('click', () => selectPiece(i));
+    strip.appendChild(dot);
+  });
+
+  updateInfo();
+});
+
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('start-overlay').classList.add('hidden');
+  started = true;
+  // Flash help text
+  const help = document.getElementById('help-text');
+  help.classList.add('visible');
+  setTimeout(() => help.classList.remove('visible'), 4000);
+  resetView();
+});
+
+function selectPiece(idx) {
+  currentIdx = idx;
+  const dots = document.querySelectorAll('.piece-dot');
+  dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+  resetView();
+  updateInfo();
+}
+
+function resetView() {
+  const p = pieces[currentIdx];
+  if (!p) return;
+  const lines = getLines(p);
+  const rows = lines.length;
+  const cols = Math.max(...lines.map(l => l.length));
+  // Center and fit
+  const cellSize = 14;
+  const gridW = cols * cellSize;
+  const gridH = rows * cellSize;
+  const fitZoom = Math.min(innerWidth * 0.8 / gridW, innerHeight * 0.8 / gridH, 3);
+  targetCamera = { x: 0, y: 0, zoom: Math.max(fitZoom, 0.5) };
+}
+
+function getLines(piece) {
+  if (piece.rendered) return piece.rendered.split('\n');
+  if (piece.grid) return piece.grid;
+  return [];
+}
+
+function updateInfo() {
+  const p = pieces[currentIdx];
+  if (!p) return;
+  const type = p.genome?.type || 'unknown';
+  const tc = TYPE_COLORS[type] || { h: 0, s: 0, l: 50 };
+
+  document.getElementById('type-badge').textContent = type;
+  document.getElementById('type-badge').style.borderColor = `hsl(${tc.h}, ${tc.s}%, ${tc.l}%)`;
+  document.getElementById('type-badge').style.color = `hsl(${tc.h}, ${tc.s}%, ${tc.l}%)`;
+  document.getElementById('score-display').textContent = (p.score * 100).toFixed(1) + '%';
+  document.getElementById('gen-display').textContent = `Gen ${p.generation}`;
+
+  drawRadar(p);
+}
+
+function drawRadar(piece) {
+  const W = 130, H = 130;
+  const cx = W / 2, cy = H / 2, R = 48;
+  const n = METRIC_KEYS.length;
+  radarCtx.clearRect(0, 0, W, H);
+
+  function pt(i, r) {
+    const a = (Math.PI * 2 * i / n) - Math.PI / 2;
+    return { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r };
+  }
+
+  // Grid
+  for (let ring = 1; ring <= 3; ring++) {
+    radarCtx.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const p = pt(i % n, R * ring / 3);
+      i === 0 ? radarCtx.moveTo(p.x, p.y) : radarCtx.lineTo(p.x, p.y);
+    }
+    radarCtx.strokeStyle = '#1e1e2e';
+    radarCtx.lineWidth = 0.5;
+    radarCtx.stroke();
+  }
+
+  // Axes
+  for (let i = 0; i < n; i++) {
+    const p = pt(i, R);
+    radarCtx.beginPath();
+    radarCtx.moveTo(cx, cy);
+    radarCtx.lineTo(p.x, p.y);
+    radarCtx.strokeStyle = '#1e1e2e';
+    radarCtx.lineWidth = 0.5;
+    radarCtx.stroke();
+  }
+
+  // Values
+  const m = piece.metrics;
+  if (!m) return;
+  const vals = METRIC_KEYS.map(k => {
+    let v = m[k] || 0;
+    if (k === 'complexity') v = Math.min(v / 3, 1);
+    else if (k === 'fractalDimension') v = Math.min(v / 2, 1);
+    else v = Math.min(v, 1);
+    return v;
+  });
+
+  radarCtx.beginPath();
+  for (let i = 0; i <= n; i++) {
+    const p = pt(i % n, vals[i % n] * R);
+    i === 0 ? radarCtx.moveTo(p.x, p.y) : radarCtx.lineTo(p.x, p.y);
+  }
+  radarCtx.fillStyle = 'rgba(124, 111, 224, 0.2)';
+  radarCtx.fill();
+  radarCtx.strokeStyle = '#7c6fe0';
+  radarCtx.lineWidth = 1.5;
+  radarCtx.stroke();
+
+  // Dots + labels
+  for (let i = 0; i < n; i++) {
+    const p = pt(i, vals[i] * R);
+    radarCtx.beginPath();
+    radarCtx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+    radarCtx.fillStyle = '#7c6fe0';
+    radarCtx.fill();
+
+    const lp = pt(i, R + 12);
+    radarCtx.fillStyle = '#6e6e82';
+    radarCtx.font = '7px monospace';
+    radarCtx.textAlign = 'center';
+    radarCtx.textBaseline = 'middle';
+    radarCtx.fillText(METRIC_NAMES[i].slice(0, 5), lp.x, lp.y);
+  }
+}
+
+// ── Input ──
+canvas.addEventListener('wheel', e => {
+  if (!started) return;
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 0.9 : 1.1;
+  targetCamera.zoom = Math.max(0.2, Math.min(20, targetCamera.zoom * factor));
+  document.getElementById('zoom-indicator').textContent = targetCamera.zoom.toFixed(1) + '\u00d7';
+}, { passive: false });
+
+canvas.addEventListener('mousedown', e => {
+  if (!started) return;
+  isDragging = true;
+  dragStart = { x: e.clientX, y: e.clientY };
+  dragCamStart = { x: targetCamera.x, y: targetCamera.y };
+  document.body.classList.add('dragging');
+});
+
+window.addEventListener('mousemove', e => {
+  if (!started) return;
+  if (isDragging) {
+    targetCamera.x = dragCamStart.x + (e.clientX - dragStart.x) / camera.zoom;
+    targetCamera.y = dragCamStart.y + (e.clientY - dragStart.y) / camera.zoom;
+  }
+  updateTooltip(e.clientX, e.clientY);
+});
+
+window.addEventListener('mouseup', () => {
+  isDragging = false;
+  document.body.classList.remove('dragging');
+});
+
+// Touch support
+let lastTouchDist = 0;
+canvas.addEventListener('touchstart', e => {
+  if (!started) return;
+  if (e.touches.length === 1) {
+    isDragging = true;
+    dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    dragCamStart = { x: targetCamera.x, y: targetCamera.y };
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+  }
+}, { passive: true });
+
+canvas.addEventListener('touchmove', e => {
+  if (!started) return;
+  e.preventDefault();
+  if (e.touches.length === 1 && isDragging) {
+    targetCamera.x = dragCamStart.x + (e.touches[0].clientX - dragStart.x) / camera.zoom;
+    targetCamera.y = dragCamStart.y + (e.touches[0].clientY - dragStart.y) / camera.zoom;
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (lastTouchDist > 0) {
+      targetCamera.zoom = Math.max(0.2, Math.min(20, targetCamera.zoom * (dist / lastTouchDist)));
+    }
+    lastTouchDist = dist;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => { isDragging = false; lastTouchDist = 0; });
+
+// Keyboard
+window.addEventListener('keydown', e => {
+  if (!started) return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    selectPiece((currentIdx + 1) % pieces.length);
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    selectPiece((currentIdx - 1 + pieces.length) % pieces.length);
+  } else if (e.key === 'r' || e.key === 'R') {
+    resetView();
+  } else if (e.key === 'h' || e.key === 'H') {
+    hudVisible = !hudVisible;
+    document.getElementById('piece-info').style.opacity = hudVisible ? 1 : 0;
+    document.getElementById('piece-strip').style.opacity = hudVisible ? 1 : 0;
+    document.getElementById('radar-panel').style.opacity = hudVisible ? 1 : 0;
+    document.getElementById('zoom-indicator').style.opacity = hudVisible ? 1 : 0;
+  }
+});
+
+// ── Tooltip ──
+function updateTooltip(mx, my) {
+  const tooltip = document.getElementById('cell-tooltip');
+  const p = pieces[currentIdx];
+  if (!p || !started) { tooltip.classList.remove('visible'); return; }
+
+  const lines = getLines(p);
+  const rows = lines.length;
+  const cols = Math.max(...lines.map(l => l.length));
+  const cellSize = 14;
+
+  // Screen to grid coords
+  const worldX = (mx - innerWidth / 2) / camera.zoom - camera.x;
+  const worldY = (my - innerHeight / 2) / camera.zoom - camera.y;
+  const gridX = worldX + (cols * cellSize) / 2;
+  const gridY = worldY + (rows * cellSize) / 2;
+  const col = Math.floor(gridX / cellSize);
+  const row = Math.floor(gridY / cellSize);
+
+  if (row >= 0 && row < rows && col >= 0 && col < lines[row].length) {
+    const ch = lines[row][col];
+    if (ch && ch !== ' ') {
+      tooltip.textContent = `[${col}, ${row}] "${ch}" (${ch.charCodeAt(0)})`;
+      tooltip.style.left = (mx + 16) + 'px';
+      tooltip.style.top = (my - 8) + 'px';
+      tooltip.classList.add('visible');
+      return;
+    }
+  }
+  tooltip.classList.remove('visible');
+}
+
+// ── Render loop ──
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function render() {
+  requestAnimationFrame(render);
+  if (!started || pieces.length === 0) return;
+
+  // Smooth camera
+  camera.x = lerp(camera.x, targetCamera.x, 0.12);
+  camera.y = lerp(camera.y, targetCamera.y, 0.12);
+  camera.zoom = lerp(camera.zoom, targetCamera.zoom, 0.12);
+
+  const W = innerWidth, H = innerHeight;
+  ctx.clearRect(0, 0, W, H);
+
+  const p = pieces[currentIdx];
+  const lines = getLines(p);
+  if (lines.length === 0) return;
+
+  const rows = lines.length;
+  const cols = Math.max(...lines.map(l => l.length));
+  const cellSize = 14;
+  const type = p.genome?.type || 'unknown';
+  const tc = TYPE_COLORS[type] || { h: 0, s: 0, l: 50 };
+
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.scale(camera.zoom, camera.zoom);
+  ctx.translate(camera.x, camera.y);
+
+  const gridW = cols * cellSize;
+  const gridH = rows * cellSize;
+  const ox = -gridW / 2;
+  const oy = -gridH / 2;
+
+  // Determine visible bounds for culling
+  const visW = W / camera.zoom;
+  const visH = H / camera.zoom;
+  const camX = -camera.x;
+  const camY = -camera.y;
+  const minCol = Math.max(0, Math.floor((camX - visW / 2 - ox) / cellSize) - 1);
+  const maxCol = Math.min(cols, Math.ceil((camX + visW / 2 - ox) / cellSize) + 1);
+  const minRow = Math.max(0, Math.floor((camY - visH / 2 - oy) / cellSize) - 1);
+  const maxRow = Math.min(rows, Math.ceil((camY + visH / 2 - oy) / cellSize) + 1);
+
+  // Draw grid lines at high zoom
+  if (camera.zoom > 2) {
+    ctx.strokeStyle = `rgba(30, 30, 46, ${Math.min((camera.zoom - 2) / 3, 0.5)})`;
+    ctx.lineWidth = 0.5 / camera.zoom;
+    for (let r = minRow; r <= maxRow; r++) {
+      const y = oy + r * cellSize;
+      ctx.beginPath();
+      ctx.moveTo(ox + minCol * cellSize, y);
+      ctx.lineTo(ox + maxCol * cellSize, y);
+      ctx.stroke();
+    }
+    for (let c = minCol; c <= maxCol; c++) {
+      const x = ox + c * cellSize;
+      ctx.beginPath();
+      ctx.moveTo(x, oy + minRow * cellSize);
+      ctx.lineTo(x, oy + maxRow * cellSize);
+      ctx.stroke();
+    }
+  }
+
+  // Detect palette
+  const allChars = lines.join('');
+  let palette = PALETTES[0];
+  for (const pal of PALETTES) {
+    const palChars = pal.trim();
+    let matches = 0;
+    for (const ch of palChars) {
+      if (allChars.includes(ch)) matches++;
+    }
+    if (matches > palChars.length * 0.3) { palette = pal; break; }
+  }
+
+  // Draw cells
+  for (let r = minRow; r < maxRow; r++) {
+    const line = lines[r] || '';
+    for (let c = minCol; c < Math.min(maxCol, line.length); c++) {
+      const ch = line[c];
+      if (!ch || ch === ' ') continue;
+
+      const palIdx = palette.indexOf(ch);
+      const intensity = palIdx >= 0 ? palIdx / (palette.length - 1) : 0.5;
+
+      const x = ox + c * cellSize;
+      const y = oy + r * cellSize;
+
+      // Cell background
+      const l = tc.l * 0.3 + intensity * tc.l * 0.7;
+      const s = tc.s * 0.6 + intensity * tc.s * 0.4;
+      const a = 0.3 + intensity * 0.7;
+      ctx.fillStyle = `hsla(${tc.h}, ${s}%, ${l}%, ${a})`;
+      ctx.fillRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
+
+      // Cell glow for high-intensity cells
+      if (intensity > 0.7 && camera.zoom > 1.5) {
+        ctx.fillStyle = `hsla(${tc.h}, ${tc.s}%, ${tc.l}%, ${(intensity - 0.7) * 0.3})`;
+        ctx.fillRect(x - 1, y - 1, cellSize + 2, cellSize + 2);
+      }
+
+      // Character at high zoom
+      if (camera.zoom > 3) {
+        ctx.fillStyle = `hsla(${tc.h}, ${Math.min(tc.s + 20, 100)}%, ${Math.min(tc.l + 20, 90)}%, ${0.8})`;
+        ctx.font = `${Math.min(cellSize * 0.7, 10)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ch, x + cellSize / 2, y + cellSize / 2);
+      }
+    }
+  }
+
+  // Border glow
+  ctx.strokeStyle = `hsla(${tc.h}, ${tc.s}%, ${tc.l}%, 0.15)`;
+  ctx.lineWidth = 2 / camera.zoom;
+  ctx.strokeRect(ox - 2, oy - 2, gridW + 4, gridH + 4);
+
+  ctx.restore();
+
+  // Subtle vignette
+  const vg = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.7);
+  vg.addColorStop(0, 'rgba(10, 10, 15, 0)');
+  vg.addColorStop(1, 'rgba(10, 10, 15, 0.6)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+requestAnimationFrame(render);
+</script>
+
+</body>
+</html>
