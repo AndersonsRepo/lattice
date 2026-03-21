@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Mosaic</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+    canvas.dragging { cursor: grabbing; }
+
+    /* ── Back button ── */
+    #back-btn {
+      position: fixed;
+      top: 1.2rem;
+      left: 1.5rem;
+      z-index: 100;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+      transition: color 0.2s;
+    }
+    #back-btn:hover { color: var(--text); }
+
+    /* ── Info panel ── */
+    .panel {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      background: rgba(18,18,26,0.9);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.6rem 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      font-size: 0.7rem;
+      white-space: nowrap;
+      transition: opacity 0.3s;
+    }
+
+    .panel .label { color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase; font-size: 0.6rem; }
+    .panel .value { color: var(--accent); font-weight: 600; }
+    .panel .sep { color: var(--border); }
+
+    /* ── Detail card (shown on click) ── */
+    .detail-card {
+      position: fixed;
+      top: 50%;
+      right: 1.5rem;
+      transform: translateY(-50%);
+      z-index: 200;
+      background: rgba(18,18,26,0.95);
+      border: 1px solid var(--accent);
+      border-radius: 12px;
+      padding: 1.2rem;
+      width: 280px;
+      box-shadow: 0 0 30px var(--accent-glow);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: none;
+    }
+
+    .detail-card.visible { display: block; }
+
+    .detail-card .art-preview {
+      font-size: 0.4rem;
+      line-height: 1.0;
+      white-space: pre;
+      background: var(--bg);
+      padding: 0.5rem;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 0.75rem;
+      max-height: 180px;
+      border: 1px solid var(--border);
+    }
+
+    .detail-card .meta-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      margin-bottom: 0.3rem;
+    }
+    .detail-card .meta-label { color: var(--text-dim); }
+    .detail-card .meta-value { color: var(--text); }
+    .detail-card .meta-value.accent { color: var(--accent); }
+    .detail-card .meta-value.green { color: var(--green); }
+
+    .detail-card .metrics-bar {
+      display: flex;
+      gap: 0.3rem;
+      margin-top: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .detail-card .metric-chip {
+      font-size: 0.55rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      background: rgba(124,111,224,0.1);
+      color: var(--text-dim);
+    }
+
+    .detail-card .close-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.6rem;
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .detail-card .close-btn:hover { color: var(--text); }
+
+    .detail-card .view-link {
+      display: block;
+      text-align: center;
+      margin-top: 0.6rem;
+      padding: 0.4rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    .detail-card .view-link:hover { border-color: var(--accent); background: rgba(124,111,224,0.1); }
+
+    /* ── Controls hint ── */
+    .hint {
+      position: fixed;
+      top: 1.2rem;
+      right: 1.5rem;
+      z-index: 100;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      opacity: 0.5;
+      text-align: right;
+      line-height: 1.6;
+    }
+    .hint kbd {
+      display: inline-block;
+      padding: 0.05rem 0.3rem;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 0.55rem;
+    }
+
+    /* ── Sort chips ── */
+    .sort-bar {
+      position: fixed;
+      top: 1.2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      gap: 0.3rem;
+    }
+    .sort-chip {
+      padding: 0.25rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(18,18,26,0.85);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .sort-chip:hover { border-color: var(--accent); color: var(--text); }
+    .sort-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* ── Loading ── */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 1rem;
+      transition: opacity 0.6s;
+    }
+    .loading-overlay.done { opacity: 0; pointer-events: none; }
+    .loading-text {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+    .loading-bar {
+      width: 200px;
+      height: 2px;
+      background: var(--border);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+    .loading-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" id="back-btn">&larr; Gallery</a>
+  <canvas id="canvas"></canvas>
+
+  <div class="sort-bar" id="sort-bar">
+    <button class="sort-chip active" data-sort="generation">By Generation</button>
+    <button class="sort-chip" data-sort="score">By Score</button>
+    <button class="sort-chip" data-sort="type">By Species</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div><span class="label">Pieces</span> <span class="value" id="p-count">0</span></div>
+    <span class="sep">|</span>
+    <div><span class="label">Zoom</span> <span class="value" id="p-zoom">1.0x</span></div>
+    <span class="sep">|</span>
+    <div><span class="label">Hover</span> <span class="value" id="p-hover">&mdash;</span></div>
+  </div>
+
+  <div class="detail-card" id="detail">
+    <button class="close-btn" id="detail-close">&times;</button>
+    <div class="art-preview" id="detail-art"></div>
+    <div class="meta-row"><span class="meta-label">Name</span><span class="meta-value accent" id="d-name"></span></div>
+    <div class="meta-row"><span class="meta-label">Species</span><span class="meta-value" id="d-type"></span></div>
+    <div class="meta-row"><span class="meta-label">Generation</span><span class="meta-value" id="d-gen"></span></div>
+    <div class="meta-row"><span class="meta-label">Score</span><span class="meta-value green" id="d-score"></span></div>
+    <div class="meta-row"><span class="meta-label">Lineage Depth</span><span class="meta-value" id="d-lineage"></span></div>
+    <div class="metrics-bar" id="d-metrics"></div>
+    <a class="view-link" id="d-link" href="#">View Detail &rarr;</a>
+  </div>
+
+  <div class="hint">
+    <kbd>Scroll</kbd> Zoom &middot; <kbd>Drag</kbd> Pan<br>
+    <kbd>Click</kbd> Inspect &middot; <kbd>Esc</kbd> Close<br>
+    <kbd>R</kbd> Reset &middot; <kbd>1-3</kbd> Sort
+  </div>
+
+  <div class="loading-overlay" id="loading">
+    <div class="loading-text">Assembling mosaic...</div>
+    <div class="loading-bar"><div class="loading-fill" id="load-fill"></div></div>
+  </div>
+
+<script>
+const TYPE_COLORS = {
+  '1d':                  { h: 270, s: 60, l: 65, label: '1D Automaton' },
+  '2d':                  { h: 142, s: 60, l: 55, label: '2D Life' },
+  'lsystem':             { h: 180, s: 50, l: 55, label: 'L-System' },
+  'reaction-diffusion':  { h: 290, s: 70, l: 60, label: 'Reaction-Diffusion' },
+  'voronoi':             { h: 200, s: 60, l: 60, label: 'Voronoi' },
+  'wfc':                 { h: 350, s: 65, l: 60, label: 'Wave Function Collapse' },
+  'spirograph':          { h: 30,  s: 70, l: 60, label: 'Spirograph' },
+  'attractor':           { h: 45,  s: 65, l: 55, label: 'Strange Attractor' },
+  'julia':               { h: 220, s: 60, l: 60, label: 'Julia Set' },
+  'noise':               { h: 100, s: 40, l: 50, label: 'Noise Field' },
+  'flowfield':           { h: 160, s: 55, l: 55, label: 'Flow Field' },
+  'magnetic-pendulum':   { h: 0,   s: 65, l: 55, label: 'Magnetic Pendulum' },
+};
+
+const CHARMAP = ' .:-=+*#%@'.split('');
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H, dpr;
+
+// Camera state
+let camX = 0, camY = 0, zoom = 1;
+let targetZoom = 1, targetX = 0, targetY = 0;
+let dragging = false, dragStartX, dragStartY, dragCamX, dragCamY;
+
+// Data
+let allPieces = [];
+let tiles = []; // { x, y, w, h, piece, img }
+let hoveredTile = null;
+let selectedTile = null;
+let currentSort = 'generation';
+
+// Tile layout params
+const TILE_PAD = 6;
+const COLS_BASE = 10;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener('resize', () => { resize(); draw(); });
+
+// ── Load data ──
+async function loadData() {
+  const fill = document.getElementById('load-fill');
+  fill.style.width = '20%';
+
+  let pieces = [];
+
+  // Try Supabase first
+  try {
+    const SUPA_URL = 'https://cbtgnkocbdiawahuwqpz.supabase.co';
+    const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNidGdua29jYmRpYXdhaHV3cXB6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIzMjU1MDIsImV4cCI6MjA1NzkwMTUwMn0.eo2NQIV6gEjqFfFFSbncWiNiaOKcHsA_tYVzMvsoYqI';
+    const res = await fetch(`${SUPA_URL}/rest/v1/archive?select=id,genome,rendered,score,metrics,generation,epoch&order=generation.asc&limit=300`, {
+      headers: { 'apikey': SUPA_KEY, 'Accept-Profile': 'lattice' }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.length > 0) pieces = data;
+    }
+  } catch (e) {}
+
+  fill.style.width = '50%';
+
+  // Fallback to gallery.json
+  if (pieces.length === 0) {
+    try {
+      const res = await fetch('gallery.json');
+      const data = await res.json();
+      const all = [...(data.archive || []), ...(data.hallOfFame || []), ...(data.pieces || [])];
+      // Deduplicate by id
+      const seen = new Set();
+      for (const p of all) {
+        if (!seen.has(p.id)) { seen.add(p.id); pieces.push(p); }
+      }
+    } catch (e) {}
+  }
+
+  fill.style.width = '80%';
+
+  // Parse rendered art into grids
+  allPieces = pieces.filter(p => p.rendered).map(p => {
+    const lines = p.rendered.split('\n').filter(l => l.length > 0);
+    const genome = p.genome || {};
+    return {
+      id: p.id,
+      type: genome.type || 'unknown',
+      generation: p.generation || 0,
+      score: p.score || 0,
+      metrics: p.metrics || {},
+      lineage: genome.lineage || [],
+      epoch: p.epoch || '',
+      lines,
+      width: Math.max(...lines.map(l => l.length)),
+      height: lines.length,
+      rendered: p.rendered,
+    };
+  });
+
+  fill.style.width = '100%';
+  document.getElementById('p-count').textContent = allPieces.length;
+
+  // Pre-render tiles to offscreen canvases
+  prerenderTiles();
+  layoutTiles();
+
+  // Center camera
+  if (tiles.length) {
+    const totalW = COLS_BASE * (tiles[0].w + TILE_PAD);
+    const totalH = Math.ceil(tiles.length / COLS_BASE) * (tiles[0].h + TILE_PAD);
+    targetX = camX = totalW / 2 - W / 2;
+    targetY = camY = totalH / 2 - H / 2;
+  }
+
+  setTimeout(() => document.getElementById('loading').classList.add('done'), 300);
+  draw();
+}
+
+// ── Pre-render each piece to an offscreen canvas ──
+function prerenderTiles() {
+  const cellSize = 4;
+  for (const p of allPieces) {
+    const tw = p.width * cellSize;
+    const th = p.height * cellSize;
+    const oc = new OffscreenCanvas(tw, th);
+    const octx = oc.getContext('2d');
+
+    const tc = TYPE_COLORS[p.type] || { h: 0, s: 0, l: 50 };
+
+    for (let y = 0; y < p.lines.length; y++) {
+      const line = p.lines[y];
+      for (let x = 0; x < line.length; x++) {
+        const ch = line[x];
+        const idx = CHARMAP.indexOf(ch);
+        const intensity = idx >= 0 ? idx / (CHARMAP.length - 1) : 0;
+        if (intensity < 0.05) continue;
+
+        const l = tc.l * 0.3 + tc.l * 0.7 * intensity;
+        const s = tc.s * (0.5 + 0.5 * intensity);
+        const a = 0.3 + 0.7 * intensity;
+
+        octx.fillStyle = `hsla(${tc.h},${s}%,${l}%,${a})`;
+        octx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+      }
+    }
+
+    p._canvas = oc;
+    p._tw = tw;
+    p._th = th;
+  }
+}
+
+// ── Layout tiles in a grid ──
+function layoutTiles() {
+  let sorted = [...allPieces];
+
+  if (currentSort === 'score') {
+    sorted.sort((a, b) => b.score - a.score);
+  } else if (currentSort === 'type') {
+    sorted.sort((a, b) => a.type.localeCompare(b.type) || b.score - a.score);
+  } else {
+    sorted.sort((a, b) => a.generation - b.generation || b.score - a.score);
+  }
+
+  const cols = Math.min(COLS_BASE, sorted.length);
+  const maxW = sorted.reduce((m, p) => Math.max(m, p._tw), 0);
+  const maxH = sorted.reduce((m, p) => Math.max(m, p._th), 0);
+  const cellW = maxW + TILE_PAD * 2;
+  const cellH = maxH + TILE_PAD * 2;
+
+  tiles = sorted.map((p, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    return {
+      x: col * (cellW + TILE_PAD),
+      y: row * (cellH + TILE_PAD),
+      w: cellW,
+      h: cellH,
+      piece: p,
+    };
+  });
+}
+
+// ── Draw ──
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Smooth camera
+  camX += (targetX - camX) * 0.12;
+  camY += (targetY - camY) * 0.12;
+  zoom += (targetZoom - zoom) * 0.12;
+
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-camX - W / 2, -camY - H / 2);
+
+  // Visible bounds (in world space)
+  const invZ = 1 / zoom;
+  const vl = camX + (W / 2) - (W / 2) * invZ;
+  const vt = camY + (H / 2) - (H / 2) * invZ;
+  const vr = vl + W * invZ;
+  const vb = vt + H * invZ;
+
+  hoveredTile = null;
+
+  for (const t of tiles) {
+    // Frustum cull
+    if (t.x + t.w < vl || t.x > vr || t.y + t.h < vt || t.y > vb) continue;
+
+    const p = t.piece;
+    const tc = TYPE_COLORS[p.type] || { h: 0, s: 0, l: 50 };
+    const isHovered = t === hoveredTile;
+    const isSelected = t === selectedTile;
+
+    // Background
+    ctx.fillStyle = '#12121a';
+    ctx.fillRect(t.x, t.y, t.w, t.h);
+
+    // Border
+    if (isSelected) {
+      ctx.strokeStyle = `hsl(${tc.h},${tc.s}%,${tc.l}%)`;
+      ctx.lineWidth = 2 / zoom;
+      ctx.shadowColor = `hsla(${tc.h},${tc.s}%,${tc.l}%,0.4)`;
+      ctx.shadowBlur = 12 / zoom;
+    } else {
+      ctx.strokeStyle = isHovered ? '#7c6fe0' : '#1e1e2e';
+      ctx.lineWidth = 1 / zoom;
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+    }
+    ctx.strokeRect(t.x, t.y, t.w, t.h);
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+
+    // Draw the pre-rendered art centered in tile
+    const ox = t.x + (t.w - p._tw) / 2;
+    const oy = t.y + (t.h - p._th) / 2;
+    ctx.drawImage(p._canvas, ox, oy);
+
+    // Labels if zoomed in enough
+    if (zoom > 0.6) {
+      ctx.fillStyle = `hsla(${tc.h},${tc.s}%,${tc.l}%,0.7)`;
+      const fs = Math.max(8, 10 / zoom);
+      ctx.font = `${fs}px 'SF Mono', monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(p.id.substring(0, 16), t.x + 4, t.y + t.h - 4);
+
+      // Score badge
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(74,222,128,0.7)';
+      ctx.fillText((p.score * 100).toFixed(1) + '%', t.x + t.w - 4, t.y + t.h - 4);
+    }
+
+    // Type color indicator (left edge)
+    ctx.fillStyle = `hsl(${tc.h},${tc.s}%,${tc.l}%)`;
+    ctx.fillRect(t.x, t.y, 3 / zoom, t.h);
+  }
+
+  ctx.restore();
+
+  // Update zoom display
+  document.getElementById('p-zoom').textContent = zoom.toFixed(1) + 'x';
+
+  requestAnimationFrame(draw);
+}
+
+// ── Hit test ──
+function screenToWorld(sx, sy) {
+  const invZ = 1 / zoom;
+  const wx = (sx - W / 2) * invZ + camX + W / 2;
+  const wy = (sy - H / 2) * invZ + camY + H / 2;
+  return { x: wx, y: wy };
+}
+
+function hitTest(sx, sy) {
+  const { x, y } = screenToWorld(sx, sy);
+  for (let i = tiles.length - 1; i >= 0; i--) {
+    const t = tiles[i];
+    if (x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h) return t;
+  }
+  return null;
+}
+
+// ── Mouse events ──
+canvas.addEventListener('mousedown', e => {
+  dragging = true;
+  canvas.classList.add('dragging');
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  dragCamX = targetX;
+  dragCamY = targetY;
+});
+
+window.addEventListener('mousemove', e => {
+  if (dragging) {
+    const dx = (e.clientX - dragStartX) / zoom;
+    const dy = (e.clientY - dragStartY) / zoom;
+    targetX = dragCamX - dx;
+    targetY = dragCamY - dy;
+  } else {
+    const t = hitTest(e.clientX, e.clientY);
+    hoveredTile = t;
+    const hoverEl = document.getElementById('p-hover');
+    if (t) {
+      const tc = TYPE_COLORS[t.piece.type] || { h: 0, s: 0, l: 50 };
+      hoverEl.textContent = `${t.piece.id.substring(0, 12)} (${tc.label || t.piece.type})`;
+    } else {
+      hoverEl.innerHTML = '&mdash;';
+    }
+  }
+});
+
+window.addEventListener('mouseup', e => {
+  if (dragging) {
+    const dist = Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY);
+    if (dist < 5) {
+      // It was a click
+      const t = hitTest(e.clientX, e.clientY);
+      if (t) {
+        selectTile(t);
+      } else {
+        closeDetail();
+      }
+    }
+  }
+  dragging = false;
+  canvas.classList.remove('dragging');
+});
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 0.88 : 1.14;
+  targetZoom = Math.max(0.15, Math.min(6, targetZoom * factor));
+}, { passive: false });
+
+// ── Touch events ──
+let lastTouchDist = 0;
+let lastTouchCenter = null;
+
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    dragging = true;
+    dragStartX = e.touches[0].clientX;
+    dragStartY = e.touches[0].clientY;
+    dragCamX = targetX;
+    dragCamY = targetY;
+  } else if (e.touches.length === 2) {
+    dragging = false;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastTouchDist = Math.hypot(dx, dy);
+    lastTouchCenter = {
+      x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+      y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+    };
+  }
+}, { passive: true });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && dragging) {
+    const dx = (e.touches[0].clientX - dragStartX) / zoom;
+    const dy = (e.touches[0].clientY - dragStartY) / zoom;
+    targetX = dragCamX - dx;
+    targetY = dragCamY - dy;
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.hypot(dx, dy);
+    if (lastTouchDist > 0) {
+      const factor = dist / lastTouchDist;
+      targetZoom = Math.max(0.15, Math.min(6, targetZoom * factor));
+    }
+    lastTouchDist = dist;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  dragging = false;
+  lastTouchDist = 0;
+}, { passive: true });
+
+// ── Detail card ──
+function selectTile(t) {
+  selectedTile = t;
+  const p = t.piece;
+  const tc = TYPE_COLORS[p.type] || { h: 0, s: 0, l: 50 };
+  const card = document.getElementById('detail');
+
+  document.getElementById('detail-art').textContent = p.rendered.substring(0, 800);
+  document.getElementById('d-name').textContent = p.id;
+  document.getElementById('d-type').textContent = tc.label || p.type;
+  document.getElementById('d-type').style.color = `hsl(${tc.h},${tc.s}%,${tc.l}%)`;
+  document.getElementById('d-gen').textContent = `Gen ${p.generation}`;
+  document.getElementById('d-score').textContent = (p.score * 100).toFixed(1) + '%';
+  document.getElementById('d-lineage').textContent = p.lineage.length + ' ancestors';
+  document.getElementById('d-link').href = `piece?id=${p.id}`;
+
+  // Metrics
+  const metricsEl = document.getElementById('d-metrics');
+  metricsEl.innerHTML = '';
+  const m = p.metrics;
+  const metricNames = ['complexity', 'symmetry', 'density', 'edgeActivity', 'novelty', 'fractalDimension'];
+  for (const name of metricNames) {
+    if (m[name] !== undefined) {
+      const chip = document.createElement('span');
+      chip.className = 'metric-chip';
+      chip.textContent = `${name.replace(/([A-Z])/g, ' $1').trim()}: ${(m[name] * 100).toFixed(0)}%`;
+      metricsEl.appendChild(chip);
+    }
+  }
+
+  card.classList.add('visible');
+}
+
+function closeDetail() {
+  selectedTile = null;
+  document.getElementById('detail').classList.remove('visible');
+}
+
+document.getElementById('detail-close').onclick = closeDetail;
+
+// ── Sort chips ──
+document.querySelectorAll('.sort-chip').forEach(chip => {
+  chip.onclick = () => {
+    currentSort = chip.dataset.sort;
+    document.querySelectorAll('.sort-chip').forEach(c => c.classList.toggle('active', c === chip));
+    layoutTiles();
+    closeDetail();
+  };
+});
+
+// ── Keyboard ──
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDetail();
+  if (e.key === 'r' || e.key === 'R') {
+    targetZoom = 1;
+    if (tiles.length) {
+      const totalW = COLS_BASE * (tiles[0].w + TILE_PAD);
+      const totalH = Math.ceil(tiles.length / COLS_BASE) * (tiles[0].h + TILE_PAD);
+      targetX = totalW / 2 - W / 2;
+      targetY = totalH / 2 - H / 2;
+    }
+  }
+  if (e.key === '1') document.querySelector('[data-sort="generation"]').click();
+  if (e.key === '2') document.querySelector('[data-sort="score"]').click();
+  if (e.key === '3') document.querySelector('[data-sort="type"]').click();
+});
+
+// ── Go ──
+loadData();
+</script>
+</body>
+</html>
