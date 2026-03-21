@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Harmonograph</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      pointer-events: auto;
+    }
+
+    .hud-subtitle {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      margin-top: 0.3rem;
+      letter-spacing: 0.08em;
+    }
+
+    .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+      pointer-events: auto;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    .controls {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      right: 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .control-panel {
+      background: rgba(10, 10, 15, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      pointer-events: auto;
+      backdrop-filter: blur(8px);
+      max-width: 320px;
+    }
+
+    .control-panel h3 {
+      font-size: 0.55rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+
+    .control-group {
+      margin-bottom: 0.6rem;
+    }
+
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      margin-bottom: 0.2rem;
+    }
+
+    .control-group label .val {
+      color: var(--green);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 3px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.3);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 0.4rem 0.6rem;
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      border-color: transparent;
+      color: var(--bg);
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 20px var(--accent-glow);
+      color: var(--bg);
+    }
+
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.5rem;
+    }
+
+    .preset-btn {
+      padding: 0.25rem 0.5rem;
+      font-family: inherit;
+      font-size: 0.5rem;
+      letter-spacing: 0.05em;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .preset-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(124, 111, 224, 0.1);
+    }
+
+    .keys {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+      text-align: right;
+    }
+
+    .keys kbd {
+      display: inline-block;
+      padding: 0.1rem 0.35rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 0.5rem;
+      color: var(--text);
+    }
+
+    .pendulum-indicator {
+      display: flex;
+      gap: 0.3rem;
+      margin-top: 0.4rem;
+    }
+
+    .pendulum-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      transition: all 0.3s;
+    }
+
+    .pendulum-dot.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hud, .controls {
+      animation: fadeIn 0.8s ease-out;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div class="hud">
+    <div class="hud-top">
+      <div class="hud-title">
+        <a href="index.html" class="back-link">lattice /</a>
+        <h1>Harmonograph</h1>
+        <div class="hud-subtitle">coupled damped pendulums</div>
+      </div>
+      <div class="hud-stats">
+        <div>strokes <span class="val" id="stroke-count">0</span></div>
+        <div>decay <span class="val" id="decay-pct">100%</span></div>
+        <div>fps <span class="val" id="fps">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="control-panel">
+      <h3>Pendulums</h3>
+
+      <div class="control-group">
+        <label>Frequency X <span class="val" id="freq-x-val">2.00</span></label>
+        <input type="range" id="freq-x" min="0.5" max="8" step="0.01" value="2">
+      </div>
+
+      <div class="control-group">
+        <label>Frequency Y <span class="val" id="freq-y-val">3.00</span></label>
+        <input type="range" id="freq-y" min="0.5" max="8" step="0.01" value="3">
+      </div>
+
+      <div class="control-group">
+        <label>Phase <span class="val" id="phase-val">0.79</span></label>
+        <input type="range" id="phase" min="0" max="6.283" step="0.01" value="0.785">
+      </div>
+
+      <div class="control-group">
+        <label>Damping <span class="val" id="damp-val">0.002</span></label>
+        <input type="range" id="damp" min="0.0001" max="0.015" step="0.0001" value="0.002">
+      </div>
+
+      <div class="control-group">
+        <label>Perturbation <span class="val" id="perturb-val">0.00</span></label>
+        <input type="range" id="perturb" min="0" max="0.5" step="0.005" value="0">
+      </div>
+
+      <div class="control-group">
+        <label>Speed <span class="val" id="speed-val">1.0x</span></label>
+        <input type="range" id="speed" min="0.1" max="4" step="0.1" value="1">
+      </div>
+
+      <h3 style="margin-top: 0.75rem">Presets</h3>
+      <div class="presets">
+        <button class="preset-btn active" data-preset="lissajous">Lissajous</button>
+        <button class="preset-btn" data-preset="rotary">Rotary</button>
+        <button class="preset-btn" data-preset="lateral">Lateral</button>
+        <button class="preset-btn" data-preset="dense">Dense</button>
+        <button class="preset-btn" data-preset="chaos">Chaos</button>
+      </div>
+
+      <div class="pendulum-indicator" id="pendulum-dots"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-random">Randomize</button>
+        <button class="btn" id="btn-clear">Clear</button>
+        <button class="btn" id="btn-save">Save PNG</button>
+      </div>
+    </div>
+
+    <div class="keys">
+      <kbd>R</kbd> randomize<br>
+      <kbd>C</kbd> clear<br>
+      <kbd>S</kbd> save png<br>
+      <kbd>Space</kbd> pause<br>
+      <kbd>1-5</kbd> presets
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // --- State ---
+    let W, H;
+    let t = 0;
+    let paused = false;
+    let strokeCount = 0;
+    let animId = null;
+    let lastFrameTime = performance.now();
+    let frameCount = 0;
+    let fpsDisplay = 0;
+
+    // Pendulum state
+    let pendulums = [
+      { frequency: 2, phase: 0, amplitude: 0.85, damping: 0.002 },
+      { frequency: 3, phase: Math.PI / 4, amplitude: 0.85, damping: 0.002 },
+    ];
+
+    let perturbation = 0;
+    let speed = 1;
+    let dt = 0.02;
+    let rotary = false;
+
+    // Color gradient (matches species colors: lavender/violet tones)
+    const gradientStops = [
+      [26, 13, 45],    // deep violet
+      [45, 26, 91],    // dark purple
+      [74, 45, 139],   // medium purple
+      [107, 68, 184],  // bright purple
+      [157, 107, 224], // lavender
+      [200, 160, 245], // light lavender
+      [232, 212, 255], // pale lavender
+    ];
+
+    function lerpColor(t) {
+      t = Math.max(0, Math.min(1, t));
+      const idx = t * (gradientStops.length - 1);
+      const i = Math.floor(idx);
+      const f = idx - i;
+      const a = gradientStops[Math.min(i, gradientStops.length - 1)];
+      const b = gradientStops[Math.min(i + 1, gradientStops.length - 1)];
+      return [
+        Math.round(a[0] + (b[0] - a[0]) * f),
+        Math.round(a[1] + (b[1] - a[1]) * f),
+        Math.round(a[2] + (b[2] - a[2]) * f),
+      ];
+    }
+
+    // --- Resize ---
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', () => { resize(); clear(); });
+    resize();
+
+    // --- Harmonograph Math ---
+    function sample(t) {
+      let x = 0, y = 0;
+      for (let i = 0; i < pendulums.length; i++) {
+        const p = pendulums[i];
+        const decay = Math.exp(-p.damping * t);
+        // Add slight perturbation for organic feel
+        const freq = p.frequency + perturbation * Math.sin(t * 0.001 + i * 1.7);
+        const val = p.amplitude * Math.sin(freq * t + p.phase) * decay;
+        if (i % 2 === 0) {
+          if (rotary && i === 0) {
+            x += val;
+            y += p.amplitude * Math.cos(freq * t + p.phase) * decay;
+          } else {
+            x += val;
+          }
+        } else {
+          y += val;
+        }
+      }
+      return [x, y];
+    }
+
+    function toScreen(x, y) {
+      const scale = Math.min(W, H) * 0.35;
+      return [
+        W / 2 + x * scale,
+        H / 2 + y * scale,
+      ];
+    }
+
+    // --- Drawing ---
+    function clear() {
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, W, H);
+      t = 0;
+      strokeCount = 0;
+    }
+
+    function drawBatch(stepsPerFrame) {
+      const maxDecay = Math.max(...pendulums.map(p => p.damping));
+      // Stop drawing when amplitude decays below threshold
+      const maxAmplitude = Math.max(...pendulums.map(p => p.amplitude));
+      const currentAmplitude = maxAmplitude * Math.exp(-maxDecay * t);
+
+      if (currentAmplitude < 0.001) return;
+
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      let [prevX, prevY] = sample(t);
+      let [prevSx, prevSy] = toScreen(prevX, prevY);
+
+      for (let i = 0; i < stepsPerFrame; i++) {
+        t += dt * speed;
+        const [x, y] = sample(t);
+        const [sx, sy] = toScreen(x, y);
+
+        // Color based on normalized time and decay
+        const progress = 1 - Math.exp(-maxDecay * t * 0.3);
+        const [r, g, b] = lerpColor(progress);
+        const alpha = Math.max(0.05, Math.exp(-maxDecay * t * 0.2));
+
+        ctx.beginPath();
+        ctx.moveTo(prevSx, prevSy);
+        ctx.lineTo(sx, sy);
+        ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+        ctx.lineWidth = 1.2 + (1 - progress) * 0.8;
+        ctx.stroke();
+
+        // Subtle glow on early strokes
+        if (alpha > 0.3) {
+          ctx.beginPath();
+          ctx.moveTo(prevSx, prevSy);
+          ctx.lineTo(sx, sy);
+          ctx.strokeStyle = `rgba(${r},${g},${b},${alpha * 0.15})`;
+          ctx.lineWidth = 4;
+          ctx.stroke();
+        }
+
+        prevSx = sx;
+        prevSy = sy;
+        strokeCount++;
+      }
+
+      // Update HUD
+      document.getElementById('stroke-count').textContent = (strokeCount / 1000).toFixed(1) + 'k';
+      document.getElementById('decay-pct').textContent = Math.round(currentAmplitude / maxAmplitude * 100) + '%';
+    }
+
+    // --- Animation Loop ---
+    function frame(now) {
+      if (!paused) {
+        drawBatch(200);
+      }
+
+      frameCount++;
+      if (now - lastFrameTime > 500) {
+        fpsDisplay = Math.round(frameCount * 1000 / (now - lastFrameTime));
+        document.getElementById('fps').textContent = fpsDisplay;
+        frameCount = 0;
+        lastFrameTime = now;
+      }
+
+      animId = requestAnimationFrame(frame);
+    }
+
+    // --- Controls ---
+    function updateSliderDisplays() {
+      document.getElementById('freq-x-val').textContent = parseFloat(document.getElementById('freq-x').value).toFixed(2);
+      document.getElementById('freq-y-val').textContent = parseFloat(document.getElementById('freq-y').value).toFixed(2);
+      document.getElementById('phase-val').textContent = parseFloat(document.getElementById('phase').value).toFixed(2);
+      document.getElementById('damp-val').textContent = parseFloat(document.getElementById('damp').value).toFixed(3);
+      document.getElementById('perturb-val').textContent = parseFloat(document.getElementById('perturb').value).toFixed(2);
+      document.getElementById('speed-val').textContent = parseFloat(document.getElementById('speed').value).toFixed(1) + 'x';
+    }
+
+    function readControls() {
+      const freqX = parseFloat(document.getElementById('freq-x').value);
+      const freqY = parseFloat(document.getElementById('freq-y').value);
+      const phase = parseFloat(document.getElementById('phase').value);
+      const damp = parseFloat(document.getElementById('damp').value);
+      perturbation = parseFloat(document.getElementById('perturb').value);
+      speed = parseFloat(document.getElementById('speed').value);
+
+      // Update first two pendulums
+      if (pendulums.length >= 1) {
+        pendulums[0].frequency = freqX;
+        pendulums[0].damping = damp;
+      }
+      if (pendulums.length >= 2) {
+        pendulums[1].frequency = freqY;
+        pendulums[1].phase = phase;
+        pendulums[1].damping = damp;
+      }
+
+      updateSliderDisplays();
+      clear();
+    }
+
+    // Slider events
+    ['freq-x', 'freq-y', 'phase', 'damp', 'perturb', 'speed'].forEach(id => {
+      document.getElementById(id).addEventListener('input', readControls);
+    });
+
+    // Pendulum dots display
+    function updatePendulumDots() {
+      const container = document.getElementById('pendulum-dots');
+      container.innerHTML = '';
+      const colors = ['#7c6fe0', '#4ade80', '#fbbf24', '#f54a9d'];
+      pendulums.forEach((p, i) => {
+        const dot = document.createElement('div');
+        dot.className = 'pendulum-dot active';
+        dot.style.background = colors[i % colors.length];
+        dot.title = `P${i + 1}: f=${p.frequency.toFixed(2)} d=${p.damping.toFixed(4)}`;
+        container.appendChild(dot);
+      });
+    }
+
+    // Presets
+    const presets = {
+      lissajous: {
+        pendulums: [
+          { frequency: 2, phase: 0, amplitude: 0.85, damping: 0.002 },
+          { frequency: 3, phase: Math.PI / 4, amplitude: 0.85, damping: 0.002 },
+        ],
+        rotary: false,
+      },
+      rotary: {
+        pendulums: [
+          { frequency: 1, phase: 0, amplitude: 0.7, damping: 0.0008 },
+          { frequency: 1, phase: Math.PI / 2, amplitude: 0.7, damping: 0.0008 },
+          { frequency: 3.01, phase: 0, amplitude: 0.4, damping: 0.003 },
+        ],
+        rotary: true,
+      },
+      lateral: {
+        pendulums: [
+          { frequency: 2, phase: 0, amplitude: 0.9, damping: 0.001 },
+          { frequency: 2.01, phase: Math.PI / 2, amplitude: 0.9, damping: 0.001 },
+        ],
+        rotary: false,
+      },
+      dense: {
+        pendulums: [
+          { frequency: 2, phase: 0, amplitude: 0.65, damping: 0.0003 },
+          { frequency: 3, phase: 1.2, amplitude: 0.55, damping: 0.0004 },
+          { frequency: 5, phase: 0.8, amplitude: 0.35, damping: 0.0006 },
+          { frequency: 7, phase: 2.1, amplitude: 0.25, damping: 0.0008 },
+        ],
+        rotary: false,
+      },
+      chaos: {
+        pendulums: [
+          { frequency: 2.37, phase: 0.42, amplitude: 0.8, damping: 0.0015 },
+          { frequency: 3.71, phase: 1.83, amplitude: 0.7, damping: 0.002 },
+          { frequency: 5.13, phase: 4.2, amplitude: 0.5, damping: 0.0025 },
+        ],
+        rotary: false,
+      },
+    };
+
+    function applyPreset(name) {
+      const p = presets[name];
+      if (!p) return;
+
+      pendulums = JSON.parse(JSON.stringify(p.pendulums));
+      rotary = p.rotary;
+
+      // Update sliders to match first two pendulums
+      if (pendulums.length >= 1) {
+        document.getElementById('freq-x').value = pendulums[0].frequency;
+        document.getElementById('damp').value = pendulums[0].damping;
+      }
+      if (pendulums.length >= 2) {
+        document.getElementById('freq-y').value = pendulums[1].frequency;
+        document.getElementById('phase').value = pendulums[1].phase;
+      }
+
+      updateSliderDisplays();
+      updatePendulumDots();
+      clear();
+
+      // Update active preset button
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.preset === name);
+      });
+    }
+
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
+    });
+
+    // Randomize
+    function randomize() {
+      const numPendulums = 2 + Math.floor(Math.random() * 3);
+      const baseFreq = 0.8 + Math.random() * 2;
+      const ratios = [1, 1.5, 2, 2.5, 3, 3.5, 4, 5];
+
+      pendulums = [];
+      for (let i = 0; i < numPendulums; i++) {
+        const ratio = ratios[Math.floor(Math.random() * ratios.length)];
+        pendulums.push({
+          frequency: baseFreq * ratio + (Math.random() - 0.5) * 0.05,
+          phase: Math.random() * Math.PI * 2,
+          amplitude: 0.3 + Math.random() * 0.6,
+          damping: 0.0005 + Math.random() * 0.004,
+        });
+      }
+
+      rotary = Math.random() < 0.25;
+
+      // Sync sliders
+      if (pendulums.length >= 1) {
+        document.getElementById('freq-x').value = pendulums[0].frequency;
+        document.getElementById('damp').value = pendulums[0].damping;
+      }
+      if (pendulums.length >= 2) {
+        document.getElementById('freq-y').value = pendulums[1].frequency;
+        document.getElementById('phase').value = pendulums[1].phase;
+      }
+
+      updateSliderDisplays();
+      updatePendulumDots();
+      clear();
+
+      // Clear active preset
+      document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+    }
+
+    // Save
+    function savePNG() {
+      const link = document.createElement('a');
+      link.download = `harmonograph-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Buttons
+    document.getElementById('btn-random').addEventListener('click', randomize);
+    document.getElementById('btn-clear').addEventListener('click', clear);
+    document.getElementById('btn-save').addEventListener('click', savePNG);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      switch (e.key.toLowerCase()) {
+        case 'r': randomize(); break;
+        case 'c': clear(); break;
+        case 's': e.preventDefault(); savePNG(); break;
+        case ' ': e.preventDefault(); paused = !paused; break;
+        case '1': applyPreset('lissajous'); break;
+        case '2': applyPreset('rotary'); break;
+        case '3': applyPreset('lateral'); break;
+        case '4': applyPreset('dense'); break;
+        case '5': applyPreset('chaos'); break;
+      }
+    });
+
+    // --- Init ---
+    clear();
+    updatePendulumDots();
+    updateSliderDisplays();
+    animId = requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
