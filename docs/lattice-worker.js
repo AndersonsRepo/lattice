@@ -273,8 +273,10 @@ class NoiseLive {
         let nx = (px + offsetX) * scale + time * 0.3;
         let ny = (py + offsetY) * scale + time * 0.15;
         if (warp > 0) {
-          nx += field.fbm(nx + 5.2, ny + 1.3, octaves, persistence, lacunarity) * warp * 10;
-          ny += field.fbm(nx + 1.7, ny + 9.2, octaves, persistence, lacunarity) * warp * 10;
+          // Use fewer octaves for displacement (warp doesn't need full detail)
+          const warpOct = Math.min(octaves, 3);
+          nx += field.fbm(nx + 5.2, ny + 1.3, warpOct, persistence, lacunarity) * warp * 10;
+          ny += field.fbm(nx + 1.7, ny + 9.2, warpOct, persistence, lacunarity) * warp * 10;
         }
         const n = (field.fbm(nx, ny, octaves, persistence, lacunarity) + 1) * 0.5;
         vals[rowOff + px] = n < 0 ? 0 : n > 1 ? 1 : n;
@@ -319,6 +321,7 @@ class FlowFieldLive {
     // Cache the base fbm call when curl is enabled (3 fbm calls → 2 with shared base)
     const useCurl = curlAmt > 0;
     const eps = 0.01;
+    const invEps = 1 / eps; // Pre-compute for forward difference gradient
     for (let i = 0; i < count; i++) {
       if (pl[i] <= 0 || px[i] < 0 || px[i] >= w || py[i] < 0 || py[i] >= h) {
         px[i] = rng() * w; py[i] = rng() * h; pl[i] = steps;
@@ -332,13 +335,15 @@ class FlowFieldLive {
       const nx = (px[i] + offsetX) * fieldScale;
       const ny = (py[i] + offsetY) * fieldScale;
       let angle;
+      const base = field.fbm(nx, ny, 3, 0.5, 2);
       if (useCurl) {
-        const base = field.fbm(nx, ny, 3, 0.5, 2);
-        const dndx = (field.fbm(nx + eps, ny, 3, 0.5, 2) - field.fbm(nx - eps, ny, 3, 0.5, 2)) * 50;
-        const dndy = (field.fbm(nx, ny + eps, 3, 0.5, 2) - field.fbm(nx, ny - eps, 3, 0.5, 2)) * 50;
+        // Forward differences: 2 extra fbm calls instead of 4 (central differences)
+        // dndx ≈ (f(x+eps) - f(x)) / eps, dndy ≈ (f(y+eps) - f(y)) / eps
+        const dndx = (field.fbm(nx + eps, ny, 3, 0.5, 2) - base) * invEps;
+        const dndy = (field.fbm(nx, ny + eps, 3, 0.5, 2) - base) * invEps;
         angle = base * 6.2832 * (1 - curlAmt) + Math.atan2(dndx, -dndy) * curlAmt;
       } else {
-        angle = field.fbm(nx, ny, 3, 0.5, 2) * 6.2832;
+        angle = base * 6.2832;
       }
       px[i] += Math.cos(angle) * stepLength;
       py[i] += Math.sin(angle) * stepLength;

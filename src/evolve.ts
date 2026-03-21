@@ -317,6 +317,7 @@ function formatPieceForDiscord(piece: Piece): string {
     : piece.genome.type === "julia" ? "Julia Set"
     : piece.genome.type === "noise" ? "Fractal Noise"
     : piece.genome.type === "flowfield" ? "Flow Field"
+    : piece.genome.type === "magnetic-pendulum" ? "Magnetic Pendulum"
     : "L-System";
 
   const ruleStr = piece.genome.type === "1d"

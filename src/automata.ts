@@ -2792,6 +2792,25 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       // Barnsley fern variants
       { X: "F-[[X]+X]+F[+FX]-X", F: "FF" },          // Classic Barnsley
       { X: "F+[[X]-X]-F[-FX]+X", F: "F!F" },         // Inverse Barnsley
+      // Space-filling curves
+      { X: "XF-F+F-XF+F+XF-F+F-X" },                 // Gosper curve (flowsnake)
+      { F: "F+F--F+F" },                              // Lévy C curve
+      { X: "XFYFX+F+YFXFY-F-XFYFX", Y: "YFXFY-F-XFYFX+F+YFXFY" }, // Peano curve
+      // Succulent / rosette forms
+      { X: "F[+X]F[-X][++X][--X]", F: "F!F" },       // Rosette spiral
+      { F: "FF[++F][+F][-F][--F]" },                  // Radial succulent
+      // Bracket coral / antler forms
+      { X: "F[+X][+X][-X]FX", F: "FF!" },             // Staghorn coral
+      { F: "F[+F+F]F[-F-F]F" },                       // Antler branching
+      // Fibonacci / spiral phyllotaxis
+      { X: "F[+++X]F[++X]F[+X][-X]", F: "FF" },      // Golden spiral branch
+      // Vine / climbing forms
+      { X: "F~[+X]F~[-X]~FX", F: "~F~F" },           // Climbing vine
+      { F: "~F[+~F@]~F[-~F@]~F" },                    // Flowering vine
+      // Dense canopy / forest floor
+      { X: "F[+X][X][-X]F[+X][-X]", F: "F!F" },      // Dense understory
+      // Branching with seasonal awareness
+      { X: "F!F[+X@]&[-X@]F^X", F: "FF" },           // Seasonal fruiting tree
     ];
     const template = ruleTemplates[Math.floor(rng() * ruleTemplates.length)];
     const hasX = "X" in template;
