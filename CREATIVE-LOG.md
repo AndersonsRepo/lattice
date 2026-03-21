@@ -4,6 +4,16 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Spectrum: Palette Extraction & Perceptual Color Intelligence
+- **What**: New `docs/spectrum.html` — comprehensive palette exploration with six interactive sections built on the OKLCH/OKLAB engine from `src/palette.ts`
+- **Hall of Fame Palette DNA**: Fetches pieces from Supabase/gallery.json, k-means clustering in OKLAB space extracts 8 dominant colors per piece. Aesthetic quality scores, temperature gauge, Delta E step-distance chart.
+- **Perceptual Gradient Comparison**: RGB vs OKLAB vs OKLCH side-by-side with uniformity scoring.
+- **OKLCH Gamut Boundary Explorer**: Interactive hue wheel + L-vs-C gamut slice with cusp point and cusp-following gradient.
+- **Color Blindness Simulation**: All species palettes under protanopia/deuteranopia/tritanopia/achromatopsia with distinction metrics.
+- **Palette Forge**: OKLCH parameter controls + 6 harmony modes, live aesthetic scoring + accessibility analysis.
+- **Population Color Map**: Hue-vs-chroma scatter plot of all pieces, score-weighted dot size, hover tooltips.
+- **Files**: `docs/spectrum.html` (new), `docs/map.html` (added entry)
+
 ### 2026-03-21 — Chromatics: Evolutionary Color Explorer + Palette System Enhancements
 - **What**: New `docs/chromatics.html` page exploring the evolutionary story of color, plus enhanced `src/palette.ts` with palette fingerprinting, similarity metrics, and clustering
 - **palette.ts enhancements**:

@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Spectrum</title>
+  <style>
+    :root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;--text:#c8c8d4;--text-dim:#6e6e82;--accent:#7c6fe0;--accent-glow:#7c6fe040;--green:#4ade80;--amber:#fbbf24;--red:#f87171}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code','Cascadia Code',monospace;min-height:100vh;overflow-x:hidden}
+    .container{max-width:1060px;margin:0 auto;padding:2rem 1.5rem}
+    header{text-align:center;padding:3rem 0 2rem;border-bottom:1px solid var(--border);margin-bottom:2.5rem}
+    h1{font-size:2.5rem;font-weight:300;letter-spacing:0.3em;text-transform:uppercase;color:var(--accent);text-shadow:0 0 30px var(--accent-glow);margin-bottom:0.5rem}
+    .subtitle{color:var(--text-dim);font-size:0.85rem;letter-spacing:0.1em}
+    h2{font-size:1.1rem;font-weight:400;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);margin-bottom:1.25rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)}
+    .section{margin-bottom:3.5rem}
+    .desc{font-size:0.75rem;color:var(--text-dim);margin-bottom:1rem;line-height:1.6}
+    .back-link{display:inline-block;margin-top:0.75rem;color:var(--accent);text-decoration:none;font-size:0.75rem;letter-spacing:0.08em}
+    .back-link:hover{text-decoration:underline}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:1rem}
+    footer{text-align:center;padding:2rem 0;color:var(--text-dim);font-size:0.7rem;border-top:1px solid var(--border);margin-top:2rem}
+    footer a{color:var(--accent);text-decoration:none}
+
+    /* Gradient strips */
+    .grad-strip{height:36px;border-radius:6px;overflow:hidden;display:flex}
+    .grad-strip .sw{flex:1;transition:transform 0.15s}
+    .grad-strip .sw:hover{transform:scaleY(1.2)}
+    .grad-strip-sm{height:24px;border-radius:4px;overflow:hidden;display:flex}
+    .grad-strip-sm .sw{flex:1}
+    .hex-row{display:flex;justify-content:space-between;margin-top:0.25rem}
+    .hex-row span{font-size:0.55rem;color:var(--text-dim);flex:1;text-align:center}
+
+    /* Controls */
+    select,input[type="number"]{padding:0.35rem 0.5rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:inherit;font-size:0.75rem;cursor:pointer}
+    select:focus,input:focus{outline:none;border-color:var(--accent)}
+    input[type="color"]{width:36px;height:36px;border:2px solid var(--border);border-radius:6px;background:none;cursor:pointer;padding:0}
+    input[type="color"]::-webkit-color-swatch-wrapper{padding:2px}
+    input[type="color"]::-webkit-color-swatch{border:none;border-radius:3px}
+    input[type="range"]{-webkit-appearance:none;height:5px;background:var(--border);border-radius:3px;outline:none;cursor:pointer}
+    input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+    .pill{padding:0.35rem 0.8rem;border:1px solid var(--border);border-radius:16px;background:transparent;color:var(--text-dim);font-family:inherit;font-size:0.68rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;transition:all 0.2s}
+    .pill:hover{border-color:var(--accent);color:var(--text)}
+    .pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
+    .ctrl-row{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem}
+    .ctrl-group{display:flex;flex-direction:column;gap:0.3rem}
+    .ctrl-group label{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em}
+
+    /* HoF grid */
+    .hof-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem}
+    .hof-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:all 0.25s}
+    .hof-card:hover{border-color:var(--accent);box-shadow:0 0 20px var(--accent-glow)}
+    .hof-card.selected{border-color:var(--green);box-shadow:0 0 16px rgba(74,222,128,0.2)}
+    .hof-render{font-size:0.28rem;line-height:1;letter-spacing:0;white-space:pre;padding:0.5rem;overflow:hidden;height:80px;display:flex;align-items:center;justify-content:center}
+    .hof-meta{padding:0.5rem 0.75rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+    .hof-meta .type{font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim)}
+    .hof-meta .score{font-size:0.7rem;color:var(--green);font-weight:600}
+    .hof-palette{display:flex;height:6px}
+    .hof-palette div{flex:1}
+
+    /* Comparison section */
+    .compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
+    .compare-col h3{font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-dim);margin-bottom:0.5rem;text-align:center}
+    .metric-bar{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem}
+    .metric-label{font-size:0.62rem;color:var(--text-dim);width:80px;text-transform:uppercase;letter-spacing:0.05em}
+    .metric-track{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+    .metric-fill{height:100%;border-radius:2px;transition:width 0.4s ease}
+    .metric-val{font-size:0.65rem;width:40px;text-align:right;font-weight:600}
+
+    /* Gamut canvas */
+    .gamut-wrap{display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap}
+    .gamut-canvas-wrap{position:relative;flex-shrink:0}
+    .gamut-info{flex:1;min-width:280px}
+    canvas{display:block}
+
+    /* Blindness sim */
+    .blind-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.75rem}
+    .blind-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.75rem;text-align:center}
+    .blind-card h4{font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.5rem}
+
+    /* Score radar */
+    .radar-wrap{display:flex;gap:2rem;align-items:center;flex-wrap:wrap}
+    .score-details{flex:1;min-width:240px}
+
+    /* Forge */
+    .forge-output{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}
+
+    @media(max-width:700px){
+      .compare-grid{grid-template-columns:1fr}
+      .gamut-wrap{flex-direction:column;align-items:center}
+      .forge-output{grid-template-columns:1fr}
+      h1{font-size:1.6rem}
+      .hof-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Spectrum</h1>
+    <p class="subtitle">Palette extraction, perceptual analysis & color intelligence from the Hall of Fame</p>
+    <a href="index.html" class="back-link">&larr; Back to Gallery</a>
+  </header>
+
+  <!-- Section 1: Hall of Fame Palette Extraction -->
+  <div class="section">
+    <h2>Hall of Fame Palette DNA</h2>
+    <p class="desc">Select a piece from the Hall of Fame to extract its dominant colors using k-means clustering in OKLAB perceptual space. Each piece's character distribution maps to its species gradient, then clusters reveal the true color signature.</p>
+    <div class="hof-grid" id="hof-grid"><div class="desc" style="grid-column:1/-1;text-align:center">Loading Hall of Fame...</div></div>
+    <div id="extraction-detail" style="display:none;margin-top:1.5rem">
+      <div class="card">
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-start">
+          <div style="flex:1;min-width:240px">
+            <div style="font-size:0.72rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem">Extracted Palette <span id="ext-id" style="color:var(--text-dim)"></span></div>
+            <div class="grad-strip" id="ext-palette"></div>
+            <div class="hex-row" id="ext-hexes"></div>
+            <div style="margin-top:1rem;font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem">Species Gradient (reference)</div>
+            <div class="grad-strip-sm" id="ext-species"></div>
+          </div>
+          <div style="flex:1;min-width:240px" id="ext-metrics"></div>
+        </div>
+        <div style="margin-top:1.25rem">
+          <div style="font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem">Perceptual Step Distances (Delta E)</div>
+          <canvas id="ext-delta-chart" width="500" height="80" style="width:100%;height:80px;border-radius:6px;background:var(--surface)"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Perceptual Gradient Comparison -->
+  <div class="section">
+    <h2>Perceptual Gradient Comparison</h2>
+    <p class="desc">See the difference between naive RGB interpolation, OKLAB (perceptual lightness), and OKLCH (hue-preserving arc). The uniformity score measures how even the perceptual steps are &mdash; higher is smoother.</p>
+    <div class="card">
+      <div class="ctrl-row">
+        <div class="ctrl-group"><label>From</label><input type="color" id="cmp-from" value="#1a1a3e"></div>
+        <div class="ctrl-group"><label>To</label><input type="color" id="cmp-to" value="#4ade80"></div>
+        <div class="ctrl-group"><label>Steps</label><input type="number" id="cmp-steps" value="12" min="4" max="24" style="width:55px"></div>
+      </div>
+      <div class="compare-grid" id="cmp-grid"></div>
+    </div>
+  </div>
+
+  <!-- Section 3: Gamut Boundary Explorer -->
+  <div class="section">
+    <h2>OKLCH Gamut Boundary</h2>
+    <p class="desc">Explore the sRGB gamut boundary in OKLCH space. The shape shows the maximum achievable chroma at each lightness/hue combination. Colors outside this boundary cannot be displayed on standard screens. Click the wheel to select a hue.</p>
+    <div class="card">
+      <div class="gamut-wrap">
+        <div class="gamut-canvas-wrap">
+          <canvas id="gamut-wheel" width="300" height="300" style="border-radius:50%;cursor:crosshair;box-shadow:0 0 30px var(--accent-glow)"></canvas>
+        </div>
+        <div class="gamut-info">
+          <div style="font-size:0.72rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem">Gamut Slice at Hue <span id="gamut-hue-val">270</span>&deg;</div>
+          <canvas id="gamut-slice" width="400" height="200" style="width:100%;height:200px;border-radius:6px"></canvas>
+          <div style="margin-top:1rem">
+            <div style="font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem">Cusp Gradient (max chroma at each lightness)</div>
+            <div class="grad-strip" id="gamut-cusp"></div>
+            <div class="hex-row" id="gamut-cusp-hex"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 4: Color Blindness Simulation -->
+  <div class="section">
+    <h2>Color Blindness Simulation</h2>
+    <p class="desc">How each species palette appears under different types of color vision deficiency. Uses Brettel/Vi&eacute;not simulation matrices.</p>
+    <div class="ctrl-row" style="margin-bottom:1rem">
+      <div class="ctrl-group"><label>Species</label>
+        <select id="blind-species"></select>
+      </div>
+    </div>
+    <div class="blind-grid" id="blind-grid"></div>
+  </div>
+
+  <!-- Section 5: Palette Forge -->
+  <div class="section">
+    <h2>Palette Forge</h2>
+    <p class="desc">Craft custom palettes using OKLCH color science. Choose a harmony rule, tune the parameters, and see live aesthetic scoring. Palettes are generated with parabolic chroma envelopes that prevent washed-out extremes.</p>
+    <div class="card">
+      <div class="ctrl-row">
+        <div class="ctrl-group"><label>Base Hue</label><input type="range" id="forge-hue" min="0" max="360" value="270" style="width:140px"><span id="forge-hue-val" style="font-size:0.7rem;color:var(--text-dim);margin-left:0.3rem">270&deg;</span></div>
+        <div class="ctrl-group"><label>Chroma</label><input type="range" id="forge-chroma" min="4" max="30" value="18" style="width:100px"><span id="forge-chroma-val" style="font-size:0.7rem;color:var(--text-dim);margin-left:0.3rem">0.18</span></div>
+        <div class="ctrl-group"><label>L Range</label>
+          <div style="display:flex;gap:0.3rem;align-items:center">
+            <input type="range" id="forge-lmin" min="0" max="30" value="5" style="width:60px">
+            <span style="font-size:0.65rem;color:var(--text-dim)">&mdash;</span>
+            <input type="range" id="forge-lmax" min="60" max="100" value="95" style="width:60px">
+          </div>
+        </div>
+        <div class="ctrl-group"><label>Steps</label><input type="number" id="forge-steps" value="10" min="4" max="20" style="width:55px"></div>
+      </div>
+      <div class="ctrl-row" id="forge-harmony"></div>
+      <div class="grad-strip" id="forge-palette" style="height:48px"></div>
+      <div class="hex-row" id="forge-hexes"></div>
+      <div class="forge-output" id="forge-output"></div>
+    </div>
+  </div>
+
+  <!-- Section 6: Population Color Map -->
+  <div class="section">
+    <h2>Population Color Map</h2>
+    <p class="desc">Every piece in the current population plotted by its dominant hue and chroma in OKLCH space. Dot size reflects fitness score. Reveals which regions of color space the evolutionary process has explored.</p>
+    <canvas id="pop-map" width="800" height="400" style="width:100%;height:400px;border-radius:8px;background:var(--surface);cursor:crosshair"></canvas>
+    <div id="pop-tooltip" style="display:none;position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.75rem;font-size:0.65rem;pointer-events:none;z-index:10"></div>
+  </div>
+
+  <footer>
+    <a href="palette.html">Palette Lab</a> &middot;
+    <a href="chromatic.html">Chromatic Lab</a> &middot;
+    <a href="map.html">All Pages</a> &middot;
+    <a href="index.html">Gallery</a>
+  </footer>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// OKLCH / OKLAB Color Science (inline for static HTML)
+// ══════════════════════════════════════════════════════
+
+function srgbToLinear(c){return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
+function linearToSrgb(c){return c<=0.0031308?12.92*c:1.055*Math.pow(c,1/2.4)-0.055}
+
+function hexToRgb(h){return[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255]}
+function rgbToHex(r,g,b){return'#'+[r,g,b].map(v=>Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,'0')).join('')}
+
+function hexToOklab(hex){
+  const[r,g,b]=hexToRgb(hex);
+  const lr=srgbToLinear(r),lg=srgbToLinear(g),lb=srgbToLinear(b);
+  const l_=Math.cbrt(0.4122214708*lr+0.5363325363*lg+0.0514459929*lb);
+  const m_=Math.cbrt(0.2119034982*lr+0.6806995451*lg+0.1073969566*lb);
+  const s_=Math.cbrt(0.0883024619*lr+0.2024326293*lg+0.6892650189*lb);
+  return[0.2104542553*l_+0.7936177850*m_-0.0040720468*s_,1.9779984951*l_-2.4285922050*m_+0.4505937099*s_,0.0259040371*l_+0.7827717662*m_-0.8086757660*s_]
+}
+
+function oklabToLinearRgb(L,a,b){
+  const l_=L+0.3963377774*a+0.2158037573*b;
+  const m_=L-0.1055613458*a-0.0638541728*b;
+  const s_=L-0.0894841775*a-1.2914855480*b;
+  return[+4.0767416621*l_*l_*l_-3.3077115913*m_*m_*m_+0.2309699292*s_*s_*s_,-1.2684380046*l_*l_*l_+2.6097574011*m_*m_*m_-0.3413193965*s_*s_*s_,-0.0041960863*l_*l_*l_-0.7034186147*m_*m_*m_+1.7076147010*s_*s_*s_]
+}
+
+function oklabToOklch(L,a,b){return[L,Math.sqrt(a*a+b*b),((Math.atan2(b,a)*180/Math.PI)+360)%360]}
+function oklchToOklab(L,C,h){const r=h*Math.PI/180;return[L,C*Math.cos(r),C*Math.sin(r)]}
+
+function hexToOklch(hex){const[L,a,b]=hexToOklab(hex);return oklabToOklch(L,a,b)}
+
+function oklchToHex(L,C,H){
+  let c=C;
+  for(let i=0;i<25;i++){
+    const[lL,la,lb]=oklchToOklab(L,c,H);
+    const[r,g,b]=oklabToLinearRgb(lL,la,lb);
+    if(r>=-0.001&&r<=1.001&&g>=-0.001&&g<=1.001&&b>=-0.001&&b<=1.001){
+      return'#'+[r,g,b].map(v=>Math.round(linearToSrgb(Math.max(0,Math.min(1,v)))*255).toString(16).padStart(2,'0')).join('')
+    }
+    c*=0.95
+  }
+  const grey=Math.round(Math.max(0,Math.min(1,L))*255).toString(16).padStart(2,'0');
+  return'#'+grey+grey+grey
+}
+
+function inGamut(L,C,H){
+  const[lL,la,lb]=oklchToOklab(L,C,H);
+  const[r,g,b]=oklabToLinearRgb(lL,la,lb);
+  return r>=-0.001&&r<=1.001&&g>=-0.001&&g<=1.001&&b>=-0.001&&b<=1.001
+}
+
+function gamutMaxChroma(L,H){
+  let lo=0,hi=0.4;
+  for(let i=0;i<20;i++){const mid=(lo+hi)/2;if(inGamut(L,mid,H))lo=mid;else hi=mid}
+  return lo
+}
+
+function deltaE(a,b){const la=hexToOklab(a),lb=hexToOklab(b);return Math.sqrt((la[0]-lb[0])**2+(la[1]-lb[1])**2+(la[2]-lb[2])**2)}
+
+// Gradient generators
+function naiveRgbGradient(h1,h2,n){
+  const[r1,g1,b1]=hexToRgb(h1),[r2,g2,b2]=hexToRgb(h2);
+  return Array.from({length:n},(_,i)=>{const t=n===1?0.5:i/(n-1);return rgbToHex(r1+(r2-r1)*t,g1+(g2-g1)*t,b1+(b2-b1)*t)})
+}
+function oklabGradient(h1,h2,n){
+  const a=hexToOklab(h1),b=hexToOklab(h2);
+  return Array.from({length:n},(_,i)=>{const t=n===1?0.5:i/(n-1);return oklchToHex(...oklabToOklch(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t))})
+}
+function oklchGradientFn(h1,h2,n){
+  const[L1,C1,H1]=hexToOklch(h1),[L2,C2,H2]=hexToOklch(h2);
+  let dh=H2-H1;if(dh>180)dh-=360;if(dh<-180)dh+=360;
+  return Array.from({length:n},(_,i)=>{const t=n===1?0.5:i/(n-1);return oklchToHex(L1+(L2-L1)*t,C1+(C2-C1)*t,(H1+dh*t+360)%360)})
+}
+
+function cuspGradient(hue,steps,scale=0.85){
+  return Array.from({length:steps},(_,i)=>{const L=0.08+(i/(steps-1))*0.87;return oklchToHex(L,gamutMaxChroma(L,hue)*scale,hue)})
+}
+
+// Species themes
+const SPECIES_THEMES={
+  '1d':{hue:270,chroma:0.18,harmony:'mono',lMin:0.05,lMax:1.0},
+  '2d':{hue:145,chroma:0.18,harmony:'mono',lMin:0.05,lMax:0.95},
+  'lsystem':{hue:35,chroma:0.16,harmony:'mono',lMin:0.05,lMax:0.95},
+  'reaction-diffusion':{hue:300,chroma:0.19,harmony:'mono',lMin:0.05,lMax:0.95},
+  'voronoi':{hue:200,chroma:0.16,harmony:'mono',lMin:0.05,lMax:0.92},
+  'wfc':{hue:340,chroma:0.18,harmony:'mono',lMin:0.05,lMax:0.93},
+  'spirograph':{hue:90,chroma:0.17,harmony:'mono',lMin:0.05,lMax:0.95},
+  'attractor':{hue:20,chroma:0.14,harmony:'mono',lMin:0.05,lMax:0.92},
+  'julia':{hue:170,chroma:0.16,harmony:'mono',lMin:0.05,lMax:0.92},
+  'noise':{hue:65,chroma:0.15,harmony:'mono',lMin:0.05,lMax:0.95},
+  'flowfield':{hue:185,chroma:0.14,harmony:'mono',lMin:0.05,lMax:0.92},
+  'flame':{hue:10,chroma:0.20,harmony:'analogous',lMin:0.05,lMax:0.95},
+};
+
+const HARMONY_OFFSETS={
+  mono:[0],complementary:[0,180],analogous:[-30,0,30],triadic:[0,120,240],split:[0,150,210],tetradic:[0,90,180,270]
+};
+
+function generateGradient(theme,steps){
+  const hues=HARMONY_OFFSETS[theme.harmony].map(o=>(theme.hue+o+360)%360);
+  return Array.from({length:steps},(_,i)=>{
+    const t=steps===1?0.5:i/(steps-1);
+    const L=theme.lMin+t*(theme.lMax-theme.lMin);
+    const cScale=1-Math.pow(2*t-1,2)*0.4;
+    const hIdx=t*(hues.length-1);
+    const hLow=hues[Math.floor(hIdx)],hHigh=hues[Math.min(Math.ceil(hIdx),hues.length-1)];
+    const hFrac=hIdx-Math.floor(hIdx);
+    let dh=hHigh-hLow;if(dh>180)dh-=360;if(dh<-180)dh+=360;
+    return oklchToHex(L,theme.chroma*cScale,(hLow+dh*hFrac+360)%360)
+  })
+}
+
+function getSpeciesColors(type){return generateGradient(SPECIES_THEMES[type]||SPECIES_THEMES['2d'],8)}
+
+// Color blindness simulation
+function simBlind(hex,type){
+  const[r,g,b]=hexToRgb(hex);
+  const lr=srgbToLinear(r),lg=srgbToLinear(g),lb=srgbToLinear(b);
+  let sr,sg,sb;
+  switch(type){
+    case'protanopia':sr=0.152286*lr+1.052583*lg-0.204868*lb;sg=0.114503*lr+0.786281*lg+0.099216*lb;sb=-0.003882*lr-0.048116*lg+1.051998*lb;break;
+    case'deuteranopia':sr=0.367322*lr+0.860646*lg-0.227968*lb;sg=0.280085*lr+0.672501*lg+0.047413*lb;sb=-0.011820*lr+0.042940*lg+0.968881*lb;break;
+    case'tritanopia':sr=1.255528*lr-0.076749*lg-0.178779*lb;sg=-0.078411*lr+0.930809*lg+0.147602*lb;sb=0.004733*lr+0.691367*lg+0.303900*lb;break;
+    case'achromatopsia':{const l=0.2126*lr+0.7152*lg+0.0722*lb;sr=sg=sb=l;break}
+  }
+  return'#'+[sr,sg,sb].map(v=>Math.round(linearToSrgb(Math.max(0,Math.min(1,v)))*255).toString(16).padStart(2,'0')).join('')
+}
+
+// Palette analysis
+function analyzePalette(colors){
+  if(colors.length<2)return{deltaEs:[],avg:0,variance:0,uniformity:100,contrast:1};
+  const des=[];
+  for(let i=0;i<colors.length-1;i++)des.push(deltaE(colors[i],colors[i+1]));
+  const avg=des.reduce((a,b)=>a+b,0)/des.length;
+  const variance=des.reduce((a,d)=>a+(d-avg)**2,0)/des.length;
+  const uniformity=avg>0?Math.max(0,100-Math.sqrt(variance)/avg*100):0;
+  const lums=colors.map(c=>hexToOklab(c)[0]);
+  const contrast=(Math.max(...lums)+0.05)/(Math.min(...lums)+0.05);
+  return{deltaEs:des,avg,variance,uniformity,contrast}
+}
+
+function scorePaletteAesthetics(colors){
+  if(colors.length<2)return{uniformity:0,contrast:0,chromaRichness:0,hueSpread:0,overall:0};
+  const a=analyzePalette(colors);
+  const uniformity=a.uniformity/100;
+  const lums=colors.map(c=>hexToOklab(c)[0]);
+  const contrast=Math.min(1,(Math.max(...lums)-Math.min(...lums))/0.8);
+  const chromas=colors.map(c=>hexToOklch(c)[1]);
+  const avgC=chromas.reduce((s,c)=>s+c,0)/chromas.length;
+  const cVar=chromas.reduce((s,c)=>s+Math.abs(c-avgC),0)/chromas.length;
+  const chromaRichness=Math.min(1,avgC/0.15*0.6+cVar/0.05*0.4);
+  const hues=colors.filter(c=>hexToOklch(c)[1]>0.02).map(c=>hexToOklch(c)[2]);
+  let hueSpread=0;
+  if(hues.length>=2){
+    const sorted=[...hues].sort((a,b)=>a-b);
+    let maxGap=0;
+    for(let i=1;i<sorted.length;i++)maxGap=Math.max(maxGap,sorted[i]-sorted[i-1]);
+    maxGap=Math.max(maxGap,360-sorted[sorted.length-1]+sorted[0]);
+    hueSpread=Math.min(1,(360-maxGap)/180)
+  }
+  const overall=uniformity*0.3+contrast*0.3+chromaRichness*0.25+hueSpread*0.15;
+  return{uniformity,contrast,chromaRichness,hueSpread,overall}
+}
+
+// K-means extraction
+function charIntensity(ch){
+  if(ch===' ')return 0;
+  const maps=[['\u00B7.:~\u2801',1],['\u2591\u2022\u2248\u2803\u25B3\u25BD\u2726',2],['\u2592\u25CB\u223F\u2807\u25C7\u2727\u2766',3],['\u2593\u25CF\u224B\u280F\u25C8\u2605\u273F',4],['\u2588\u25C6\u2307\u281F\u2B21\u2736\u2740\u2741',5],['\u2573\u25D0\u25D1\u25D2\u25D3\u2301\u283F\u28FF\u2B22\u2739\u273A',6]];
+  for(const[s,v]of maps)if(s.includes(ch))return v;
+  return 3
+}
+
+function extractPalette(rendered,typeColors,k=6){
+  const pixels=[];
+  for(const ch of rendered){
+    const i=charIntensity(ch);if(i===0)continue;
+    pixels.push(hexToOklab(typeColors[Math.min(i,typeColors.length-1)]))
+  }
+  if(pixels.length<k)return typeColors.slice(0,k);
+  // k-means++ init
+  const centroids=[pixels[Math.floor(Math.random()*pixels.length)]];
+  for(let c=1;c<k;c++){
+    const dists=pixels.map(p=>{let m=Infinity;for(const ct of centroids){const d=(p[0]-ct[0])**2+(p[1]-ct[1])**2+(p[2]-ct[2])**2;if(d<m)m=d}return m});
+    const total=dists.reduce((a,b)=>a+b,0);let r=Math.random()*total,acc=0;
+    for(let i=0;i<dists.length;i++){acc+=dists[i];if(acc>=r){centroids.push([...pixels[i]]);break}}
+  }
+  for(let iter=0;iter<15;iter++){
+    const clusters=Array.from({length:k},()=>[]);
+    for(const p of pixels){let minD=Infinity,minC=0;for(let c=0;c<k;c++){const d=(p[0]-centroids[c][0])**2+(p[1]-centroids[c][1])**2+(p[2]-centroids[c][2])**2;if(d<minD){minD=d;minC=c}}clusters[minC].push(p)}
+    for(let c=0;c<k;c++){if(!clusters[c].length)continue;const n=clusters[c].length;centroids[c]=[clusters[c].reduce((a,p)=>a+p[0],0)/n,clusters[c].reduce((a,p)=>a+p[1],0)/n,clusters[c].reduce((a,p)=>a+p[2],0)/n]}
+  }
+  return centroids.map(ct=>{const[L,C,H]=oklabToOklch(ct[0],ct[1],ct[2]);return oklchToHex(L,C,H)}).sort((a,b)=>hexToOklab(a)[0]-hexToOklab(b)[0])
+}
+
+// Color temperature
+function colorTemp(hex){
+  const[,,h]=hexToOklch(hex);
+  const warm=[{c:30,w:60,s:1},{c:60,w:40,s:0.7},{c:330,w:50,s:0.6}];
+  const cool=[{c:210,w:60,s:1},{c:170,w:40,s:0.8},{c:270,w:40,s:0.5}];
+  let t=0;
+  for(const z of warm){let d=Math.abs(h-z.c);if(d>180)d=360-d;t+=Math.max(0,1-d/z.w)*z.s}
+  for(const z of cool){let d=Math.abs(h-z.c);if(d>180)d=360-d;t-=Math.max(0,1-d/z.w)*z.s}
+  return Math.max(-1,Math.min(1,t))
+}
+
+// ══════════════════════════════════════════════════════
+// Data Loading
+// ══════════════════════════════════════════════════════
+
+const SB_URL='https://fwwjtlafcrzeqfuqmexs.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ3d2p0bGFmY3J6ZXFmdXFtZXhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNjAzNTAsImV4cCI6MjA4MzczNjM1MH0.caaW2yQl0o9WGfwvNRrcdPZXmYIZKgBaCpqzc-gXt5M';
+const SB_HEADERS={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
+
+let allPieces=[];
+
+async function loadPieces(){
+  try{
+    const res=await fetch(SB_URL+'/rest/v1/hall_of_fame?select=id,genome,score,generation,rendered&order=score.desc&limit=48',{headers:SB_HEADERS});
+    if(res.ok){const d=await res.json();if(d.length)return d}
+  }catch(e){}
+  try{
+    const res=await fetch('gallery.json');
+    if(res.ok){const d=await res.json();return(d.pieces||d).sort((a,b)=>b.score-a.score).slice(0,48)}
+  }catch(e){}
+  return[]
+}
+
+// ══════════════════════════════════════════════════════
+// Rendering Helpers
+// ══════════════════════════════════════════════════════
+
+function makeStrip(colors,cls='grad-strip'){
+  return`<div class="${cls}">${colors.map(c=>`<div class="sw" style="background:${c}" title="${c}"></div>`).join('')}</div>`
+}
+function makeHexRow(colors){
+  return`<div class="hex-row">${colors.map(c=>`<span>${c}</span>`).join('')}</div>`
+}
+function makeMetricBar(label,value,color='var(--accent)'){
+  const pct=Math.round(value*100);
+  return`<div class="metric-bar"><span class="metric-label">${label}</span><div class="metric-track"><div class="metric-fill" style="width:${pct}%;background:${color}"></div></div><span class="metric-val" style="color:${color}">${pct}%</span></div>`
+}
+
+// ══════════════════════════════════════════════════════
+// Section 1: Hall of Fame Palette Extraction
+// ══════════════════════════════════════════════════════
+
+let selectedPiece=null;
+
+function renderHofGrid(pieces){
+  const grid=document.getElementById('hof-grid');
+  if(!pieces.length){grid.innerHTML='<div class="desc" style="grid-column:1/-1;text-align:center">No pieces found</div>';return}
+  grid.innerHTML=pieces.map((p,i)=>{
+    const type=p.genome?.type||'2d';
+    const colors=getSpeciesColors(type);
+    const accent=colors[4]||'var(--accent)';
+    const rendered=(p.rendered||'').slice(0,500);
+    return`<div class="hof-card" data-idx="${i}">
+      <div class="hof-render" style="color:${accent}">${escapeHtml(rendered)}</div>
+      <div class="hof-palette">${colors.map(c=>`<div style="background:${c}"></div>`).join('')}</div>
+      <div class="hof-meta"><span class="type">${type}</span><span class="score">${(p.score*100).toFixed(1)}%</span></div>
+    </div>`
+  }).join('');
+  grid.querySelectorAll('.hof-card').forEach(card=>{
+    card.addEventListener('click',()=>{
+      grid.querySelectorAll('.hof-card').forEach(c=>c.classList.remove('selected'));
+      card.classList.add('selected');
+      selectPiece(pieces[+card.dataset.idx])
+    })
+  });
+  // Auto-select first
+  if(pieces.length){grid.querySelector('.hof-card').click()}
+}
+
+function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function selectPiece(piece){
+  selectedPiece=piece;
+  const type=piece.genome?.type||'2d';
+  const specColors=getSpeciesColors(type);
+  const extracted=extractPalette(piece.rendered||'',specColors,8);
+  const analysis=analyzePalette(extracted);
+  const aesthetics=scorePaletteAesthetics(extracted);
+
+  const detail=document.getElementById('extraction-detail');
+  detail.style.display='block';
+
+  document.getElementById('ext-id').textContent=`(${piece.id} — ${type})`;
+  document.getElementById('ext-palette').innerHTML=extracted.map(c=>`<div class="sw" style="background:${c}" title="${c}"></div>`).join('');
+  document.getElementById('ext-hexes').innerHTML=extracted.map(c=>`<span>${c}</span>`).join('');
+  document.getElementById('ext-species').innerHTML=specColors.map(c=>`<div class="sw" style="background:${c}"></div>`).join('');
+
+  // Metrics
+  const mDiv=document.getElementById('ext-metrics');
+  const avgTemp=extracted.filter(c=>hexToOklch(c)[1]>0.02).reduce((s,c)=>s+colorTemp(c),0)/(extracted.filter(c=>hexToOklch(c)[1]>0.02).length||1);
+  const tempLabel=avgTemp>0.3?'Warm':avgTemp<-0.3?'Cool':'Neutral';
+  const tempColor=avgTemp>0.3?'var(--amber)':avgTemp<-0.3?'#4488ff':'var(--text-dim)';
+  mDiv.innerHTML=`
+    <div style="font-size:0.72rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem">Aesthetic Analysis</div>
+    ${makeMetricBar('Uniformity',aesthetics.uniformity,'var(--green)')}
+    ${makeMetricBar('Contrast',aesthetics.contrast,'var(--accent)')}
+    ${makeMetricBar('Chroma',aesthetics.chromaRichness,'var(--amber)')}
+    ${makeMetricBar('Hue Spread',aesthetics.hueSpread,'#4ad4f5')}
+    ${makeMetricBar('Overall',aesthetics.overall,'var(--green)')}
+    <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.75rem">
+      <span style="font-size:0.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em">Temperature</span>
+      <div style="flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,#4488ff 0%,#888 50%,#ff6644 100%);position:relative">
+        <div style="position:absolute;top:-3px;width:4px;height:14px;background:#fff;border-radius:2px;left:${(avgTemp+1)/2*100}%;transform:translateX(-50%);box-shadow:0 0 6px rgba(255,255,255,0.5)"></div>
+      </div>
+      <span style="font-size:0.68rem;font-weight:600;color:${tempColor}">${tempLabel}</span>
+    </div>
+    <div style="margin-top:0.5rem;font-size:0.62rem;color:var(--text-dim)">Perceptual uniformity: ${analysis.uniformity.toFixed(1)}% &middot; Contrast ratio: ${analysis.contrast.toFixed(1)}:1</div>
+  `;
+
+  // Delta E chart
+  drawDeltaChart(analysis.deltaEs);
+}
+
+function drawDeltaChart(deltaEs){
+  const canvas=document.getElementById('ext-delta-chart');
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=canvas.offsetWidth*dpr;canvas.height=80*dpr;
+  ctx.scale(dpr,dpr);
+  const w=canvas.offsetWidth,h=80;
+  ctx.clearRect(0,0,w,h);
+  if(!deltaEs.length)return;
+
+  const max=Math.max(...deltaEs)*1.2;
+  const avg=deltaEs.reduce((a,b)=>a+b,0)/deltaEs.length;
+  const barW=w/(deltaEs.length+1);
+
+  // Avg line
+  const avgY=h-avg/max*(h-16)-8;
+  ctx.strokeStyle='rgba(124,111,224,0.4)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(0,avgY);ctx.lineTo(w,avgY);ctx.stroke();ctx.setLineDash([]);
+
+  // Bars
+  deltaEs.forEach((d,i)=>{
+    const bh=d/max*(h-16);
+    const x=(i+0.5)*barW;
+    const dev=Math.abs(d-avg)/avg;
+    const color=dev<0.2?'rgba(74,222,128,0.7)':dev<0.5?'rgba(251,191,36,0.7)':'rgba(248,113,113,0.7)';
+    ctx.fillStyle=color;
+    ctx.beginPath();ctx.roundRect(x-barW*0.35,h-8-bh,barW*0.7,bh,3);ctx.fill();
+    ctx.fillStyle='rgba(200,200,212,0.5)';ctx.font='9px monospace';ctx.textAlign='center';
+    ctx.fillText(d.toFixed(3),x,h-bh-12)
+  });
+
+  ctx.fillStyle='rgba(124,111,224,0.6)';ctx.font='9px monospace';ctx.textAlign='right';
+  ctx.fillText('avg: '+avg.toFixed(3),w-4,avgY-4)
+}
+
+// ══════════════════════════════════════════════════════
+// Section 2: Perceptual Gradient Comparison
+// ══════════════════════════════════════════════════════
+
+function updateComparison(){
+  const from=document.getElementById('cmp-from').value;
+  const to=document.getElementById('cmp-to').value;
+  const steps=+document.getElementById('cmp-steps').value||12;
+
+  const rgb=naiveRgbGradient(from,to,steps);
+  const lab=oklabGradient(from,to,steps);
+  const lch=oklchGradientFn(from,to,steps);
+
+  const aRgb=analyzePalette(rgb),aLab=analyzePalette(lab),aLch=analyzePalette(lch);
+
+  const grid=document.getElementById('cmp-grid');
+  grid.innerHTML=[
+    {name:'Linear RGB',colors:rgb,a:aRgb,desc:'Naive interpolation in gamma-encoded sRGB space. Produces a perceptual midpoint shift and desaturated greys.'},
+    {name:'OKLAB',colors:lab,a:aLab,desc:'Interpolation in perceptual lightness space. Even steps, but hue can shift through grey on complementary paths.'},
+    {name:'OKLCH',colors:lch,a:aLch,desc:'Polar interpolation with shortest hue arc. Preserves saturation through the transition. Best for most use cases.'}
+  ].map(({name,colors,a,desc})=>`
+    <div class="compare-col">
+      <h3>${name}</h3>
+      ${makeStrip(colors)}
+      ${makeHexRow(colors.filter((_,i)=>i%Math.max(1,Math.floor(steps/6))===0||i===steps-1))}
+      <div style="margin-top:0.75rem">
+        ${makeMetricBar('Uniformity',a.uniformity/100,a.uniformity>70?'var(--green)':a.uniformity>40?'var(--amber)':'var(--red)')}
+      </div>
+      <div style="font-size:0.6rem;color:var(--text-dim);margin-top:0.5rem;line-height:1.5">${desc}</div>
+    </div>
+  `).join('')
+}
+
+document.getElementById('cmp-from').addEventListener('input',updateComparison);
+document.getElementById('cmp-to').addEventListener('input',updateComparison);
+document.getElementById('cmp-steps').addEventListener('input',updateComparison);
+
+// ══════════════════════════════════════════════════════
+// Section 3: Gamut Boundary Explorer
+// ══════════════════════════════════════════════════════
+
+let gamutHue=270;
+
+function drawGamutWheel(){
+  const canvas=document.getElementById('gamut-wheel');
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const size=300;
+  canvas.width=size*dpr;canvas.height=size*dpr;
+  ctx.scale(dpr,dpr);
+  const cx=size/2,cy=size/2,r=size/2-4;
+
+  // Draw hue wheel at L=0.7
+  for(let angle=0;angle<360;angle+=1){
+    const rad=angle*Math.PI/180;
+    const maxC=gamutMaxChroma(0.7,angle);
+    const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+    grad.addColorStop(0,oklchToHex(0.7,0,angle));
+    grad.addColorStop(0.8,oklchToHex(0.7,maxC*0.85,angle));
+    grad.addColorStop(1,oklchToHex(0.7,maxC*0.6,angle));
+
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,rad-0.02,rad+0.02);
+    ctx.closePath();
+    ctx.fillStyle=grad;ctx.fill()
+  }
+
+  // Hue indicator
+  const hRad=gamutHue*Math.PI/180;
+  ctx.strokeStyle='rgba(255,255,255,0.8)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx+r*0.2*Math.cos(hRad),cy+r*0.2*Math.sin(hRad));
+  ctx.lineTo(cx+r*0.95*Math.cos(hRad),cy+r*0.95*Math.sin(hRad));ctx.stroke();
+
+  // Center dot
+  ctx.fillStyle='rgba(10,10,15,0.6)';ctx.beginPath();ctx.arc(cx,cy,20,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(200,200,212,0.6)';ctx.font='9px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(gamutHue+'°',cx,cy)
+}
+
+function drawGamutSlice(){
+  const canvas=document.getElementById('gamut-slice');
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const w=canvas.offsetWidth||400,h=200;
+  canvas.width=w*dpr;canvas.height=h*dpr;
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+
+  const padding={left:40,right:10,top:10,bottom:25};
+  const pw=w-padding.left-padding.right,ph=h-padding.top-padding.bottom;
+
+  // Draw gamut boundary filled
+  ctx.fillStyle='rgba(30,30,46,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(padding.left,padding.top+ph);
+  for(let i=0;i<=100;i++){
+    const L=i/100;
+    const maxC=gamutMaxChroma(L,gamutHue);
+    const x=padding.left+L*pw;
+    const y=padding.top+ph-maxC/0.35*ph;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)
+  }
+  ctx.lineTo(padding.left+pw,padding.top+ph);
+  ctx.lineTo(padding.left,padding.top+ph);
+  ctx.closePath();ctx.fill();
+
+  // Gamut boundary line
+  ctx.strokeStyle='rgba(124,111,224,0.6)';ctx.lineWidth=2;
+  ctx.beginPath();
+  for(let i=0;i<=100;i++){
+    const L=i/100;
+    const maxC=gamutMaxChroma(L,gamutHue);
+    const x=padding.left+L*pw;
+    const y=padding.top+ph-maxC/0.35*ph;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)
+  }
+  ctx.stroke();
+
+  // Draw cusp point
+  let maxC=0,cuspL=0;
+  for(let i=0;i<=100;i++){const L=i/100;const c=gamutMaxChroma(L,gamutHue);if(c>maxC){maxC=c;cuspL=L}}
+  const cuspX=padding.left+cuspL*pw;
+  const cuspY=padding.top+ph-maxC/0.35*ph;
+  ctx.fillStyle=oklchToHex(cuspL,maxC*0.85,gamutHue);
+  ctx.beginPath();ctx.arc(cuspX,cuspY,6,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+
+  // Axes
+  ctx.strokeStyle='rgba(110,110,130,0.3)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(padding.left,padding.top+ph);ctx.lineTo(padding.left+pw,padding.top+ph);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(padding.left,padding.top);ctx.lineTo(padding.left,padding.top+ph);ctx.stroke();
+
+  ctx.fillStyle='rgba(110,110,130,0.6)';ctx.font='9px monospace';
+  ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=0;i<=10;i+=2){ctx.fillText((i/10).toFixed(1),padding.left+i/10*pw,padding.top+ph+6)}
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let i=0;i<=7;i+=1){const c=i*0.05;ctx.fillText(c.toFixed(2),padding.left-4,padding.top+ph-c/0.35*ph)}
+
+  ctx.fillStyle='rgba(110,110,130,0.4)';ctx.textAlign='center';ctx.fillText('Lightness (L)',padding.left+pw/2,h-2);
+  ctx.save();ctx.translate(8,padding.top+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Chroma (C)',0,0);ctx.restore();
+
+  // Label cusp
+  ctx.fillStyle='rgba(200,200,212,0.7)';ctx.font='9px monospace';ctx.textAlign='left';
+  ctx.fillText(`cusp L=${cuspL.toFixed(2)} C=${maxC.toFixed(3)}`,cuspX+10,cuspY-4);
+}
+
+function updateGamut(){
+  document.getElementById('gamut-hue-val').textContent=gamutHue;
+  drawGamutWheel();
+  drawGamutSlice();
+
+  const colors=cuspGradient(gamutHue,10);
+  document.getElementById('gamut-cusp').innerHTML=colors.map(c=>`<div class="sw" style="background:${c}" title="${c}"></div>`).join('');
+  document.getElementById('gamut-cusp-hex').innerHTML=colors.filter((_,i)=>i%2===0||i===9).map(c=>`<span>${c}</span>`).join('');
+}
+
+document.getElementById('gamut-wheel').addEventListener('click',e=>{
+  const rect=e.target.getBoundingClientRect();
+  const x=e.clientX-rect.left-rect.width/2;
+  const y=e.clientY-rect.top-rect.height/2;
+  gamutHue=Math.round(((Math.atan2(y,x)*180/Math.PI)+360)%360);
+  updateGamut()
+});
+
+// ══════════════════════════════════════════════════════
+// Section 4: Color Blindness Simulation
+// ══════════════════════════════════════════════════════
+
+function updateBlindness(){
+  const type=document.getElementById('blind-species').value;
+  const colors=getSpeciesColors(type);
+  const types=['Normal','protanopia','deuteranopia','tritanopia','achromatopsia'];
+  const labels=['Normal Vision','Protanopia (no red)','Deuteranopia (no green)','Tritanopia (no blue)','Achromatopsia (no color)'];
+
+  document.getElementById('blind-grid').innerHTML=types.map((t,i)=>{
+    const simColors=t==='Normal'?colors:colors.map(c=>simBlind(c,t));
+    return`<div class="blind-card">
+      <h4>${labels[i]}</h4>
+      ${makeStrip(simColors,'grad-strip-sm')}
+      <div style="margin-top:0.5rem">${makeMetricBar('Distinction',t==='Normal'?1:computeDistinction(simColors),'var(--green)')}</div>
+    </div>`
+  }).join('')
+}
+
+function computeDistinction(colors){
+  if(colors.length<2)return 1;
+  let minDE=Infinity;
+  for(let i=0;i<colors.length;i++){for(let j=i+1;j<colors.length;j++){const d=deltaE(colors[i],colors[j]);if(d<minDE)minDE=d}}
+  return Math.min(1,minDE/0.05)
+}
+
+// ══════════════════════════════════════════════════════
+// Section 5: Palette Forge
+// ══════════════════════════════════════════════════════
+
+let forgeHarmony='mono';
+
+function updateForge(){
+  const hue=+document.getElementById('forge-hue').value;
+  const chroma=+document.getElementById('forge-chroma').value/100;
+  const lMin=+document.getElementById('forge-lmin').value/100;
+  const lMax=+document.getElementById('forge-lmax').value/100;
+  const steps=+document.getElementById('forge-steps').value||10;
+
+  document.getElementById('forge-hue-val').textContent=hue+'°';
+  document.getElementById('forge-chroma-val').textContent=chroma.toFixed(2);
+
+  const theme={hue,chroma,harmony:forgeHarmony,lMin,lMax};
+  const colors=generateGradient(theme,steps);
+
+  document.getElementById('forge-palette').innerHTML=colors.map(c=>`<div class="sw" style="background:${c}" title="${c}"></div>`).join('');
+  document.getElementById('forge-hexes').innerHTML=colors.filter((_,i)=>i%Math.max(1,Math.floor(steps/8))===0||i===steps-1).map(c=>`<span>${c}</span>`).join('');
+
+  const aesthetics=scorePaletteAesthetics(colors);
+  const analysis=analyzePalette(colors);
+  const avgTemp=colors.filter(c=>hexToOklch(c)[1]>0.02).reduce((s,c)=>s+colorTemp(c),0)/(colors.filter(c=>hexToOklch(c)[1]>0.02).length||1);
+
+  const out=document.getElementById('forge-output');
+  out.innerHTML=`
+    <div>
+      <div style="font-size:0.72rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem">Quality Scores</div>
+      ${makeMetricBar('Uniformity',aesthetics.uniformity,'var(--green)')}
+      ${makeMetricBar('Contrast',aesthetics.contrast,'var(--accent)')}
+      ${makeMetricBar('Chroma',aesthetics.chromaRichness,'var(--amber)')}
+      ${makeMetricBar('Hue Spread',aesthetics.hueSpread,'#4ad4f5')}
+      ${makeMetricBar('Overall',aesthetics.overall,aesthetics.overall>0.7?'var(--green)':aesthetics.overall>0.4?'var(--amber)':'var(--red)')}
+      <div style="margin-top:0.5rem;font-size:0.6rem;color:var(--text-dim)">Perceptual uniformity: ${analysis.uniformity.toFixed(1)}% &middot; Avg step: ${analysis.avg.toFixed(4)}</div>
+    </div>
+    <div>
+      <div style="font-size:0.72rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem">Color Blindness Safety</div>
+      ${['protanopia','deuteranopia','tritanopia'].map(t=>{
+        const sim=colors.map(c=>simBlind(c,t));
+        const dist=computeDistinction(sim);
+        return`<div style="margin-bottom:0.75rem">
+          <div style="font-size:0.62rem;color:var(--text-dim);text-transform:uppercase;margin-bottom:0.3rem">${t}</div>
+          ${makeStrip(sim,'grad-strip-sm')}
+          ${makeMetricBar('Distinction',dist,dist>0.5?'var(--green)':'var(--red)')}
+        </div>`
+      }).join('')}
+    </div>
+  `
+}
+
+// Forge harmony buttons
+function initForge(){
+  const container=document.getElementById('forge-harmony');
+  const modes=['mono','complementary','analogous','triadic','split','tetradic'];
+  const labels=['Mono','Complementary','Analogous','Triadic','Split-Comp','Tetradic'];
+  container.innerHTML=modes.map((m,i)=>`<button class="pill${m===forgeHarmony?' active':''}" data-mode="${m}">${labels[i]}</button>`).join('');
+  container.querySelectorAll('.pill').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      container.querySelectorAll('.pill').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      forgeHarmony=btn.dataset.mode;
+      updateForge()
+    })
+  });
+  ['forge-hue','forge-chroma','forge-lmin','forge-lmax','forge-steps'].forEach(id=>{
+    document.getElementById(id).addEventListener('input',updateForge)
+  })
+}
+
+// ══════════════════════════════════════════════════════
+// Section 6: Population Color Map
+// ══════════════════════════════════════════════════════
+
+function drawPopMap(pieces){
+  const canvas=document.getElementById('pop-map');
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const w=canvas.offsetWidth||800,h=400;
+  canvas.width=w*dpr;canvas.height=h*dpr;
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+
+  const pad={left:45,right:15,top:15,bottom:30};
+  const pw=w-pad.left-pad.right,ph=h-pad.top-pad.bottom;
+
+  // Axes
+  ctx.strokeStyle='rgba(110,110,130,0.2)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pad.left,pad.top+ph);ctx.lineTo(pad.left+pw,pad.top+ph);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pad.left,pad.top);ctx.lineTo(pad.left,pad.top+ph);ctx.stroke();
+
+  // Grid lines
+  for(let i=0;i<=360;i+=60){
+    const x=pad.left+i/360*pw;
+    ctx.strokeStyle='rgba(110,110,130,0.1)';ctx.beginPath();ctx.moveTo(x,pad.top);ctx.lineTo(x,pad.top+ph);ctx.stroke();
+    ctx.fillStyle='rgba(110,110,130,0.5)';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText(i+'°',x,h-4)
+  }
+  for(let c=0;c<=0.3;c+=0.05){
+    const y=pad.top+ph-c/0.3*ph;
+    ctx.strokeStyle='rgba(110,110,130,0.1)';ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(pad.left+pw,y);ctx.stroke();
+    ctx.fillStyle='rgba(110,110,130,0.5)';ctx.font='9px monospace';ctx.textAlign='right';ctx.fillText(c.toFixed(2),pad.left-4,y+3)
+  }
+
+  ctx.fillStyle='rgba(110,110,130,0.4)';ctx.textAlign='center';ctx.fillText('Dominant Hue (OKLCH)',pad.left+pw/2,h-2);
+
+  // Plot pieces
+  const plotData=[];
+  for(const p of pieces){
+    const type=p.genome?.type||'2d';
+    const colors=getSpeciesColors(type);
+    const accent=colors[4]||'#7c6fe0';
+    const[,C,H]=hexToOklch(accent);
+    const x=pad.left+H/360*pw;
+    const y=pad.top+ph-C/0.3*ph;
+    const r=3+p.score*8;
+    plotData.push({x,y,r,color:accent,piece:p})
+  }
+
+  // Draw with glow
+  for(const d of plotData){
+    ctx.globalAlpha=0.15;ctx.fillStyle=d.color;
+    ctx.beginPath();ctx.arc(d.x,d.y,d.r+4,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=0.8;
+    ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  // Tooltip on hover
+  const tooltip=document.getElementById('pop-tooltip');
+  canvas.addEventListener('mousemove',e=>{
+    const rect=canvas.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*(w/rect.width);
+    const my=(e.clientY-rect.top)*(h/rect.height);
+    let hit=null;
+    for(const d of plotData){
+      if(Math.hypot(mx-d.x,my-d.y)<d.r+4){hit=d;break}
+    }
+    if(hit){
+      tooltip.style.display='block';
+      tooltip.style.left=(e.clientX+12)+'px';
+      tooltip.style.top=(e.clientY-30)+'px';
+      const p=hit.piece;
+      tooltip.innerHTML=`<span style="color:var(--accent)">${p.id}</span><br>${p.genome?.type||'?'} &middot; ${(p.score*100).toFixed(1)}%`
+    }else{tooltip.style.display='none'}
+  });
+  canvas.addEventListener('mouseleave',()=>{tooltip.style.display='none'})
+}
+
+// ══════════════════════════════════════════════════════
+// Init
+// ══════════════════════════════════════════════════════
+
+function initBlindSelect(){
+  const sel=document.getElementById('blind-species');
+  sel.innerHTML=Object.keys(SPECIES_THEMES).map(t=>`<option value="${t}">${t}</option>`).join('');
+  sel.addEventListener('change',updateBlindness)
+}
+
+async function init(){
+  // Load pieces
+  allPieces=await loadPieces();
+  renderHofGrid(allPieces);
+  drawPopMap(allPieces);
+
+  // Init other sections
+  updateComparison();
+  updateGamut();
+  initBlindSelect();
+  updateBlindness();
+  initForge();
+  updateForge()
+}
+
+init();
+</script>
+</body>
+</html>
