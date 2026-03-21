@@ -2,3 +2,4 @@ node_modules/
 gallery/population.json
 gallery/*.txt
 logs/
+.worktrees/
