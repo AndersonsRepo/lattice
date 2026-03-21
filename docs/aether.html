@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aether — Lattice</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --border: #1e1e2e;
+  --text: #c8c8d4;
+  --text-dim: #6e6e82;
+  --accent: #7c6fe0;
+  --accent-glow: #7c6fe040;
+  --green: #4ade80;
+  --amber: #fbbf24;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+canvas { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+.back {
+  position: fixed; top: 16px; left: 16px; z-index: 100;
+  color: var(--text-dim); text-decoration: none; font-size: 13px;
+  letter-spacing: 0.05em; transition: color 0.2s;
+}
+.back:hover { color: var(--accent); }
+
+.panel {
+  position: fixed; top: 16px; right: 16px; z-index: 100;
+  width: 272px;
+  background: rgba(10, 10, 15, 0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 11px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.panel.hidden { opacity: 0; pointer-events: none; transform: translateX(10px); }
+.panel::-webkit-scrollbar { width: 4px; }
+.panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.panel-title {
+  text-transform: uppercase; letter-spacing: 0.15em;
+  color: var(--accent); font-size: 14px; margin-bottom: 2px;
+}
+.panel-sub {
+  color: var(--text-dim); font-size: 10px; margin-bottom: 14px; line-height: 1.5;
+}
+.section-label {
+  text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--text-dim); font-size: 9px;
+  margin-top: 12px; margin-bottom: 6px;
+  border-top: 1px solid var(--border); padding-top: 10px;
+}
+.section-label:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+
+.slider-row {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;
+}
+.slider-row label { color: var(--text); font-size: 10px; min-width: 72px; }
+.slider-row input[type="range"] {
+  flex: 1; margin: 0 8px; accent-color: var(--accent); height: 3px;
+}
+.slider-row .val {
+  color: var(--text-dim); font-size: 9px; min-width: 30px; text-align: right;
+}
+
+.btn-row { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+.btn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text); font-family: inherit; font-size: 10px;
+  padding: 5px 9px; border-radius: 6px; cursor: pointer;
+  transition: all 0.2s; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+.btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+/* Emitter grid */
+.emitter-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 6px;
+}
+.emitter-btn {
+  background: transparent; border: 1px solid var(--border);
+  font-family: inherit; font-size: 9px; color: var(--text-dim);
+  padding: 6px 4px; border-radius: 6px; cursor: pointer;
+  text-align: center; transition: all 0.2s; line-height: 1.3;
+}
+.emitter-btn:hover { border-color: var(--accent); color: var(--accent); }
+.emitter-btn.active { border-color: var(--green); color: var(--green); background: rgba(74,222,128,0.08); }
+
+/* Field equation display */
+.field-eq {
+  color: var(--accent); font-size: 10px; text-align: center;
+  padding: 6px; margin-top: 6px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: rgba(124, 111, 224, 0.05);
+  letter-spacing: 0.03em;
+}
+
+.stats {
+  position: fixed; bottom: 16px; left: 16px; z-index: 100;
+  display: flex; gap: 16px; font-size: 10px;
+  color: var(--text-dim); letter-spacing: 0.05em;
+}
+.hint {
+  position: fixed; bottom: 16px; right: 16px; z-index: 100;
+  font-size: 10px; color: var(--text-dim); letter-spacing: 0.04em;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<a href="index.html" class="back">← lattice</a>
+
+<div class="panel" id="panel">
+  <div class="panel-title">Aether</div>
+  <div class="panel-sub">Invisible fields shape visible matter. Move your mouse to stir the medium.</div>
+
+  <div class="section-label">Field</div>
+  <div class="slider-row">
+    <label>Turbulence</label>
+    <input type="range" id="s-turb" min="0.001" max="0.012" step="0.001" value="0.004">
+    <span class="val" id="v-turb">0.004</span>
+  </div>
+  <div class="slider-row">
+    <label>Flow speed</label>
+    <input type="range" id="s-speed" min="0.5" max="5.0" step="0.1" value="2.0">
+    <span class="val" id="v-speed">2.0</span>
+  </div>
+  <div class="slider-row">
+    <label>Curl</label>
+    <input type="range" id="s-curl" min="0.0" max="2.0" step="0.1" value="0.8">
+    <span class="val" id="v-curl">0.8</span>
+  </div>
+  <div class="slider-row">
+    <label>Damping</label>
+    <input type="range" id="s-damp" min="0.90" max="0.999" step="0.001" value="0.980">
+    <span class="val" id="v-damp">0.980</span>
+  </div>
+  <div class="slider-row">
+    <label>Mouse force</label>
+    <input type="range" id="s-mforce" min="0" max="8" step="0.5" value="4">
+    <span class="val" id="v-mforce">4</span>
+  </div>
+
+  <div class="section-label">Particles</div>
+  <div class="slider-row">
+    <label>Count</label>
+    <input type="range" id="s-count" min="1000" max="25000" step="1000" value="8000">
+    <span class="val" id="v-count">8K</span>
+  </div>
+  <div class="slider-row">
+    <label>Size</label>
+    <input type="range" id="s-size" min="0.5" max="4.0" step="0.1" value="1.2">
+    <span class="val" id="v-size">1.2</span>
+  </div>
+  <div class="slider-row">
+    <label>Trails</label>
+    <input type="range" id="s-trails" min="0.01" max="0.25" step="0.01" value="0.04">
+    <span class="val" id="v-trails">0.04</span>
+  </div>
+  <div class="slider-row">
+    <label>Hue shift</label>
+    <input type="range" id="s-hue" min="0" max="360" step="5" value="0">
+    <span class="val" id="v-hue">0°</span>
+  </div>
+
+  <div class="section-label">Emitters</div>
+  <div class="emitter-grid" id="emitters"></div>
+
+  <div class="section-label">Field Equation</div>
+  <div class="field-eq" id="field-eq">v = curl(noise(p · s)) + mouse</div>
+
+  <div class="section-label">Modes</div>
+  <div class="btn-row">
+    <button class="btn active" id="btn-flow">Flow</button>
+    <button class="btn" id="btn-vortex">Vortex</button>
+    <button class="btn" id="btn-radial">Radial</button>
+    <button class="btn" id="btn-wave">Wave</button>
+  </div>
+
+  <div class="section-label">Audio</div>
+  <div class="btn-row">
+    <button class="btn" id="btn-mic"><span id="mic-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--text-dim);margin-right:4px;vertical-align:middle;transition:background 0.3s"></span>Mic reactive</button>
+    <button class="btn" id="btn-drone">Drone</button>
+  </div>
+
+  <div class="section-label">Actions</div>
+  <div class="btn-row">
+    <button class="btn" id="btn-reset">Reset</button>
+    <button class="btn" id="btn-scatter">Scatter</button>
+    <button class="btn" id="btn-pause">Pause</button>
+    <button class="btn" id="btn-hide">Hide UI</button>
+  </div>
+</div>
+
+<div class="stats">
+  <span id="stat-fps">60 fps</span>
+  <span id="stat-p">8000 particles</span>
+</div>
+<div class="hint" id="hint">H — toggle panel &nbsp; Space — pause &nbsp; R — reset</div>
+
+<script>
+// ── Simplex noise (compact 2D/3D) ──
+const F2 = 0.5 * (Math.sqrt(3) - 1), G2 = (3 - Math.sqrt(3)) / 6;
+const F3 = 1/3, G3 = 1/6;
+const grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+const perm = new Uint8Array(512);
+(function() {
+  const p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+  for (let i = 255; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+  for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+})();
+
+function noise2D(x, y) {
+  const s = (x + y) * F2;
+  const i = Math.floor(x + s), j = Math.floor(y + s);
+  const t = (i + j) * G2;
+  const X0 = i - t, Y0 = j - t;
+  const x0 = x - X0, y0 = y - Y0;
+  const i1 = x0 > y0 ? 1 : 0, j1 = x0 > y0 ? 0 : 1;
+  const x1 = x0 - i1 + G2, y1 = y0 - j1 + G2;
+  const x2 = x0 - 1 + 2*G2, y2 = y0 - 1 + 2*G2;
+  const ii = i & 255, jj = j & 255;
+  let n0 = 0, n1 = 0, n2 = 0;
+  let t0 = 0.5 - x0*x0 - y0*y0;
+  if (t0 > 0) { t0 *= t0; const gi = perm[ii + perm[jj]] % 12; n0 = t0*t0 * (grad3[gi][0]*x0 + grad3[gi][1]*y0); }
+  let t1 = 0.5 - x1*x1 - y1*y1;
+  if (t1 > 0) { t1 *= t1; const gi = perm[ii+i1 + perm[jj+j1]] % 12; n1 = t1*t1 * (grad3[gi][0]*x1 + grad3[gi][1]*y1); }
+  let t2 = 0.5 - x2*x2 - y2*y2;
+  if (t2 > 0) { t2 *= t2; const gi = perm[ii+1 + perm[jj+1]] % 12; n2 = t2*t2 * (grad3[gi][0]*x2 + grad3[gi][1]*y2); }
+  return 70 * (n0 + n1 + n2);
+}
+
+function noise3D(x, y, z) {
+  const s = (x+y+z)*F3;
+  const i = Math.floor(x+s), j = Math.floor(y+s), k = Math.floor(z+s);
+  const t = (i+j+k)*G3;
+  const x0 = x-(i-t), y0 = y-(j-t), z0 = z-(k-t);
+  let i1,j1,k1,i2,j2,k2;
+  if(x0>=y0){if(y0>=z0){i1=1;j1=0;k1=0;i2=1;j2=1;k2=0}else if(x0>=z0){i1=1;j1=0;k1=0;i2=1;j2=0;k2=1}else{i1=0;j1=0;k1=1;i2=1;j2=0;k2=1}}
+  else{if(y0<z0){i1=0;j1=0;k1=1;i2=0;j2=1;k2=1}else if(x0<z0){i1=0;j1=1;k1=0;i2=0;j2=1;k2=1}else{i1=0;j1=1;k1=0;i2=1;j2=1;k2=0}}
+  const x1=x0-i1+G3,y1=y0-j1+G3,z1=z0-k1+G3;
+  const x2=x0-i2+2*G3,y2=y0-j2+2*G3,z2=z0-k2+2*G3;
+  const x3=x0-1+3*G3,y3=y0-1+3*G3,z3=z0-1+3*G3;
+  const ii=i&255,jj=j&255,kk=k&255;
+  let n=0;
+  let tt=0.6-x0*x0-y0*y0-z0*z0;
+  if(tt>0){tt*=tt;const gi=perm[ii+perm[jj+perm[kk]]]%12;n+=tt*tt*(grad3[gi][0]*x0+grad3[gi][1]*y0+grad3[gi][2]*z0);}
+  tt=0.6-x1*x1-y1*y1-z1*z1;
+  if(tt>0){tt*=tt;const gi=perm[ii+i1+perm[jj+j1+perm[kk+k1]]]%12;n+=tt*tt*(grad3[gi][0]*x1+grad3[gi][1]*y1+grad3[gi][2]*z1);}
+  tt=0.6-x2*x2-y2*y2-z2*z2;
+  if(tt>0){tt*=tt;const gi=perm[ii+i2+perm[jj+j2+perm[kk+k2]]]%12;n+=tt*tt*(grad3[gi][0]*x2+grad3[gi][1]*y2+grad3[gi][2]*z2);}
+  tt=0.6-x3*x3-y3*y3-z3*z3;
+  if(tt>0){tt*=tt;const gi=perm[ii+1+perm[jj+1+perm[kk+1]]]%12;n+=tt*tt*(grad3[gi][0]*x3+grad3[gi][1]*y3+grad3[gi][2]*z3);}
+  return 32*n;
+}
+
+// ── Canvas setup ──
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, dpr;
+
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── Parameters ──
+let cfg = {
+  turb: 0.004,
+  speed: 2.0,
+  curl: 0.8,
+  damp: 0.980,
+  mforce: 4,
+  count: 8000,
+  size: 1.2,
+  trails: 0.04,
+  hue: 0,
+  mode: 'flow', // flow, vortex, radial, wave
+};
+
+let paused = false;
+let time = 0;
+let mouseX = W/2, mouseY = H/2, pmouseX = W/2, pmouseY = H/2;
+let mouseDown = false;
+let mouseVX = 0, mouseVY = 0;
+
+// Audio state
+let micActive = false, micLevel = 0, audioCtx = null, analyser = null, micStream = null;
+let droneActive = false, droneOsc = null, droneGain = null, droneLfo = null;
+
+// ── Emitters ──
+const EMITTER_TYPES = [
+  { name: 'Point', icon: '·', fn: (cx,cy,i,n) => ({x:cx,y:cy}) },
+  { name: 'Ring', icon: '○', fn: (cx,cy,i,n) => { const a=i/n*Math.PI*2; const r=80; return {x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r}; }},
+  { name: 'Line', icon: '—', fn: (cx,cy,i,n) => ({x:cx+(i/n-0.5)*200,y:cy}) },
+  { name: 'Grid', icon: '⊞', fn: (cx,cy,i,n) => { const s=Math.ceil(Math.sqrt(n)); return {x:cx+(i%s-s/2)*8,y:cy+(Math.floor(i/s)-s/2)*8}; }},
+  { name: 'Spiral', icon: '◎', fn: (cx,cy,i,n) => { const a=i*0.3; const r=i/n*120; return {x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r}; }},
+  { name: 'Cross', icon: '+', fn: (cx,cy,i,n) => { const half=n/2; if(i<half) return {x:cx+(i/half-0.5)*200,y:cy}; else return {x:cx,y:cy+((i-half)/half-0.5)*200}; }},
+  { name: 'Scatter', icon: '∴', fn: (cx,cy,i,n) => ({x:Math.random()*W,y:Math.random()*H}) },
+  { name: 'Dual', icon: '⁘', fn: (cx,cy,i,n) => { const side=i<n/2?-1:1; const a=(i%(n/2))/(n/2)*Math.PI*2; return {x:cx+side*150+Math.cos(a)*40,y:cy+Math.sin(a)*40}; }},
+];
+let currentEmitter = 6; // Scatter
+
+// ── Particles ──
+let px, py, pvx, pvy, plife, phue;
+
+function initParticles(emitterIdx) {
+  const n = cfg.count;
+  px = new Float32Array(n);
+  py = new Float32Array(n);
+  pvx = new Float32Array(n);
+  pvy = new Float32Array(n);
+  plife = new Float32Array(n);
+  phue = new Float32Array(n);
+
+  const em = EMITTER_TYPES[emitterIdx !== undefined ? emitterIdx : currentEmitter];
+  const cx = W/2, cy = H/2;
+  for (let i = 0; i < n; i++) {
+    const pos = em.fn(cx, cy, i, n);
+    px[i] = pos.x;
+    py[i] = pos.y;
+    pvx[i] = (Math.random() - 0.5) * 0.5;
+    pvy[i] = (Math.random() - 0.5) * 0.5;
+    plife[i] = Math.random();
+    phue[i] = Math.random() * 360;
+  }
+}
+
+// ── Field computation ──
+function getField(x, y, t) {
+  const s = cfg.turb;
+  let fx, fy;
+
+  if (cfg.mode === 'flow') {
+    // Curl noise flow field
+    const eps = 0.5;
+    const n1 = noise3D(x * s, y * s + eps, t * 0.3);
+    const n2 = noise3D(x * s, y * s - eps, t * 0.3);
+    const n3 = noise3D(x * s + eps, y * s, t * 0.3);
+    const n4 = noise3D(x * s - eps, y * s, t * 0.3);
+    fx = (n1 - n2) * cfg.curl;
+    fy = -(n3 - n4) * cfg.curl;
+    // Add direct noise
+    fx += noise3D(x * s * 2, y * s * 2, t * 0.5 + 100) * (1 - cfg.curl);
+    fy += noise3D(x * s * 2 + 50, y * s * 2, t * 0.5 + 100) * (1 - cfg.curl);
+  } else if (cfg.mode === 'vortex') {
+    // Multiple rotating vortices
+    fx = 0; fy = 0;
+    const cx1 = W/2 + Math.sin(t*0.2) * W*0.2;
+    const cy1 = H/2 + Math.cos(t*0.3) * H*0.2;
+    const cx2 = W/2 + Math.sin(t*0.2 + 2) * W*0.25;
+    const cy2 = H/2 + Math.cos(t*0.3 + 2) * H*0.25;
+    for (const [cx,cy,sign] of [[cx1,cy1,1],[cx2,cy2,-1]]) {
+      const dx = x - cx, dy = y - cy;
+      const d = Math.sqrt(dx*dx + dy*dy) + 1;
+      const strength = 200 / d * sign;
+      fx += -dy / d * strength;
+      fy += dx / d * strength;
+    }
+    fx *= 0.01; fy *= 0.01;
+    // Add noise
+    fx += noise3D(x*s, y*s, t*0.2) * 0.3;
+    fy += noise3D(x*s+99, y*s, t*0.2) * 0.3;
+  } else if (cfg.mode === 'radial') {
+    // Pulsating radial field
+    const dx = x - W/2, dy = y - H/2;
+    const d = Math.sqrt(dx*dx + dy*dy) + 1;
+    const pulse = Math.sin(d * 0.02 - t * 2) * 0.5;
+    fx = (dx / d) * pulse;
+    fy = (dy / d) * pulse;
+    fx += noise3D(x*s, y*s, t*0.3) * 0.5;
+    fy += noise3D(x*s+50, y*s, t*0.3) * 0.5;
+  } else if (cfg.mode === 'wave') {
+    // Standing wave interference
+    const wave1 = Math.sin(x * 0.015 + t * 1.5) * Math.cos(y * 0.01);
+    const wave2 = Math.cos(y * 0.012 - t * 1.2) * Math.sin(x * 0.008 + t * 0.3);
+    fx = wave1 + noise3D(x*s, y*s, t*0.4) * 0.3;
+    fy = wave2 + noise3D(x*s+50, y*s, t*0.4) * 0.3;
+  }
+
+  return { x: fx * cfg.speed, y: fy * cfg.speed };
+}
+
+// ── Physics step ──
+function step() {
+  const n = px.length;
+  const dt = 1;
+  const micBoost = micActive ? 1 + micLevel * 3 : 1;
+
+  // Mouse velocity
+  mouseVX = (mouseX - pmouseX) * 0.5;
+  mouseVY = (mouseY - pmouseY) * 0.5;
+  pmouseX = mouseX;
+  pmouseY = mouseY;
+
+  for (let i = 0; i < n; i++) {
+    const field = getField(px[i], py[i], time);
+
+    // Field force
+    pvx[i] += field.x * 0.1 * micBoost;
+    pvy[i] += field.y * 0.1 * micBoost;
+
+    // Mouse influence
+    const dx = mouseX - px[i];
+    const dy = mouseY - py[i];
+    const d2 = dx*dx + dy*dy;
+    const mouseR = 200;
+    if (d2 < mouseR * mouseR && d2 > 1) {
+      const d = Math.sqrt(d2);
+      const falloff = 1 - d / mouseR;
+      const f = falloff * falloff * cfg.mforce * 0.1;
+      if (mouseDown) {
+        // Push away when clicking
+        pvx[i] -= (dx / d) * f * 3;
+        pvy[i] -= (dy / d) * f * 3;
+      } else {
+        // Gentle attraction toward cursor + inherit mouse velocity
+        pvx[i] += (dx / d) * f * 0.3 + mouseVX * falloff * 0.05;
+        pvy[i] += (dy / d) * f * 0.3 + mouseVY * falloff * 0.05;
+      }
+    }
+
+    // Damping
+    pvx[i] *= cfg.damp;
+    pvy[i] *= cfg.damp;
+
+    // Integrate
+    px[i] += pvx[i] * dt;
+    py[i] += pvy[i] * dt;
+
+    // Wrap
+    if (px[i] < 0) px[i] += W;
+    else if (px[i] > W) px[i] -= W;
+    if (py[i] < 0) py[i] += H;
+    else if (py[i] > H) py[i] -= H;
+
+    // Color: hue evolves based on speed
+    const speed = Math.sqrt(pvx[i]*pvx[i] + pvy[i]*pvy[i]);
+    phue[i] = (phue[i] + speed * 0.5) % 360;
+    plife[i] = Math.min(plife[i] + 0.005, 1);
+  }
+
+  time += 0.016;
+}
+
+// ── Render ──
+function draw() {
+  // Trail fade
+  ctx.fillStyle = `rgba(10, 10, 15, ${cfg.trails})`;
+  ctx.fillRect(0, 0, W, H);
+
+  const n = px.length;
+  const baseSize = cfg.size;
+  const hueShift = cfg.hue;
+
+  // We draw particles as tiny rects for maximum performance
+  // Group into batches by approximate hue for visual coherence
+  for (let i = 0; i < n; i++) {
+    const speed = Math.sqrt(pvx[i]*pvx[i] + pvy[i]*pvy[i]);
+    const h = (phue[i] + hueShift) % 360;
+    const s = 70 + speed * 5;
+    const l = 45 + Math.min(speed * 15, 35);
+    const alpha = Math.min(0.3 + speed * 0.3, 0.95) * plife[i];
+    const size = baseSize + Math.min(speed * 0.4, 2);
+
+    ctx.fillStyle = `hsla(${h|0}, ${Math.min(s,100)|0}%, ${Math.min(l,80)|0}%, ${alpha.toFixed(2)})`;
+    ctx.fillRect(px[i] - size/2, py[i] - size/2, size, size);
+  }
+
+  // Mouse glow
+  const glowR = 120;
+  const grad = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, glowR);
+  if (mouseDown) {
+    grad.addColorStop(0, 'rgba(239, 68, 68, 0.06)');
+  } else {
+    grad.addColorStop(0, 'rgba(124, 111, 224, 0.04)');
+  }
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(mouseX - glowR, mouseY - glowR, glowR*2, glowR*2);
+}
+
+// ── Main loop ──
+let frameCount = 0, lastFpsTime = performance.now(), fps = 60;
+function loop() {
+  if (!paused) {
+    step();
+    draw();
+  }
+
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 500) {
+    fps = Math.round(frameCount / ((now - lastFpsTime) / 1000));
+    frameCount = 0;
+    lastFpsTime = now;
+    document.getElementById('stat-fps').textContent = fps + ' fps';
+  }
+
+  // Mic level
+  if (micActive && analyser) {
+    const data = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) { const v = (data[i]-128)/128; sum += v*v; }
+    micLevel = Math.sqrt(sum / data.length);
+  }
+
+  // Drone modulation
+  if (droneActive && droneOsc) {
+    // Speed of particles modulates drone pitch
+    let avgSpeed = 0;
+    const n = Math.min(px.length, 2000);
+    for (let i = 0; i < n; i++) avgSpeed += Math.sqrt(pvx[i]*pvx[i] + pvy[i]*pvy[i]);
+    avgSpeed /= n;
+    droneOsc.frequency.setTargetAtTime(55 + avgSpeed * 30, audioCtx.currentTime, 0.1);
+    droneGain.gain.setTargetAtTime(Math.min(0.08 + avgSpeed * 0.02, 0.15), audioCtx.currentTime, 0.1);
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ── Slider wiring ──
+function wire(id, key, fmt) {
+  const input = document.getElementById('s-' + id);
+  const val = document.getElementById('v-' + id);
+  input.addEventListener('input', () => {
+    cfg[key] = parseFloat(input.value);
+    val.textContent = fmt ? fmt(cfg[key]) : cfg[key];
+    if (key === 'count') { initParticles(); clearCanvas(); updateStatP(); }
+  });
+}
+wire('turb', 'turb');
+wire('speed', 'speed');
+wire('curl', 'curl');
+wire('damp', 'damp');
+wire('mforce', 'mforce');
+wire('count', 'count', v => (v/1000).toFixed(0)+'K');
+wire('size', 'size');
+wire('trails', 'trails');
+wire('hue', 'hue', v => v+'°');
+
+function updateStatP() {
+  document.getElementById('stat-p').textContent = cfg.count + ' particles';
+}
+
+function clearCanvas() {
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ── Emitters UI ──
+function renderEmitters() {
+  const el = document.getElementById('emitters');
+  el.innerHTML = '';
+  EMITTER_TYPES.forEach((em, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'emitter-btn' + (idx === currentEmitter ? ' active' : '');
+    btn.innerHTML = em.icon + '<br>' + em.name;
+    btn.addEventListener('click', () => {
+      currentEmitter = idx;
+      initParticles(idx);
+      clearCanvas();
+      document.querySelectorAll('.emitter-btn').forEach((b,i) => b.classList.toggle('active', i===idx));
+    });
+    el.appendChild(btn);
+  });
+}
+
+// ── Mode buttons ──
+const modeEqs = {
+  flow: 'v = curl(noise(p · s, t)) + drift',
+  vortex: 'v = Σ rot(p - cᵢ) / |p - cᵢ| + noise',
+  radial: 'v = r̂ · sin(|r| - ωt) + noise',
+  wave: 'v = (sin(kx + ωt), cos(ky - ωt)) + noise',
+};
+['flow','vortex','radial','wave'].forEach(mode => {
+  document.getElementById('btn-' + mode).addEventListener('click', function() {
+    cfg.mode = mode;
+    document.querySelectorAll('.btn-row .btn').forEach(b => {
+      if (['btn-flow','btn-vortex','btn-radial','btn-wave'].includes(b.id))
+        b.classList.toggle('active', b.id === 'btn-'+mode);
+    });
+    document.getElementById('field-eq').textContent = modeEqs[mode];
+    clearCanvas();
+  });
+});
+
+// ── Action buttons ──
+document.getElementById('btn-reset').addEventListener('click', () => { initParticles(); clearCanvas(); });
+document.getElementById('btn-scatter').addEventListener('click', () => {
+  for (let i = 0; i < px.length; i++) {
+    pvx[i] += (Math.random()-0.5) * 10;
+    pvy[i] += (Math.random()-0.5) * 10;
+  }
+});
+document.getElementById('btn-pause').addEventListener('click', function() {
+  paused = !paused;
+  this.textContent = paused ? 'Play' : 'Pause';
+  this.classList.toggle('active', paused);
+});
+document.getElementById('btn-hide').addEventListener('click', () => {
+  document.getElementById('panel').classList.toggle('hidden');
+});
+
+// ── Mic ──
+document.getElementById('btn-mic').addEventListener('click', async function() {
+  if (micActive) {
+    micActive = false;
+    document.getElementById('mic-dot').style.background = 'var(--text-dim)';
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    return;
+  }
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    micActive = true;
+    document.getElementById('mic-dot').style.background = '#ef4444';
+    document.getElementById('mic-dot').style.boxShadow = '0 0 6px #ef444480';
+  } catch(e) { console.warn('Mic denied', e); }
+});
+
+// ── Drone ──
+document.getElementById('btn-drone').addEventListener('click', function() {
+  if (droneActive) {
+    droneActive = false;
+    this.classList.remove('active');
+    if (droneOsc) { droneOsc.stop(); droneOsc = null; }
+    if (droneLfo) { droneLfo.stop(); droneLfo = null; }
+    return;
+  }
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  audioCtx.resume();
+
+  // Deep drone
+  droneOsc = audioCtx.createOscillator();
+  droneOsc.type = 'sawtooth';
+  droneOsc.frequency.value = 55;
+
+  droneGain = audioCtx.createGain();
+  droneGain.gain.value = 0.08;
+
+  // LFO for movement
+  droneLfo = audioCtx.createOscillator();
+  droneLfo.frequency.value = 0.15;
+  const lfoGain = audioCtx.createGain();
+  lfoGain.gain.value = 10;
+  droneLfo.connect(lfoGain);
+  lfoGain.connect(droneOsc.frequency);
+  droneLfo.start();
+
+  // Filter for warmth
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 200;
+  filter.Q.value = 2;
+
+  droneOsc.connect(filter);
+  filter.connect(droneGain);
+  droneGain.connect(audioCtx.destination);
+  droneOsc.start();
+
+  droneActive = true;
+  this.classList.add('active');
+});
+
+// ── Mouse events ──
+canvas.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+canvas.addEventListener('mousedown', () => { mouseDown = true; });
+canvas.addEventListener('mouseup', () => { mouseDown = false; });
+canvas.addEventListener('mouseleave', () => { mouseDown = false; });
+canvas.addEventListener('touchstart', e => { e.preventDefault(); mouseDown = true; mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY; }, {passive:false});
+canvas.addEventListener('touchmove', e => { e.preventDefault(); mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY; }, {passive:false});
+canvas.addEventListener('touchend', () => { mouseDown = false; });
+
+// ── Keyboard ──
+document.addEventListener('keydown', e => {
+  if (e.key === 'h' || e.key === 'H') document.getElementById('panel').classList.toggle('hidden');
+  if (e.key === ' ') { e.preventDefault(); document.getElementById('btn-pause').click(); }
+  if (e.key === 'r' || e.key === 'R') document.getElementById('btn-reset').click();
+  if (e.key === 's' || e.key === 'S') document.getElementById('btn-scatter').click();
+  if (e.key === 'm' || e.key === 'M') document.getElementById('btn-mic').click();
+  if (e.key === 'd' || e.key === 'D') document.getElementById('btn-drone').click();
+  if (e.key >= '1' && e.key <= '4') {
+    const modes = ['flow','vortex','radial','wave'];
+    document.getElementById('btn-' + modes[e.key - 1]).click();
+  }
+});
+
+// ── Init ──
+initParticles();
+renderEmitters();
+clearCanvas();
+updateStatP();
+loop();
+</script>
+</body>
+</html>
