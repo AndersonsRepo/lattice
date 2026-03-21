@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Crucible</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* --- Canvas area --- */
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      border-radius: 4px;
+      image-rendering: pixelated;
+    }
+
+    .canvas-info {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+    .canvas-info .label { color: var(--accent); text-transform: uppercase; letter-spacing: 0.12em; }
+    .canvas-info .fps { color: var(--text-dim); }
+
+    /* --- Sidebar --- */
+    .sidebar {
+      width: 320px;
+      min-width: 320px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 1.25rem 1.25rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-header h1 {
+      font-size: 1rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .sidebar-header .sub {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      margin-top: 0.35rem;
+      letter-spacing: 0.05em;
+    }
+
+    .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+      display: inline-block;
+      margin-bottom: 0.5rem;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    .sidebar-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 1.25rem;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    /* --- Control groups --- */
+    .ctrl-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .ctrl-group-title {
+      font-size: 0.55rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.6rem;
+    }
+
+    .ctrl-row label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.03em;
+      flex-shrink: 0;
+    }
+
+    .ctrl-row .val {
+      font-size: 0.6rem;
+      color: var(--green);
+      min-width: 3.5em;
+      text-align: right;
+      margin-left: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      margin: 0 0.5rem;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    /* --- Presets --- */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .preset-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      padding: 0.45rem 0.3rem;
+      border-radius: 3px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .preset-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+    .preset-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(124, 111, 224, 0.08);
+    }
+
+    /* --- Palette selector --- */
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.4rem;
+    }
+
+    .palette-btn {
+      height: 28px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.15s;
+      overflow: hidden;
+    }
+    .palette-btn:hover, .palette-btn.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    /* --- Action buttons --- */
+    .action-row {
+      display: flex;
+      gap: 0.4rem;
+      margin-top: 0.5rem;
+    }
+
+    .action-btn {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      padding: 0.55rem;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-transform: uppercase;
+    }
+    .action-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .action-btn.primary {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(124, 111, 224, 0.06);
+    }
+
+    /* --- Audio toggle --- */
+    .audio-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0;
+    }
+
+    .toggle-track {
+      width: 32px;
+      height: 16px;
+      background: var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .toggle-track.on { background: var(--accent); }
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--text);
+      transition: transform 0.2s;
+    }
+    .toggle-track.on::after { transform: translateX(16px); }
+
+    .audio-label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+    .audio-status {
+      font-size: 0.55rem;
+      color: var(--green);
+      margin-left: auto;
+    }
+
+    /* --- Brush preview --- */
+    .brush-preview {
+      position: absolute;
+      border: 1px solid var(--accent);
+      border-radius: 50%;
+      pointer-events: none;
+      opacity: 0.4;
+      z-index: 5;
+      transform: translate(-50%, -50%);
+    }
+
+    /* --- Start overlay --- */
+    .start-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      cursor: pointer;
+      transition: opacity 0.5s;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-overlay h2 {
+      font-size: 1.4rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+      margin-bottom: 1rem;
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-overlay p {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
+
+    /* --- Keyboard hints --- */
+    .shortcuts {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .shortcut-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.3rem;
+    }
+
+    .shortcut-row kbd {
+      font-family: inherit;
+      font-size: 0.55rem;
+      color: var(--accent);
+      background: var(--bg);
+      padding: 0.1rem 0.35rem;
+      border-radius: 2px;
+      border: 1px solid var(--border);
+    }
+
+    .shortcut-row span {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+    }
+  </style>
+</head>
+<body>
+
+<div class="canvas-area" id="canvasArea">
+  <canvas id="display"></canvas>
+  <div class="brush-preview" id="brushPreview"></div>
+  <div class="canvas-info">
+    <div class="label">Reaction-Diffusion</div>
+    <div class="fps" id="fpsDisplay">0 fps · 0 steps/s</div>
+  </div>
+  <div class="start-overlay" id="startOverlay">
+    <h2>Crucible</h2>
+    <p>click to ignite the reaction</p>
+  </div>
+</div>
+
+<div class="sidebar">
+  <div class="sidebar-header">
+    <a href="index.html" class="back-link">← gallery</a>
+    <h1>Crucible</h1>
+    <div class="sub">Interactive reaction-diffusion laboratory</div>
+  </div>
+
+  <div class="sidebar-scroll">
+
+    <!-- Presets -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title">Presets</div>
+      <div class="preset-grid" id="presetGrid"></div>
+    </div>
+
+    <!-- Core Parameters -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title">Reaction</div>
+      <div class="ctrl-row">
+        <label>Feed</label>
+        <input type="range" id="feed" min="0.01" max="0.08" step="0.001" value="0.055">
+        <span class="val" id="feedVal">0.055</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Kill</label>
+        <input type="range" id="kill" min="0.04" max="0.075" step="0.001" value="0.062">
+        <span class="val" id="killVal">0.062</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Diffuse A</label>
+        <input type="range" id="dA" min="0.1" max="1.5" step="0.01" value="1.0">
+        <span class="val" id="dAVal">1.00</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Diffuse B</label>
+        <input type="range" id="dB" min="0.1" max="0.8" step="0.01" value="0.5">
+        <span class="val" id="dBVal">0.50</span>
+      </div>
+    </div>
+
+    <!-- Simulation -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title">Simulation</div>
+      <div class="ctrl-row">
+        <label>Speed</label>
+        <input type="range" id="speed" min="1" max="32" step="1" value="8">
+        <span class="val" id="speedVal">8</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Brush</label>
+        <input type="range" id="brush" min="2" max="30" step="1" value="8">
+        <span class="val" id="brushVal">8</span>
+      </div>
+    </div>
+
+    <!-- Audio Reactivity -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title">Audio Reactivity</div>
+      <div class="audio-toggle">
+        <div class="toggle-track" id="audioToggle"></div>
+        <span class="audio-label">Microphone</span>
+        <span class="audio-status" id="audioStatus"></span>
+      </div>
+      <div class="ctrl-row">
+        <label>Sensitivity</label>
+        <input type="range" id="audioSens" min="0.1" max="3.0" step="0.1" value="1.0">
+        <span class="val" id="audioSensVal">1.0</span>
+      </div>
+    </div>
+
+    <!-- Color Palette -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title">Palette</div>
+      <div class="palette-grid" id="paletteGrid"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title">Actions</div>
+      <div class="action-row">
+        <button class="action-btn" id="clearBtn">Clear</button>
+        <button class="action-btn" id="seedBtn">Seed</button>
+        <button class="action-btn primary" id="exportBtn">Export</button>
+      </div>
+      <div class="action-row">
+        <button class="action-btn" id="pauseBtn">Pause</button>
+        <button class="action-btn" id="symmetryBtn">Symmetry: Off</button>
+      </div>
+    </div>
+
+    <!-- Shortcuts -->
+    <div class="shortcuts">
+      <div class="ctrl-group-title">Shortcuts</div>
+      <div class="shortcut-row"><kbd>Space</kbd><span>Pause / Resume</span></div>
+      <div class="shortcut-row"><kbd>C</kbd><span>Clear</span></div>
+      <div class="shortcut-row"><kbd>S</kbd><span>Random seed</span></div>
+      <div class="shortcut-row"><kbd>E</kbd><span>Export PNG</span></div>
+      <div class="shortcut-row"><kbd>M</kbd><span>Toggle symmetry</span></div>
+      <div class="shortcut-row"><kbd>R</kbd><span>Randomize params</span></div>
+      <div class="shortcut-row"><kbd>1-9</kbd><span>Load preset</span></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  Crucible — WebGL Gray-Scott Reaction-Diffusion Laboratory
+// ============================================================
+
+const SIM_W = 512, SIM_H = 512;
+
+// --- Presets: [name, feed, kill] ---
+const PRESETS = [
+  ['Mitosis',   0.0367, 0.0649],
+  ['Coral',     0.0545, 0.062],
+  ['Ripples',   0.018,  0.051],
+  ['Maze',      0.029,  0.057],
+  ['Spots',     0.035,  0.065],
+  ['Worms',     0.078,  0.061],
+  ['Bubbles',   0.012,  0.047],
+  ['Spirals',   0.014,  0.054],
+  ['Pulsing',   0.025,  0.06],
+];
+
+// --- Color palettes: arrays of [r,g,b] stops for chemical B concentration ---
+const PALETTES = [
+  { name: 'Void',    stops: [[10,10,15],[60,50,140],[124,111,224],[74,222,128]] },
+  { name: 'Ember',   stops: [[10,10,15],[120,20,20],[251,191,36],[255,255,200]] },
+  { name: 'Ocean',   stops: [[10,10,15],[10,40,80],[30,120,180],[74,222,128]] },
+  { name: 'Bone',    stops: [[10,10,15],[60,60,70],[160,160,170],[200,200,212]] },
+  { name: 'Neon',    stops: [[10,10,15],[200,30,120],[255,100,200],[74,222,128]] },
+  { name: 'Toxic',   stops: [[10,10,15],[20,80,20],[74,222,128],[200,255,100]] },
+  { name: 'Plasma',  stops: [[10,10,15],[100,20,140],[220,80,60],[251,191,36]] },
+  { name: 'Ice',     stops: [[10,10,15],[20,30,80],[80,140,220],[220,240,255]] },
+];
+
+// --- State ---
+let paused = false;
+let symmetry = false;
+let activePalette = 0;
+let activePreset = -1;
+let audioActive = false;
+let audioLevel = 0;
+let analyser = null;
+let audioData = null;
+
+// --- WebGL setup ---
+const displayCanvas = document.getElementById('display');
+const gl = displayCanvas.getContext('webgl', { preserveDrawingBuffer: true });
+if (!gl) { alert('WebGL required'); throw new Error('No WebGL'); }
+
+// Enable float textures
+const floatExt = gl.getExtension('OES_texture_float');
+if (!floatExt) { alert('OES_texture_float required'); throw new Error('No float textures'); }
+
+// Fullscreen quad
+const quadVerts = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+const quadBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.bufferData(gl.ARRAY_BUFFER, quadVerts, gl.STATIC_DRAW);
+
+// --- Shader sources ---
+const VERT_SRC = `
+attribute vec2 pos;
+varying vec2 uv;
+void main() {
+  uv = pos * 0.5 + 0.5;
+  gl_Position = vec4(pos, 0.0, 1.0);
+}`;
+
+const SIM_FRAG_SRC = `
+precision highp float;
+varying vec2 uv;
+uniform sampler2D state;
+uniform vec2 texelSize;
+uniform float feed, kill, dA, dB, dt;
+uniform vec2 brushPos;
+uniform float brushRadius;
+uniform float brushActive;
+uniform float symmetryOn;
+
+void main() {
+  vec4 c = texture2D(state, uv);
+  float a = c.r, b = c.g;
+
+  // 5-point Laplacian
+  float lA = -a * 4.0;
+  float lB = -b * 4.0;
+  vec4 n;
+  n = texture2D(state, uv + vec2(texelSize.x, 0.0)); lA += n.r; lB += n.g;
+  n = texture2D(state, uv - vec2(texelSize.x, 0.0)); lA += n.r; lB += n.g;
+  n = texture2D(state, uv + vec2(0.0, texelSize.y)); lA += n.r; lB += n.g;
+  n = texture2D(state, uv - vec2(0.0, texelSize.y)); lA += n.r; lB += n.g;
+
+  float abb = a * b * b;
+  float newA = a + (dA * lA - abb + feed * (1.0 - a)) * dt;
+  float newB = b + (dB * lB + abb - (kill + feed) * b) * dt;
+
+  // Brush injection
+  if (brushActive > 0.5) {
+    vec2 center = brushPos;
+    float d = length(uv - center);
+    float r = brushRadius;
+    if (d < r) {
+      float strength = smoothstep(r, r * 0.3, d);
+      newB = mix(newB, 1.0, strength * 0.8);
+    }
+    // Symmetry: mirror brush
+    if (symmetryOn > 0.5) {
+      vec2 m1 = vec2(1.0 - center.x, center.y);
+      vec2 m2 = vec2(center.x, 1.0 - center.y);
+      vec2 m3 = vec2(1.0 - center.x, 1.0 - center.y);
+      float d1 = length(uv - m1);
+      float d2 = length(uv - m2);
+      float d3 = length(uv - m3);
+      if (d1 < r) newB = mix(newB, 1.0, smoothstep(r, r*0.3, d1) * 0.8);
+      if (d2 < r) newB = mix(newB, 1.0, smoothstep(r, r*0.3, d2) * 0.8);
+      if (d3 < r) newB = mix(newB, 1.0, smoothstep(r, r*0.3, d3) * 0.8);
+    }
+  }
+
+  gl_FragColor = vec4(clamp(newA, 0.0, 1.0), clamp(newB, 0.0, 1.0), 0.0, 1.0);
+}`;
+
+const RENDER_FRAG_SRC = `
+precision highp float;
+varying vec2 uv;
+uniform sampler2D state;
+uniform vec3 color0, color1, color2, color3;
+
+vec3 palette(float t) {
+  if (t < 0.33) return mix(color0, color1, t / 0.33);
+  if (t < 0.66) return mix(color1, color2, (t - 0.33) / 0.33);
+  return mix(color2, color3, (t - 0.66) / 0.34);
+}
+
+void main() {
+  vec4 c = texture2D(state, uv);
+  float b = c.g;
+  vec3 col = palette(clamp(b * 2.5, 0.0, 1.0));
+  // Subtle vignette
+  float vig = 1.0 - 0.3 * length(uv - 0.5);
+  gl_FragColor = vec4(col * vig, 1.0);
+}`;
+
+// --- Compile shaders ---
+function compileShader(src, type) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(s));
+    return null;
+  }
+  return s;
+}
+
+function createProgram(vSrc, fSrc) {
+  const v = compileShader(vSrc, gl.VERTEX_SHADER);
+  const f = compileShader(fSrc, gl.FRAGMENT_SHADER);
+  const p = gl.createProgram();
+  gl.attachShader(p, v);
+  gl.attachShader(p, f);
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(p));
+    return null;
+  }
+  return p;
+}
+
+const simProg = createProgram(VERT_SRC, SIM_FRAG_SRC);
+const renderProg = createProgram(VERT_SRC, RENDER_FRAG_SRC);
+
+// Uniform locations
+const simUni = {};
+['state','texelSize','feed','kill','dA','dB','dt','brushPos','brushRadius','brushActive','symmetryOn'].forEach(n => {
+  simUni[n] = gl.getUniformLocation(simProg, n);
+});
+
+const renderUni = {};
+['state','color0','color1','color2','color3'].forEach(n => {
+  renderUni[n] = gl.getUniformLocation(renderProg, n);
+});
+
+// --- Framebuffers (ping-pong) ---
+function createFBO() {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, SIM_W, SIM_H, 0, gl.RGBA, gl.FLOAT, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  return { tex, fb };
+}
+
+let fbo0 = createFBO();
+let fbo1 = createFBO();
+
+// --- Initialize state: A=1 everywhere, B=0 ---
+function clearState() {
+  const data = new Float32Array(SIM_W * SIM_H * 4);
+  for (let i = 0; i < SIM_W * SIM_H; i++) {
+    data[i * 4] = 1.0;     // A
+    data[i * 4 + 1] = 0.0; // B
+    data[i * 4 + 2] = 0.0;
+    data[i * 4 + 3] = 1.0;
+  }
+  gl.bindTexture(gl.TEXTURE_2D, fbo0.tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, SIM_W, SIM_H, 0, gl.RGBA, gl.FLOAT, data);
+  gl.bindTexture(gl.TEXTURE_2D, fbo1.tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, SIM_W, SIM_H, 0, gl.RGBA, gl.FLOAT, data);
+}
+
+function seedRandom() {
+  // Read current state, add random B patches
+  const data = new Float32Array(SIM_W * SIM_H * 4);
+  for (let i = 0; i < SIM_W * SIM_H; i++) {
+    data[i * 4] = 1.0;
+    data[i * 4 + 1] = 0.0;
+    data[i * 4 + 2] = 0.0;
+    data[i * 4 + 3] = 1.0;
+  }
+  // Place 8-15 random circular seeds
+  const numSeeds = 8 + Math.floor(Math.random() * 8);
+  for (let s = 0; s < numSeeds; s++) {
+    const cx = Math.floor(Math.random() * SIM_W);
+    const cy = Math.floor(Math.random() * SIM_H);
+    const r = 4 + Math.floor(Math.random() * 12);
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx*dx + dy*dy <= r*r) {
+          const x = (cx + dx + SIM_W) % SIM_W;
+          const y = (cy + dy + SIM_H) % SIM_H;
+          const idx = (y * SIM_W + x) * 4;
+          data[idx + 1] = 1.0;
+        }
+      }
+    }
+  }
+  gl.bindTexture(gl.TEXTURE_2D, fbo0.tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, SIM_W, SIM_H, 0, gl.RGBA, gl.FLOAT, data);
+}
+
+clearState();
+seedRandom();
+
+// --- Draw quad helper ---
+function drawQuad(prog) {
+  gl.useProgram(prog);
+  const posLoc = gl.getAttribLocation(prog, 'pos');
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  gl.enableVertexAttribArray(posLoc);
+  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// --- Slider bindings ---
+const sliders = {
+  feed: document.getElementById('feed'),
+  kill: document.getElementById('kill'),
+  dA: document.getElementById('dA'),
+  dB: document.getElementById('dB'),
+  speed: document.getElementById('speed'),
+  brush: document.getElementById('brush'),
+  audioSens: document.getElementById('audioSens'),
+};
+
+const valDisplays = {
+  feed: document.getElementById('feedVal'),
+  kill: document.getElementById('killVal'),
+  dA: document.getElementById('dAVal'),
+  dB: document.getElementById('dBVal'),
+  speed: document.getElementById('speedVal'),
+  brush: document.getElementById('brushVal'),
+  audioSens: document.getElementById('audioSensVal'),
+};
+
+function updateValDisplays() {
+  valDisplays.feed.textContent = parseFloat(sliders.feed.value).toFixed(3);
+  valDisplays.kill.textContent = parseFloat(sliders.kill.value).toFixed(3);
+  valDisplays.dA.textContent = parseFloat(sliders.dA.value).toFixed(2);
+  valDisplays.dB.textContent = parseFloat(sliders.dB.value).toFixed(2);
+  valDisplays.speed.textContent = sliders.speed.value;
+  valDisplays.brush.textContent = sliders.brush.value;
+  valDisplays.audioSens.textContent = parseFloat(sliders.audioSens.value).toFixed(1);
+}
+
+Object.values(sliders).forEach(s => s.addEventListener('input', () => {
+  updateValDisplays();
+  activePreset = -1;
+  updatePresetUI();
+}));
+updateValDisplays();
+
+// --- Preset UI ---
+const presetGrid = document.getElementById('presetGrid');
+PRESETS.forEach((p, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'preset-btn';
+  btn.textContent = p[0];
+  btn.addEventListener('click', () => loadPreset(i));
+  presetGrid.appendChild(btn);
+});
+
+function loadPreset(i) {
+  const p = PRESETS[i];
+  sliders.feed.value = p[1];
+  sliders.kill.value = p[2];
+  updateValDisplays();
+  activePreset = i;
+  updatePresetUI();
+}
+
+function updatePresetUI() {
+  presetGrid.querySelectorAll('.preset-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', i === activePreset);
+  });
+}
+
+// --- Palette UI ---
+const paletteGrid = document.getElementById('paletteGrid');
+PALETTES.forEach((p, i) => {
+  const btn = document.createElement('div');
+  btn.className = 'palette-btn';
+  const s = p.stops;
+  btn.style.background = `linear-gradient(90deg, rgb(${s[0]}), rgb(${s[1]}), rgb(${s[2]}), rgb(${s[3]}))`;
+  btn.title = p.name;
+  btn.addEventListener('click', () => {
+    activePalette = i;
+    updatePaletteUI();
+  });
+  paletteGrid.appendChild(btn);
+});
+
+function updatePaletteUI() {
+  paletteGrid.querySelectorAll('.palette-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', i === activePalette);
+  });
+}
+updatePaletteUI();
+
+// --- Mouse tracking ---
+let mouseDown = false;
+let mouseUV = [0, 0];
+const brushPreview = document.getElementById('brushPreview');
+const canvasArea = document.getElementById('canvasArea');
+
+function getCanvasUV(e) {
+  const rect = displayCanvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width;
+  const y = 1.0 - (e.clientY - rect.top) / rect.height;
+  return [Math.max(0, Math.min(1, x)), Math.max(0, Math.min(1, y))];
+}
+
+canvasArea.addEventListener('mousedown', (e) => {
+  if (e.target.closest('.sidebar') || e.target.closest('.start-overlay')) return;
+  mouseDown = true;
+  mouseUV = getCanvasUV(e);
+});
+
+canvasArea.addEventListener('mousemove', (e) => {
+  mouseUV = getCanvasUV(e);
+  // Update brush preview
+  const rect = displayCanvas.getBoundingClientRect();
+  const bx = e.clientX;
+  const by = e.clientY;
+  const bSize = parseFloat(sliders.brush.value) / SIM_W * rect.width * 2;
+  brushPreview.style.left = bx + 'px';
+  brushPreview.style.top = by + 'px';
+  brushPreview.style.width = bSize + 'px';
+  brushPreview.style.height = bSize + 'px';
+});
+
+window.addEventListener('mouseup', () => { mouseDown = false; });
+
+// --- Audio reactivity ---
+const audioToggle = document.getElementById('audioToggle');
+const audioStatus = document.getElementById('audioStatus');
+
+audioToggle.addEventListener('click', async () => {
+  if (!audioActive) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const ctx = new AudioContext();
+      const source = ctx.createMediaStreamSource(stream);
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      audioData = new Uint8Array(analyser.frequencyBinCount);
+      audioActive = true;
+      audioToggle.classList.add('on');
+      audioStatus.textContent = 'active';
+    } catch (err) {
+      audioStatus.textContent = 'denied';
+    }
+  } else {
+    audioActive = false;
+    analyser = null;
+    audioData = null;
+    audioToggle.classList.remove('on');
+    audioStatus.textContent = '';
+  }
+});
+
+function getAudioLevel() {
+  if (!audioActive || !analyser) return 0;
+  analyser.getByteFrequencyData(audioData);
+  let sum = 0;
+  for (let i = 0; i < audioData.length; i++) sum += audioData[i];
+  return (sum / audioData.length / 255) * parseFloat(sliders.audioSens.value);
+}
+
+// --- Actions ---
+document.getElementById('clearBtn').addEventListener('click', () => { clearState(); seedRandom(); });
+document.getElementById('seedBtn').addEventListener('click', seedRandom);
+document.getElementById('pauseBtn').addEventListener('click', togglePause);
+document.getElementById('symmetryBtn').addEventListener('click', toggleSymmetry);
+document.getElementById('exportBtn').addEventListener('click', exportPNG);
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
+}
+
+function toggleSymmetry() {
+  symmetry = !symmetry;
+  document.getElementById('symmetryBtn').textContent = 'Symmetry: ' + (symmetry ? 'On' : 'Off');
+}
+
+function exportPNG() {
+  const link = document.createElement('a');
+  link.download = 'crucible-' + Date.now() + '.png';
+  link.href = displayCanvas.toDataURL('image/png');
+  link.click();
+}
+
+// --- Keyboard shortcuts ---
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key.toLowerCase()) {
+    case ' ': e.preventDefault(); togglePause(); break;
+    case 'c': clearState(); seedRandom(); break;
+    case 's': seedRandom(); break;
+    case 'e': exportPNG(); break;
+    case 'm': toggleSymmetry(); break;
+    case 'r':
+      sliders.feed.value = 0.01 + Math.random() * 0.07;
+      sliders.kill.value = 0.04 + Math.random() * 0.035;
+      updateValDisplays();
+      activePreset = -1;
+      updatePresetUI();
+      break;
+    default:
+      const n = parseInt(e.key);
+      if (n >= 1 && n <= PRESETS.length) loadPreset(n - 1);
+  }
+});
+
+// --- Start overlay ---
+const startOverlay = document.getElementById('startOverlay');
+startOverlay.addEventListener('click', () => {
+  startOverlay.classList.add('hidden');
+});
+
+// --- Resize ---
+function resize() {
+  const area = canvasArea;
+  const w = area.clientWidth;
+  const h = area.clientHeight;
+  const size = Math.min(w - 40, h - 40);
+  displayCanvas.width = SIM_W;
+  displayCanvas.height = SIM_H;
+  displayCanvas.style.width = size + 'px';
+  displayCanvas.style.height = size + 'px';
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Main loop ---
+let lastTime = performance.now();
+let frameCount = 0;
+let fpsTime = 0;
+let stepCount = 0;
+
+function frame(now) {
+  requestAnimationFrame(frame);
+
+  // FPS counter
+  frameCount++;
+  if (now - fpsTime > 1000) {
+    document.getElementById('fpsDisplay').textContent =
+      `${frameCount} fps · ${stepCount} steps/s`;
+    frameCount = 0;
+    stepCount = 0;
+    fpsTime = now;
+  }
+
+  if (paused) return;
+
+  // Audio modulation
+  audioLevel = getAudioLevel();
+
+  const feed = parseFloat(sliders.feed.value) + audioLevel * 0.01;
+  const kill = parseFloat(sliders.kill.value) + audioLevel * 0.005;
+  const dA = parseFloat(sliders.dA.value);
+  const dB = parseFloat(sliders.dB.value);
+  const stepsPerFrame = parseInt(sliders.speed.value);
+  const brushR = parseFloat(sliders.brush.value) / SIM_W;
+
+  // Simulation steps
+  gl.viewport(0, 0, SIM_W, SIM_H);
+  for (let i = 0; i < stepsPerFrame; i++) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo1.fb);
+    gl.useProgram(simProg);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, fbo0.tex);
+    gl.uniform1i(simUni.state, 0);
+    gl.uniform2f(simUni.texelSize, 1.0/SIM_W, 1.0/SIM_H);
+    gl.uniform1f(simUni.feed, feed);
+    gl.uniform1f(simUni.kill, kill);
+    gl.uniform1f(simUni.dA, dA);
+    gl.uniform1f(simUni.dB, dB);
+    gl.uniform1f(simUni.dt, 1.0);
+    gl.uniform2f(simUni.brushPos, mouseUV[0], mouseUV[1]);
+    gl.uniform1f(simUni.brushRadius, brushR);
+    gl.uniform1f(simUni.brushActive, mouseDown ? 1.0 : 0.0);
+    gl.uniform1f(simUni.symmetryOn, symmetry ? 1.0 : 0.0);
+
+    drawQuad(simProg);
+
+    // Swap
+    const tmp = fbo0;
+    fbo0 = fbo1;
+    fbo1 = tmp;
+    stepCount++;
+  }
+
+  // Render to screen
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  gl.useProgram(renderProg);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, fbo0.tex);
+  gl.uniform1i(renderUni.state, 0);
+
+  const pal = PALETTES[activePalette].stops;
+  gl.uniform3f(renderUni.color0, pal[0][0]/255, pal[0][1]/255, pal[0][2]/255);
+  gl.uniform3f(renderUni.color1, pal[1][0]/255, pal[1][1]/255, pal[1][2]/255);
+  gl.uniform3f(renderUni.color2, pal[2][0]/255, pal[2][1]/255, pal[2][2]/255);
+  gl.uniform3f(renderUni.color3, pal[3][0]/255, pal[3][1]/255, pal[3][2]/255);
+
+  drawQuad(renderProg);
+}
+
+// Load default preset
+loadPreset(0);
+requestAnimationFrame(frame);
+
+</script>
+</body>
+</html>
