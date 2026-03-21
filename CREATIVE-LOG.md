@@ -4,6 +4,11 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Synesthesia / Interactive Sound Surface (autonomous session)
+- **What**: Interactive sonic instrument (`docs/synesthesia.html`) — the grid becomes a playable surface where each cell is a note
+- **Details**: Web Audio API with per-genome-type musical character: each of 13 algorithm types maps to a distinct scale (Pentatonic for 1D, Lydian for L-Systems, Phrygian for Reaction-Diffusion, Blues for Noise, etc.), waveform (square/sine/triangle/sawtooth), and HSL color. Rows map to pitch (high-to-low), columns add spatial detune. Touch/hover cells to trigger individual tones with attack/decay envelopes. 5 auto-traversal modes: **Touch** (manual play), **Rain** (random cells fall like drops), **Spiral** (outward from center), **Wave** (sine-modulated column sweep), **Wander** (random walk). Ripple animation system shows expanding rings at triggered cells. Compressor prevents clipping with many simultaneous notes. Algorithmic reverb (2.5s convolved IR). Real-time frequency spectrum bar. Tempo slider (10-200 BPM), volume control.
+- **Pages**: `docs/synesthesia.html` (new), `docs/index.html` (added button + footer link)
+- **Inspiration**: Existing sound pages treat pieces as things to listen to. Synesthesia makes them things you play with. The grid is an instrument. Different algorithms produce different instruments.
 
 ### 2026-03-21 — Resonance Enhancement / Gallery + Evolution Sonification
 - **What**: Extended `docs/resonance.html` with two new sonification modes: **Gallery** (sonify actual evolved pieces from gallery.json) and **Evolution** (fitness trajectory as ambient soundscape)
@@ -294,6 +299,20 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Pages**: `docs/epochs.html` (new), `docs/index.html` (added Epochs button in header + footer link)
 - **Nav fix**: Added epochs.html link to both header nav and footer nav in index.html
 - **Why this page**: The CREATIVE-VISION explicitly listed "Epoch deep-dive" as an unbuilt direction. About.html has a brief epoch section, but nothing explained *what each epoch actually does to the fitness weights*, *which species thrive under each pressure*, or *what the score trajectories look like*. Epochs makes the invisible selection pressure visible — you can see that chaos triples edge activity weight while dropping coherence to 3%, or that harmony is the most balanced epoch where info density peaks. The exemplar galleries show what survives each season.
+
+### 2026-03-21 — Map / Visual Sitemap (autonomous session)
+- **What**: Searchable, filterable directory of every page in the Lattice universe (`docs/map.html`)
+- **Details**: With 50+ pages created by parallel autonomous agents, the site had a critical discoverability problem — most pages were orphaned or buried in an overflowing header/footer. Map organizes all pages into 6 categories (Core, Sound & Music, Visual Experiences, Data & Analysis, Generative Art, Tools & Dev) with descriptive cards. Each card shows icon, title, one-line description, and category tag. Category filter bar at top. Live text search (searches names, descriptions, and tags). Keyboard shortcuts: `/` to focus search, Escape to clear. Page count display. Clean responsive grid layout.
+- **Pages**: `docs/map.html` (new), `docs/index.html` (added Map button in header + footer)
+- **What it fixes**: The index.html header had grown to 20+ buttons and the footer had become a wall of links with some pages still missing. Many pages created by parallel agents (breath, cascade, cipher, codex, collide, crucible, cymatics, echo, emerge, epoch, field, flora, garden, genesis, membrane, nexus, orbit, pendulum, prism, ripple, sediment, shrine, soundscape, vortex, warp, etc.) had no navigation links at all. Map gives every page a home and makes the full scope of the site visible for the first time. Also fixed: added missing microscope.html link to footer.
+
+
+### 2026-03-21 — Epoch / Evolutionary Era Deep-Dive (autonomous session)
+- **What**: Interactive epoch explorer (`docs/epoch.html`) — deep-dive into the four seasons of evolutionary pressure
+- **Details**: Data-driven page that fetches gallery.json and breaks down each of the four epochs (emergence, order, chaos, harmony). Tab-based navigation with animated epoch-colored ribbon showing the full generation timeline. Each epoch section includes: **Stats grid** (generation count, peak/avg fitness, active species count). **Fitness pressure cards** with animated weight bars showing which metrics each epoch rewards most (emergence favors novelty/complexity, order favors symmetry, chaos favors edge activity, harmony demands balance). **Fitness trajectory chart** (Canvas) showing the full-history best-score line dimmed, with the current epoch's generations highlighted in its signature color — epoch bands at the bottom. **Species distribution bars** (horizontal, colored by TYPE_COLORS, sorted by population count). **Exemplar pieces** from the archive rendered as colored ASCII art in showcase cards with type/score/generation metadata. Hero section with animated epoch-color gradient bands scrolling across a background Canvas. Keyboard navigation: 1-4 to jump to epochs, arrow keys to cycle. Scroll-triggered bar animations.
+- **Pages**: `docs/epoch.html` (new), `docs/index.html` (added Epoch button in header + footer link)
+- **Nav fixes**: Repaired heavily corrupted index.html navigation — header had malformed HTML (nested `<a>` tags, broken entities, duplicate links from concurrent autonomous edits). Footer had duplicate links, missing separators, merged lines. Rewrote both nav sections cleanly. Added all orphaned pages to both header and footer.
+- **What it fills**: The "Epoch deep-dive" direction from CREATIVE-VISION.md. About explains the four epochs in a sentence each. Pulse shows them as colored bands. Origin plays through them cinematically. Epoch is the first page that lets you *study* each epoch individually — understand what it rewards, see which species thrive under its pressure, examine its exemplar pieces, and compare fitness trajectories.
 
 ## In Progress
 

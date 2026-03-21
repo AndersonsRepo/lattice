@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Epochs</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    #back-btn {
+      position: fixed; top: 1rem; left: 1rem; z-index: 100;
+      color: var(--text-dim); text-decoration: none; font-size: 0.8rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 0.4rem 0.8rem; border: 1px solid var(--border);
+      border-radius: 6px; background: var(--surface);
+      transition: border-color 0.3s, color 0.3s;
+    }
+    #back-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
+
+    /* Hero */
+    .hero {
+      text-align: center; padding: 3rem 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      position: relative; overflow: hidden;
+    }
+    .hero h1 {
+      font-size: 2rem; font-weight: 300; letter-spacing: 0.3em;
+      text-transform: uppercase; color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+    }
+    .hero .subtitle {
+      color: var(--text-dim); font-size: 0.75rem; letter-spacing: 0.1em;
+      margin-top: 0.4rem;
+    }
+
+    /* Cycle visualizer */
+    .cycle-ring {
+      margin: 2.5rem auto 0;
+      width: 280px; height: 280px;
+      position: relative;
+    }
+    .cycle-ring canvas {
+      width: 100%; height: 100%;
+    }
+    .cycle-center {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center; pointer-events: none;
+    }
+    .cycle-gen {
+      font-size: 2rem; font-weight: 600; color: var(--accent);
+    }
+    .cycle-label {
+      font-size: 0.6rem; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.12em;
+    }
+
+    /* Epoch sections */
+    .epoch-section {
+      padding: 3rem 0; border-bottom: 1px solid var(--border);
+    }
+    .epoch-section:last-child { border-bottom: none; }
+
+    .epoch-header {
+      display: flex; align-items: center; gap: 1rem;
+      margin-bottom: 1.5rem; flex-wrap: wrap;
+    }
+    .epoch-icon {
+      width: 48px; height: 48px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; flex-shrink: 0;
+    }
+    .epoch-title {
+      font-size: 1.4rem; font-weight: 300; letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+    .epoch-range {
+      font-size: 0.65rem; color: var(--text-dim); letter-spacing: 0.08em;
+    }
+    .epoch-desc {
+      font-size: 0.8rem; color: var(--text-dim); line-height: 1.6;
+      max-width: 700px; margin-bottom: 1.5rem;
+    }
+
+    /* Weight bars */
+    .weights-section {
+      margin-bottom: 1.5rem;
+    }
+    .weights-title {
+      font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.12em; margin-bottom: 0.6rem;
+    }
+    .weight-row {
+      display: flex; align-items: center; gap: 0.5rem;
+      margin-bottom: 0.35rem; font-size: 0.65rem;
+    }
+    .weight-label {
+      width: 80px; text-align: right; color: var(--text-dim);
+      flex-shrink: 0;
+    }
+    .weight-bar-bg {
+      flex: 1; max-width: 300px; height: 8px;
+      background: rgba(255,255,255,0.04); border-radius: 4px;
+      overflow: hidden; position: relative;
+    }
+    .weight-bar-fill {
+      height: 100%; border-radius: 4px;
+      transition: width 0.8s ease;
+    }
+    .weight-val {
+      width: 32px; color: var(--text-dim); font-size: 0.6rem;
+    }
+    .weight-delta {
+      width: 40px; font-size: 0.55rem;
+    }
+    .weight-delta.up { color: var(--green); }
+    .weight-delta.down { color: #ef4444; }
+    .weight-delta.neutral { color: var(--text-dim); opacity: 0.4; }
+
+    /* Stats row */
+    .epoch-stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.75rem; margin-bottom: 1.5rem;
+    }
+    .epoch-stat {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.6rem 0.8rem; text-align: center;
+    }
+    .epoch-stat-value {
+      font-size: 1.2rem; font-weight: 600;
+    }
+    .epoch-stat-label {
+      font-size: 0.55rem; color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.1em; margin-top: 0.15rem;
+    }
+
+    /* Piece gallery strip */
+    .epoch-gallery {
+      display: flex; gap: 0.75rem; overflow-x: auto;
+      padding: 0.5rem 0 1rem; scroll-behavior: smooth;
+    }
+    .epoch-gallery::-webkit-scrollbar { height: 4px; }
+    .epoch-gallery::-webkit-scrollbar-track { background: var(--bg); }
+    .epoch-gallery::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .epoch-piece {
+      flex-shrink: 0; width: 180px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; overflow: hidden; cursor: default;
+      transition: border-color 0.3s, transform 0.2s;
+    }
+    .epoch-piece:hover {
+      border-color: var(--accent); transform: translateY(-2px);
+    }
+    .epoch-piece canvas {
+      width: 180px; height: 100px; display: block;
+    }
+    .epoch-piece-info {
+      padding: 0.4rem 0.6rem; font-size: 0.6rem;
+      display: flex; justify-content: space-between;
+    }
+    .epoch-piece-type { color: var(--text-dim); }
+    .epoch-piece-score { font-weight: 600; }
+
+    /* Species chart */
+    .species-chart {
+      margin-top: 1rem;
+    }
+    .species-chart-title {
+      font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.12em; margin-bottom: 0.5rem;
+    }
+    .species-bars {
+      display: flex; flex-direction: column; gap: 0.3rem;
+    }
+    .species-bar-row {
+      display: flex; align-items: center; gap: 0.4rem; font-size: 0.6rem;
+    }
+    .species-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .species-name {
+      width: 90px; color: var(--text-dim); flex-shrink: 0;
+    }
+    .species-bar-bg {
+      flex: 1; max-width: 200px; height: 6px;
+      background: rgba(255,255,255,0.04); border-radius: 3px;
+      overflow: hidden;
+    }
+    .species-bar-fill {
+      height: 100%; border-radius: 3px; transition: width 0.6s ease;
+    }
+    .species-count {
+      width: 30px; color: var(--text-dim); font-size: 0.55rem; text-align: right;
+    }
+
+    /* Fitness trajectory mini */
+    .trajectory-section { margin-top: 1.5rem; }
+    .trajectory-canvas {
+      width: 100%; height: 80px; display: block; border-radius: 6px;
+      background: var(--bg); border: 1px solid var(--border);
+    }
+
+    /* Transition arrows between sections */
+    .epoch-transition {
+      text-align: center; padding: 1rem 0; color: var(--text-dim);
+      font-size: 1rem; opacity: 0.3;
+    }
+
+    @media (max-width: 700px) {
+      .epoch-header { flex-direction: column; align-items: flex-start; }
+      .epoch-stats { grid-template-columns: repeat(2, 1fr); }
+      .weight-bar-bg { max-width: 160px; }
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" id="back-btn">&larr; Gallery</a>
+
+  <div class="hero">
+    <h1>Epochs</h1>
+    <p class="subtitle">the four seasons of aesthetic pressure</p>
+    <div class="cycle-ring">
+      <canvas id="cycle-canvas" width="560" height="560"></canvas>
+      <div class="cycle-center">
+        <div class="cycle-gen" id="cycle-gen">—</div>
+        <div class="cycle-label">current generation</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container" id="epochs-container">
+    <!-- Epoch sections rendered by JS -->
+  </div>
+
+  <script>
+    const EPOCH_META = {
+      emergence: {
+        color: '#7c6fe0',
+        icon: '&#10022;',
+        tagline: 'Favoring structural complexity and novel forms',
+        description: 'The first phase of each cycle. The fitness function amplifies complexity and novelty — rewarding pieces that explore uncharted territory. Fractal dimension and structural interest matter most here. This is where new species tend to appear, because the system is actively seeking forms it hasn\'t seen before.',
+        weights: { density: 0.11, complexity: 0.19, symmetry: 0.05, edge: 0.11, structure: 0.16, novelty: 0.16, fractal: 0.09, infoDensity: 0.07, coherence: 0.06 },
+      },
+      order: {
+        color: '#4ade80',
+        icon: '&#10023;',
+        tagline: 'Seeking symmetry, pattern, and balance',
+        description: 'The system shifts to rewarding organization. Symmetry weight triples compared to emergence. Information density and coherence rise — the system wants patterns that encode meaning efficiently. Species that survived emergence now face pressure to become structured, not just novel.',
+        weights: { density: 0.15, complexity: 0.11, symmetry: 0.18, edge: 0.07, structure: 0.07, novelty: 0.16, fractal: 0.06, infoDensity: 0.11, coherence: 0.09 },
+      },
+      chaos: {
+        color: '#ef4444',
+        icon: '&#10038;',
+        tagline: 'Rewarding edge activity and high entropy',
+        description: 'A deliberate disruption. Edge activity and complexity spike to their highest weights. Coherence drops to its minimum. The system wants turbulence, borders, fractal detail. Pieces that were too orderly get culled. This epoch prevents the population from converging on a single local optimum — it\'s the evolutionary equivalent of a forest fire that clears space for new growth.',
+        weights: { density: 0.12, complexity: 0.19, symmetry: 0.05, edge: 0.19, structure: 0.08, novelty: 0.16, fractal: 0.12, infoDensity: 0.06, coherence: 0.03 },
+      },
+      harmony: {
+        color: '#fbbf24',
+        icon: '&#10047;',
+        tagline: 'Balancing density, structure, and uniqueness',
+        description: 'The resolution. No single metric dominates — the weights are the most evenly distributed of any epoch. Information density reaches its peak weight. The system is asking: can you be complex AND organized? Dense AND structured? Novel AND coherent? Only the most complete pieces thrive here. This is where all-time bests tend to consolidate.',
+        weights: { density: 0.14, complexity: 0.14, symmetry: 0.07, edge: 0.11, structure: 0.11, novelty: 0.14, fractal: 0.10, infoDensity: 0.12, coherence: 0.07 },
+      }
+    };
+
+    const EPOCH_ORDER = ['emergence', 'order', 'chaos', 'harmony'];
+
+    const SPECIES_COLORS = {
+      '1d': '#c8abff', '2d': '#4ade80', 'lsystem': '#fbbf24',
+      'reaction-diffusion': '#d44af5', 'voronoi': '#4ad4f5', 'wfc': '#f54a9d',
+      'spirograph': '#d4f54a', 'attractor': '#f59d6b', 'julia': '#4af5d4',
+      'noise': '#d4d44a', 'flowfield': '#4ad4d4', 'dla': '#a0a0a0',
+    };
+
+    const WEIGHT_LABELS = {
+      density: 'Density', complexity: 'Complexity', symmetry: 'Symmetry',
+      edge: 'Edge Activity', structure: 'Structure', novelty: 'Novelty',
+      fractal: 'Fractal', infoDensity: 'Info Density', coherence: 'Coherence',
+    };
+
+    // Balanced reference weights (average across all epochs)
+    const BALANCED = {};
+    Object.keys(EPOCH_META.emergence.weights).forEach(k => {
+      BALANCED[k] = EPOCH_ORDER.reduce((s, e) => s + EPOCH_META[e].weights[k], 0) / 4;
+    });
+
+    const TYPE_COLORS = {
+      '1d':                 ['#0a0a0f','#1a1a3e','#3b2d8b','#6b4edb','#9d7af5','#c8abff','#e8d8ff','#ffffff'],
+      '2d':                 ['#0a0a0f','#0d2818','#166b3a','#22a95c','#4ade80','#7af5a8','#b8ffd4','#e8fff0'],
+      'lsystem':            ['#0a0a0f','#2d1a0a','#6b3a0d','#a85c16','#db8b22','#f5b84a','#ffe088','#fff4cc'],
+      'reaction-diffusion': ['#0a0a0f','#1a0a2d','#3b0d6b','#6b16a8','#a822db','#d44af5','#f088ff','#ffccff'],
+      'voronoi':            ['#0a0a0f','#0a1a2d','#0d3b6b','#166ba8','#22a8db','#4ad4f5','#88eeff','#ccf8ff'],
+      'wfc':                ['#0a0a0f','#2d0a0a','#6b0d1a','#a8163b','#db226b','#f54a9d','#ff88c8','#ffccee'],
+      'spirograph':         ['#0a0a0f','#1a2d0a','#3b6b0d','#6ba816','#a8db22','#d4f54a','#eeff88','#ffffcc'],
+      'attractor':          ['#0a0a0f','#2d1a1a','#6b2d2d','#a84a3b','#db6b4a','#f59d6b','#ffc8a0','#ffe8d8'],
+      'julia':              ['#0a0a0f','#0a2d2d','#0d6b5b','#16a88a','#22dbb5','#4af5d4','#88ffe8','#ccfff4'],
+      'noise':              ['#0a0a0f','#1a1a0a','#3b3b0d','#6b6b16','#a8a822','#d4d44a','#eeff88','#ffffcc'],
+      'flowfield':          ['#0a0a0f','#0a1a1a','#0d3b3b','#166b6b','#22a8a8','#4ad4d4','#88eeff','#ccffff'],
+    };
+
+    const CHAR_INTENSITY = {};
+    ' .·:░▒▓█'.split('').forEach((c,i) => CHAR_INTENSITY[c] = i / 8);
+    '╔╗╚╝║═╠╣╦╩╬─│┌┐└┘├┤┬┴┼'.split('').forEach(c => CHAR_INTENSITY[c] = 0.5);
+    'αβγδωΩπΣΔΦψλμ∞≈∂∫√∝∈∀∃'.split('').forEach(c => CHAR_INTENSITY[c] = 0.65);
+    '❦✿❀❁✧✦★☆♠♣♥♦♪♫∞'.split('').forEach(c => CHAR_INTENSITY[c] = 0.75);
+    function charIntensity(ch) {
+      return CHAR_INTENSITY[ch] !== undefined ? CHAR_INTENSITY[ch] : (ch === ' ' ? 0 : 0.5);
+    }
+
+    let galleryData = null;
+
+    async function init() {
+      try {
+        const resp = await fetch('gallery.json');
+        galleryData = await resp.json();
+      } catch(e) {
+        console.error('Failed to load gallery.json:', e);
+        return;
+      }
+
+      document.getElementById('cycle-gen').textContent = galleryData.generation || '—';
+      drawCycleRing();
+      renderEpochs();
+    }
+
+    function drawCycleRing() {
+      const canvas = document.getElementById('cycle-canvas');
+      const ctx = canvas.getContext('2d');
+      const cx = 280, cy = 280, r = 230, rInner = 170;
+
+      ctx.clearRect(0, 0, 560, 560);
+
+      const currentGen = galleryData.generation || 0;
+      const currentEpochIdx = Math.floor(currentGen / 10) % 4;
+
+      EPOCH_ORDER.forEach((epoch, i) => {
+        const startAngle = (i / 4) * Math.PI * 2 - Math.PI / 2;
+        const endAngle = ((i + 1) / 4) * Math.PI * 2 - Math.PI / 2;
+        const meta = EPOCH_META[epoch];
+        const isActive = i === currentEpochIdx;
+
+        // Arc
+        ctx.beginPath();
+        ctx.arc(cx, cy, isActive ? r + 4 : r, startAngle, endAngle);
+        ctx.arc(cx, cy, rInner, endAngle, startAngle, true);
+        ctx.closePath();
+
+        ctx.fillStyle = meta.color;
+        ctx.globalAlpha = isActive ? 0.4 : 0.12;
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = meta.color;
+        ctx.lineWidth = isActive ? 2 : 1;
+        ctx.globalAlpha = isActive ? 0.9 : 0.3;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Label
+        const midAngle = (startAngle + endAngle) / 2;
+        const labelR = (r + rInner) / 2;
+        const lx = cx + Math.cos(midAngle) * labelR;
+        const ly = cy + Math.sin(midAngle) * labelR;
+
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.fillStyle = isActive ? meta.color : '#6e6e82';
+        ctx.font = `${isActive ? '600' : '400'} ${isActive ? 13 : 11}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(epoch.toUpperCase(), 0, 0);
+        ctx.restore();
+      });
+
+      // Generation tick marks around outside
+      const history = galleryData.history || [];
+      history.forEach(h => {
+        const epochIdx = EPOCH_ORDER.indexOf(h.epoch);
+        if (epochIdx < 0) return;
+        const genInCycle = h.generation % 40;
+        const angle = (genInCycle / 40) * Math.PI * 2 - Math.PI / 2;
+        const tr = r + 12;
+        const tx = cx + Math.cos(angle) * tr;
+        const ty = cy + Math.sin(angle) * tr;
+        ctx.beginPath();
+        ctx.arc(tx, ty, h.hallOfFameSize > 0 ? 2 : 1, 0, Math.PI * 2);
+        ctx.fillStyle = EPOCH_META[h.epoch].color;
+        ctx.globalAlpha = h.hallOfFameSize > 0 ? 0.7 : 0.15;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+
+      // Current position indicator
+      const currentAngle = ((currentGen % 40) / 40) * Math.PI * 2 - Math.PI / 2;
+      const indicR = r + 18;
+      const ix = cx + Math.cos(currentAngle) * indicR;
+      const iy = cy + Math.sin(currentAngle) * indicR;
+      ctx.beginPath();
+      ctx.arc(ix, iy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.globalAlpha = 0.9;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    function renderEpochs() {
+      const container = document.getElementById('epochs-container');
+      const history = galleryData.history || [];
+      const archive = galleryData.archive || [];
+      const currentGen = galleryData.generation || 0;
+
+      EPOCH_ORDER.forEach((epoch, ei) => {
+        const meta = EPOCH_META[epoch];
+
+        // Calculate stats for this epoch
+        const epochGens = history.filter(h => h.epoch === epoch);
+        const epochPieces = archive.filter(p => p.epoch === epoch);
+        const genRanges = [];
+        for (let g = ei * 10 + 1; g <= currentGen; g += 40) {
+          genRanges.push(`${g}-${Math.min(g + 9, currentGen)}`);
+        }
+
+        const avgBest = epochGens.length ? (epochGens.reduce((s,h) => s + h.bestScore, 0) / epochGens.length) : 0;
+        const maxBest = epochGens.length ? Math.max(...epochGens.map(h => h.bestScore)) : 0;
+        const totalHoF = epochGens.reduce((s,h) => s + (h.hallOfFameSize || 0), 0);
+
+        // Species counts for this epoch
+        const speciesCounts = {};
+        epochGens.forEach(h => {
+          for (const [sp, cnt] of Object.entries(h.speciesCounts || {})) {
+            speciesCounts[sp] = (speciesCounts[sp] || 0) + cnt;
+          }
+        });
+        const totalSpecies = Object.values(speciesCounts).reduce((s, v) => s + v, 0) || 1;
+
+        // Build section HTML
+        const section = document.createElement('div');
+        section.className = 'epoch-section';
+        section.id = `epoch-${epoch}`;
+
+        section.innerHTML = `
+          <div class="epoch-header">
+            <div class="epoch-icon" style="background: ${meta.color}22; border: 1px solid ${meta.color}40;">
+              <span style="color: ${meta.color}">${meta.icon}</span>
+            </div>
+            <div>
+              <div class="epoch-title" style="color: ${meta.color}">${epoch}</div>
+              <div class="epoch-range">Generations: ${genRanges.slice(0, 4).join(', ')}${genRanges.length > 4 ? ', ...' : ''}</div>
+            </div>
+          </div>
+
+          <div class="epoch-desc">${meta.description}</div>
+
+          <div class="epoch-stats">
+            <div class="epoch-stat">
+              <div class="epoch-stat-value" style="color: ${meta.color}">${epochGens.length}</div>
+              <div class="epoch-stat-label">Generations</div>
+            </div>
+            <div class="epoch-stat">
+              <div class="epoch-stat-value" style="color: ${meta.color}">${epochPieces.length}</div>
+              <div class="epoch-stat-label">Archived Pieces</div>
+            </div>
+            <div class="epoch-stat">
+              <div class="epoch-stat-value" style="color: ${meta.color}">${(avgBest * 100).toFixed(1)}%</div>
+              <div class="epoch-stat-label">Avg Best Fitness</div>
+            </div>
+            <div class="epoch-stat">
+              <div class="epoch-stat-value" style="color: ${meta.color}">${(maxBest * 100).toFixed(1)}%</div>
+              <div class="epoch-stat-label">Peak Fitness</div>
+            </div>
+            <div class="epoch-stat">
+              <div class="epoch-stat-value" style="color: ${meta.color}">${Object.keys(speciesCounts).length}</div>
+              <div class="epoch-stat-label">Species Active</div>
+            </div>
+          </div>
+
+          <div class="weights-section">
+            <div class="weights-title">Fitness Weights — What ${epoch} Rewards</div>
+            <div class="weight-bars" id="weights-${epoch}"></div>
+          </div>
+
+          <div class="species-chart">
+            <div class="species-chart-title">Species Population Distribution</div>
+            <div class="species-bars" id="species-${epoch}"></div>
+          </div>
+
+          <div style="margin-top: 1.5rem">
+            <div class="weights-title">Exemplar Pieces</div>
+            <div class="epoch-gallery" id="gallery-${epoch}"></div>
+          </div>
+
+          <div class="trajectory-section">
+            <canvas class="trajectory-canvas" id="trajectory-${epoch}" height="80"></canvas>
+          </div>
+        `;
+
+        container.appendChild(section);
+
+        // Transition arrow (except last)
+        if (ei < EPOCH_ORDER.length - 1) {
+          const arrow = document.createElement('div');
+          arrow.className = 'epoch-transition';
+          arrow.textContent = '↓';
+          container.appendChild(arrow);
+        }
+
+        // Render weight bars
+        renderWeights(epoch);
+        // Render species bars
+        renderSpecies(epoch, speciesCounts, totalSpecies);
+        // Render exemplar gallery
+        renderGalleryStrip(epoch, epochPieces);
+        // Render mini trajectory
+        renderTrajectory(epoch, epochGens);
+      });
+    }
+
+    function renderWeights(epoch) {
+      const container = document.getElementById(`weights-${epoch}`);
+      const weights = EPOCH_META[epoch].weights;
+      const meta = EPOCH_META[epoch];
+      const maxW = Math.max(...Object.values(weights));
+
+      // Sort by weight descending to show priorities clearly
+      const sorted = Object.entries(weights).sort((a, b) => b[1] - a[1]);
+
+      sorted.forEach(([key, val]) => {
+        const pct = (val / 0.25) * 100; // 0.25 as practical max for bar fill
+        const delta = val - BALANCED[key];
+        let deltaStr = '', deltaClass = 'neutral';
+        if (Math.abs(delta) > 0.005) {
+          deltaStr = delta > 0 ? `+${(delta * 100).toFixed(0)}` : `${(delta * 100).toFixed(0)}`;
+          deltaClass = delta > 0 ? 'up' : 'down';
+        }
+
+        const row = document.createElement('div');
+        row.className = 'weight-row';
+        row.innerHTML = `
+          <span class="weight-label">${WEIGHT_LABELS[key] || key}</span>
+          <div class="weight-bar-bg">
+            <div class="weight-bar-fill" style="width: ${Math.min(100, pct)}%; background: ${meta.color};"></div>
+          </div>
+          <span class="weight-val">${(val * 100).toFixed(0)}%</span>
+          <span class="weight-delta ${deltaClass}">${deltaStr}</span>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function renderSpecies(epoch, counts, total) {
+      const container = document.getElementById(`species-${epoch}`);
+      const meta = EPOCH_META[epoch];
+      const maxCount = Math.max(...Object.values(counts), 1);
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+      sorted.forEach(([species, count]) => {
+        const pct = (count / maxCount) * 100;
+        const row = document.createElement('div');
+        row.className = 'species-bar-row';
+        row.innerHTML = `
+          <span class="species-dot" style="background: ${SPECIES_COLORS[species] || '#888'}"></span>
+          <span class="species-name">${species}</span>
+          <div class="species-bar-bg">
+            <div class="species-bar-fill" style="width: ${pct}%; background: ${SPECIES_COLORS[species] || '#888'}; opacity: 0.6;"></div>
+          </div>
+          <span class="species-count">${count}</span>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function renderGalleryStrip(epoch, pieces) {
+      const container = document.getElementById(`gallery-${epoch}`);
+      const meta = EPOCH_META[epoch];
+
+      // Show top pieces by score
+      const sorted = [...pieces]
+        .filter(p => p.rendered && p.genome)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 12);
+
+      if (sorted.length === 0) {
+        container.innerHTML = '<span style="color: var(--text-dim); font-size: 0.65rem; opacity: 0.5;">No pieces archived in this epoch yet</span>';
+        return;
+      }
+
+      sorted.forEach(piece => {
+        const card = document.createElement('div');
+        card.className = 'epoch-piece';
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 360;
+        canvas.height = 200;
+        card.appendChild(canvas);
+
+        const info = document.createElement('div');
+        info.className = 'epoch-piece-info';
+        info.innerHTML = `
+          <span class="epoch-piece-type" style="color: ${SPECIES_COLORS[piece.genome.type] || '#888'}">${piece.genome.type}</span>
+          <span class="epoch-piece-score" style="color: ${meta.color}">${(piece.score * 100).toFixed(1)}%</span>
+        `;
+        card.appendChild(info);
+        container.appendChild(card);
+
+        // Render piece to canvas
+        renderPieceToCanvas(canvas, piece);
+      });
+    }
+
+    function renderPieceToCanvas(canvas, piece) {
+      const rows = piece.rendered.split('\n');
+      const h = rows.length;
+      const w = Math.max(...rows.map(r => [...r].length));
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const cellW = canvas.width / w;
+      const cellH = canvas.height / h;
+      const colors = TYPE_COLORS[piece.genome.type] || TYPE_COLORS['2d'];
+      ctx.font = `${Math.max(8, cellH - 1)}px monospace`;
+      ctx.textBaseline = 'top';
+
+      for (let y = 0; y < h; y++) {
+        const chars = [...(rows[y] || '')];
+        for (let x = 0; x < chars.length; x++) {
+          const ch = chars[x];
+          const intensity = charIntensity(ch);
+          if (intensity <= 0) continue;
+          const ci = Math.min(7, Math.round(intensity * 7));
+          ctx.fillStyle = colors[ci];
+          ctx.globalAlpha = 0.3 + intensity * 0.7;
+          ctx.fillText(ch, x * cellW, y * cellH);
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function renderTrajectory(epoch, epochGens) {
+      const canvas = document.getElementById(`trajectory-${epoch}`);
+      const meta = EPOCH_META[epoch];
+      // Set canvas width to match CSS width
+      canvas.width = canvas.offsetWidth * 2 || 1000;
+      canvas.height = 160;
+      const ctx = canvas.getContext('2d');
+      const pad = { l: 40, r: 10, t: 10, b: 20 };
+      const plotW = canvas.width - pad.l - pad.r;
+      const plotH = canvas.height - pad.t - pad.b;
+
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (epochGens.length < 2) return;
+
+      const gens = epochGens.map(h => h.generation);
+      const minGen = Math.min(...gens);
+      const maxGen = Math.max(...gens);
+      const genRange = maxGen - minGen || 1;
+      const minScore = Math.min(...epochGens.map(h => h.avgScore || 0));
+      const maxScore = Math.max(...epochGens.map(h => h.bestScore));
+      const scoreRange = maxScore - minScore || 0.01;
+
+      // Best score line
+      ctx.beginPath();
+      ctx.strokeStyle = meta.color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.8;
+      epochGens.forEach((h, i) => {
+        const x = pad.l + ((h.generation - minGen) / genRange) * plotW;
+        const y = pad.t + (1 - (h.bestScore - minScore) / scoreRange) * plotH;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Avg score line (dashed)
+      ctx.beginPath();
+      ctx.strokeStyle = meta.color;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.3;
+      ctx.setLineDash([4, 4]);
+      epochGens.forEach((h, i) => {
+        const x = pad.l + ((h.generation - minGen) / genRange) * plotW;
+        const y = pad.t + (1 - ((h.avgScore || 0) - minScore) / scoreRange) * plotH;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+
+      // Y-axis labels
+      ctx.fillStyle = '#6e6e82';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${(maxScore * 100).toFixed(0)}%`, pad.l - 4, pad.t);
+      ctx.fillText(`${(minScore * 100).toFixed(0)}%`, pad.l - 4, pad.t + plotH);
+
+      // X-axis
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`Gen ${minGen}`, pad.l, pad.t + plotH + 4);
+      ctx.fillText(`Gen ${maxGen}`, pad.l + plotW, pad.t + plotH + 4);
+    }
+
+    init();
+  </script>
+</body>
+</html>
