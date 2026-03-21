@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Garden</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --leaf: #2d8a4e;
+      --bark: #8b6b3d;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+    }
+
+    canvas { display: block; border-radius: 4px; }
+
+    .canvas-info {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+    .canvas-info .species-name { color: var(--green); text-transform: uppercase; letter-spacing: 0.12em; }
+    .canvas-info .detail { color: var(--text-dim); }
+
+    .sidebar {
+      width: 340px;
+      min-width: 340px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 1.25rem 1.25rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-header h1 {
+      font-size: 1rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 0.25rem;
+    }
+
+    .sidebar-header .subtitle {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+    }
+
+    .sidebar-header .back-link {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .sidebar-header .back-link:hover { color: var(--accent); }
+
+    /* Preset selector */
+    .preset-section {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.5rem;
+    }
+
+    .preset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem;
+    }
+
+    .preset-btn {
+      padding: 0.45rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.58rem;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .preset-btn:hover { border-color: var(--green); color: var(--text); }
+    .preset-btn.active {
+      background: var(--green);
+      border-color: var(--green);
+      color: #0a0a0f;
+      font-weight: 600;
+    }
+
+    .preset-btn .preset-icon {
+      margin-right: 0.3rem;
+    }
+
+    /* Controls */
+    .controls {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 1.25rem;
+    }
+
+    .controls::-webkit-scrollbar { width: 4px; }
+    .controls::-webkit-scrollbar-track { background: transparent; }
+    .controls::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .control-group { margin-bottom: 0.9rem; }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      margin-bottom: 0.35rem;
+      letter-spacing: 0.03em;
+    }
+
+    .control-value {
+      color: var(--green);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--green);
+      cursor: pointer;
+      transition: transform 0.15s;
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.3);
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+    input[type="range"]::-webkit-slider-thumb:active { transform: scale(1.3); background: var(--accent); }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .toggle {
+      width: 32px;
+      height: 18px;
+      border-radius: 9px;
+      background: var(--border);
+      cursor: pointer;
+      position: relative;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .toggle.on { background: var(--green); }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.2s;
+    }
+    .toggle.on::after { transform: translateX(14px); }
+
+    .toggle-label {
+      font-size: 0.62rem;
+      color: var(--text-dim);
+      letter-spacing: 0.03em;
+    }
+
+    /* Grammar display */
+    .grammar-display {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.58rem;
+      color: var(--text);
+      letter-spacing: 0.02em;
+      line-height: 1.7;
+      margin-bottom: 0.8rem;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    .grammar-display .sym { color: var(--green); font-weight: 600; }
+    .grammar-display .arrow { color: var(--text-dim); margin: 0 0.2rem; }
+    .grammar-display .prob { color: var(--amber); font-size: 0.52rem; }
+
+    /* Actions */
+    .actions {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .action-row { display: flex; gap: 0.5rem; }
+
+    .btn {
+      flex: 1;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .btn:hover { border-color: var(--green); color: #fff; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2d8a4e, var(--green));
+      border-color: transparent;
+      color: #0a0a0f;
+      font-weight: 600;
+    }
+    .btn-primary:hover { box-shadow: 0 0 20px rgba(74, 222, 128, 0.3); transform: translateY(-1px); }
+
+    .shortcuts {
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+    }
+    .shortcuts kbd {
+      display: inline-block;
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+      background: rgba(74, 222, 128, 0.1);
+      border: 1px solid rgba(74, 222, 128, 0.2);
+      font-family: inherit;
+      font-size: 0.5rem;
+      color: var(--text);
+      margin-right: 0.2rem;
+    }
+
+    .seed-display {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 0.35rem;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .seed-display:hover { color: var(--green); }
+
+    @media (max-width: 700px) {
+      body { flex-direction: column-reverse; }
+      .sidebar {
+        width: 100%;
+        min-width: unset;
+        max-height: 50vh;
+        border-left: none;
+        border-top: 1px solid var(--border);
+      }
+      .canvas-area { min-height: 50vh; }
+    }
+
+    @keyframes grow {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .growing { animation: grow 0.5s ease-out; }
+  </style>
+</head>
+<body>
+  <div class="canvas-area">
+    <canvas id="canvas"></canvas>
+    <div class="canvas-info">
+      <span class="species-name" id="info-name"></span><br>
+      <span class="detail" id="info-detail"></span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Garden</h1>
+      <div class="subtitle">Botanical L-System Laboratory</div>
+      <a href="index.html" class="back-link">&larr; back to gallery</a>
+    </div>
+
+    <div class="preset-section">
+      <div class="section-label">Species</div>
+      <div class="preset-grid" id="preset-grid"></div>
+    </div>
+
+    <div class="controls" id="controls">
+      <div class="section-label" style="margin-bottom: 0.6rem;">Grammar</div>
+      <div class="grammar-display" id="grammar-display"></div>
+
+      <div class="section-label" style="margin-bottom: 0.6rem;">Parameters</div>
+
+      <div class="control-group">
+        <div class="control-label">Branching Angle <span class="control-value" id="val-angle"></span></div>
+        <input type="range" id="sl-angle" min="5" max="120" step="0.5">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">Iterations <span class="control-value" id="val-iter"></span></div>
+        <input type="range" id="sl-iter" min="1" max="7" step="1">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">Angle Jitter <span class="control-value" id="val-jitter"></span></div>
+        <input type="range" id="sl-jitter" min="0" max="15" step="0.5">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">Branch Taper <span class="control-value" id="val-taper"></span></div>
+        <input type="range" id="sl-taper" min="0.5" max="1.0" step="0.01">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label">Tropism <span class="control-value" id="val-tropism"></span></div>
+        <input type="range" id="sl-tropism" min="-0.3" max="0.3" step="0.01">
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle" id="tog-stochastic"></div>
+        <span class="toggle-label">Stochastic (probabilistic branching)</span>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle" id="tog-animate"></div>
+        <span class="toggle-label">Animated growth</span>
+      </div>
+    </div>
+
+    <div class="seed-display" id="seed-display" title="Click to copy seed"></div>
+
+    <div class="actions">
+      <div class="action-row">
+        <button class="btn btn-primary" id="btn-grow">Grow</button>
+        <button class="btn" id="btn-mutate">Mutate</button>
+      </div>
+      <div class="action-row">
+        <button class="btn" id="btn-download">Save PNG</button>
+        <button class="btn" id="btn-random">Random</button>
+      </div>
+    </div>
+
+    <div class="shortcuts">
+      <kbd>G</kbd> Grow <kbd>M</kbd> Mutate <kbd>R</kbd> Random <kbd>S</kbd> Save
+      <kbd>1</kbd>-<kbd>9</kbd> Preset <kbd>A</kbd> Animate
+    </div>
+  </div>
+
+<script>
+// ============================================================
+//  Lattice Garden — Botanical L-System Laboratory
+// ============================================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// --- PRNG ---
+function mulberry32(seed) {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// --- Color palettes for L-systems ---
+const PALETTES = {
+  botanical: {
+    bg: [10, 10, 15],
+    trunk: [139, 107, 61],
+    branch: [107, 82, 48],
+    leaf: [45, 138, 78],
+    leafTip: [74, 222, 128],
+    bloom: [180, 120, 200],
+  },
+  frost: {
+    bg: [8, 12, 20],
+    trunk: [140, 170, 210],
+    branch: [100, 140, 190],
+    leaf: [180, 210, 240],
+    leafTip: [220, 240, 255],
+    bloom: [160, 200, 255],
+  },
+  ember: {
+    bg: [15, 8, 5],
+    trunk: [160, 80, 30],
+    branch: [180, 100, 40],
+    leaf: [220, 140, 50],
+    leafTip: [255, 190, 80],
+    bloom: [255, 120, 60],
+  },
+  void: {
+    bg: [5, 5, 15],
+    trunk: [100, 80, 160],
+    branch: [120, 90, 180],
+    leaf: [140, 110, 200],
+    leafTip: [180, 150, 240],
+    bloom: [200, 120, 255],
+  },
+  moss: {
+    bg: [8, 15, 10],
+    trunk: [80, 100, 60],
+    branch: [60, 90, 50],
+    leaf: [90, 160, 70],
+    leafTip: [130, 200, 90],
+    bloom: [200, 220, 100],
+  },
+};
+
+let currentPaletteName = 'botanical';
+
+// --- Botanical Presets ---
+const PRESETS = [
+  {
+    name: 'Willow',
+    axiom: 'F',
+    rules: { F: 'FF+[+F-F-F]-[-F+F+F]' },
+    angle: 22.5,
+    iterations: 4,
+    angleJitter: 3,
+    lengthScale: 0.85,
+    tropism: 0.08,
+    palette: 'botanical',
+  },
+  {
+    name: 'Fern',
+    axiom: 'X',
+    rules: { X: 'F+[[X]-X]-F[-FX]+X', F: 'FF' },
+    angle: 25,
+    iterations: 5,
+    angleJitter: 2,
+    lengthScale: 0.78,
+    tropism: 0.04,
+    palette: 'botanical',
+  },
+  {
+    name: 'Sakura',
+    axiom: 'F',
+    rules: { F: 'FF-[-F+F+F]+[+F-F-F]' },
+    angle: 22,
+    iterations: 4,
+    angleJitter: 5,
+    lengthScale: 0.82,
+    tropism: 0.02,
+    palette: 'ember',
+    stochastic: {
+      F: [
+        { production: 'FF-[-F+F+F]+[+F-F-F]', weight: 0.7 },
+        { production: 'FF-[-F+F]+[+F-F]', weight: 0.3 },
+      ]
+    },
+  },
+  {
+    name: 'Seaweed',
+    axiom: 'F',
+    rules: { F: 'F[+F]F[-F]+F' },
+    angle: 28,
+    iterations: 5,
+    angleJitter: 6,
+    lengthScale: 0.9,
+    tropism: -0.06,
+    palette: 'moss',
+  },
+  {
+    name: 'Frost',
+    axiom: 'F+F+F+F+F+F',
+    rules: { F: 'F+F-F-F+F' },
+    angle: 60,
+    iterations: 4,
+    angleJitter: 1,
+    lengthScale: 1.0,
+    tropism: 0,
+    palette: 'frost',
+  },
+  {
+    name: 'Canopy',
+    axiom: 'F',
+    rules: { F: 'FF[+F+F+F][-F-F-F]' },
+    angle: 20,
+    iterations: 4,
+    angleJitter: 4,
+    lengthScale: 0.75,
+    tropism: 0.05,
+    palette: 'botanical',
+    stochastic: {
+      F: [
+        { production: 'FF[+F+F+F][-F-F-F]', weight: 0.6 },
+        { production: 'FF[+F+F][-F-F]', weight: 0.25 },
+        { production: 'F[-F]F', weight: 0.15 },
+      ]
+    },
+  },
+  {
+    name: 'Dragon',
+    axiom: 'FX',
+    rules: { X: 'X+YF+', Y: '-FX-Y' },
+    angle: 90,
+    iterations: 12,
+    angleJitter: 0,
+    lengthScale: 1.0,
+    tropism: 0,
+    palette: 'void',
+  },
+  {
+    name: 'Vine',
+    axiom: 'X',
+    rules: { X: 'F[+X][-X]FX', F: 'FF' },
+    angle: 30,
+    iterations: 5,
+    angleJitter: 7,
+    lengthScale: 0.8,
+    tropism: 0.12,
+    palette: 'moss',
+    stochastic: {
+      X: [
+        { production: 'F[+X][-X]FX', weight: 0.5 },
+        { production: 'F[+X]FX', weight: 0.3 },
+        { production: 'F[-X]FX', weight: 0.2 },
+      ]
+    },
+  },
+  {
+    name: 'Coral',
+    axiom: 'F-F-F-F',
+    rules: { F: 'FF-[-F+F]+[+F-F]' },
+    angle: 45,
+    iterations: 4,
+    angleJitter: 3,
+    lengthScale: 0.88,
+    tropism: -0.03,
+    palette: 'ember',
+    stochastic: {
+      F: [
+        { production: 'FF-[-F+F]+[+F-F]', weight: 0.6 },
+        { production: 'F[-F+F]+F', weight: 0.4 },
+      ]
+    },
+  },
+  {
+    name: 'Spiral',
+    axiom: 'AAAA',
+    rules: { A: 'F[+++A]F[---A]+A', F: 'FF' },
+    angle: 14,
+    iterations: 5,
+    angleJitter: 2,
+    lengthScale: 0.85,
+    tropism: 0,
+    palette: 'void',
+  },
+  {
+    name: 'Hilbert',
+    axiom: 'X',
+    rules: { X: '-YF+XFX+FY-', Y: '+XF-YFY-FX+' },
+    angle: 90,
+    iterations: 5,
+    angleJitter: 0,
+    lengthScale: 1.0,
+    tropism: 0,
+    palette: 'frost',
+  },
+  {
+    name: 'Meadow',
+    axiom: 'F',
+    rules: { F: 'F[+F]F[-F]F' },
+    angle: 25.7,
+    iterations: 4,
+    angleJitter: 8,
+    lengthScale: 0.82,
+    tropism: 0.06,
+    palette: 'botanical',
+    stochastic: {
+      F: [
+        { production: 'F[+F]F[-F]F', weight: 0.5 },
+        { production: 'F[-F]F[+F]', weight: 0.3 },
+        { production: 'FF', weight: 0.2 },
+      ]
+    },
+  },
+];
+
+// --- State ---
+let state = {
+  seed: Date.now() & 0xffffffff,
+  presetIdx: 0,
+  angle: PRESETS[0].angle,
+  iterations: PRESETS[0].iterations,
+  angleJitter: PRESETS[0].angleJitter,
+  lengthScale: PRESETS[0].lengthScale,
+  tropism: PRESETS[0].tropism,
+  stochasticOn: !!PRESETS[0].stochastic,
+  animateOn: false,
+};
+
+// --- L-System Engine ---
+function expandLSystem(axiom, rules, stochastic, iterations, rng, stochasticOn) {
+  let current = axiom;
+  for (let i = 0; i < iterations; i++) {
+    let next = '';
+    for (const ch of current) {
+      if (stochasticOn && stochastic && stochastic[ch]) {
+        const alts = stochastic[ch];
+        const total = alts.reduce((s, a) => s + a.weight, 0);
+        let r = rng() * total;
+        let chosen = alts[0].production;
+        for (const alt of alts) {
+          r -= alt.weight;
+          if (r <= 0) { chosen = alt.production; break; }
+        }
+        next += chosen;
+      } else {
+        next += rules[ch] ?? ch;
+      }
+    }
+    current = next;
+    if (current.length > 30000) break;
+  }
+  return current;
+}
+
+function traceTurtle(str, angle, angleJitter, lengthScale, tropism, rng) {
+  const points = [];
+  const segments = [];
+  let tx = 0, ty = 0, tAngle = -90, tDepth = 0;
+  const stack = [];
+
+  for (const ch of str) {
+    switch (ch) {
+      case 'F':
+      case 'G': {
+        const depthFactor = Math.pow(lengthScale, tDepth);
+        const step = depthFactor;
+        const jitter = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
+        const tropismBend = tropism * tDepth * 2;
+        const finalAngle = tAngle + jitter + tropismBend;
+        const rad = finalAngle * Math.PI / 180;
+        const nx = tx + step * Math.cos(rad);
+        const ny = ty + step * Math.sin(rad);
+        segments.push({ x0: tx, y0: ty, x1: nx, y1: ny, depth: tDepth });
+        points.push({ x: nx, y: ny, depth: tDepth });
+        tx = nx; ty = ny;
+        break;
+      }
+      case '+': tAngle += angle; break;
+      case '-': tAngle -= angle; break;
+      case '[':
+        stack.push({ x: tx, y: ty, angle: tAngle, depth: tDepth });
+        tDepth++;
+        break;
+      case ']': {
+        const s = stack.pop();
+        if (s) { tx = s.x; ty = s.y; tAngle = s.angle; tDepth = s.depth; }
+        break;
+      }
+    }
+  }
+  return { points, segments };
+}
+
+// --- Rendering ---
+function renderLSystem(segments, maxSegments) {
+  if (segments.length === 0) return;
+
+  const segs = maxSegments != null ? segments.slice(0, maxSegments) : segments;
+  if (segs.length === 0) return;
+
+  const pal = PALETTES[currentPaletteName];
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.width / dpr;
+  const h = canvas.height / dpr;
+
+  // Find bounding box
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const s of segs) {
+    minX = Math.min(minX, s.x0, s.x1);
+    maxX = Math.max(maxX, s.x0, s.x1);
+    minY = Math.min(minY, s.y0, s.y1);
+    maxY = Math.max(maxY, s.y0, s.y1);
+  }
+
+  const bboxW = maxX - minX || 1;
+  const bboxH = maxY - minY || 1;
+  const margin = 40;
+  const scale = Math.min((w - margin * 2) / bboxW, (h - margin * 2) / bboxH);
+  const offX = (w - bboxW * scale) / 2 - minX * scale;
+  const offY = (h - bboxH * scale) / 2 - minY * scale;
+
+  // Find max depth
+  let maxDepth = 0;
+  for (const s of segs) maxDepth = Math.max(maxDepth, s.depth);
+  maxDepth = Math.max(maxDepth, 1);
+
+  // Clear
+  ctx.fillStyle = `rgb(${pal.bg[0]}, ${pal.bg[1]}, ${pal.bg[2]})`;
+  ctx.fillRect(0, 0, w, h);
+
+  // Draw segments
+  for (const seg of segs) {
+    const x0 = seg.x0 * scale + offX;
+    const y0 = seg.y0 * scale + offY;
+    const x1 = seg.x1 * scale + offX;
+    const y1 = seg.y1 * scale + offY;
+    const t = seg.depth / maxDepth;
+
+    // Interpolate color: trunk → branch → leaf → leafTip
+    let r, g, b;
+    if (t < 0.3) {
+      const f = t / 0.3;
+      r = pal.trunk[0] + (pal.branch[0] - pal.trunk[0]) * f;
+      g = pal.trunk[1] + (pal.branch[1] - pal.trunk[1]) * f;
+      b = pal.trunk[2] + (pal.branch[2] - pal.trunk[2]) * f;
+    } else if (t < 0.7) {
+      const f = (t - 0.3) / 0.4;
+      r = pal.branch[0] + (pal.leaf[0] - pal.branch[0]) * f;
+      g = pal.branch[1] + (pal.leaf[1] - pal.branch[1]) * f;
+      b = pal.branch[2] + (pal.leaf[2] - pal.branch[2]) * f;
+    } else {
+      const f = (t - 0.7) / 0.3;
+      r = pal.leaf[0] + (pal.leafTip[0] - pal.leaf[0]) * f;
+      g = pal.leaf[1] + (pal.leafTip[1] - pal.leaf[1]) * f;
+      b = pal.leaf[2] + (pal.leafTip[2] - pal.leaf[2]) * f;
+    }
+
+    // Width tapers with depth
+    const lineWidth = Math.max(0.5, (1 - t * 0.8) * 3.5);
+
+    ctx.strokeStyle = `rgb(${r|0}, ${g|0}, ${b|0})`;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+
+    // Leaf dots at branch tips (high depth, short segments)
+    if (t > 0.75) {
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      if (len < 8) {
+        ctx.fillStyle = `rgba(${pal.leafTip[0]}, ${pal.leafTip[1]}, ${pal.leafTip[2]}, ${0.4 + t * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(x1, y1, Math.max(1, (1 - t) * 4 + 1), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Bloom glow overlay on leaf tips
+  ctx.globalCompositeOperation = 'screen';
+  for (const seg of segs) {
+    if (seg.depth / maxDepth > 0.8) {
+      const x1 = seg.x1 * scale + offX;
+      const y1 = seg.y1 * scale + offY;
+      const grad = ctx.createRadialGradient(x1, y1, 0, x1, y1, 6);
+      grad.addColorStop(0, `rgba(${pal.bloom[0]}, ${pal.bloom[1]}, ${pal.bloom[2]}, 0.15)`);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x1 - 6, y1 - 6, 12, 12);
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Vignette
+  const vg = ctx.createRadialGradient(w/2, h/2, w * 0.3, w/2, h/2, w * 0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, w, h);
+}
+
+// --- UI ---
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const area = document.querySelector('.canvas-area');
+  const w = area.clientWidth;
+  const h = area.clientHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function buildPresetGrid() {
+  const grid = document.getElementById('preset-grid');
+  grid.innerHTML = '';
+  PRESETS.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn' + (i === state.presetIdx ? ' active' : '');
+    btn.textContent = p.name;
+    btn.onclick = () => selectPreset(i);
+    grid.appendChild(btn);
+  });
+}
+
+function selectPreset(idx) {
+  state.presetIdx = idx;
+  const p = PRESETS[idx];
+  state.angle = p.angle;
+  state.iterations = p.iterations;
+  state.angleJitter = p.angleJitter;
+  state.lengthScale = p.lengthScale;
+  state.tropism = p.tropism;
+  state.stochasticOn = !!p.stochastic;
+  currentPaletteName = p.palette || 'botanical';
+  state.seed = (Date.now() ^ (Math.random() * 0xffffffff)) & 0xffffffff;
+  syncUI();
+  grow();
+}
+
+function syncUI() {
+  const sl = (id, val) => { document.getElementById(id).value = val; };
+  const sv = (id, val) => { document.getElementById(id).textContent = val; };
+
+  sl('sl-angle', state.angle);
+  sv('val-angle', state.angle + '\u00b0');
+  sl('sl-iter', state.iterations);
+  sv('val-iter', state.iterations);
+  sl('sl-jitter', state.angleJitter);
+  sv('val-jitter', state.angleJitter.toFixed(1) + '\u00b0');
+  sl('sl-taper', state.lengthScale);
+  sv('val-taper', state.lengthScale.toFixed(2));
+  sl('sl-tropism', state.tropism);
+  sv('val-tropism', state.tropism.toFixed(2));
+
+  const togSto = document.getElementById('tog-stochastic');
+  togSto.className = 'toggle' + (state.stochasticOn ? ' on' : '');
+  const togAnim = document.getElementById('tog-animate');
+  togAnim.className = 'toggle' + (state.animateOn ? ' on' : '');
+
+  document.getElementById('seed-display').textContent = 'seed: 0x' + (state.seed >>> 0).toString(16).padStart(8, '0');
+
+  // Update preset buttons
+  document.querySelectorAll('.preset-btn').forEach((btn, i) => {
+    btn.className = 'preset-btn' + (i === state.presetIdx ? ' active' : '');
+  });
+
+  // Update grammar display
+  updateGrammarDisplay();
+
+  // Update info
+  const p = PRESETS[state.presetIdx];
+  document.getElementById('info-name').textContent = p.name;
+  const symCount = Object.keys(p.rules).length;
+  document.getElementById('info-detail').textContent =
+    `${symCount} production rule${symCount > 1 ? 's' : ''} \u00b7 ${state.iterations} iterations \u00b7 ${state.angle}\u00b0`;
+}
+
+function updateGrammarDisplay() {
+  const p = PRESETS[state.presetIdx];
+  const el = document.getElementById('grammar-display');
+  let html = `<span class="sym">axiom</span><span class="arrow">\u2192</span>${escHtml(p.axiom)}<br>`;
+
+  for (const [sym, prod] of Object.entries(p.rules)) {
+    html += `<span class="sym">${escHtml(sym)}</span><span class="arrow">\u2192</span>${escHtml(prod)}<br>`;
+  }
+
+  if (state.stochasticOn && p.stochastic) {
+    html += '<br><span style="color: var(--amber); font-size: 0.52rem;">STOCHASTIC VARIANTS</span><br>';
+    for (const [sym, alts] of Object.entries(p.stochastic)) {
+      for (const alt of alts) {
+        html += `<span class="sym">${escHtml(sym)}</span><span class="arrow">\u2192</span>${escHtml(alt.production)} <span class="prob">(${(alt.weight * 100).toFixed(0)}%)</span><br>`;
+      }
+    }
+  }
+
+  el.innerHTML = html;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// --- Core grow ---
+let allSegments = [];
+let animFrame = null;
+let animIdx = 0;
+
+function grow() {
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+
+  const p = PRESETS[state.presetIdx];
+  const rng = mulberry32(state.seed);
+  const str = expandLSystem(
+    p.axiom,
+    p.rules,
+    p.stochastic,
+    state.iterations,
+    rng,
+    state.stochasticOn
+  );
+
+  const rng2 = mulberry32(state.seed ^ 0x5f3759df);
+  const { segments } = traceTurtle(str, state.angle, state.angleJitter, state.lengthScale, state.tropism, rng2);
+  allSegments = segments;
+
+  if (state.animateOn && segments.length > 0) {
+    animIdx = 0;
+    animateGrow();
+  } else {
+    resizeCanvas();
+    renderLSystem(segments);
+    canvas.classList.remove('growing');
+    void canvas.offsetWidth;
+    canvas.classList.add('growing');
+  }
+}
+
+function animateGrow() {
+  const step = Math.max(1, Math.ceil(allSegments.length / 120));
+  animIdx = Math.min(animIdx + step, allSegments.length);
+  resizeCanvas();
+  renderLSystem(allSegments, animIdx);
+
+  if (animIdx < allSegments.length) {
+    animFrame = requestAnimationFrame(animateGrow);
+  } else {
+    animFrame = null;
+  }
+}
+
+function mutate() {
+  const rng = mulberry32(state.seed);
+  // Perturb angle
+  state.angle = Math.max(5, Math.min(120, state.angle + (rng() - 0.5) * 10));
+  // Perturb jitter
+  state.angleJitter = Math.max(0, Math.min(15, state.angleJitter + (rng() - 0.5) * 4));
+  // Perturb taper
+  state.lengthScale = Math.max(0.5, Math.min(1.0, state.lengthScale + (rng() - 0.5) * 0.1));
+  // Perturb tropism
+  state.tropism = Math.max(-0.3, Math.min(0.3, state.tropism + (rng() - 0.5) * 0.06));
+  // New seed
+  state.seed = (state.seed * 1103515245 + 12345) & 0x7fffffff;
+  syncUI();
+  grow();
+}
+
+function randomize() {
+  state.presetIdx = Math.floor(Math.random() * PRESETS.length);
+  const p = PRESETS[state.presetIdx];
+  state.angle = p.angle + (Math.random() - 0.5) * 15;
+  state.iterations = p.iterations;
+  state.angleJitter = p.angleJitter + Math.random() * 3;
+  state.lengthScale = Math.max(0.5, Math.min(1.0, p.lengthScale + (Math.random() - 0.5) * 0.15));
+  state.tropism = Math.max(-0.3, Math.min(0.3, p.tropism + (Math.random() - 0.5) * 0.1));
+  state.stochasticOn = !!p.stochastic;
+  currentPaletteName = p.palette || 'botanical';
+  state.seed = (Date.now() ^ (Math.random() * 0xffffffff)) & 0xffffffff;
+  syncUI();
+  grow();
+}
+
+function downloadPNG() {
+  // Re-render at 4x for high quality
+  const origW = canvas.width;
+  const origH = canvas.height;
+  const dpr = window.devicePixelRatio || 1;
+  const w = (origW / dpr) * 4;
+  const h = (origH / dpr) * 4;
+  canvas.width = w;
+  canvas.height = h;
+  ctx.setTransform(4, 0, 0, 4, 0, 0);
+  renderLSystem(allSegments);
+
+  const link = document.createElement('a');
+  link.download = `lattice-garden-${PRESETS[state.presetIdx].name.toLowerCase()}-${(state.seed >>> 0).toString(16)}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+
+  // Restore
+  canvas.width = origW;
+  canvas.height = origH;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  renderLSystem(allSegments);
+}
+
+// --- Wire up controls ---
+function wireSlider(id, valId, prop, fmt, onChange) {
+  const sl = document.getElementById(id);
+  sl.addEventListener('input', () => {
+    state[prop] = parseFloat(sl.value);
+    document.getElementById(valId).textContent = fmt(state[prop]);
+    if (onChange) onChange();
+  });
+}
+
+function init() {
+  resizeCanvas();
+  buildPresetGrid();
+
+  wireSlider('sl-angle', 'val-angle', 'angle', v => v + '\u00b0', grow);
+  wireSlider('sl-iter', 'val-iter', 'iterations', v => v, grow);
+  wireSlider('sl-jitter', 'val-jitter', 'angleJitter', v => v.toFixed(1) + '\u00b0', grow);
+  wireSlider('sl-taper', 'val-taper', 'lengthScale', v => v.toFixed(2), grow);
+  wireSlider('sl-tropism', 'val-tropism', 'tropism', v => v.toFixed(2), grow);
+
+  document.getElementById('tog-stochastic').onclick = () => {
+    state.stochasticOn = !state.stochasticOn;
+    syncUI();
+    grow();
+  };
+
+  document.getElementById('tog-animate').onclick = () => {
+    state.animateOn = !state.animateOn;
+    syncUI();
+  };
+
+  document.getElementById('btn-grow').onclick = () => { state.seed = (Date.now() ^ (Math.random() * 0xffffffff)) & 0xffffffff; syncUI(); grow(); };
+  document.getElementById('btn-mutate').onclick = mutate;
+  document.getElementById('btn-random').onclick = randomize;
+  document.getElementById('btn-download').onclick = downloadPNG;
+
+  document.getElementById('seed-display').onclick = () => {
+    const hex = '0x' + (state.seed >>> 0).toString(16).padStart(8, '0');
+    navigator.clipboard.writeText(hex).then(() => {
+      document.getElementById('seed-display').textContent = 'copied!';
+      setTimeout(() => { document.getElementById('seed-display').textContent = 'seed: ' + hex; }, 800);
+    });
+  };
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    switch (e.key.toLowerCase()) {
+      case 'g': document.getElementById('btn-grow').click(); break;
+      case 'm': mutate(); break;
+      case 'r': randomize(); break;
+      case 's': downloadPNG(); break;
+      case 'a':
+        state.animateOn = !state.animateOn;
+        syncUI();
+        break;
+      case '1': case '2': case '3': case '4': case '5':
+      case '6': case '7': case '8': case '9': {
+        const idx = parseInt(e.key) - 1;
+        if (idx < PRESETS.length) selectPreset(idx);
+        break;
+      }
+    }
+  });
+
+  window.addEventListener('resize', () => { resizeCanvas(); renderLSystem(allSegments); });
+
+  syncUI();
+  grow();
+}
+
+init();
+</script>
+</body>
+</html>
