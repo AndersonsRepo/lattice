@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Drift</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: none;
+    }
+
+    canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+    }
+
+    /* Minimal overlay UI */
+    .hud {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      opacity: 1;
+      transition: opacity 2s ease;
+    }
+
+    .hud.faded { opacity: 0.15; }
+    .hud:hover { opacity: 1; transition: opacity 0.3s ease; }
+
+    .now-playing {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      max-width: 400px;
+    }
+
+    .now-playing .piece-name {
+      color: var(--accent);
+      font-size: 0.85rem;
+      margin-bottom: 0.25rem;
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .now-playing .piece-meta {
+      color: var(--text-dim);
+      font-size: 0.6rem;
+      opacity: 0.7;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .play-btn {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--accent);
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+    }
+
+    .play-btn:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .vol-slider {
+      -webkit-appearance: none;
+      width: 80px;
+      height: 2px;
+      background: var(--border);
+      border-radius: 1px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .vol-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .epoch-label {
+      position: fixed;
+      top: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.6rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      opacity: 0;
+      transition: opacity 1.5s ease;
+      z-index: 10;
+    }
+
+    .epoch-label.visible { opacity: 0.5; }
+
+    .gen-counter {
+      position: fixed;
+      top: 1.5rem;
+      right: 2rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      opacity: 0.3;
+      z-index: 10;
+      letter-spacing: 0.1em;
+    }
+
+    .back-link {
+      position: fixed;
+      top: 1.5rem;
+      left: 2rem;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      z-index: 10;
+      opacity: 0.4;
+      transition: opacity 0.3s;
+      letter-spacing: 0.1em;
+    }
+    .back-link:hover { opacity: 1; color: var(--accent); }
+
+    .spectrum {
+      display: flex;
+      gap: 2px;
+      align-items: flex-end;
+      height: 24px;
+    }
+
+    .spectrum-bar {
+      width: 3px;
+      background: var(--accent);
+      opacity: 0.5;
+      border-radius: 1px;
+      transition: height 0.08s linear;
+    }
+
+    .elapsed {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      opacity: 0.5;
+      letter-spacing: 0.15em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Intro overlay */
+    .intro {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      transition: opacity 1.5s ease;
+    }
+
+    .intro.hidden { opacity: 0; pointer-events: none; }
+
+    .intro h1 {
+      font-size: 3rem;
+      font-weight: 200;
+      letter-spacing: 0.4em;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+    }
+
+    .intro p {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      max-width: 360px;
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    .intro .start-btn {
+      margin-top: 1rem;
+      padding: 0.8rem 2.5rem;
+      border: 1px solid var(--border);
+      border-radius: 2rem;
+      background: transparent;
+      color: var(--accent);
+      font-family: inherit;
+      font-size: 0.8rem;
+      letter-spacing: 0.2em;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .intro .start-btn:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 30px var(--accent-glow);
+      background: rgba(124, 111, 224, 0.05);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="fog"></canvas>
+
+  <a href="index.html" class="back-link">&larr; Lattice</a>
+  <div class="epoch-label" id="epochLabel"></div>
+  <div class="gen-counter" id="genCounter"></div>
+
+  <div class="intro" id="intro">
+    <h1>DRIFT</h1>
+    <p>Infinite ambient radio generated from the evolutionary archive. Each piece becomes a voice in a never-ending composition. Press play and let it carry you.</p>
+    <button class="start-btn" id="startBtn">&#9654;&ensp;Begin</button>
+  </div>
+
+  <div class="hud" id="hud">
+    <div class="now-playing" id="nowPlaying">
+      <div class="piece-name">&#8212;</div>
+      <div class="piece-meta"></div>
+    </div>
+    <div class="spectrum" id="spectrum"></div>
+    <div class="controls">
+      <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="60">
+      <button class="play-btn" id="playBtn">&#9654;</button>
+      <input type="range" class="vol-slider" id="driftSpeed" min="1" max="10" value="5" title="Drift speed">
+    </div>
+    <div class="elapsed" id="elapsed">00:00</div>
+  </div>
+
+  <script>
+  (function() {
+    'use strict';
+
+    // ── State ──
+    let ctx, masterGain, analyser, analyserData;
+    let playing = false;
+    let pieces = [], history = [];
+    let currentPiece = null, nextPiece = null;
+    let currentVoices = [], fadingVoices = [];
+    let driftTimer = 0, pieceDuration = 0;
+    let elapsedSeconds = 0, elapsedInterval;
+    let hudFadeTimer;
+    let historyIdx = 0;
+
+    // ── Epoch colors ──
+    const EPOCH_COLORS = {
+      emergence: '#4ade80',
+      order: '#7c6fe0',
+      chaos: '#ef4444',
+      harmony: '#fbbf24'
+    };
+
+    // ── Scales (pentatonic modes for ambient quality) ──
+    const SCALES = {
+      emergence: [0, 2, 4, 7, 9],        // major pentatonic
+      order:     [0, 2, 3, 7, 8],         // minor pentatonic variant
+      chaos:     [0, 1, 5, 7, 10],        // phrygian-ish
+      harmony:   [0, 4, 5, 7, 11],        // lydian-ish
+    };
+
+    // ── Load data ──
+    async function loadData() {
+      try {
+        const resp = await fetch('gallery.json');
+        const data = await resp.json();
+        pieces = [...(data.hallOfFame || []), ...(data.pieces || [])];
+        history = data.history || [];
+        // Shuffle pieces for variety
+        for (let i = pieces.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
+        }
+      } catch(e) {
+        console.error('Failed to load gallery:', e);
+      }
+    }
+
+    // ── Audio setup ──
+    function initAudio() {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+      // Master chain: gain → compressor → analyser → destination
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.6;
+
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -20;
+      comp.knee.value = 10;
+      comp.ratio.value = 4;
+      comp.attack.value = 0.05;
+      comp.release.value = 0.25;
+
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyserData = new Uint8Array(analyser.frequencyBinCount);
+
+      masterGain.connect(comp);
+      comp.connect(analyser);
+      analyser.connect(ctx.destination);
+    }
+
+    // ── Voice: a single sonic layer derived from a piece ──
+    function createVoice(piece, fadeIn) {
+      const now = ctx.currentTime;
+      const genome = piece.genome;
+      const metrics = piece.metrics || {};
+      const type = genome.type || '1d';
+      const gen = piece.generation || 0;
+
+      // Find epoch from history
+      let epoch = 'emergence';
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i].generation <= gen) { epoch = history[i].epoch || 'emergence'; break; }
+      }
+
+      const scale = SCALES[epoch] || SCALES.emergence;
+      const rootNote = 36 + (gen % 12); // C2-B2, shifts with generation
+      const voice = { nodes: [], gainNode: null, epoch };
+
+      // Voice gain envelope
+      const vGain = ctx.createGain();
+      vGain.gain.setValueAtTime(0, now);
+      vGain.gain.linearRampToValueAtTime(0.35, now + (fadeIn || 8));
+      vGain.connect(masterGain);
+      voice.gainNode = vGain;
+
+      // ── Layer 1: Sub-bass drone ──
+      const bassFreq = midiToFreq(rootNote);
+      const bass = ctx.createOscillator();
+      bass.type = 'sine';
+      bass.frequency.value = bassFreq;
+      const bassGain = ctx.createGain();
+      bassGain.gain.value = 0.15;
+      // Slow pitch drift
+      const bassMod = ctx.createOscillator();
+      bassMod.frequency.value = 0.03 + (metrics.complexity || 1) * 0.01;
+      const bassModGain = ctx.createGain();
+      bassModGain.gain.value = 0.3;
+      bassMod.connect(bassModGain);
+      bassModGain.connect(bass.frequency);
+      bass.connect(bassGain);
+      bassGain.connect(vGain);
+      bass.start(now);
+      bassMod.start(now);
+      voice.nodes.push(bass, bassMod);
+
+      // ── Layer 2: Harmonic pad (type-specific timbre) ──
+      const padNotes = pickPadNotes(scale, rootNote, metrics);
+      padNotes.forEach((note, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = typeToWaveform(type);
+        osc.frequency.value = midiToFreq(note);
+        // Detune for warmth
+        osc.detune.value = (metrics.novelty || 0.5) * 8 * (i % 2 === 0 ? 1 : -1);
+
+        const padGain = ctx.createGain();
+        padGain.gain.value = 0.06;
+
+        // Slow amplitude modulation (breathing)
+        const ampMod = ctx.createOscillator();
+        ampMod.frequency.value = 0.05 + i * 0.02 + (metrics.edgeActivity || 0.3) * 0.03;
+        const ampModGain = ctx.createGain();
+        ampModGain.gain.value = 0.03;
+        ampMod.connect(ampModGain);
+        ampModGain.connect(padGain.gain);
+
+        osc.connect(padGain);
+        padGain.connect(vGain);
+        osc.start(now + i * 0.5);
+        ampMod.start(now);
+        voice.nodes.push(osc, ampMod);
+      });
+
+      // ── Layer 3: Melodic particles from grid ──
+      if (piece.rendered) {
+        scheduleGridMelody(piece, voice, scale, rootNote, epoch);
+      }
+
+      // ── Layer 4: Fitness shimmer ──
+      const score = piece.score || 0.5;
+      if (score > 0.65) {
+        const shimmer = ctx.createOscillator();
+        shimmer.type = 'sine';
+        shimmer.frequency.value = midiToFreq(rootNote + 24 + scale[Math.floor(score * scale.length)]);
+        const shimGain = ctx.createGain();
+        shimGain.gain.value = 0;
+        // Slow swell
+        const shimMod = ctx.createOscillator();
+        shimMod.frequency.value = 0.02;
+        const shimModG = ctx.createGain();
+        shimModG.gain.value = (score - 0.65) * 0.15;
+        shimMod.connect(shimModG);
+        shimModG.connect(shimGain.gain);
+
+        shimmer.connect(shimGain);
+        shimGain.connect(vGain);
+        shimmer.start(now);
+        shimMod.start(now);
+        voice.nodes.push(shimmer, shimMod);
+      }
+
+      return voice;
+    }
+
+    function pickPadNotes(scale, root, metrics) {
+      const density = metrics.density || 0.4;
+      const count = 3 + Math.floor(density * 3); // 3-6 notes
+      const notes = [];
+      for (let i = 0; i < count; i++) {
+        const octave = Math.floor(i / scale.length);
+        const degree = scale[i % scale.length];
+        notes.push(root + 12 + degree + octave * 12);
+      }
+      return notes;
+    }
+
+    function scheduleGridMelody(piece, voice, scale, root, epoch) {
+      const lines = piece.rendered.split('\n').filter(l => l.length > 0);
+      if (lines.length === 0) return;
+      const now = ctx.currentTime;
+
+      // Sample sparse notes from the grid — one every few seconds
+      const speed = parseFloat(document.getElementById('driftSpeed').value) || 5;
+      const interval = 3 + (10 - speed) * 1.5; // 4.5s to 16.5s between notes
+      const maxNotes = 20;
+      let noteCount = 0;
+
+      for (let r = 0; r < lines.length && noteCount < maxNotes; r += Math.max(1, Math.floor(lines.length / maxNotes))) {
+        const line = lines[r];
+        // Find a non-space character
+        let col = -1, weight = 0;
+        for (let c = 0; c < line.length; c++) {
+          const cp = line.codePointAt(c);
+          if (cp > 32 && cp !== 46) { // not space or period
+            col = c;
+            weight = Math.min(cp / 10000, 1);
+            break;
+          }
+        }
+        if (col < 0) continue;
+
+        const degree = scale[Math.floor((col / Math.max(line.length, 1)) * scale.length)];
+        const octave = Math.floor((1 - r / lines.length) * 3);
+        const midi = root + 12 + degree + octave * 12;
+        const time = now + 4 + noteCount * interval;
+
+        // Short bell-like tone
+        const osc = ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.value = midiToFreq(midi);
+        osc.detune.value = (Math.random() - 0.5) * 6;
+
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, time);
+        env.gain.linearRampToValueAtTime(0.08 * weight + 0.02, time + 0.1);
+        env.gain.exponentialRampToValueAtTime(0.001, time + 2 + weight * 3);
+
+        osc.connect(env);
+        env.connect(voice.gainNode);
+        osc.start(time);
+        osc.stop(time + 5);
+        voice.nodes.push(osc);
+        noteCount++;
+      }
+    }
+
+    function typeToWaveform(type) {
+      const map = {
+        '1d': 'square',
+        '2d': 'sine',
+        'lsystem': 'sawtooth',
+        'reaction-diffusion': 'triangle',
+        'voronoi': 'sine',
+        'wfc': 'triangle',
+        'spirograph': 'sawtooth',
+        'attractor': 'square',
+        'julia': 'sine',
+        'noise': 'sawtooth',
+        'flowfield': 'triangle',
+        'magnetic-pendulum': 'sine',
+      };
+      return map[type] || 'sine';
+    }
+
+    function midiToFreq(midi) {
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    // ── Fade out and stop a voice ──
+    function fadeOutVoice(voice, duration) {
+      if (!voice || !voice.gainNode) return;
+      const now = ctx.currentTime;
+      voice.gainNode.gain.cancelScheduledValues(now);
+      voice.gainNode.gain.setValueAtTime(voice.gainNode.gain.value, now);
+      voice.gainNode.gain.linearRampToValueAtTime(0, now + duration);
+      // Clean up after fade
+      setTimeout(() => {
+        voice.nodes.forEach(n => { try { n.stop(); } catch(e) {} });
+        try { voice.gainNode.disconnect(); } catch(e) {}
+      }, duration * 1000 + 500);
+    }
+
+    // ── Transition to next piece ──
+    function transitionPiece() {
+      if (pieces.length === 0) return;
+
+      // Pick next piece (cycle through shuffled list)
+      const pieceIdx = driftTimer % pieces.length;
+      const piece = pieces[pieceIdx];
+      driftTimer++;
+
+      // Fade out current voices
+      currentVoices.forEach(v => fadeOutVoice(v, 10));
+
+      // Create new voice
+      const voice = createVoice(piece, 10);
+      currentVoices = [voice];
+      currentPiece = piece;
+
+      // Update UI
+      updateNowPlaying(piece, voice.epoch);
+
+      // Schedule next transition
+      const speed = parseFloat(document.getElementById('driftSpeed').value) || 5;
+      pieceDuration = 25 + (10 - speed) * 8; // 25s to 105s per piece
+    }
+
+    // ── UI updates ──
+    function updateNowPlaying(piece, epoch) {
+      const np = document.getElementById('nowPlaying');
+      const type = piece.genome.type || 'unknown';
+      const gen = piece.generation || '?';
+      const score = piece.score ? (piece.score * 100).toFixed(1) + '%' : '?';
+      const color = EPOCH_COLORS[epoch] || '#c8c8d4';
+
+      np.querySelector('.piece-name').textContent = piece.id || 'unknown';
+      np.querySelector('.piece-name').style.color = color;
+      np.querySelector('.piece-meta').textContent =
+        `${type} \u00B7 gen ${gen} \u00B7 ${score} \u00B7 ${epoch}`;
+
+      const el = document.getElementById('epochLabel');
+      el.textContent = epoch;
+      el.style.color = color;
+      el.classList.add('visible');
+
+      document.getElementById('genCounter').textContent = `gen ${gen}`;
+    }
+
+    // ── Spectrum visualizer ──
+    function initSpectrum() {
+      const container = document.getElementById('spectrum');
+      for (let i = 0; i < 24; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'spectrum-bar';
+        bar.style.height = '1px';
+        container.appendChild(bar);
+      }
+    }
+
+    function updateSpectrum() {
+      if (!analyser) return;
+      analyser.getByteFrequencyData(analyserData);
+      const bars = document.querySelectorAll('.spectrum-bar');
+      const step = Math.floor(analyserData.length / bars.length);
+      bars.forEach((bar, i) => {
+        const val = analyserData[i * step] || 0;
+        bar.style.height = Math.max(1, val / 10) + 'px';
+        bar.style.opacity = 0.3 + (val / 255) * 0.7;
+      });
+    }
+
+    // ── Fog canvas (ambient particle background) ──
+    const fogCanvas = document.getElementById('fog');
+    const fogCtx = fogCanvas.getContext('2d');
+    let particles = [];
+
+    function initFog() {
+      fogCanvas.width = window.innerWidth;
+      fogCanvas.height = window.innerHeight;
+      particles = [];
+      const count = 60;
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * fogCanvas.width,
+          y: Math.random() * fogCanvas.height,
+          r: 40 + Math.random() * 120,
+          vx: (Math.random() - 0.5) * 0.15,
+          vy: (Math.random() - 0.5) * 0.1,
+          alpha: 0.01 + Math.random() * 0.025,
+          hue: Math.random() > 0.7 ? 142 : 252, // green or purple
+          pulse: Math.random() * Math.PI * 2,
+          pulseSpeed: 0.002 + Math.random() * 0.005,
+        });
+      }
+    }
+
+    function drawFog() {
+      fogCtx.fillStyle = 'rgba(10, 10, 15, 0.08)';
+      fogCtx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
+
+      // Audio reactivity
+      let bassEnergy = 0;
+      if (analyserData) {
+        for (let i = 0; i < 8; i++) bassEnergy += analyserData[i] || 0;
+        bassEnergy /= (8 * 255);
+      }
+
+      const epochColor = currentPiece ?
+        EPOCH_COLORS[(function() {
+          let ep = 'emergence';
+          const g = currentPiece.generation || 0;
+          for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].generation <= g) { ep = history[i].epoch || 'emergence'; break; }
+          }
+          return ep;
+        })()] : '#7c6fe0';
+
+      particles.forEach(p => {
+        p.x += p.vx + bassEnergy * (Math.random() - 0.5) * 0.8;
+        p.y += p.vy;
+        p.pulse += p.pulseSpeed;
+
+        // Wrap
+        if (p.x < -p.r) p.x = fogCanvas.width + p.r;
+        if (p.x > fogCanvas.width + p.r) p.x = -p.r;
+        if (p.y < -p.r) p.y = fogCanvas.height + p.r;
+        if (p.y > fogCanvas.height + p.r) p.y = -p.r;
+
+        const breathe = 0.5 + 0.5 * Math.sin(p.pulse);
+        const a = p.alpha * (0.6 + breathe * 0.4) * (1 + bassEnergy * 2);
+        const r = p.r * (0.9 + breathe * 0.1 + bassEnergy * 0.3);
+
+        const grad = fogCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+        grad.addColorStop(0, epochColor + Math.floor(a * 255).toString(16).padStart(2, '0'));
+        grad.addColorStop(1, epochColor + '00');
+        fogCtx.fillStyle = grad;
+        fogCtx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+      });
+    }
+
+    // ── Main loop ──
+    let lastTransition = 0;
+    function animate(ts) {
+      if (!ts) ts = 0;
+      requestAnimationFrame(animate);
+
+      drawFog();
+
+      if (playing) {
+        updateSpectrum();
+
+        // Auto-transition
+        if (ts - lastTransition > pieceDuration * 1000 || lastTransition === 0) {
+          transitionPiece();
+          lastTransition = ts;
+        }
+      }
+    }
+
+    // ── Elapsed timer ──
+    function updateElapsed() {
+      elapsedSeconds++;
+      const m = Math.floor(elapsedSeconds / 60);
+      const s = elapsedSeconds % 60;
+      document.getElementById('elapsed').textContent =
+        String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+
+    // ── Controls ──
+    function togglePlay() {
+      if (!ctx) initAudio();
+      if (ctx.state === 'suspended') ctx.resume();
+
+      playing = !playing;
+      document.getElementById('playBtn').innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+
+      if (playing) {
+        if (!currentPiece) transitionPiece();
+        elapsedInterval = setInterval(updateElapsed, 1000);
+        scheduleHudFade();
+      } else {
+        clearInterval(elapsedInterval);
+        clearTimeout(hudFadeTimer);
+        document.getElementById('hud').classList.remove('faded');
+      }
+    }
+
+    function scheduleHudFade() {
+      clearTimeout(hudFadeTimer);
+      document.getElementById('hud').classList.remove('faded');
+      hudFadeTimer = setTimeout(() => {
+        if (playing) document.getElementById('hud').classList.add('faded');
+      }, 6000);
+    }
+
+    // ── Init ──
+    window.addEventListener('resize', () => {
+      fogCanvas.width = window.innerWidth;
+      fogCanvas.height = window.innerHeight;
+    });
+
+    document.getElementById('startBtn').addEventListener('click', () => {
+      document.getElementById('intro').classList.add('hidden');
+      document.body.style.cursor = 'default';
+      togglePlay();
+    });
+
+    document.getElementById('playBtn').addEventListener('click', togglePlay);
+
+    document.getElementById('volSlider').addEventListener('input', (e) => {
+      if (masterGain) masterGain.gain.value = e.target.value / 100;
+    });
+
+    document.getElementById('driftSpeed').addEventListener('input', () => {
+      scheduleHudFade();
+    });
+
+    document.addEventListener('mousemove', scheduleHudFade);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+      if (e.code === 'ArrowRight') transitionPiece();
+      if (e.code === 'ArrowUp') {
+        const v = document.getElementById('volSlider');
+        v.value = Math.min(100, parseInt(v.value) + 10);
+        v.dispatchEvent(new Event('input'));
+      }
+      if (e.code === 'ArrowDown') {
+        const v = document.getElementById('volSlider');
+        v.value = Math.max(0, parseInt(v.value) - 10);
+        v.dispatchEvent(new Event('input'));
+      }
+    });
+
+    // Boot
+    loadData().then(() => {
+      initFog();
+      initSpectrum();
+      animate();
+    });
+
+  })();
+  </script>
+</body>
+</html>
