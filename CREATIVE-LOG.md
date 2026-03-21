@@ -4,6 +4,30 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Evolution Engine Upgrade + Origin Data Viz
+- **What**: Major improvements to the evolution system (`src/evolve.ts`) and enhanced data visualization for the Origin timelapse (`docs/origin.html`)
+- **Evolution improvements**:
+  - **Elitism** — top 2 pieces now survive each generation unmutated, preventing fitness regression
+  - **Extinction events** — every 50 generations, 60% of the population is culled (preserving one per species), forcing exploration of new genome space
+  - **Adaptive crossover** — crossover rate increases from 30% to 50% when species diversity drops, with preference for inter-species breeding to counter monoculture
+  - **Simpson's diversity index** — measures species diversity each generation (0=monoculture, 1=max diversity), exported to gallery.json
+  - **Species momentum** — tracks which species are trending up/down in fitness, exported to history
+  - **Enhanced generation records** — extinction flags, diversity index, crossover rate, and species momentum all recorded for visualization
+- **Origin enhancements**:
+  - **Species radar chart** (toggle with R) — animated radar showing species population composition at each generation, with type-colored vertices
+  - **Species stacked timeline** (toggle with S) — horizontal stacked bar showing which species dominated over time, with playhead indicator
+  - **Metrics panel** (toggle with M) — fitness sparkline (best + avg trend lines with extinction markers), 8 metric bars (complexity, symmetry, density, edge, fractal, info, structure, coherence), and evolution telemetry (diversity, crossover rate, trending species)
+  - **Extinction narratives** — extinction events and diversity milestones appear as narrative events during playback
+  - **Enhanced start screen** — shows extinction count alongside existing stats
+- **Pages**: `src/evolve.ts` (rewritten evolution core), `docs/origin.html` (enhanced with 3 toggleable panels)
+- **How it differs**: First time evolution telemetry is tracked and visualized. The radar/strata/metrics panels turn Origin from a passive timelapse into an analytical tool for understanding evolutionary dynamics.
+
+### 2026-03-21 — Void / 3D Particle Sculpture Explorer
+- **What**: First 3D experience in the collection (`docs/void.html`) — orbit through mathematical particle formations rendered with Three.js
+- **Details**: WebGL via Three.js (CDN import map). 25,000 particles arranged in 6 formations: **Helix** (double DNA strand), **Attractor** (Lorenz strange attractor point cloud), **Lattice** (3D crystal grid with optional breathing), **Nebula** (spherical cloud with noise tendrils), **Torus** (torus knot p=2,q=3), **Wave** (3D sine interference surface). Custom vertex/fragment shaders with additive blending, distance-based fog, and glow falloff. Smooth morphing between formations (particles ease toward new targets). 6 color palettes (Amethyst, Ember, Ocean, Nebula, Frost, Void). OrbitControls for free camera with auto-rotate. Unreal Bloom post-processing toggle. Audio reactivity: microphone input drives particle size per frequency band, camera shake from bass, rotation speed from mids. Breathe mode adds organic pulsing to the sculpture. Parameter sliders: count (500-25K), size, spread, speed, morph blend. PNG export. Frosted-glass panel. Keyboard: H (panel), 1-6 (formation), Space (spin), B (breathe), M (audio), R (randomize), S (screenshot).
+- **Pages**: `docs/void.html` (new), `docs/index.html` (added Void button + footer link)
+- **What makes it unique**: Every other page in the collection is 2D Canvas. Void is the first true 3D experience — you orbit through the sculpture, zoom into particle clouds, and experience the mathematics from any angle. The Lorenz attractor as a glowing point cloud is something flat rendering cannot achieve.
+
 ### 2026-03-21 — Wavelength / Ambient Evolutionary Radio
 - **What**: Tunable ambient radio (`docs/wavelength.html`) — drag a dial to scan through 148 generations and hear multiple pieces simultaneously as layered sonic textures
 - **Details**: Circular tuner dial where position = generation number. At each position, 2-6 nearby archive pieces play simultaneously as overlapping Web Audio voices. Each piece's rendered grid is analyzed row-by-row: character density → oscillator volume, row index → pentatonic scale pitch, genome type → waveform (square for 1D/WFC, triangle for 2D/voronoi/noise, sawtooth for L-system/attractor/flowfield, sine for RD/spirograph/julia). Epoch at the tuned generation sets the musical scale (pentatonic/dorian/phrygian/mixolydian) and visual accent color. High-symmetry pieces get an extra harmonic partial. Pieces cross-fade smoothly (4s fade-in, 3s fade-out) as you sweep through generations. Sub-bass drone shifts pitch per epoch. Drift mode slowly auto-scans through the timeline, looping. The dial ring shows epoch-colored arcs with species-colored tick marks at each Hall of Fame entry. Waveform oscilloscope fills the background. Spectrum analyzer bars along the bottom. Voice cards below the dial show currently-playing pieces (type, score, generation). Convolution reverb (3s tail), dynamics compressor. Controls: volume, drift speed, layer count (2-6). Keyboard: Space (play/pause), D (drift), arrows (tune/volume), L (layers).

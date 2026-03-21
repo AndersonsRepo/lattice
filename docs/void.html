@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Void</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas { display: block; }
+
+    /* --- HUD --- */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      padding: 1.25rem;
+    }
+
+    .hud-title { pointer-events: auto; }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .hud-title .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .hud-title .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    /* --- Panel --- */
+    .panel {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      width: 280px;
+      background: rgba(18,18,26,0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      pointer-events: auto;
+      z-index: 20;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+
+    .panel.hidden {
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+    }
+
+    .panel-section {
+      margin-bottom: 0.75rem;
+    }
+
+    .panel-section:last-child { margin-bottom: 0; }
+
+    .panel-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 0.4rem;
+    }
+
+    /* Shape selector */
+    .shape-row {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .shape-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: all 0.2s;
+    }
+    .shape-btn:hover { border-color: var(--accent); color: var(--text); }
+    .shape-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0a0a0f;
+    }
+
+    /* Palette selector */
+    .palette-row {
+      display: flex;
+      gap: 4px;
+    }
+
+    .palette-swatch {
+      width: 20px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .palette-swatch:hover { transform: scale(1.2); }
+    .palette-swatch.active { border-color: #fff; transform: scale(1.2); }
+
+    /* Sliders */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .slider-name {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      width: 60px;
+      flex-shrink: 0;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .slider-val {
+      font-size: 0.55rem;
+      color: var(--green);
+      width: 30px;
+      text-align: right;
+    }
+
+    /* Toggle buttons */
+    .toggle-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .toggle-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .toggle-btn:hover { border-color: var(--accent); color: var(--text); }
+    .toggle-btn.active {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    /* Keyboard hint */
+    .hint {
+      position: absolute;
+      bottom: 1.25rem;
+      right: 1.25rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      pointer-events: none;
+      text-align: right;
+      line-height: 1.8;
+    }
+
+    .hint kbd {
+      display: inline-block;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0 4px;
+      font-family: inherit;
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+
+<div class="hud">
+  <div class="hud-top">
+    <div class="hud-title">
+      <h1>Void</h1>
+      <a href="index.html" class="back-link">&larr; Lattice</a>
+    </div>
+    <div class="hud-stats">
+      <div>Particles <span class="val" id="stat-count">0</span></div>
+      <div>FPS <span class="val" id="stat-fps">0</span></div>
+      <div id="stat-audio" style="display:none">Audio <span class="val">ON</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="panel">
+  <div class="panel-section">
+    <div class="panel-label">Formation</div>
+    <div class="shape-row" id="shape-row"></div>
+  </div>
+  <div class="panel-section">
+    <div class="panel-label">Palette</div>
+    <div class="palette-row" id="palette-row"></div>
+  </div>
+  <div class="panel-section">
+    <div class="panel-label">Parameters</div>
+    <div id="sliders"></div>
+  </div>
+  <div class="panel-section">
+    <div class="panel-label">Options</div>
+    <div class="toggle-row">
+      <button class="toggle-btn active" id="btn-spin">Spin</button>
+      <button class="toggle-btn" id="btn-breathe">Breathe</button>
+      <button class="toggle-btn" id="btn-audio">Audio</button>
+      <button class="toggle-btn" id="btn-bloom">Bloom</button>
+      <button class="toggle-btn" id="btn-export">PNG</button>
+    </div>
+  </div>
+</div>
+
+<div class="hint" id="hint">
+  <kbd>H</kbd> panel &middot; <kbd>1-6</kbd> formation &middot; <kbd>Space</kbd> spin<br>
+  <kbd>B</kbd> breathe &middot; <kbd>M</kbd> audio &middot; <kbd>R</kbd> randomize &middot; <kbd>S</kbd> screenshot
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+
+// ==================== CONFIG ====================
+const FORMATIONS = [
+  { name: 'Helix',     key: '1' },
+  { name: 'Attractor', key: '2' },
+  { name: 'Lattice',   key: '3' },
+  { name: 'Nebula',    key: '4' },
+  { name: 'Torus',     key: '5' },
+  { name: 'Wave',      key: '6' },
+];
+
+const PALETTES = [
+  { name: 'Amethyst', colors: ['#7c6fe0','#a78bfa','#c4b5fd','#4ade80','#22d3ee'] },
+  { name: 'Ember',    colors: ['#ef4444','#f97316','#fbbf24','#facc15','#fef08a'] },
+  { name: 'Ocean',    colors: ['#0ea5e9','#06b6d4','#22d3ee','#67e8f9','#7c6fe0'] },
+  { name: 'Nebula',   colors: ['#a855f7','#ec4899','#f43f5e','#fb7185','#fda4af'] },
+  { name: 'Frost',    colors: ['#e2e8f0','#94a3b8','#64748b','#7c6fe0','#4ade80'] },
+  { name: 'Void',     colors: ['#7c6fe0','#4ade80','#0a0a0f','#1e1e2e','#c8c8d4'] },
+];
+
+const SLIDER_DEFS = [
+  { id: 'count',    label: 'Count',    min: 500,  max: 25000, step: 500,  def: 8000  },
+  { id: 'size',     label: 'Size',     min: 0.5,  max: 5,     step: 0.1,  def: 1.5   },
+  { id: 'spread',   label: 'Spread',   min: 1,    max: 20,    step: 0.5,  def: 8     },
+  { id: 'speed',    label: 'Speed',    min: 0,    max: 3,     step: 0.05, def: 0.5   },
+  { id: 'morph',    label: 'Morph',    min: 0,    max: 1,     step: 0.01, def: 0     },
+];
+
+// ==================== STATE ====================
+const state = {
+  formation: 0,
+  palette: 0,
+  spin: true,
+  breathe: false,
+  audio: false,
+  bloom: false,
+  params: {},
+  morphTarget: null,
+  morphProgress: 0,
+  audioData: new Float32Array(64),
+  audioBass: 0,
+  audioMid: 0,
+  audioTreble: 0,
+};
+
+SLIDER_DEFS.forEach(s => state.params[s.id] = s.def);
+
+// ==================== THREE.JS SETUP ====================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a0f);
+scene.fog = new THREE.FogExp2(0x0a0a0f, 0.015);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(0, 5, 18);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.prepend(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.8;
+controls.maxDistance = 60;
+controls.minDistance = 2;
+
+// Bloom composer
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.4, 0.85);
+bloomPass.enabled = false;
+composer.addPass(bloomPass);
+
+// ==================== PARTICLE SYSTEM ====================
+const MAX_PARTICLES = 25000;
+
+const geometry = new THREE.BufferGeometry();
+const positions = new Float32Array(MAX_PARTICLES * 3);
+const colors = new Float32Array(MAX_PARTICLES * 3);
+const sizes = new Float32Array(MAX_PARTICLES);
+const targetPositions = new Float32Array(MAX_PARTICLES * 3);
+
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+
+const vertexShader = `
+  attribute float aSize;
+  varying vec3 vColor;
+  varying float vDist;
+  void main() {
+    vColor = color;
+    vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+    vDist = -mvPos.z;
+    gl_PointSize = aSize * (200.0 / -mvPos.z);
+    gl_Position = projectionMatrix * mvPos;
+  }
+`;
+
+const fragmentShader = `
+  varying vec3 vColor;
+  varying float vDist;
+  void main() {
+    float d = length(gl_PointCoord - 0.5);
+    if (d > 0.5) discard;
+    float alpha = smoothstep(0.5, 0.1, d);
+    float glow = exp(-d * 4.0) * 0.5;
+    vec3 c = vColor + glow;
+    float fogFactor = exp(-0.015 * vDist * vDist);
+    c = mix(vec3(0.039, 0.039, 0.059), c, fogFactor);
+    gl_FragColor = vec4(c, alpha * fogFactor);
+  }
+`;
+
+const material = new THREE.ShaderMaterial({
+  vertexShader,
+  fragmentShader,
+  vertexColors: true,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+
+const points = new THREE.Points(geometry, material);
+scene.add(points);
+
+// Subtle ambient grid
+const gridHelper = new THREE.GridHelper(40, 40, 0x1e1e2e, 0x12121a);
+gridHelper.position.y = -8;
+scene.add(gridHelper);
+
+// ==================== FORMATION GENERATORS ====================
+function generateHelix(i, count, spread, t) {
+  const frac = i / count;
+  const angle = frac * Math.PI * 12 + t;
+  const y = (frac - 0.5) * spread * 2;
+  const r = spread * 0.3;
+  const strand = i % 2 === 0 ? 1 : -1;
+  return [
+    Math.cos(angle) * r * strand,
+    y,
+    Math.sin(angle) * r * strand
+  ];
+}
+
+function generateAttractor(i, count, spread, t) {
+  // Lorenz attractor via iteration
+  const sigma = 10, rho = 28, beta = 8/3;
+  let x = 0.1 + (i * 0.0001), y = 0, z = 0;
+  const dt = 0.005;
+  const steps = 20 + (i % 40);
+  for (let s = 0; s < steps; s++) {
+    const dx = sigma * (y - x);
+    const dy = x * (rho - z) - y;
+    const dz = x * y - beta * z;
+    x += dx * dt;
+    y += dy * dt;
+    z += dz * dt;
+  }
+  const scale = spread / 30;
+  return [x * scale, (z - 25) * scale, y * scale];
+}
+
+function generateLattice(i, count, spread, t) {
+  const dim = Math.ceil(Math.cbrt(count));
+  const ix = i % dim;
+  const iy = Math.floor(i / dim) % dim;
+  const iz = Math.floor(i / (dim * dim));
+  const gap = spread / dim;
+  const offset = spread * 0.5;
+  const breathe = state.breathe ? Math.sin(t * 0.5) * 0.3 : 0;
+  return [
+    ix * gap - offset + Math.sin(t + iy * 0.5) * breathe,
+    iy * gap - offset + Math.cos(t + iz * 0.5) * breathe,
+    iz * gap - offset + Math.sin(t + ix * 0.5) * breathe
+  ];
+}
+
+function generateNebula(i, count, spread, t) {
+  // Pseudo-random using index as seed
+  const hash = (n) => {
+    let h = n * 2654435761 >>> 0;
+    h = ((h >> 16) ^ h) * 0x45d9f3b >>> 0;
+    h = ((h >> 16) ^ h) >>> 0;
+    return (h & 0xffff) / 0xffff;
+  };
+  const phi = hash(i) * Math.PI * 2;
+  const cosTheta = hash(i + 99999) * 2 - 1;
+  const sinTheta = Math.sqrt(1 - cosTheta * cosTheta);
+  const r = Math.pow(hash(i + 77777), 0.5) * spread * 0.8;
+  // Add tendrils
+  const tendril = Math.sin(phi * 3 + t) * Math.cos(cosTheta * 4 + t * 0.7) * spread * 0.2;
+  return [
+    (sinTheta * Math.cos(phi) * r) + tendril,
+    (cosTheta * r) + Math.sin(phi * 5 + t * 0.3) * spread * 0.1,
+    (sinTheta * Math.sin(phi) * r) + tendril * 0.5
+  ];
+}
+
+function generateTorus(i, count, spread, t) {
+  const frac = i / count;
+  const R = spread * 0.5; // major radius
+  const r = spread * 0.15; // minor radius
+  const u = frac * Math.PI * 2 * 20 + t;
+  const v = frac * Math.PI * 2 * 63; // coprime for coverage
+  // Torus knot (p=2, q=3)
+  const p = 2, q = 3;
+  const theta = u;
+  const phi = q / p * theta;
+  const knotR = R + r * Math.cos(phi);
+  return [
+    knotR * Math.cos(theta),
+    r * Math.sin(phi),
+    knotR * Math.sin(theta)
+  ];
+}
+
+function generateWave(i, count, spread, t) {
+  const dim = Math.ceil(Math.sqrt(count));
+  const ix = i % dim;
+  const iz = Math.floor(i / dim);
+  const gap = spread / dim;
+  const offset = spread * 0.5;
+  const x = ix * gap - offset;
+  const z = iz * gap - offset;
+  const dist = Math.sqrt(x * x + z * z);
+  const y = Math.sin(dist * 1.5 - t * 2) * spread * 0.15 +
+            Math.sin(x * 0.8 + t) * spread * 0.08 +
+            Math.cos(z * 0.6 + t * 0.7) * spread * 0.06;
+  return [x, y, z];
+}
+
+const generators = [generateHelix, generateAttractor, generateLattice, generateNebula, generateTorus, generateWave];
+
+// ==================== UPDATE PARTICLES ====================
+function updateParticles(time) {
+  const count = Math.min(state.params.count, MAX_PARTICLES);
+  const spread = state.params.spread;
+  const gen = generators[state.formation];
+  const posAttr = geometry.getAttribute('position');
+  const colAttr = geometry.getAttribute('color');
+  const sizeAttr = geometry.getAttribute('aSize');
+  const palette = PALETTES[state.palette].colors.map(hexToRGB);
+  const baseSize = state.params.size;
+  const morph = state.params.morph;
+
+  for (let i = 0; i < count; i++) {
+    const [tx, ty, tz] = gen(i, count, spread, time * state.params.speed);
+    const idx = i * 3;
+
+    // Smooth morphing
+    if (morph > 0 && state.morphTarget !== null) {
+      const [mx, my, mz] = generators[state.morphTarget](i, count, spread, time * state.params.speed);
+      targetPositions[idx]     = tx + (mx - tx) * morph;
+      targetPositions[idx + 1] = ty + (my - ty) * morph;
+      targetPositions[idx + 2] = tz + (mz - tz) * morph;
+    } else {
+      targetPositions[idx]     = tx;
+      targetPositions[idx + 1] = ty;
+      targetPositions[idx + 2] = tz;
+    }
+
+    // Ease toward target
+    positions[idx]     += (targetPositions[idx]     - positions[idx])     * 0.08;
+    positions[idx + 1] += (targetPositions[idx + 1] - positions[idx + 1]) * 0.08;
+    positions[idx + 2] += (targetPositions[idx + 2] - positions[idx + 2]) * 0.08;
+
+    // Color from palette based on position
+    const ci = Math.abs(Math.sin(i * 0.1 + time * 0.1));
+    const pi = ci * (palette.length - 1);
+    const lo = Math.floor(pi);
+    const hi = Math.min(lo + 1, palette.length - 1);
+    const t2 = pi - lo;
+    colAttr.array[idx]     = palette[lo][0] + (palette[hi][0] - palette[lo][0]) * t2;
+    colAttr.array[idx + 1] = palette[lo][1] + (palette[hi][1] - palette[lo][1]) * t2;
+    colAttr.array[idx + 2] = palette[lo][2] + (palette[hi][2] - palette[lo][2]) * t2;
+
+    // Audio reactivity on size
+    let s = baseSize;
+    if (state.audio) {
+      const band = i % 64;
+      s += Math.abs(state.audioData[band] || 0) * 2;
+    }
+    sizeAttr.array[i] = s;
+  }
+
+  geometry.setDrawRange(0, count);
+  posAttr.needsUpdate = true;
+  colAttr.needsUpdate = true;
+  sizeAttr.needsUpdate = true;
+}
+
+function hexToRGB(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+}
+
+// ==================== AUDIO ====================
+let audioCtx, analyser, micStream;
+
+async function initAudio() {
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 128;
+    analyser.smoothingTimeConstant = 0.8;
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioCtx.createMediaStreamSource(micStream);
+    source.connect(analyser);
+    state.audio = true;
+    document.getElementById('stat-audio').style.display = '';
+    document.getElementById('btn-audio').classList.add('active');
+  } catch (e) {
+    state.audio = false;
+    document.getElementById('btn-audio').classList.remove('active');
+  }
+}
+
+function stopAudio() {
+  if (micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
+  }
+  state.audio = false;
+  document.getElementById('stat-audio').style.display = 'none';
+  document.getElementById('btn-audio').classList.remove('active');
+  state.audioData.fill(0);
+}
+
+function updateAudio() {
+  if (!state.audio || !analyser) return;
+  const data = new Float32Array(analyser.frequencyBinCount);
+  analyser.getFloatFrequencyData(data);
+  // Normalize from dB to 0-1
+  for (let i = 0; i < 64; i++) {
+    state.audioData[i] = Math.max(0, (data[i] + 100) / 100);
+  }
+  state.audioBass = (state.audioData[0] + state.audioData[1] + state.audioData[2]) / 3;
+  state.audioMid = (state.audioData[10] + state.audioData[15] + state.audioData[20]) / 3;
+  state.audioTreble = (state.audioData[40] + state.audioData[50] + state.audioData[60]) / 3;
+}
+
+// ==================== UI ====================
+function buildUI() {
+  // Formation buttons
+  const shapeRow = document.getElementById('shape-row');
+  FORMATIONS.forEach((f, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'shape-btn' + (i === 0 ? ' active' : '');
+    btn.textContent = f.name;
+    btn.dataset.idx = i;
+    btn.onclick = () => setFormation(i);
+    shapeRow.appendChild(btn);
+  });
+
+  // Palette swatches
+  const palRow = document.getElementById('palette-row');
+  PALETTES.forEach((p, i) => {
+    const sw = document.createElement('div');
+    sw.className = 'palette-swatch' + (i === 0 ? ' active' : '');
+    sw.style.background = `linear-gradient(135deg, ${p.colors[0]}, ${p.colors[2]}, ${p.colors[4]})`;
+    sw.title = p.name;
+    sw.onclick = () => setPalette(i);
+    palRow.appendChild(sw);
+  });
+
+  // Sliders
+  const slidersEl = document.getElementById('sliders');
+  SLIDER_DEFS.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'slider-name';
+    nameEl.textContent = s.label;
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = s.min;
+    input.max = s.max;
+    input.step = s.step;
+    input.value = s.def;
+    input.id = 'slider-' + s.id;
+    const valEl = document.createElement('span');
+    valEl.className = 'slider-val';
+    valEl.id = 'val-' + s.id;
+    valEl.textContent = s.def;
+    input.oninput = () => {
+      const v = parseFloat(input.value);
+      state.params[s.id] = v;
+      valEl.textContent = v % 1 === 0 ? v : v.toFixed(1);
+    };
+    row.append(nameEl, input, valEl);
+    slidersEl.appendChild(row);
+  });
+
+  // Toggle buttons
+  document.getElementById('btn-spin').onclick = () => {
+    state.spin = !state.spin;
+    controls.autoRotate = state.spin;
+    document.getElementById('btn-spin').classList.toggle('active', state.spin);
+  };
+
+  document.getElementById('btn-breathe').onclick = () => {
+    state.breathe = !state.breathe;
+    document.getElementById('btn-breathe').classList.toggle('active', state.breathe);
+  };
+
+  document.getElementById('btn-audio').onclick = () => {
+    if (state.audio) stopAudio();
+    else initAudio();
+  };
+
+  document.getElementById('btn-bloom').onclick = () => {
+    state.bloom = !state.bloom;
+    bloomPass.enabled = state.bloom;
+    document.getElementById('btn-bloom').classList.toggle('active', state.bloom);
+  };
+
+  document.getElementById('btn-export').onclick = exportPNG;
+}
+
+function setFormation(idx) {
+  if (idx === state.formation) return;
+  // Set morph target for smooth transition
+  state.morphTarget = idx;
+  state.params.morph = 0;
+  const slider = document.getElementById('slider-morph');
+  const morphAnim = () => {
+    state.params.morph += 0.02;
+    if (state.params.morph >= 1) {
+      state.params.morph = 0;
+      state.formation = idx;
+      state.morphTarget = null;
+      slider.value = 0;
+      document.getElementById('val-morph').textContent = '0';
+    } else {
+      slider.value = state.params.morph;
+      document.getElementById('val-morph').textContent = state.params.morph.toFixed(1);
+      requestAnimationFrame(morphAnim);
+    }
+  };
+  requestAnimationFrame(morphAnim);
+
+  document.querySelectorAll('.shape-btn').forEach(b => b.classList.toggle('active', +b.dataset.idx === idx));
+}
+
+function setPalette(idx) {
+  state.palette = idx;
+  document.querySelectorAll('.palette-swatch').forEach((s, i) => s.classList.toggle('active', i === idx));
+}
+
+function exportPNG() {
+  // Render one frame to the preserved buffer
+  if (state.bloom) composer.render();
+  else renderer.render(scene, camera);
+  const link = document.createElement('a');
+  link.download = `void-${FORMATIONS[state.formation].name.toLowerCase()}-${Date.now()}.png`;
+  link.href = renderer.domElement.toDataURL('image/png');
+  link.click();
+}
+
+function randomize() {
+  const fi = Math.floor(Math.random() * FORMATIONS.length);
+  const pi = Math.floor(Math.random() * PALETTES.length);
+  setFormation(fi);
+  setPalette(pi);
+  SLIDER_DEFS.forEach(s => {
+    if (s.id === 'morph') return;
+    const v = s.min + Math.random() * (s.max - s.min);
+    const rounded = Math.round(v / s.step) * s.step;
+    state.params[s.id] = rounded;
+    document.getElementById('slider-' + s.id).value = rounded;
+    document.getElementById('val-' + s.id).textContent = rounded % 1 === 0 ? rounded : rounded.toFixed(1);
+  });
+}
+
+// ==================== KEYBOARD ====================
+window.addEventListener('keydown', e => {
+  const key = e.key.toLowerCase();
+  if (key === 'h') {
+    document.getElementById('panel').classList.toggle('hidden');
+    document.getElementById('hint').classList.toggle('hidden');
+  }
+  if (key >= '1' && key <= '6') setFormation(+key - 1);
+  if (key === ' ') { e.preventDefault(); document.getElementById('btn-spin').click(); }
+  if (key === 'b') document.getElementById('btn-breathe').click();
+  if (key === 'm') document.getElementById('btn-audio').click();
+  if (key === 'r') randomize();
+  if (key === 's') exportPNG();
+});
+
+// ==================== RESIZE ====================
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+
+// ==================== ANIMATION LOOP ====================
+let lastTime = 0;
+let frameCount = 0;
+let fpsTime = 0;
+
+function animate(now) {
+  requestAnimationFrame(animate);
+
+  const time = now * 0.001;
+  const dt = time - lastTime;
+  lastTime = time;
+
+  // FPS counter
+  frameCount++;
+  if (now - fpsTime > 500) {
+    document.getElementById('stat-fps').textContent = Math.round(frameCount / ((now - fpsTime) / 1000));
+    frameCount = 0;
+    fpsTime = now;
+  }
+
+  document.getElementById('stat-count').textContent = Math.min(state.params.count, MAX_PARTICLES);
+
+  // Audio
+  updateAudio();
+
+  // Audio-driven camera shake
+  if (state.audio && state.audioBass > 0.5) {
+    camera.position.x += (Math.random() - 0.5) * state.audioBass * 0.05;
+    camera.position.y += (Math.random() - 0.5) * state.audioBass * 0.03;
+  }
+
+  // Audio-driven auto-rotate speed
+  if (state.audio) {
+    controls.autoRotateSpeed = 0.8 + state.audioMid * 3;
+  }
+
+  // Breathe effect on spread
+  if (state.breathe) {
+    const breatheOffset = Math.sin(time * 0.8) * 1.5;
+    scene.rotation.y += Math.sin(time * 0.3) * 0.0005;
+    points.scale.setScalar(1 + breatheOffset * 0.05);
+  } else {
+    points.scale.setScalar(1);
+  }
+
+  controls.update();
+  updateParticles(time);
+
+  if (state.bloom) {
+    composer.render();
+  } else {
+    renderer.render(scene, camera);
+  }
+}
+
+// ==================== INIT ====================
+buildUI();
+
+// Initialize positions to avoid all starting at origin
+const count = state.params.count;
+for (let i = 0; i < count; i++) {
+  const [x, y, z] = generateHelix(i, count, state.params.spread, 0);
+  const idx = i * 3;
+  positions[idx] = x;
+  positions[idx+1] = y;
+  positions[idx+2] = z;
+}
+
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
