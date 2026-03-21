@@ -4,6 +4,53 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Performance Pipeline Optimization
+- **What**: Profiled and optimized the evolution scoring pipeline and frontend rendering infrastructure
+- **Score function optimization** (`src/automata.ts`):
+  - Merged 7+ separate grid passes into fewer passes (density + edge activity + quadrant mass in single scan)
+  - Replaced `Record<number, number>` histogram with `Map` (faster iteration, no `Object.values` allocation)
+  - BFS flood fill: `Uint8Array` visited + `Uint32Array` queue (was `boolean[][]` + `[number,number][]` tuples — eliminated GC pressure)
+  - Eliminated `Math.max(...Object.keys(counts).map(Number))` spread (stack overflow risk on large grids)
+  - Hoisted row references (`grid[y]` cached), pre-computed loop bounds, inlined clamp operations
+  - Spatial coherence: merged variance + correlation into single pass with pre-computed `invMaxVal`
+  - Box-counting dimension: inlined linear regression (eliminated intermediate `points` array allocation)
+  - Result: ~1.96ms/call on 120x80 grid (11 metrics including aestheticHarmony)
+- **Worker pool** (`docs/lattice-pool.js`):
+  - `WorkerPool` class maintains warm idle workers, reuses across piece transitions
+  - `PooledBridge` — drop-in replacement for `WorkerBridge` that acquires/releases from pool
+  - Eliminates Worker constructor + script download overhead (~5-15ms per transition)
+  - Configurable pool size, pre-warming, graceful drain
+- **Benchmark page** (`docs/perf.html` rewritten):
+  - Three benchmark sections: Engine Simulation, Render Pipeline, Worker Pool
+  - Engine bench: per-type computation time + round-trip with visual bars
+  - Render bench: FastRenderer vs LegacyRenderer with speedup ratio, throughput, vignette timing
+  - Pool bench: cold init (new Worker) vs warm init (pooled) with p95 percentiles
+  - Individual section buttons for quick targeted benchmarks
+  - Full pipeline summary combining all results
+- **Pages**: `src/automata.ts` (optimized), `docs/lattice-pool.js` (new), `docs/perf.html` (rewritten)
+- **What makes it unique**: Infrastructure optimization — makes evolution generations faster and frontend transitions smoother without changing any visual output
+
+### 2026-03-21 — Evolution System Overhaul + Metric Scatter Visualization
+
+- **Evolution improvements** (`src/evolve.ts`):
+  - **Hall of Fame seeding** (15% rate): Mutated offspring from proven HoF genetics injected back into gene pool
+  - **NSGA-II crowding distance**: Multi-objective diversity preservation in selection tiebreaking
+  - **Age-based incumbent penalty**: 0.3%/gen score decay (capped 10%) to encourage population turnover
+  - **Pareto front tracking**: Non-dominated solution counting for telemetry
+  - **New telemetry**: `hofSeedCount`, `avgCrowdingDistance`, `agePenaltyApplied`, `paretoFrontSize`
+- **Origin visualization** (`docs/origin.html`):
+  - **Metric Scatter Plot** panel (F key): 2D projection showing complexity x structure, pieces sized by score, colored by species, with evolutionary trajectory and epoch regions
+  - **Enhanced telemetry display**: Pareto front, crowding, HoF seeds, age penalty in metrics panel
+  - **New narrative events**: Pareto expansion milestones and genetic revival events
+- **Bug fixes** (`src/automata.ts`): Fixed corrupted flowfield mutation handler, removed duplicate DLA crossover, added `evolveFractalFlame` re-export
+
+### 2026-03-21 — Harmonograph Engine + Interactive Page
+- **New engine**: `harmonograph` — coupled damped pendulum simulation. 2-4 pendulums with configurable frequency, phase, amplitude, and exponential decay trace Lissajous-like curves that die beautifully over time. Unlike spirographs (periodic), harmonographs are physical simulations with organic decay and interference.
+- **Engine file**: `src/harmonograph.ts` — full evolution engine with `evolveHarmonograph()`, `mutateHarmonograph()`, `crossoverHarmonograph()`, `randomHarmonographRule()`, and 3 seed genomes (classic 2:3 Lissajous, rotary orbital, dense 4-pendulum).
+- **Evolution integration**: Added to `src/automata.ts` (Genome type, species colors, scoring weights emphasizing coherence/rhythm/balance, mutation, crossover, type-swap pool) and `src/evolve.ts` (generatePiece switch, Discord label).
+- **Interactive page**: `docs/harmonograph.html` — full-screen canvas with real-time pendulum drawing. Controls: frequency X/Y, phase, damping, perturbation, speed. 5 presets (Lissajous, Rotary, Lateral, Dense, Chaos). Keyboard shortcuts. Glow effects on early strokes, color gradient from deep violet to pale lavender. Save PNG.
+- **Files**: `src/harmonograph.ts` (new), `src/automata.ts`, `src/evolve.ts`, `docs/harmonograph.html` (new)
+
 ### 2026-03-21 — Aesthetic Harmony Metric + Directed Mutation + Enhanced Origin Visualization
 - **New metric**: `aestheticHarmony` — a meta-metric measuring how well a piece's metrics complement each other. High harmony = structured complexity, balanced composition, and fractal edges working in concert. Prevents evolution from producing incoherent high-scorers.
 - **Directed mutation** (`src/evolve.ts`): Identifies parent's weakest metric dimension and biases mutation to improve it. 30% activation for top-half parents. Canvas tweaks for balance weakness, double-mutation for harmony/coherence weakness.

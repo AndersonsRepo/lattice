@@ -502,6 +502,13 @@
       color: var(--text-dim);
       letter-spacing: 0.05em;
     }
+    .lp-axis-toggle {
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .lp-axis-toggle:hover {
+      color: var(--accent);
+    }
     #landscape-canvas {
       width: 100%;
       height: calc(100% - 1.2rem);
@@ -580,7 +587,7 @@
 <div id="landscape-panel">
   <div class="lp-header">
     <span>METRIC LANDSCAPE</span>
-    <span class="lp-axis-label" id="lp-axes">complexity × structure</span>
+    <span class="lp-axis-label lp-axis-toggle" id="lp-axes" title="Click to cycle axes">complexity × harmony</span>
   </div>
   <canvas id="landscape-canvas" width="520" height="480"></canvas>
 </div>
@@ -830,6 +837,24 @@ function computeEvents(data, sortedArchive) {
     }
   }
 
+  // Pareto front milestones
+  let maxPareto = 0;
+  for (const h of data.history || []) {
+    if (h.paretoFrontSize && h.paretoFrontSize > maxPareto + 3) {
+      maxPareto = h.paretoFrontSize;
+      if (!ev[h.generation]) {
+        ev[h.generation] = `pareto expansion — ${h.paretoFrontSize} non-dominated solutions found`;
+      }
+    }
+  }
+
+  // HoF seeding events (when proven genetics return)
+  for (const h of data.history || []) {
+    if (h.hofSeedCount >= 2 && !ev[h.generation]) {
+      ev[h.generation] = `genetic revival — ${h.hofSeedCount} offspring from hall of fame genetics`;
+    }
+  }
+
   return ev;
 }
 
@@ -940,6 +965,7 @@ function updateHUD() {
     drawFitnessLandscape();
     updateLineageDepth();
   }
+  if (scatterVisible) drawMetricScatter();
 }
 
 let narrativeTimeout = null;
@@ -1274,6 +1300,32 @@ function drawFitnessLandscape() {
     lctx.fillStyle = 'rgba(96,165,250,0.5)';
     lctx.font = `${10 * devicePixelRatio}px monospace`;
     lctx.fillText('div', Math.min(labelX, W - 30 * devicePixelRatio), labelY + 3 * devicePixelRatio);
+  }
+
+  // Aesthetic harmony curve (purple, dashed) — shows population-wide harmony trend
+  const harmonies = visibleHistory.map(h => h.avgAestheticHarmony ?? 0);
+  if (harmonies.some(h => h > 0)) {
+    lctx.beginPath();
+    for (let i = 0; i < visibleHistory.length; i++) {
+      const x = toX(historyData.indexOf(visibleHistory[i]));
+      // Map harmony (0-1) to same Y range as scores for visual comparison
+      const y = H - (harmonies[i] * 0.85 * H) - H * 0.05;
+      if (i === 0) lctx.moveTo(x, y);
+      else lctx.lineTo(x, y);
+    }
+    lctx.strokeStyle = 'rgba(124,111,224,0.45)';
+    lctx.lineWidth = 1.5 * devicePixelRatio;
+    lctx.setLineDash([6 * devicePixelRatio, 4 * devicePixelRatio]);
+    lctx.stroke();
+    lctx.setLineDash([]);
+
+    // Label
+    const lastH = harmonies[harmonies.length - 1];
+    const labelX2 = toX(historyData.indexOf(visibleHistory[visibleHistory.length - 1])) + 6 * devicePixelRatio;
+    const labelY2 = H - (lastH * 0.85 * H) - H * 0.05;
+    lctx.fillStyle = 'rgba(124,111,224,0.6)';
+    lctx.font = `${10 * devicePixelRatio}px monospace`;
+    lctx.fillText('hrm', Math.min(labelX2, W - 30 * devicePixelRatio), labelY2 + 3 * devicePixelRatio);
   }
 
   // Current position glow
@@ -1628,6 +1680,7 @@ function updateMetricsPanel() {
     { label: 'cohere', val: m.spatialCoherence || 0, max: 1, color: '#34d399' },
     { label: 'balance', val: m.compositionBalance || 0, max: 1, color: '#e879f9' },
     { label: 'rhythm', val: m.rhythmicRegularity || 0, max: 1, color: '#f472b6' },
+    { label: 'harmony', val: m.aestheticHarmony || 0, max: 1, color: '#c084fc' },
   ];
 
   const barsEl = document.getElementById('metric-bars');
@@ -1670,6 +1723,22 @@ function updateMetricsPanel() {
         lines.push(`<span class="evo-label">trending</span> <span class="evo-val">↑ ${top[0]}</span>`);
       }
     }
+    // New evolution telemetry
+    if (histEntry.paretoFrontSize !== undefined) {
+      lines.push(`<span class="evo-label">pareto front</span> <span class="evo-val">${histEntry.paretoFrontSize} pieces</span>`);
+    }
+    if (histEntry.avgCrowdingDistance !== undefined) {
+      lines.push(`<span class="evo-label">crowding</span> <span class="evo-val">${histEntry.avgCrowdingDistance.toFixed(3)}</span>`);
+    }
+    if (histEntry.hofSeedCount > 0) {
+      lines.push(`<span class="evo-label">HoF seeds</span> <span class="evo-val" style="color:#a78bfa">${histEntry.hofSeedCount}</span>`);
+    }
+    if (histEntry.agePenaltyApplied > 0) {
+      lines.push(`<span class="evo-label">aged out</span> <span class="evo-val">${histEntry.agePenaltyApplied}</span>`);
+    }
+    if (histEntry.avgAestheticHarmony !== undefined && histEntry.avgAestheticHarmony > 0) {
+      lines.push(`<span class="evo-label">avg harmony</span> <span class="evo-val" style="color:#c084fc">${(histEntry.avgAestheticHarmony * 100).toFixed(0)}%</span>`);
+    }
     telEl.innerHTML = lines.join('<br>');
   } else {
     telEl.innerHTML = '';
@@ -1679,6 +1748,21 @@ function updateMetricsPanel() {
 // ── Metric Scatter Plot — 2D projection of the fitness landscape ──────────────
 // Projects each archive piece into 2D using complexity × structuralInterest
 // with score as point size. Shows evolutionary trajectory and current position.
+// Switchable axis pairs for metric scatter
+const AXIS_PAIRS = [
+  { x: 'complexity', y: 'aestheticHarmony', xLabel: 'complexity', yLabel: 'harmony' },
+  { x: 'complexity', y: 'structuralInterest', xLabel: 'complexity', yLabel: 'structure' },
+  { x: 'fractalDimension', y: 'aestheticHarmony', xLabel: 'fractal dim', yLabel: 'harmony' },
+  { x: 'edgeActivity', y: 'spatialCoherence', xLabel: 'edge activity', yLabel: 'coherence' },
+  { x: 'informationDensity', y: 'compositionBalance', xLabel: 'info density', yLabel: 'balance' },
+];
+let currentAxisPair = 0;
+
+document.getElementById('lp-axes').addEventListener('click', () => {
+  currentAxisPair = (currentAxisPair + 1) % AXIS_PAIRS.length;
+  drawMetricScatter();
+});
+
 function drawMetricScatter() {
   const lc = document.getElementById('landscape-canvas');
   const lctx = lc.getContext('2d');
@@ -1689,18 +1773,19 @@ function drawMetricScatter() {
 
   const piece = archive[currentIndex];
   const curGen = piece?.generation ?? 0;
+  const axes = AXIS_PAIRS[currentAxisPair];
+  const xKey = axes.x;
+  const yKey = axes.y;
 
-  // Use two metric axes that best separate species:
-  // X = complexity (entropy), Y = structural interest
-  // Size = score, Color = species type
-  const xKey = 'complexity';
-  const yKey = 'structuralInterest';
-  const xMax = Math.max(...archive.map(p => p.metrics?.[xKey] ?? 0), 0.01);
-  const yMax = Math.max(...archive.map(p => p.metrics?.[yKey] ?? 0), 0.01);
+  // Normalize: for fractalDimension max is 2, for others scan the data
+  const xNorm = xKey === 'fractalDimension' ? 2 : xKey === 'complexity' ? 2.5 : 1;
+  const yNorm = yKey === 'fractalDimension' ? 2 : yKey === 'complexity' ? 2.5 : 1;
+  const xMax = Math.max(...archive.map(p => (p.metrics?.[xKey] ?? 0) / xNorm), 0.01);
+  const yMax = Math.max(...archive.map(p => (p.metrics?.[yKey] ?? 0) / yNorm), 0.01);
 
-  const pad = 20; // padding in canvas units
-  const toX = v => pad + ((v ?? 0) / xMax) * (W - pad * 2);
-  const toY = v => H - pad - ((v ?? 0) / yMax) * (H - pad * 2);
+  const pad = 20;
+  const toX = v => pad + ((v ?? 0) / xNorm / xMax) * (W - pad * 2);
+  const toY = v => H - pad - ((v ?? 0) / yNorm / yMax) * (H - pad * 2);
 
   // Grid lines
   lctx.strokeStyle = 'rgba(255,255,255,0.04)';
@@ -1716,17 +1801,17 @@ function drawMetricScatter() {
   lctx.fillStyle = 'rgba(255,255,255,0.15)';
   lctx.font = '16px monospace';
   lctx.textAlign = 'center';
-  lctx.fillText('complexity →', W / 2, H - 3);
+  lctx.fillText(axes.xLabel + ' →', W / 2, H - 3);
   lctx.save();
   lctx.translate(10, H / 2);
   lctx.rotate(-Math.PI / 2);
-  lctx.fillText('structure →', 0, 0);
+  lctx.fillText(axes.yLabel + ' →', 0, 0);
   lctx.restore();
 
   // Only draw pieces up to current generation (progressive reveal)
   const visible = archive.filter(p => p.generation <= curGen);
 
-  // Draw evolutionary trajectory line (connect sequential archive entries)
+  // Draw evolutionary trajectory line
   if (visible.length > 1) {
     lctx.beginPath();
     for (let i = 0; i < visible.length; i++) {
@@ -1740,7 +1825,7 @@ function drawMetricScatter() {
     lctx.stroke();
   }
 
-  // Draw epoch-colored background regions (convex hull per epoch - simplified as bounding boxes)
+  // Draw epoch-colored background regions
   const epochGroups = {};
   for (const p of visible) {
     const ep = p.epoch || 'emergence';
@@ -1766,10 +1851,9 @@ function drawMetricScatter() {
     const x = toX(p.metrics?.[xKey]);
     const y = toY(p.metrics?.[yKey]);
     const theme = TYPE_COLORS[p.genome.type] || TYPE_COLORS['2d'];
-    const color = theme.colors[4]; // mid-brightness
-    const radius = 2 + (p.score ?? 0.5) * 4; // size = fitness
+    const color = theme.colors[4];
+    const radius = 2 + (p.score ?? 0.5) * 4;
 
-    // Fade older pieces
     const age = curGen - p.generation;
     const maxAge = Math.max(curGen - archive[0].generation, 1);
     const opacity = 0.15 + 0.7 * (1 - age / maxAge);
@@ -1787,7 +1871,6 @@ function drawMetricScatter() {
     const theme = TYPE_COLORS[piece.genome.type] || TYPE_COLORS['2d'];
     const color = theme.colors[5];
 
-    // Glow ring
     lctx.beginPath();
     lctx.arc(x, y, 10, 0, Math.PI * 2);
     lctx.strokeStyle = color;
@@ -1797,20 +1880,25 @@ function drawMetricScatter() {
     lctx.stroke();
     lctx.shadowBlur = 0;
 
-    // Solid center
     lctx.beginPath();
     lctx.arc(x, y, 4, 0, Math.PI * 2);
     lctx.fillStyle = '#fff';
     lctx.fill();
 
-    // Score label
+    // Score + harmony label
+    const harmonyVal = piece.metrics.aestheticHarmony ?? 0;
     lctx.fillStyle = 'rgba(255,255,255,0.7)';
     lctx.font = '18px monospace';
     lctx.textAlign = 'left';
     lctx.fillText((piece.score * 100).toFixed(0) + '%', x + 14, y + 5);
+    if (harmonyVal > 0) {
+      lctx.fillStyle = 'rgba(124,111,224,0.5)';
+      lctx.font = '13px monospace';
+      lctx.fillText('h:' + (harmonyVal * 100).toFixed(0), x + 14, y + 19);
+    }
   }
 
-  // Legend — small type dots in top-right
+  // Legend
   const legendTypes = [...new Set(visible.map(p => p.genome.type))];
   lctx.font = '14px monospace';
   lctx.textAlign = 'left';
@@ -1828,7 +1916,7 @@ function drawMetricScatter() {
   }
 
   // Update axis label
-  document.getElementById('lp-axes').textContent = `${xKey} × ${yKey}`;
+  document.getElementById('lp-axes').textContent = `${axes.xLabel} × ${axes.yLabel}`;
 }
 
 // ── Start overlay ─────────────────────────────────────────────────────────────
