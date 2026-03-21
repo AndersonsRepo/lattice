@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Tide</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title { pointer-events: auto; }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .hud-title .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .hud-title .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+      pointer-events: auto;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    .hud-hint {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 2;
+      opacity: 0.7;
+      transition: opacity 2s;
+    }
+    .hud-hint.hidden { opacity: 0; }
+    .hud-hint kbd {
+      display: inline-block;
+      padding: 0.1em 0.4em;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 1em;
+      color: var(--text);
+    }
+
+    .panel {
+      position: absolute;
+      top: 4rem;
+      right: 1.25rem;
+      width: 250px;
+      background: rgba(18, 18, 26, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      pointer-events: auto;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      overflow: hidden;
+      z-index: 20;
+    }
+    .panel.collapsed {
+      transform: translateX(calc(100% + 2rem));
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-header span {
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .panel-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.1em;
+      padding: 0.2em 0.5em;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .panel-toggle:hover { color: var(--accent); border-color: var(--accent); }
+
+    .panel-body {
+      padding: 0.75rem 1rem 1rem;
+      max-height: 72vh;
+      overflow-y: auto;
+    }
+    .panel-body::-webkit-scrollbar { width: 4px; }
+    .panel-body::-webkit-scrollbar-track { background: transparent; }
+    .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .ctrl-section {
+      font-size: 0.5rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0.9rem 0 0.45rem;
+      padding-bottom: 0.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .ctrl-section:first-child { margin-top: 0; }
+
+    .ctrl-group { margin-bottom: 0.6rem; }
+
+    .ctrl-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.55rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.25rem;
+    }
+    .ctrl-group label .cv { color: var(--green); text-transform: none; letter-spacing: 0; }
+
+    .ctrl-group input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    .ctrl-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    .mode-row {
+      display: flex;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.4rem;
+    }
+
+    .mode-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.5rem;
+      letter-spacing: 0.05em;
+      padding: 0.25em 0.55em;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mode-btn:hover { border-color: var(--accent); color: var(--text); }
+    .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .mic-status {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      padding: 0.3em 0;
+    }
+    .mic-status:hover { color: var(--text); }
+
+    .mic-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      transition: background 0.3s;
+    }
+    .mic-dot.active { background: var(--green); box-shadow: 0 0 8px rgba(74,222,128,0.5); }
+
+    .spectrum {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 36px;
+      display: flex;
+      align-items: flex-end;
+      gap: 1px;
+      padding: 0 1.25rem;
+      opacity: 0;
+      transition: opacity 0.6s;
+      pointer-events: none;
+      z-index: 8;
+    }
+    .spectrum.visible { opacity: 0.45; }
+    .spectrum .band {
+      flex: 1;
+      background: var(--accent);
+      border-radius: 1px 1px 0 0;
+      min-height: 1px;
+    }
+
+    .vignette {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(10,10,15,0.55) 100%);
+      z-index: 5;
+    }
+
+    @media (max-width: 640px) {
+      .panel { width: 210px; right: 0.75rem; top: 3.5rem; }
+      .hud-top { padding: 0.75rem; }
+      .hud-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="fluidCvs"></canvas>
+  <canvas id="partCvs"></canvas>
+
+  <div class="vignette"></div>
+
+  <div class="hud">
+    <div class="hud-top">
+      <div class="hud-title">
+        <a href="index.html" class="back-link">&larr; lattice</a>
+        <h1>Tide</h1>
+      </div>
+      <div class="hud-stats">
+        <div>particles <span class="val" id="sP">0</span></div>
+        <div>energy <span class="val" id="sE">0.0</span></div>
+        <div>fps <span class="val" id="sF">0</span></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel">
+      <div class="panel-header">
+        <span>Controls</span>
+        <button class="panel-toggle" id="panelClose">Hide</button>
+      </div>
+      <div class="panel-body">
+        <div class="ctrl-section">Visualization</div>
+        <div class="mode-row" id="vizModes">
+          <button class="mode-btn active" data-v="particles">Particles</button>
+          <button class="mode-btn" data-v="density">Density</button>
+          <button class="mode-btn" data-v="velocity">Velocity</button>
+          <button class="mode-btn" data-v="combined">Combined</button>
+        </div>
+
+        <div class="ctrl-section">Palette</div>
+        <div class="mode-row" id="colorModes">
+          <button class="mode-btn active" data-c="purple">Purple</button>
+          <button class="mode-btn" data-c="thermal">Thermal</button>
+          <button class="mode-btn" data-c="ocean">Ocean</button>
+          <button class="mode-btn" data-c="ember">Ember</button>
+          <button class="mode-btn" data-c="mono">Mono</button>
+        </div>
+
+        <div class="ctrl-section">Fluid</div>
+        <div class="ctrl-group">
+          <label>Viscosity <span class="cv" id="dVisc">0.00010</span></label>
+          <input type="range" id="cVisc" min="0" max="100" value="10">
+        </div>
+        <div class="ctrl-group">
+          <label>Diffusion <span class="cv" id="dDiff">0.00001</span></label>
+          <input type="range" id="cDiff" min="0" max="100" value="5">
+        </div>
+        <div class="ctrl-group">
+          <label>Force <span class="cv" id="dForce">8.0</span></label>
+          <input type="range" id="cForce" min="1" max="100" value="40">
+        </div>
+        <div class="ctrl-group">
+          <label>Vorticity <span class="cv" id="dVort">0.50</span></label>
+          <input type="range" id="cVort" min="0" max="100" value="50">
+        </div>
+
+        <div class="ctrl-section">Particles</div>
+        <div class="ctrl-group">
+          <label>Count <span class="cv" id="dCount">8000</span></label>
+          <input type="range" id="cCount" min="500" max="20000" value="8000" step="500">
+        </div>
+        <div class="ctrl-group">
+          <label>Trail <span class="cv" id="dTrail">0.94</span></label>
+          <input type="range" id="cTrail" min="0" max="100" value="70">
+        </div>
+        <div class="ctrl-group">
+          <label>Size <span class="cv" id="dSize">1.5</span></label>
+          <input type="range" id="cSize" min="5" max="40" value="15">
+        </div>
+
+        <div class="ctrl-section">Audio</div>
+        <div class="mic-status" id="micToggle">
+          <span class="mic-dot" id="micDot"></span>
+          <span id="micLabel">Click to enable microphone</span>
+        </div>
+        <div class="ctrl-group">
+          <label>Sensitivity <span class="cv" id="dSens">1.0</span></label>
+          <input type="range" id="cSens" min="5" max="200" value="50">
+        </div>
+        <div class="ctrl-group">
+          <label>Bass Turbulence <span class="cv" id="dBass">0.50</span></label>
+          <input type="range" id="cBass" min="0" max="100" value="50">
+        </div>
+      </div>
+    </div>
+
+    <div class="hud-hint" id="hint">
+      <kbd>Tab</kbd> panel &nbsp;
+      <kbd>Space</kbd> pause &nbsp;
+      <kbd>C</kbd> clear &nbsp;
+      <kbd>R</kbd> reset &nbsp;
+      <kbd>M</kbd> mic &nbsp;
+      <kbd>1-4</kbd> viz &nbsp;
+      <kbd>Click+drag</kbd> inject fluid
+    </div>
+  </div>
+
+  <div class="spectrum" id="spectrum"></div>
+
+<script>
+'use strict';
+
+/* ================================================================
+   STABLE FLUIDS — Jos Stam (1999)
+   Grid-based Navier-Stokes with semi-Lagrangian advection.
+   128×128 grid, dual-canvas rendering (fluid field + particle trails).
+   ================================================================ */
+
+const N = 128;
+const SZ = (N + 2) * (N + 2);
+const IX = (i, j) => i + (N + 2) * j;
+
+/* --- Solver primitives --- */
+
+function addSrc(x, s, dt) {
+  for (let i = 0; i < SZ; i++) x[i] += dt * s[i];
+}
+
+function setBnd(b, x) {
+  for (let i = 1; i <= N; i++) {
+    x[IX(0,     i)] = b === 1 ? -x[IX(1, i)] : x[IX(1, i)];
+    x[IX(N + 1, i)] = b === 1 ? -x[IX(N, i)] : x[IX(N, i)];
+    x[IX(i,     0)] = b === 2 ? -x[IX(i, 1)] : x[IX(i, 1)];
+    x[IX(i, N + 1)] = b === 2 ? -x[IX(i, N)] : x[IX(i, N)];
+  }
+  x[IX(0,0)]     = 0.5 * (x[IX(1,0)]   + x[IX(0,1)]);
+  x[IX(0,N+1)]   = 0.5 * (x[IX(1,N+1)] + x[IX(0,N)]);
+  x[IX(N+1,0)]   = 0.5 * (x[IX(N,0)]   + x[IX(N+1,1)]);
+  x[IX(N+1,N+1)] = 0.5 * (x[IX(N,N+1)] + x[IX(N+1,N)]);
+}
+
+function diffuse(b, x, x0, diff, dt) {
+  if (diff <= 0) { x.set(x0); return; }
+  const a = dt * diff * N * N, c = 1 + 4 * a;
+  for (let k = 0; k < 6; k++) {
+    for (let i = 1; i <= N; i++)
+      for (let j = 1; j <= N; j++)
+        x[IX(i,j)] = (x0[IX(i,j)] + a * (x[IX(i-1,j)] + x[IX(i+1,j)] + x[IX(i,j-1)] + x[IX(i,j+1)])) / c;
+    setBnd(b, x);
+  }
+}
+
+function advect(b, d, d0, u, v, dt) {
+  const dt0 = dt * N;
+  for (let i = 1; i <= N; i++) {
+    for (let j = 1; j <= N; j++) {
+      let x = Math.max(0.5, Math.min(N + 0.5, i - dt0 * u[IX(i,j)]));
+      let y = Math.max(0.5, Math.min(N + 0.5, j - dt0 * v[IX(i,j)]));
+      const i0 = ~~x, j0 = ~~y, s1 = x - i0, t1 = y - j0;
+      d[IX(i,j)] = (1-s1)*((1-t1)*d0[IX(i0,j0)] + t1*d0[IX(i0,j0+1)]) +
+                   s1*((1-t1)*d0[IX(i0+1,j0)] + t1*d0[IX(i0+1,j0+1)]);
+    }
+  }
+  setBnd(b, d);
+}
+
+function project(u, v, p, div) {
+  const h = 1.0 / N;
+  for (let i = 1; i <= N; i++)
+    for (let j = 1; j <= N; j++) {
+      div[IX(i,j)] = -0.5 * h * (u[IX(i+1,j)] - u[IX(i-1,j)] + v[IX(i,j+1)] - v[IX(i,j-1)]);
+      p[IX(i,j)] = 0;
+    }
+  setBnd(0, div); setBnd(0, p);
+  for (let k = 0; k < 6; k++) {
+    for (let i = 1; i <= N; i++)
+      for (let j = 1; j <= N; j++)
+        p[IX(i,j)] = (div[IX(i,j)] + p[IX(i-1,j)] + p[IX(i+1,j)] + p[IX(i,j-1)] + p[IX(i,j+1)]) / 4;
+    setBnd(0, p);
+  }
+  for (let i = 1; i <= N; i++)
+    for (let j = 1; j <= N; j++) {
+      u[IX(i,j)] -= 0.5 * N * (p[IX(i+1,j)] - p[IX(i-1,j)]);
+      v[IX(i,j)] -= 0.5 * N * (p[IX(i,j+1)] - p[IX(i,j-1)]);
+    }
+  setBnd(1, u); setBnd(2, v);
+}
+
+/* --- Full solver steps --- */
+
+// Temp buffers (reused each frame to avoid GC)
+const tmpA = new Float32Array(SZ);
+const tmpB = new Float32Array(SZ);
+
+function velStep(u, v, u0, v0, visc, dt) {
+  addSrc(u, u0, dt); addSrc(v, v0, dt);
+  tmpA.set(u); diffuse(1, u, tmpA, visc, dt);
+  tmpB.set(v); diffuse(2, v, tmpB, visc, dt);
+  project(u, v, u0, v0);
+  tmpA.set(u); tmpB.set(v);
+  advect(1, u, tmpA, tmpA, tmpB, dt);
+  advect(2, v, tmpB, tmpA, tmpB, dt);
+  project(u, v, u0, v0);
+}
+
+function densStep(d, d0, u, v, diff, dt) {
+  addSrc(d, d0, dt);
+  tmpA.set(d); diffuse(0, d, tmpA, diff, dt);
+  tmpA.set(d); advect(0, d, tmpA, u, v, dt);
+}
+
+/* ================================================================
+   STATE
+   ================================================================ */
+
+const uf = new Float32Array(SZ), vf = new Float32Array(SZ);
+const u0 = new Float32Array(SZ), v0 = new Float32Array(SZ);
+const dn = new Float32Array(SZ), d0 = new Float32Array(SZ);
+
+const P = {
+  visc: 0.0001, diff: 0.00001, force: 8.0, vort: 0.5,
+  count: 8000, trail: 0.94, size: 1.5,
+  viz: 'particles', color: 'purple',
+  sens: 1.0, bass: 0.5, paused: false,
+};
+
+let mouseDown = false, mX = 0, mY = 0, pmX = 0, pmY = 0;
+let interacted = false;
+
+/* ================================================================
+   PARTICLES
+   ================================================================ */
+
+let pts = [];
+
+function initPts(n) {
+  pts = [];
+  for (let i = 0; i < n; i++)
+    pts.push({ x: Math.random() * N, y: Math.random() * N, vx: 0, vy: 0, life: 0.3 + Math.random() * 0.7 });
+}
+
+function stepPts() {
+  for (let k = 0; k < pts.length; k++) {
+    const p = pts[k];
+    const gi = Math.max(1, Math.min(N, ~~p.x + 1));
+    const gj = Math.max(1, Math.min(N, ~~p.y + 1));
+    const id = IX(gi, gj);
+    p.vx = p.vx * 0.94 + uf[id] * 0.85;
+    p.vy = p.vy * 0.94 + vf[id] * 0.85;
+    p.x += p.vx; p.y += p.vy;
+    if (p.x < 0) p.x += N; if (p.x >= N) p.x -= N;
+    if (p.y < 0) p.y += N; if (p.y >= N) p.y -= N;
+    const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    p.life = Math.min(1, p.life + (spd > 0.04 ? 0.02 : -0.004));
+    if (p.life <= 0) { p.x = Math.random() * N; p.y = Math.random() * N; p.vx = 0; p.vy = 0; p.life = 0.3; }
+  }
+}
+
+/* ================================================================
+   PALETTES
+   ================================================================ */
+
+const pals = {
+  purple(t) { return [~~(70 + 54*t), ~~(50 + 61*t), ~~(140 + 84*t)]; },
+  thermal(t) {
+    if (t < 0.33) return [~~(t*3*220), ~~(t*3*40), ~~(t*3*80)];
+    if (t < 0.66) { const s=(t-0.33)*3; return [220+~~(s*35), ~~(40+s*160), 0]; }
+    const s=(t-0.66)*3; return [255, 200+~~(s*55), ~~(s*70)];
+  },
+  ocean(t) { return [~~(15*t), ~~(70+150*t), ~~(110+145*t)]; },
+  ember(t) { return [~~(40+215*t), ~~(25+110*Math.pow(t,1.4)), ~~(8+20*t)]; },
+  mono(t)  { const v=~~(200*t); return [v, v, ~~(v*1.06)]; },
+};
+
+function rgba(t, a) {
+  const [r,g,b] = pals[P.color](Math.min(1, Math.max(0, t)));
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+/* ================================================================
+   AUDIO
+   ================================================================ */
+
+let actx = null, analyser = null, micStr = null, fData = null, micOn = false;
+
+async function toggleMic() {
+  if (micOn) { if (micStr) micStr.getTracks().forEach(t => t.stop()); micOn = false; micUI(); return; }
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    micStr = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const src = actx.createMediaStreamSource(micStr);
+    analyser = actx.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.7;
+    src.connect(analyser);
+    fData = new Uint8Array(analyser.frequencyBinCount);
+    micOn = true; micUI();
+  } catch(e) { console.warn('Mic denied', e); }
+}
+
+function micUI() {
+  document.getElementById('micDot').classList.toggle('active', micOn);
+  document.getElementById('micLabel').textContent = micOn ? 'Microphone active' : 'Click to enable microphone';
+  document.getElementById('spectrum').classList.toggle('visible', micOn);
+}
+
+function getBands() {
+  if (!micOn || !analyser) return null;
+  analyser.getByteFrequencyData(fData);
+  const nb = 8, bs = ~~(fData.length / nb), r = new Float32Array(nb);
+  for (let b = 0; b < nb; b++) { let s = 0; for (let i = 0; i < bs; i++) s += fData[b*bs+i]; r[b] = (s/bs/255) * P.sens; }
+  return r;
+}
+
+function buildSpectrum() {
+  const el = document.getElementById('spectrum');
+  for (let i = 0; i < 32; i++) { const d = document.createElement('div'); d.className = 'band'; el.appendChild(d); }
+}
+
+function drawSpectrum() {
+  if (!micOn || !analyser) return;
+  analyser.getByteFrequencyData(fData);
+  const bands = document.querySelectorAll('.spectrum .band');
+  const step = ~~(fData.length / bands.length);
+  bands.forEach((b, i) => { const v = fData[i*step]/255; b.style.height = (v*32+1)+'px'; b.style.opacity = 0.3+v*0.7; });
+}
+
+/* ================================================================
+   CANVAS SETUP
+   ================================================================ */
+
+const fCvs = document.getElementById('fluidCvs');
+const pCvs = document.getElementById('partCvs');
+const fCtx = fCvs.getContext('2d');
+const pCtx = pCvs.getContext('2d');
+let W, H, cW, cH;
+
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  fCvs.width = W; fCvs.height = H;
+  pCvs.width = W; pCvs.height = H;
+  cW = W / N; cH = H / N;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ================================================================
+   INPUT
+   ================================================================ */
+
+pCvs.addEventListener('mousedown',  e => { mouseDown = true; mX = e.clientX; mY = e.clientY; pmX = mX; pmY = mY; });
+pCvs.addEventListener('mousemove',  e => { pmX = mX; pmY = mY; mX = e.clientX; mY = e.clientY; });
+pCvs.addEventListener('mouseup',    () => { mouseDown = false; });
+pCvs.addEventListener('mouseleave', () => { mouseDown = false; });
+
+pCvs.addEventListener('touchstart', e => { e.preventDefault(); const t=e.touches[0]; mouseDown=true; mX=t.clientX; mY=t.clientY; pmX=mX; pmY=mY; }, { passive: false });
+pCvs.addEventListener('touchmove',  e => { e.preventDefault(); const t=e.touches[0]; pmX=mX; pmY=mY; mX=t.clientX; mY=t.clientY; }, { passive: false });
+pCvs.addEventListener('touchend',   () => { mouseDown = false; });
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key.toLowerCase()) {
+    case 'tab': e.preventDefault(); document.getElementById('panel').classList.toggle('collapsed'); break;
+    case ' ':   e.preventDefault(); P.paused = !P.paused; break;
+    case 'c':   clearAll(); break;
+    case 'r':   clearAll(); initPts(P.count); break;
+    case 'm':   toggleMic(); break;
+    case '1':   setViz('particles'); break;
+    case '2':   setViz('density'); break;
+    case '3':   setViz('velocity'); break;
+    case '4':   setViz('combined'); break;
+  }
+});
+
+function clearAll() {
+  uf.fill(0); vf.fill(0); u0.fill(0); v0.fill(0);
+  dn.fill(0); d0.fill(0);
+  pCtx.clearRect(0,0,W,H); fCtx.clearRect(0,0,W,H);
+}
+
+/* ================================================================
+   CONTROLS WIRING
+   ================================================================ */
+
+function setViz(m) {
+  P.viz = m;
+  document.querySelectorAll('#vizModes .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.v === m));
+  pCtx.clearRect(0,0,W,H);
+}
+
+document.querySelectorAll('#vizModes .mode-btn').forEach(b => b.addEventListener('click', () => setViz(b.dataset.v)));
+document.querySelectorAll('#colorModes .mode-btn').forEach(b => b.addEventListener('click', () => {
+  P.color = b.dataset.c;
+  document.querySelectorAll('#colorModes .mode-btn').forEach(x => x.classList.toggle('active', x.dataset.c === P.color));
+}));
+
+document.getElementById('panelClose').addEventListener('click', () => document.getElementById('panel').classList.toggle('collapsed'));
+document.getElementById('micToggle').addEventListener('click', toggleMic);
+
+const SM = {
+  cVisc:  { k:'visc',  d:'dVisc',  fn:v=>Math.pow(10,-5+v/25),  fmt:v=>v.toFixed(5) },
+  cDiff:  { k:'diff',  d:'dDiff',  fn:v=>Math.pow(10,-6+v/25),  fmt:v=>v.toFixed(5) },
+  cForce: { k:'force', d:'dForce', fn:v=>v*0.2,                  fmt:v=>v.toFixed(1) },
+  cVort:  { k:'vort',  d:'dVort',  fn:v=>v/100,                  fmt:v=>v.toFixed(2) },
+  cCount: { k:'count', d:'dCount', fn:v=>Math.round(v),          fmt:v=>String(v) },
+  cTrail: { k:'trail', d:'dTrail', fn:v=>0.85+v/667,             fmt:v=>v.toFixed(2) },
+  cSize:  { k:'size',  d:'dSize',  fn:v=>v/10,                   fmt:v=>v.toFixed(1) },
+  cSens:  { k:'sens',  d:'dSens',  fn:v=>v/50,                   fmt:v=>v.toFixed(1) },
+  cBass:  { k:'bass',  d:'dBass',  fn:v=>v/100,                  fmt:v=>v.toFixed(2) },
+};
+
+for (const [id, cfg] of Object.entries(SM)) {
+  const el = document.getElementById(id);
+  if (!el) continue;
+  el.addEventListener('input', () => {
+    const val = cfg.fn(Number(el.value));
+    P[cfg.k] = val;
+    document.getElementById(cfg.d).textContent = cfg.fmt(val);
+    if (cfg.k === 'count') {
+      while (pts.length < val) pts.push({ x:Math.random()*N, y:Math.random()*N, vx:0, vy:0, life:0.3+Math.random()*0.7 });
+      if (pts.length > val) pts.length = val;
+    }
+  });
+}
+
+/* ================================================================
+   FORCE APPLICATION
+   ================================================================ */
+
+function applyMouse() {
+  if (!mouseDown) return;
+  interacted = true;
+  const gi = Math.max(1, Math.min(N, ~~(mX / cW) + 1));
+  const gj = Math.max(1, Math.min(N, ~~(mY / cH) + 1));
+  const dx = (mX - pmX) * P.force;
+  const dy = (mY - pmY) * P.force;
+  const R = 5;
+  for (let di = -R; di <= R; di++) {
+    for (let dj = -R; dj <= R; dj++) {
+      const ci = gi+di, cj = gj+dj;
+      if (ci<1||ci>N||cj<1||cj>N) continue;
+      const dist = Math.sqrt(di*di + dj*dj);
+      if (dist > R) continue;
+      const f = 1 - dist / R;
+      const id = IX(ci, cj);
+      u0[id] += dx * f;
+      v0[id] += dy * f;
+      // Curl component for natural vortex formation
+      if (P.vort > 0) {
+        u0[id] += -dj * P.vort * P.force * f * 0.35;
+        v0[id] +=  di * P.vort * P.force * f * 0.35;
+      }
+      d0[id] += 60 * f;
+    }
+  }
+}
+
+function applyAudio() {
+  const bands = getBands();
+  if (!bands) return;
+  interacted = true;
+  const bass = (bands[0]+bands[1]) * 0.5;
+  const mid  = (bands[2]+bands[3]+bands[4]) / 3;
+  const high = (bands[5]+bands[6]+bands[7]) / 3;
+
+  // Bass → swirling turbulence field
+  if (bass > 0.12) {
+    const t = performance.now() * 0.001;
+    for (let i = 1; i <= N; i += 3)
+      for (let j = 1; j <= N; j += 3) {
+        const id = IX(i,j);
+        const a = Math.sin(i*0.08 + t*1.2) * Math.cos(j*0.08 + t*0.7);
+        u0[id] += Math.cos(a) * bass * P.bass * 10;
+        v0[id] += Math.sin(a) * bass * P.bass * 10;
+      }
+  }
+
+  // Mid → density injection at boundaries
+  if (mid > 0.08) {
+    for (let i = 1; i <= N; i += 2) {
+      d0[IX(i,1)] += mid * 40;
+      d0[IX(i,N)] += mid * 40;
+      d0[IX(1,i)] += mid * 30;
+      d0[IX(N,i)] += mid * 30;
+    }
+  }
+
+  // High → random sparks
+  if (high > 0.15) {
+    for (let k = 0, n = ~~(high*12); k < n; k++) {
+      const ri = ~~(Math.random()*N)+1, rj = ~~(Math.random()*N)+1;
+      d0[IX(ri,rj)] += high * 90;
+      const a = Math.random() * 6.283;
+      u0[IX(ri,rj)] += Math.cos(a) * high * 6;
+      v0[IX(ri,rj)] += Math.sin(a) * high * 6;
+    }
+  }
+}
+
+/* ================================================================
+   RENDERING
+   ================================================================ */
+
+function renderDensity() {
+  const img = fCtx.createImageData(W, H);
+  const data = img.data;
+  for (let py = 0; py < H; py++) {
+    const gj = Math.min(N, ~~(py / cH) + 1);
+    for (let px = 0; px < W; px++) {
+      const gi = Math.min(N, ~~(px / cW) + 1);
+      const d = Math.min(1, dn[IX(gi,gj)] * 0.015);
+      if (d < 0.004) continue;
+      const [r,g,b] = pals[P.color](d);
+      const off = (py*W+px)*4;
+      data[off]=r; data[off+1]=g; data[off+2]=b; data[off+3]=~~(d*255);
+    }
+  }
+  fCtx.putImageData(img, 0, 0);
+}
+
+function renderVelocity() {
+  fCtx.clearRect(0,0,W,H);
+  const step = Math.max(2, ~~(N/42));
+  for (let i = 1; i <= N; i += step)
+    for (let j = 1; j <= N; j += step) {
+      const id = IX(i,j);
+      const ux = uf[id], vy = vf[id];
+      const mag = Math.sqrt(ux*ux + vy*vy);
+      if (mag < 0.008) continue;
+      const px = (i-0.5)*cW, py = (j-0.5)*cH;
+      const t = Math.min(1, mag*0.6);
+      fCtx.beginPath();
+      fCtx.moveTo(px, py);
+      fCtx.lineTo(px + ux*14*cW, py + vy*14*cH);
+      fCtx.strokeStyle = rgba(t, 0.35+t*0.55);
+      fCtx.lineWidth = 1+t;
+      fCtx.stroke();
+      // Arrow tip
+      const angle = Math.atan2(vy, ux), hl = 3+mag*5;
+      fCtx.beginPath();
+      fCtx.moveTo(px + ux*14*cW, py + vy*14*cH);
+      fCtx.lineTo(px + ux*14*cW - Math.cos(angle-0.4)*hl, py + vy*14*cH - Math.sin(angle-0.4)*hl);
+      fCtx.strokeStyle = rgba(t, 0.25);
+      fCtx.lineWidth = 1;
+      fCtx.stroke();
+    }
+}
+
+function renderParticles() {
+  pCtx.fillStyle = 'rgba(10,10,15,' + (1 - P.trail) + ')';
+  pCtx.fillRect(0,0,W,H);
+  for (let k = 0; k < pts.length; k++) {
+    const p = pts[k];
+    if (p.life < 0.04) continue;
+    const px = p.x*cW, py = p.y*cH;
+    const spd = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+    const t = Math.min(1, spd*1.6);
+    const alpha = p.life * (0.25 + t*0.75);
+    const sz = P.size * (0.4 + t*0.6);
+    pCtx.fillStyle = rgba(t, alpha);
+    pCtx.fillRect(px-sz*0.5, py-sz*0.5, sz, sz);
+    // Glow for fast particles
+    if (spd > 0.4) {
+      pCtx.fillStyle = rgba(t, alpha*0.12);
+      const gs = sz*3.5;
+      pCtx.fillRect(px-gs*0.5, py-gs*0.5, gs, gs);
+    }
+  }
+}
+
+function renderFrame() {
+  const m = P.viz;
+  if (m === 'density' || m === 'combined') renderDensity();
+  else fCtx.clearRect(0,0,W,H);
+  if (m === 'velocity' || m === 'combined') { if (m === 'velocity') fCtx.clearRect(0,0,W,H); renderVelocity(); }
+  if (m === 'particles' || m === 'combined') renderParticles();
+  else pCtx.clearRect(0,0,W,H);
+}
+
+/* ================================================================
+   MAIN LOOP
+   ================================================================ */
+
+const DT = 0.1;
+let frameN = 0, lastFT = performance.now(), fpsVal = 0;
+
+function totalEnergy() {
+  let e = 0;
+  for (let i = 1; i <= N; i++)
+    for (let j = 1; j <= N; j++) { const id = IX(i,j); e += uf[id]*uf[id] + vf[id]*vf[id]; }
+  return Math.sqrt(e / (N*N));
+}
+
+function frame() {
+  requestAnimationFrame(frame);
+  frameN++;
+  const now = performance.now();
+  if (now - lastFT >= 500) {
+    fpsVal = ~~(frameN / ((now - lastFT) / 1000));
+    frameN = 0; lastFT = now;
+    document.getElementById('sF').textContent = fpsVal;
+    document.getElementById('sP').textContent = pts.length;
+    document.getElementById('sE').textContent = totalEnergy().toFixed(2);
+  }
+  if (P.paused) return;
+
+  u0.fill(0); v0.fill(0); d0.fill(0);
+  applyMouse();
+  applyAudio();
+  velStep(uf, vf, u0, v0, P.visc, DT);
+  densStep(dn, d0, uf, vf, P.diff, DT);
+  stepPts();
+  renderFrame();
+  if (micOn) drawSpectrum();
+  if (interacted) document.getElementById('hint').classList.add('hidden');
+}
+
+/* ================================================================
+   INIT — seed counter-rotating vortex pair
+   ================================================================ */
+
+buildSpectrum();
+initPts(P.count);
+
+// Two counter-rotating vortices for an immediate visual
+const cx1 = ~~(N*0.35), cy1 = ~~(N*0.5);
+const cx2 = ~~(N*0.65), cy2 = ~~(N*0.5);
+for (let di = -10; di <= 10; di++)
+  for (let dj = -10; dj <= 10; dj++) {
+    const dist = Math.sqrt(di*di + dj*dj);
+    if (dist > 10) continue;
+    const f = 1 - dist / 10;
+    const i1=cx1+di, j1=cy1+dj, i2=cx2+di, j2=cy2+dj;
+    if (i1>=1&&i1<=N&&j1>=1&&j1<=N) { uf[IX(i1,j1)] = -dj*4*f; vf[IX(i1,j1)] = di*4*f; dn[IX(i1,j1)] = 50*f; }
+    if (i2>=1&&i2<=N&&j2>=1&&j2<=N) { uf[IX(i2,j2)] = dj*4*f; vf[IX(i2,j2)] = -di*4*f; dn[IX(i2,j2)] = 50*f; }
+  }
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
