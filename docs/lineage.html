@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lineage — Lattice Phylogenetic Tree</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+    canvas { display: block; cursor: grab; }
+    canvas.dragging { cursor: grabbing; }
+
+    /* Start overlay */
+    #start-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: opacity 0.6s ease;
+    }
+    #start-overlay.hidden { opacity: 0; pointer-events: none; }
+    #start-overlay h1 {
+      font-size: 2.5rem; font-weight: 300;
+      letter-spacing: 0.3em; text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+      margin-bottom: 0.5rem;
+    }
+    #start-overlay p {
+      color: var(--text-dim); font-size: 0.8rem;
+      letter-spacing: 0.1em; margin-top: 0.5rem;
+    }
+    #start-overlay .stats {
+      display: flex; gap: 2rem; margin-top: 1.5rem;
+    }
+    #start-overlay .stat-val {
+      font-size: 1.5rem; color: var(--accent); text-align: center;
+    }
+    #start-overlay .stat-lbl {
+      font-size: 0.65rem; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+
+    /* Detail panel */
+    #detail-panel {
+      position: fixed; top: 1rem; right: 1rem; z-index: 50;
+      width: 320px; max-height: calc(100vh - 2rem);
+      background: rgba(18,18,26,0.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: none;
+      overflow-y: auto;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+    #detail-panel.visible { display: block; }
+    #detail-panel h2 {
+      font-size: 0.85rem; font-weight: 500;
+      color: var(--accent); margin-bottom: 0.75rem;
+      letter-spacing: 0.08em;
+    }
+    .detail-row {
+      display: flex; justify-content: space-between;
+      font-size: 0.7rem; padding: 0.3rem 0;
+      border-bottom: 1px solid rgba(30,30,46,0.5);
+    }
+    .detail-row .label { color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+    .detail-row .value { color: var(--text); }
+    .detail-art {
+      margin-top: 0.75rem;
+      padding: 0.5rem;
+      background: var(--bg);
+      border-radius: 6px;
+      font-size: 0.45rem;
+      line-height: 1.1;
+      white-space: pre;
+      overflow: hidden;
+      max-height: 200px;
+    }
+    .detail-metrics {
+      margin-top: 0.75rem;
+    }
+    .metric-bar-row {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.6rem; margin-bottom: 0.3rem;
+    }
+    .metric-bar-row .m-label {
+      width: 60px; text-align: right;
+      color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.05em; font-size: 0.55rem;
+    }
+    .metric-bar-track {
+      flex: 1; height: 4px;
+      background: var(--border); border-radius: 2px;
+    }
+    .metric-bar-fill {
+      height: 100%; border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+    .metric-bar-row .m-val {
+      width: 30px; font-size: 0.6rem; color: var(--text-dim);
+    }
+    .lineage-chain {
+      margin-top: 0.75rem;
+      font-size: 0.6rem; color: var(--text-dim);
+      word-break: break-all;
+    }
+    .lineage-chain .marker { color: var(--amber); }
+    .lineage-chain .seed { color: var(--accent); cursor: pointer; }
+    .lineage-chain .seed:hover { text-decoration: underline; }
+
+    /* Controls */
+    #controls {
+      position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%);
+      z-index: 50;
+      display: flex; gap: 0.5rem; align-items: center;
+      background: rgba(18,18,26,0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 0.5rem 1rem;
+    }
+    #controls button {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: inherit;
+      font-size: 0.65rem; padding: 0.3rem 0.7rem;
+      border-radius: 12px; cursor: pointer;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    #controls button:hover { border-color: var(--accent); color: var(--text); }
+    #controls button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* Legend */
+    #legend {
+      position: fixed; bottom: 1rem; left: 1rem; z-index: 50;
+      background: rgba(18,18,26,0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      font-size: 0.6rem;
+    }
+    #legend h3 {
+      font-size: 0.6rem; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 0.4rem;
+      margin-bottom: 0.2rem; color: var(--text-dim);
+    }
+    .legend-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+
+    /* Home link */
+    #home-link {
+      position: fixed; top: 1rem; left: 1rem; z-index: 50;
+      color: var(--text-dim); text-decoration: none;
+      font-size: 0.7rem; letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); }
+
+    /* Title bar */
+    #title-bar {
+      position: fixed; top: 1rem; left: 50%; transform: translateX(-50%);
+      z-index: 50; text-align: center;
+    }
+    #title-bar h1 {
+      font-size: 1rem; font-weight: 300;
+      letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+    #title-bar p {
+      font-size: 0.6rem; color: var(--text-dim);
+      letter-spacing: 0.08em; margin-top: 0.2rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="start-overlay">
+    <h1>Lineage</h1>
+    <p>the phylogenetic tree of digital life</p>
+    <div class="stats">
+      <div><div class="stat-val" id="s-species">—</div><div class="stat-lbl">Species</div></div>
+      <div><div class="stat-val" id="s-pieces">—</div><div class="stat-lbl">Specimens</div></div>
+      <div><div class="stat-val" id="s-depth">—</div><div class="stat-lbl">Max Depth</div></div>
+      <div><div class="stat-val" id="s-gens">—</div><div class="stat-lbl">Generations</div></div>
+    </div>
+    <p style="margin-top: 2rem; opacity: 0.4;">click to enter</p>
+  </div>
+
+  <a href="index.html" id="home-link">← Lattice</a>
+  <div id="title-bar"><h1>Lineage</h1><p id="info-line">phylogenetic tree</p></div>
+
+  <canvas id="canvas"></canvas>
+
+  <div id="detail-panel">
+    <h2 id="d-title">—</h2>
+    <div id="d-rows"></div>
+    <div class="detail-metrics" id="d-metrics"></div>
+    <div class="lineage-chain" id="d-lineage"></div>
+    <div class="detail-art" id="d-art"></div>
+  </div>
+
+  <div id="legend"></div>
+
+  <div id="controls">
+    <button id="btn-reset" title="Reset view (R)">Reset</button>
+    <button id="btn-layout" title="Toggle layout (L)">Tree</button>
+    <button id="btn-labels" title="Toggle labels (N)">Labels</button>
+    <button id="btn-glow" title="Toggle glow (G)" class="active">Glow</button>
+  </div>
+
+<script>
+(function(){
+  const TYPE_COLORS = {
+    '1d': '#9d7af5', '2d': '#4ade80', 'lsystem': '#f5b84a',
+    'reaction-diffusion': '#d44af5', 'voronoi': '#4ad4f5', 'wfc': '#f54a9d',
+    'spirograph': '#d4f54a', 'attractor': '#f59d6b', 'julia': '#4af5d4',
+    'noise': '#d4d44a', 'flowfield': '#4ad4d4'
+  };
+
+  const METRIC_LABELS = {
+    complexity: 'CX', symmetry: 'SY', density: 'DN', novelty: 'NV',
+    edgeActivity: 'EA', structuralInterest: 'SI', fractalDimension: 'FD',
+    informationDensity: 'ID'
+  };
+
+  const METRIC_MAX = {
+    complexity: 3, symmetry: 1, density: 1, novelty: 1,
+    edgeActivity: 1, structuralInterest: 1, fractalDimension: 2, informationDensity: 1
+  };
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H;
+  let nodes = [], edges = [];
+  let seedToNode = {};
+  let idToNode = {};
+
+  // Camera
+  let camX = 0, camY = 0, camZoom = 1;
+  let dragStart = null, camStart = null;
+  let hoveredNode = null, selectedNode = null;
+
+  // Options
+  let layoutMode = 'tree'; // 'tree' or 'force'
+  let showLabels = false;
+  let showGlow = true;
+  let forceIterations = 0;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Load data
+  fetch('gallery.json').then(r => r.json()).then(data => {
+    buildGraph(data);
+    populateOverlay(data);
+    buildLegend();
+    requestAnimationFrame(animate);
+  });
+
+  function buildGraph(data) {
+    const seen = new Map();
+
+    // Collect all unique pieces
+    for (const src of ['hallOfFame', 'archive', 'population']) {
+      for (const p of (data[src] || [])) {
+        const id = p.id;
+        if (!id || seen.has(id)) continue;
+        const g = p.genome || {};
+        const seedHex = g.seed ? (g.seed >>> 0).toString(16).slice(0, 8) : '';
+        const lineage = g.lineage || [];
+        const isHoF = (data.hallOfFame || []).some(h => h.id === id);
+
+        const node = {
+          id, type: g.type || '?', seed: seedHex,
+          lineage: lineage,
+          mutations: g.mutations || 0,
+          score: p.score || 0,
+          generation: p.generation || 0,
+          metrics: p.metrics || {},
+          rendered: p.rendered || '',
+          isHoF,
+          // Physics
+          x: 0, y: 0, vx: 0, vy: 0,
+          radius: 6 + (p.score || 0) * 14,
+          color: TYPE_COLORS[g.type] || '#7c6fe0',
+          children: [],
+          parent: null,
+          depth: 0
+        };
+        seen.set(id, node);
+        if (seedHex) seedToNode[seedHex] = node;
+        idToNode[id] = node;
+      }
+    }
+
+    nodes = Array.from(seen.values());
+
+    // Build edges based on lineage
+    // The lineage array contains ancestor seed hashes. The last non-marker
+    // entry is the immediate parent seed.
+    for (const node of nodes) {
+      const lin = node.lineage.filter(s => s !== '×' && s !== 'typeswap');
+      if (lin.length < 2) continue;
+
+      // Try to find the parent: it's the second-to-last seed
+      // (last is often the piece's own seed)
+      const parentSeed = lin[lin.length - 2];
+      const parentNode = seedToNode[parentSeed];
+      if (parentNode && parentNode !== node) {
+        edges.push({ from: parentNode, to: node });
+        node.parent = parentNode;
+        parentNode.children.push(node);
+      }
+    }
+
+    // Compute depth
+    function setDepth(n, d) {
+      n.depth = d;
+      for (const c of n.children) setDepth(c, d + 1);
+    }
+    const roots = nodes.filter(n => !n.parent);
+    roots.forEach(r => setDepth(r, 0));
+
+    // Initial layout
+    applyTreeLayout();
+  }
+
+  function applyTreeLayout() {
+    const roots = nodes.filter(n => !n.parent);
+    const maxDepth = Math.max(...nodes.map(n => n.depth), 0);
+    const levelSpacing = 120;
+    const nodeSpacing = 80;
+
+    // Group by depth
+    const levels = {};
+    for (const n of nodes) {
+      if (!levels[n.depth]) levels[n.depth] = [];
+      levels[n.depth].push(n);
+    }
+
+    // Sort each level by generation, then score
+    for (const d in levels) {
+      levels[d].sort((a, b) => a.generation - b.generation || b.score - a.score);
+    }
+
+    // Position nodes
+    for (const d in levels) {
+      const arr = levels[d];
+      const totalWidth = (arr.length - 1) * nodeSpacing;
+      arr.forEach((n, i) => {
+        n.x = i * nodeSpacing - totalWidth / 2;
+        n.y = parseInt(d) * levelSpacing - (maxDepth * levelSpacing) / 2;
+      });
+    }
+
+    // Center camera
+    camX = 0; camY = 0;
+    camZoom = Math.min(W / ((nodes.length * nodeSpacing) + 200), H / ((maxDepth + 2) * levelSpacing), 1.5);
+    camZoom = Math.max(camZoom, 0.3);
+  }
+
+  function applyForceLayout() {
+    // Scatter initially
+    nodes.forEach(n => {
+      n.x = (Math.random() - 0.5) * 600;
+      n.y = (Math.random() - 0.5) * 400;
+      n.vx = 0; n.vy = 0;
+    });
+    forceIterations = 300;
+  }
+
+  function stepForce() {
+    if (forceIterations <= 0) return;
+    forceIterations--;
+    const alpha = 0.3 * (forceIterations / 300);
+
+    // Repulsion between all nodes
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const repulse = 8000 / (dist * dist);
+        const fx = (dx / dist) * repulse * alpha;
+        const fy = (dy / dist) * repulse * alpha;
+        a.vx -= fx; a.vy -= fy;
+        b.vx += fx; b.vy += fy;
+      }
+    }
+
+    // Attraction along edges
+    for (const e of edges) {
+      const dx = e.to.x - e.from.x;
+      const dy = e.to.y - e.from.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const attract = (dist - 100) * 0.02 * alpha;
+      const fx = (dx / dist) * attract;
+      const fy = (dy / dist) * attract;
+      e.from.vx += fx; e.from.vy += fy;
+      e.to.vx -= fx; e.to.vy -= fy;
+    }
+
+    // Center gravity
+    for (const n of nodes) {
+      n.vx -= n.x * 0.001 * alpha;
+      n.vy -= n.y * 0.001 * alpha;
+      n.x += n.vx; n.y += n.vy;
+      n.vx *= 0.85; n.vy *= 0.85;
+    }
+  }
+
+  function populateOverlay(data) {
+    const types = new Set(nodes.map(n => n.type));
+    const maxDepth = Math.max(...nodes.map(n => n.depth), 0);
+    document.getElementById('s-species').textContent = types.size;
+    document.getElementById('s-pieces').textContent = nodes.length;
+    document.getElementById('s-depth').textContent = maxDepth;
+    document.getElementById('s-gens').textContent = data.generation || '?';
+  }
+
+  function buildLegend() {
+    const types = [...new Set(nodes.map(n => n.type))].sort();
+    const legend = document.getElementById('legend');
+    let html = '<h3>Species</h3>';
+    for (const t of types) {
+      const color = TYPE_COLORS[t] || '#7c6fe0';
+      const count = nodes.filter(n => n.type === t).length;
+      html += `<div class="legend-item"><span class="legend-dot" style="background:${color}"></span>${t} (${count})</div>`;
+    }
+    html += '<div class="legend-item" style="margin-top:0.4rem"><span class="legend-dot" style="background:#fff;box-shadow:0 0 6px #fff"></span>Hall of Fame</div>';
+    legend.innerHTML = html;
+  }
+
+  // World <-> screen coords
+  function worldToScreen(wx, wy) {
+    return [W / 2 + (wx - camX) * camZoom, H / 2 + (wy - camY) * camZoom];
+  }
+  function screenToWorld(sx, sy) {
+    return [(sx - W / 2) / camZoom + camX, (sy - H / 2) / camZoom + camY];
+  }
+
+  function nodeAtScreen(sx, sy) {
+    const [wx, wy] = screenToWorld(sx, sy);
+    let best = null, bestDist = Infinity;
+    for (const n of nodes) {
+      const dx = n.x - wx, dy = n.y - wy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const hitR = n.radius / camZoom + 8 / camZoom;
+      if (dist < hitR && dist < bestDist) {
+        best = n; bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  // Drawing
+  function draw() {
+    ctx.fillStyle = '#0a0a0f';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(30,30,46,0.3)';
+    ctx.lineWidth = 1;
+    const gridStep = 100 * camZoom;
+    if (gridStep > 20) {
+      const ox = (W / 2 - camX * camZoom) % gridStep;
+      const oy = (H / 2 - camY * camZoom) % gridStep;
+      for (let x = ox; x < W; x += gridStep) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = oy; y < H; y += gridStep) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+    }
+
+    // Draw edges
+    for (const e of edges) {
+      const [x1, y1] = worldToScreen(e.from.x, e.from.y);
+      const [x2, y2] = worldToScreen(e.to.x, e.to.y);
+
+      // Check if either end is selected — highlight the lineage chain
+      const isHighlighted = selectedNode &&
+        (isAncestorOf(e.from, selectedNode) && isAncestorOf(e.to, selectedNode));
+
+      if (showGlow && isHighlighted) {
+        ctx.strokeStyle = 'rgba(124,111,224,0.6)';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#7c6fe0';
+        ctx.shadowBlur = 10;
+      } else {
+        ctx.strokeStyle = isHighlighted ? 'rgba(124,111,224,0.5)' : 'rgba(124,111,224,0.12)';
+        ctx.lineWidth = isHighlighted ? 2 : 1;
+        ctx.shadowBlur = 0;
+      }
+
+      // Curved edge
+      const mx = (x1 + x2) / 2;
+      const my = (y1 + y2) / 2 - 20 * camZoom;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.quadraticCurveTo(mx, my, x2, y2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Arrow at target
+      if (camZoom > 0.4) {
+        const angle = Math.atan2(y2 - my, x2 - mx);
+        const arrowLen = 6;
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - arrowLen * Math.cos(angle - 0.3), y2 - arrowLen * Math.sin(angle - 0.3));
+        ctx.lineTo(x2 - arrowLen * Math.cos(angle + 0.3), y2 - arrowLen * Math.sin(angle + 0.3));
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // Draw nodes
+    const time = Date.now() / 1000;
+    for (const n of nodes) {
+      const [sx, sy] = worldToScreen(n.x, n.y);
+      if (sx < -50 || sx > W + 50 || sy < -50 || sy > H + 50) continue;
+
+      const r = n.radius * camZoom;
+      const isSelected = n === selectedNode;
+      const isHovered = n === hoveredNode;
+
+      // Glow for HoF
+      if (showGlow && n.isHoF) {
+        const pulse = 0.5 + 0.5 * Math.sin(time * 2 + n.generation);
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 12 + pulse * 8;
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.beginPath();
+        ctx.arc(sx, sy, r + 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Outer ring for selected
+      if (isSelected) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r + 5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Node body
+      if (showGlow) {
+        ctx.shadowColor = n.color;
+        ctx.shadowBlur = isHovered ? 20 : 8;
+      }
+      ctx.fillStyle = n.color;
+      ctx.globalAlpha = isHovered || isSelected ? 1 : 0.85;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+
+      // Inner dot for score
+      if (r > 4) {
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.beginPath();
+        ctx.arc(sx - r * 0.25, sy - r * 0.25, r * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Label
+      if (showLabels && camZoom > 0.5) {
+        ctx.fillStyle = 'rgba(200,200,212,0.7)';
+        ctx.font = `${Math.max(8, 10 * camZoom)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`g${n.generation}`, sx, sy + r + 12 * camZoom);
+        if (camZoom > 0.8) {
+          ctx.fillStyle = 'rgba(110,110,130,0.6)';
+          ctx.font = `${Math.max(7, 8 * camZoom)}px monospace`;
+          ctx.fillText(`${(n.score * 100).toFixed(0)}%`, sx, sy + r + 22 * camZoom);
+        }
+      }
+    }
+
+    // Info line
+    const infoEl = document.getElementById('info-line');
+    if (hoveredNode) {
+      infoEl.textContent = `${hoveredNode.type} · gen ${hoveredNode.generation} · ${(hoveredNode.score * 100).toFixed(1)}%`;
+    } else {
+      infoEl.textContent = `${nodes.length} specimens · ${edges.length} lineage connections`;
+    }
+  }
+
+  function isAncestorOf(ancestor, descendant) {
+    let n = descendant;
+    while (n) {
+      if (n === ancestor) return true;
+      n = n.parent;
+    }
+    return false;
+  }
+
+  function showDetail(node) {
+    const panel = document.getElementById('detail-panel');
+    panel.classList.add('visible');
+    document.getElementById('d-title').textContent =
+      `${node.type}${node.isHoF ? ' ★' : ''} — Gen ${node.generation}`;
+    document.getElementById('d-title').style.color = node.color;
+
+    let rows = '';
+    rows += detailRow('ID', node.id);
+    rows += detailRow('Score', (node.score * 100).toFixed(1) + '%');
+    rows += detailRow('Species', node.type);
+    rows += detailRow('Generation', node.generation);
+    rows += detailRow('Mutations', node.mutations);
+    rows += detailRow('Seed', node.seed);
+    rows += detailRow('Depth', node.depth);
+    rows += detailRow('Children', node.children.length);
+    document.getElementById('d-rows').innerHTML = rows;
+
+    // Metrics
+    let mHtml = '';
+    const metricKeys = ['complexity','symmetry','density','novelty','edgeActivity','structuralInterest','informationDensity'];
+    for (const key of metricKeys) {
+      const val = node.metrics[key] || 0;
+      const max = METRIC_MAX[key] || 1;
+      const pct = Math.min(100, (val / max) * 100);
+      const label = METRIC_LABELS[key] || key.slice(0, 2).toUpperCase();
+      mHtml += `<div class="metric-bar-row">
+        <span class="m-label">${label}</span>
+        <div class="metric-bar-track"><div class="metric-bar-fill" style="width:${pct}%;background:${node.color}"></div></div>
+        <span class="m-val">${pct.toFixed(0)}%</span>
+      </div>`;
+    }
+    document.getElementById('d-metrics').innerHTML = mHtml;
+
+    // Lineage chain
+    let linHtml = '<strong style="color:var(--text-dim)">Lineage:</strong> ';
+    for (const entry of node.lineage) {
+      if (entry === '×' || entry === 'typeswap') {
+        linHtml += `<span class="marker">${entry}</span> → `;
+      } else {
+        const hasNode = !!seedToNode[entry];
+        if (hasNode) {
+          linHtml += `<span class="seed" data-seed="${entry}">${entry}</span> → `;
+        } else {
+          linHtml += `${entry} → `;
+        }
+      }
+    }
+    linHtml = linHtml.replace(/ → $/, '');
+    document.getElementById('d-lineage').innerHTML = linHtml;
+
+    // Click handler for seed links
+    document.querySelectorAll('.seed[data-seed]').forEach(el => {
+      el.addEventListener('click', () => {
+        const target = seedToNode[el.dataset.seed];
+        if (target) {
+          selectedNode = target;
+          camX = target.x;
+          camY = target.y;
+          showDetail(target);
+        }
+      });
+    });
+
+    // Rendered art
+    const artEl = document.getElementById('d-art');
+    if (node.rendered) {
+      artEl.style.display = 'block';
+      artEl.textContent = node.rendered;
+      artEl.style.color = node.color;
+    } else {
+      artEl.style.display = 'none';
+    }
+  }
+
+  function detailRow(label, value) {
+    return `<div class="detail-row"><span class="label">${label}</span><span class="value">${value}</span></div>`;
+  }
+
+  // Interaction
+  canvas.addEventListener('mousedown', e => {
+    const node = nodeAtScreen(e.clientX, e.clientY);
+    if (node) {
+      selectedNode = node;
+      showDetail(node);
+    } else {
+      dragStart = { x: e.clientX, y: e.clientY };
+      camStart = { x: camX, y: camY };
+      canvas.classList.add('dragging');
+    }
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    if (dragStart) {
+      camX = camStart.x - (e.clientX - dragStart.x) / camZoom;
+      camY = camStart.y - (e.clientY - dragStart.y) / camZoom;
+    } else {
+      hoveredNode = nodeAtScreen(e.clientX, e.clientY);
+      canvas.style.cursor = hoveredNode ? 'pointer' : 'grab';
+    }
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    dragStart = null; camStart = null;
+    canvas.classList.remove('dragging');
+  });
+
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    const [wx, wy] = screenToWorld(e.clientX, e.clientY);
+    camZoom *= factor;
+    camZoom = Math.max(0.15, Math.min(5, camZoom));
+    // Zoom toward cursor
+    camX = wx - (e.clientX - W / 2) / camZoom;
+    camY = wy - (e.clientY - H / 2) / camZoom;
+  }, { passive: false });
+
+  // Touch support
+  let lastTouchDist = 0;
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      const node = nodeAtScreen(t.clientX, t.clientY);
+      if (node) {
+        selectedNode = node;
+        showDetail(node);
+      } else {
+        dragStart = { x: t.clientX, y: t.clientY };
+        camStart = { x: camX, y: camY };
+      }
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', e => {
+    if (e.touches.length === 1 && dragStart) {
+      const t = e.touches[0];
+      camX = camStart.x - (t.clientX - dragStart.x) / camZoom;
+      camY = camStart.y - (t.clientY - dragStart.y) / camZoom;
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (lastTouchDist) {
+        camZoom *= dist / lastTouchDist;
+        camZoom = Math.max(0.15, Math.min(5, camZoom));
+      }
+      lastTouchDist = dist;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', () => {
+    dragStart = null; camStart = null; lastTouchDist = 0;
+  });
+
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (e.key === 'r' || e.key === 'R') {
+      if (layoutMode === 'tree') applyTreeLayout();
+      else { applyForceLayout(); }
+    }
+    if (e.key === 'l' || e.key === 'L') toggleLayout();
+    if (e.key === 'n' || e.key === 'N') toggleLabels();
+    if (e.key === 'g' || e.key === 'G') toggleGlow();
+    if (e.key === 'Escape') {
+      selectedNode = null;
+      document.getElementById('detail-panel').classList.remove('visible');
+    }
+  });
+
+  // Buttons
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    if (layoutMode === 'tree') applyTreeLayout();
+    else applyForceLayout();
+  });
+
+  function toggleLayout() {
+    layoutMode = layoutMode === 'tree' ? 'force' : 'tree';
+    document.getElementById('btn-layout').textContent = layoutMode === 'tree' ? 'Tree' : 'Force';
+    if (layoutMode === 'tree') applyTreeLayout();
+    else applyForceLayout();
+  }
+  document.getElementById('btn-layout').addEventListener('click', toggleLayout);
+
+  function toggleLabels() {
+    showLabels = !showLabels;
+    document.getElementById('btn-labels').classList.toggle('active', showLabels);
+  }
+  document.getElementById('btn-labels').addEventListener('click', toggleLabels);
+
+  function toggleGlow() {
+    showGlow = !showGlow;
+    document.getElementById('btn-glow').classList.toggle('active', showGlow);
+  }
+  document.getElementById('btn-glow').addEventListener('click', toggleGlow);
+
+  // Start overlay
+  document.getElementById('start-overlay').addEventListener('click', () => {
+    document.getElementById('start-overlay').classList.add('hidden');
+  });
+
+  // Animation loop
+  function animate() {
+    if (layoutMode === 'force') stepForce();
+    draw();
+    requestAnimationFrame(animate);
+  }
+})();
+</script>
+</body>
+</html>
