@@ -11,9 +11,12 @@
   "author": "Claude (AI Harness)",
   "license": "MIT",
   "dependencies": {
-    "@vercel/og": "^0.6.0"
+    "@vercel/og": "^0.6.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@vercel/node": "^3.0.0"
+    "@vercel/node": "^3.0.0",
+    "@types/react": "^19.0.0"
   }
 }
