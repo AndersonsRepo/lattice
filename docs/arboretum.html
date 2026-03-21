@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Arboretum</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* --- Sidebar --- */
+    .sidebar {
+      width: 340px;
+      min-width: 340px;
+      height: 100vh;
+      overflow-y: auto;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .sidebar h1 {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+    }
+
+    .sidebar h2 {
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+
+    .back {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      transition: color 0.2s;
+    }
+    .back:hover { color: var(--accent); }
+
+    /* --- Presets --- */
+    .presets {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem;
+    }
+    .preset-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.55rem;
+      padding: 0.5rem 0.4rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+      line-height: 1.3;
+    }
+    .preset-btn:hover {
+      border-color: var(--accent);
+      background: rgba(124, 111, 224, 0.08);
+    }
+    .preset-btn.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+    .preset-name {
+      color: var(--green);
+      font-size: 0.6rem;
+      display: block;
+      margin-bottom: 0.15rem;
+    }
+    .preset-rule {
+      color: var(--text-dim);
+      font-size: 0.5rem;
+      word-break: break-all;
+    }
+
+    /* --- Controls --- */
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .control-row label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      min-width: 70px;
+      letter-spacing: 0.05em;
+    }
+
+    .control-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+      height: 4px;
+    }
+
+    .control-row .val {
+      font-size: 0.55rem;
+      color: var(--accent);
+      min-width: 36px;
+      text-align: right;
+    }
+
+    input[type="text"], textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.6rem;
+      padding: 0.4rem 0.5rem;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus, textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .rule-editor {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .rule-row {
+      display: flex;
+      gap: 0.3rem;
+      align-items: center;
+    }
+    .rule-row .sym {
+      color: var(--green);
+      font-size: 0.65rem;
+      min-width: 14px;
+    }
+    .rule-row .arrow {
+      color: var(--text-dim);
+      font-size: 0.55rem;
+    }
+    .rule-row input {
+      flex: 1;
+    }
+
+    .add-rule-btn, .action-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      padding: 0.35rem 0.6rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .add-rule-btn:hover, .action-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .action-row {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .action-btn.primary {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .toggle-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      cursor: pointer;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+    }
+    .toggle input { display: none; }
+    .toggle .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+    .toggle input:checked + .dot {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* --- Info bar --- */
+    .info-bar {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .info-bar span { white-space: nowrap; }
+
+    /* --- Canvas area --- */
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+    }
+
+    /* --- Symbol reference --- */
+    .symbol-ref {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .symbol-ref code {
+      color: var(--green);
+      background: var(--bg);
+      padding: 0.1rem 0.25rem;
+      border-radius: 3px;
+      font-size: 0.5rem;
+    }
+
+    /* --- Keyboard hint --- */
+    .kbd-hint {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      opacity: 0.5;
+      z-index: 10;
+    }
+
+    /* --- Stochastic rule editor --- */
+    .stochastic-group {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem;
+      display: none;
+    }
+    .stochastic-group.visible { display: block; }
+    .stochastic-row {
+      display: flex;
+      gap: 0.3rem;
+      align-items: center;
+      margin-bottom: 0.25rem;
+    }
+    .stochastic-row input[type="text"] { flex: 1; }
+    .stochastic-row input[type="range"] { width: 60px; accent-color: var(--amber); }
+    .weight-val { color: var(--amber); font-size: 0.5rem; min-width: 28px; }
+
+    /* --- Remove button --- */
+    .remove-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.5rem;
+      padding: 0.15rem 0.35rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      line-height: 1;
+    }
+    .remove-btn:hover { border-color: #ef4444; color: #ef4444; }
+
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        min-width: 100%;
+        height: auto;
+        max-height: 45vh;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <a href="index.html" class="back">&larr; LATTICE</a>
+    <h1>Arboretum</h1>
+  </div>
+
+  <h2>Presets</h2>
+  <div class="presets" id="presets"></div>
+
+  <h2>Production Rules</h2>
+  <div class="control-group">
+    <div class="control-row">
+      <label>Axiom</label>
+      <input type="text" id="axiom" value="F" spellcheck="false">
+    </div>
+    <div class="rule-editor" id="ruleEditor"></div>
+    <button class="add-rule-btn" id="addRuleBtn">+ add rule</button>
+  </div>
+
+  <div class="toggle-row">
+    <label class="toggle">
+      <input type="checkbox" id="stochasticToggle">
+      <span class="dot"></span>
+      Stochastic
+    </label>
+    <label class="toggle">
+      <input type="checkbox" id="animateToggle">
+      <span class="dot"></span>
+      Animate Growth
+    </label>
+  </div>
+
+  <div class="stochastic-group" id="stochasticGroup">
+    <h2 style="margin-bottom:0.4rem">Stochastic Variants</h2>
+    <div id="stochasticEditor"></div>
+    <button class="add-rule-btn" id="addStochasticBtn">+ add variant</button>
+  </div>
+
+  <h2>Parameters</h2>
+  <div class="control-group">
+    <div class="control-row">
+      <label>Angle</label>
+      <input type="range" id="angle" min="1" max="180" value="25" step="0.5">
+      <span class="val" id="angleVal">25&deg;</span>
+    </div>
+    <div class="control-row">
+      <label>Iterations</label>
+      <input type="range" id="iterations" min="1" max="8" value="4" step="1">
+      <span class="val" id="iterationsVal">4</span>
+    </div>
+    <div class="control-row">
+      <label>Jitter</label>
+      <input type="range" id="jitter" min="0" max="15" value="0" step="0.5">
+      <span class="val" id="jitterVal">0&deg;</span>
+    </div>
+    <div class="control-row">
+      <label>Tropism</label>
+      <input type="range" id="tropism" min="-30" max="30" value="0" step="1">
+      <span class="val" id="tropismVal">0</span>
+    </div>
+    <div class="control-row">
+      <label>Length Scale</label>
+      <input type="range" id="lengthScale" min="50" max="100" value="85" step="1">
+      <span class="val" id="lengthScaleVal">0.85</span>
+    </div>
+    <div class="control-row">
+      <label>Width Decay</label>
+      <input type="range" id="widthDecay" min="50" max="100" value="85" step="1">
+      <span class="val" id="widthDecayVal">0.85</span>
+    </div>
+    <div class="control-row">
+      <label>Leaf Size</label>
+      <input type="range" id="leafSize" min="0" max="100" value="30" step="1">
+      <span class="val" id="leafSizeVal">0.30</span>
+    </div>
+    <div class="control-row">
+      <label>Petals</label>
+      <input type="range" id="petals" min="0" max="8" value="5" step="1">
+      <span class="val" id="petalsVal">5</span>
+    </div>
+  </div>
+
+  <div class="action-row">
+    <button class="action-btn primary" id="renderBtn">Render</button>
+    <button class="action-btn" id="randomSeedBtn">Random Seed</button>
+    <button class="action-btn" id="mutateBtn">Mutate</button>
+    <button class="action-btn" id="exportBtn">Export PNG</button>
+  </div>
+
+  <div class="info-bar" id="infoBar">
+    <span>String: <b id="infoLen">0</b></span>
+    <span>Points: <b id="infoPoints">0</b></span>
+    <span>Depth: <b id="infoDepth">0</b></span>
+    <span>Seed: <b id="infoSeed">0</b></span>
+  </div>
+
+  <h2>Symbol Reference</h2>
+  <div class="symbol-ref">
+    <code>F</code> <code>G</code> draw forward &nbsp;
+    <code>+</code> turn left &nbsp;
+    <code>-</code> turn right &nbsp;
+    <code>[</code> push &nbsp;
+    <code>]</code> pop<br>
+    <code>~</code> sinusoidal step &nbsp;
+    <code>!</code> taper width &nbsp;
+    <code>|</code> 180&deg; turn<br>
+    <code>@</code> flower/fruit &nbsp;
+    <code>{</code><code>}</code> leaf polygon &nbsp;
+    <code>&amp;</code> gravity bend
+  </div>
+</div>
+
+<div class="canvas-area">
+  <canvas id="canvas"></canvas>
+</div>
+
+<div class="kbd-hint">Space: render &middot; R: random &middot; M: mutate &middot; S: export &middot; A: animate</div>
+
+<script>
+// ============================================================
+// Arboretum — Interactive L-System Laboratory
+// Pure client-side L-system engine with vector rendering
+// ============================================================
+
+// --- Seeded RNG (mulberry32) ---
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+var seed = Math.floor(Math.random() * 2**32);
+
+// --- Presets ---
+var PRESETS = [
+  { name: "Fractal Plant", axiom: "X", rules: { X: "F+[[X]-X]-F[-FX]+X", F: "FF" }, angle: 25, iterations: 5 },
+  { name: "Realistic Tree", axiom: "F", rules: { F: "FF+[+F-F-F]-[-F+F+F]" }, angle: 25, iterations: 4 },
+  { name: "Koch Curve", axiom: "F", rules: { F: "F+F-F-F+F" }, angle: 90, iterations: 4 },
+  { name: "Dragon Curve", axiom: "X", rules: { X: "X+YF+", Y: "-FX-Y" }, angle: 90, iterations: 12 },
+  { name: "Sierpinski", axiom: "F-G-G", rules: { F: "F-G+F+G-F", G: "GG" }, angle: 120, iterations: 6 },
+  { name: "Hilbert Curve", axiom: "X", rules: { X: "-YF+XFX+FY-", Y: "+XF-YFY-FX+" }, angle: 90, iterations: 5 },
+  { name: "Binary Tree", axiom: "X", rules: { X: "F[+X][-X]FX", F: "FF" }, angle: 30, iterations: 5 },
+  { name: "Flowering Bush", axiom: "F", rules: { F: "FF[+F{~F~F}@][-F{~F~F}@]" }, angle: 22.5, iterations: 4, jitter: 3, leafSize: 0.4, petals: 5 },
+  { name: "Koch Island", axiom: "F-F-F-F", rules: { F: "F+F-F-FF+F+F-F" }, angle: 90, iterations: 3 },
+  { name: "Weeping Willow", axiom: "F", rules: { F: "FF&[+F{~F}@][-F{~F}@]" }, angle: 20, iterations: 4, tropism: 0.15, widthDecay: 0.7, jitter: 4 },
+  { name: "Coral Growth", axiom: "X", rules: { X: "~F[+X]~F[-X]~FX@", F: "~F~F" }, angle: 25, iterations: 5, jitter: 6, tropism: -0.1 },
+  { name: "Tapering Oak", axiom: "F", rules: { F: "F!F[+F!F][-F!F]" }, angle: 30, iterations: 5, widthDecay: 0.72, lengthScale: 0.82 },
+  { name: "Dense Canopy", axiom: "F", rules: { F: "F[-F]F[+F][F]" }, angle: 25.7, iterations: 5 },
+  { name: "Penrose Tile", axiom: "F-F-F-F-F", rules: { F: "F-F++F+F-F-F" }, angle: 72, iterations: 4 },
+  { name: "Vine Tendrils", axiom: "F", rules: { F: "F[+~F~F][-~F~F]F" }, angle: 22, iterations: 5, jitter: 5, tropism: 0.08 },
+  { name: "Snowflake", axiom: "F++F++F", rules: { F: "F-F++F-F" }, angle: 60, iterations: 4 },
+  { name: "Leaf Canopy", axiom: "X", rules: { X: "F[@]F[+X{FF}][-X{FF}]", F: "F!F" }, angle: 28, iterations: 5, leafSize: 0.5 },
+  { name: "Stochastic Fern", axiom: "X", rules: { X: "F[+X][-X]FX", F: "FF" }, angle: 25, iterations: 5, stochastic: { X: [{ production: "F[+X][-X]FX", weight: 0.6 }, { production: "F[-X]F[+X]X", weight: 0.4 }] }, jitter: 2 },
+];
+
+// --- State ---
+var currentRules = {};
+var currentAxiom = "F";
+var stochasticRules = {};
+var animating = false;
+var animFrame = null;
+
+// --- DOM refs ---
+var canvas = document.getElementById('canvas');
+var ctx2d = canvas.getContext('2d');
+var presetsEl = document.getElementById('presets');
+var ruleEditorEl = document.getElementById('ruleEditor');
+var stochasticEditorEl = document.getElementById('stochasticEditor');
+var stochasticGroupEl = document.getElementById('stochasticGroup');
+
+// --- Build presets ---
+PRESETS.forEach(function(p, i) {
+  var btn = document.createElement('button');
+  btn.className = 'preset-btn';
+  var ruleStr = Object.entries(p.rules).map(function(e) { return e[0] + '\u2192' + e[1]; }).join(', ');
+  btn.innerHTML = '<span class="preset-name">' + p.name + '</span><span class="preset-rule">' +
+    (ruleStr.length > 50 ? ruleStr.slice(0, 50) + '\u2026' : ruleStr) + '</span>';
+  btn.onclick = function() { loadPreset(i); };
+  presetsEl.appendChild(btn);
+});
+
+function loadPreset(i) {
+  var p = PRESETS[i];
+  currentRules = {};
+  for (var k in p.rules) currentRules[k] = p.rules[k];
+  currentAxiom = p.axiom;
+  document.getElementById('axiom').value = p.axiom;
+  document.getElementById('angle').value = p.angle;
+  document.getElementById('iterations').value = p.iterations;
+  document.getElementById('jitter').value = p.jitter || 0;
+  document.getElementById('tropism').value = Math.round((p.tropism || 0) * 100);
+  document.getElementById('lengthScale').value = Math.round((p.lengthScale || 0.85) * 100);
+  document.getElementById('widthDecay').value = Math.round((p.widthDecay || 0.85) * 100);
+  document.getElementById('leafSize').value = Math.round((p.leafSize || 0.3) * 100);
+  document.getElementById('petals').value = p.petals != null ? p.petals : 5;
+
+  stochasticRules = p.stochastic ? JSON.parse(JSON.stringify(p.stochastic)) : {};
+  document.getElementById('stochasticToggle').checked = Object.keys(stochasticRules).length > 0;
+  stochasticGroupEl.classList.toggle('visible', Object.keys(stochasticRules).length > 0);
+
+  updateSliderLabels();
+  rebuildRuleEditor();
+  rebuildStochasticEditor();
+
+  var btns = document.querySelectorAll('.preset-btn');
+  for (var j = 0; j < btns.length; j++) btns[j].classList.toggle('active', j === i);
+  render();
+}
+
+// --- Rule editor ---
+function rebuildRuleEditor() {
+  ruleEditorEl.innerHTML = '';
+  var keys = Object.keys(currentRules);
+  for (var ki = 0; ki < keys.length; ki++) {
+    var sym = keys[ki];
+    var prod = currentRules[sym];
+    var row = document.createElement('div');
+    row.className = 'rule-row';
+    row.innerHTML =
+      '<span class="sym">' + sym + '</span>' +
+      '<span class="arrow">\u2192</span>' +
+      '<input type="text" value="' + prod.replace(/"/g, '&quot;') + '" spellcheck="false" data-sym="' + sym + '">' +
+      '<button class="remove-btn" data-remove="' + sym + '">\u00d7</button>';
+    ruleEditorEl.appendChild(row);
+  }
+  var inputs = ruleEditorEl.querySelectorAll('input');
+  for (var ii = 0; ii < inputs.length; ii++) {
+    (function(inp) {
+      inp.addEventListener('input', function() { currentRules[inp.dataset.sym] = inp.value; });
+      inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') render(); });
+    })(inputs[ii]);
+  }
+  var removeBtns = ruleEditorEl.querySelectorAll('[data-remove]');
+  for (var ri = 0; ri < removeBtns.length; ri++) {
+    (function(btn) {
+      btn.onclick = function() { delete currentRules[btn.dataset.remove]; rebuildRuleEditor(); };
+    })(removeBtns[ri]);
+  }
+}
+
+document.getElementById('addRuleBtn').onclick = function() {
+  var syms = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  var used = Object.keys(currentRules);
+  var newSym = '';
+  for (var si = 0; si < syms.length; si++) {
+    if (used.indexOf(syms[si]) === -1) { newSym = syms[si]; break; }
+  }
+  if (newSym) {
+    currentRules[newSym] = 'F';
+    rebuildRuleEditor();
+  }
+};
+
+// --- Stochastic editor ---
+function rebuildStochasticEditor() {
+  stochasticEditorEl.innerHTML = '';
+  var keys = Object.keys(stochasticRules);
+  for (var ki = 0; ki < keys.length; ki++) {
+    var sym = keys[ki];
+    var alts = stochasticRules[sym];
+    for (var ai = 0; ai < alts.length; ai++) {
+      var row = document.createElement('div');
+      row.className = 'stochastic-row';
+      row.innerHTML =
+        '<span class="sym" style="color:var(--amber);font-size:0.55rem">' + sym + '#' + (ai + 1) + '</span>' +
+        '<input type="text" value="' + alts[ai].production.replace(/"/g, '&quot;') + '" spellcheck="false" data-sym="' + sym + '" data-idx="' + ai + '">' +
+        '<input type="range" min="1" max="100" value="' + Math.round(alts[ai].weight * 100) + '" data-sym="' + sym + '" data-idx="' + ai + '" class="weight-slider">' +
+        '<span class="weight-val">' + Math.round(alts[ai].weight * 100) + '%</span>';
+      stochasticEditorEl.appendChild(row);
+    }
+  }
+  var textInputs = stochasticEditorEl.querySelectorAll('input[type="text"]');
+  for (var ti = 0; ti < textInputs.length; ti++) {
+    (function(inp) {
+      inp.addEventListener('input', function() {
+        stochasticRules[inp.dataset.sym][+inp.dataset.idx].production = inp.value;
+      });
+    })(textInputs[ti]);
+  }
+  var sliders = stochasticEditorEl.querySelectorAll('.weight-slider');
+  for (var si = 0; si < sliders.length; si++) {
+    (function(sl) {
+      sl.addEventListener('input', function() {
+        var w = +sl.value / 100;
+        stochasticRules[sl.dataset.sym][+sl.dataset.idx].weight = w;
+        sl.nextElementSibling.textContent = Math.round(w * 100) + '%';
+      });
+    })(sliders[si]);
+  }
+}
+
+document.getElementById('addStochasticBtn').onclick = function() {
+  var syms = Object.keys(currentRules);
+  if (syms.length === 0) return;
+  var sym = syms[0];
+  if (!stochasticRules[sym]) stochasticRules[sym] = [];
+  stochasticRules[sym].push({ production: currentRules[sym] || 'F', weight: 0.5 });
+  rebuildStochasticEditor();
+};
+
+document.getElementById('stochasticToggle').onchange = function() {
+  stochasticGroupEl.classList.toggle('visible', this.checked);
+  if (!this.checked) stochasticRules = {};
+};
+
+// --- Slider labels ---
+function updateSliderLabels() {
+  document.getElementById('angleVal').textContent = document.getElementById('angle').value + '\u00b0';
+  document.getElementById('iterationsVal').textContent = document.getElementById('iterations').value;
+  document.getElementById('jitterVal').textContent = document.getElementById('jitter').value + '\u00b0';
+  document.getElementById('tropismVal').textContent = (+document.getElementById('tropism').value / 100).toFixed(2);
+  document.getElementById('lengthScaleVal').textContent = (+document.getElementById('lengthScale').value / 100).toFixed(2);
+  document.getElementById('widthDecayVal').textContent = (+document.getElementById('widthDecay').value / 100).toFixed(2);
+  document.getElementById('leafSizeVal').textContent = (+document.getElementById('leafSize').value / 100).toFixed(2);
+  document.getElementById('petalsVal').textContent = document.getElementById('petals').value;
+}
+
+var allSliders = document.querySelectorAll('.control-group input[type="range"]');
+for (var si = 0; si < allSliders.length; si++) {
+  allSliders[si].addEventListener('input', updateSliderLabels);
+}
+
+// ============================================================
+// L-System Engine
+// ============================================================
+
+function generateString(axiom, rules, stochastic, iterations, rngFn) {
+  var current = axiom;
+  var history = [current];
+  for (var i = 0; i < iterations; i++) {
+    var next = '';
+    for (var ci = 0; ci < current.length; ci++) {
+      var ch = current[ci];
+      if (stochastic && stochastic[ch]) {
+        var alts = stochastic[ch];
+        var totalWeight = 0;
+        for (var ai = 0; ai < alts.length; ai++) totalWeight += alts[ai].weight;
+        var r = rngFn() * totalWeight;
+        var chosen = alts[0].production;
+        for (var ai2 = 0; ai2 < alts.length; ai2++) {
+          r -= alts[ai2].weight;
+          if (r <= 0) { chosen = alts[ai2].production; break; }
+        }
+        next += chosen;
+      } else {
+        next += rules[ch] != null ? rules[ch] : ch;
+      }
+    }
+    current = next;
+    history.push(current);
+    if (current.length > 50000) break;
+  }
+  return { final: current, history: history };
+}
+
+function traceTurtle(str, params) {
+  var angle = params.angle;
+  var jitter = params.jitter;
+  var tropism = params.tropism;
+  var lengthScale = params.lengthScale;
+  var widthDecay = params.widthDecay;
+  var leafSize = params.leafSize;
+  var petals = params.petals;
+  var rngFn = params.rngFn;
+
+  var segments = [];
+  var tx = 0, ty = 0, tAngle = -90, tDepth = 0, tWidth = 1.0;
+  var stack = [];
+  var stepCount = 0;
+  var inLeaf = false;
+  var maxDepth = 0;
+  var DEG = Math.PI / 180;
+
+  for (var i = 0; i < str.length; i++) {
+    var ch = str[i];
+    switch (ch) {
+      case 'F':
+      case 'G': {
+        var depthFactor = Math.pow(lengthScale, tDepth);
+        var j = jitter > 0 ? (rngFn() - 0.5) * 2 * jitter : 0;
+        var tropBend = tropism * tDepth * 2;
+        var fa = tAngle + j + tropBend;
+        var rad = fa * DEG;
+        var nx = tx + depthFactor * Math.cos(rad);
+        var ny = ty + depthFactor * Math.sin(rad);
+        segments.push({ x1: tx, y1: ty, x2: nx, y2: ny, depth: tDepth, width: tWidth, kind: inLeaf ? 'leaf' : 'stem' });
+        tx = nx; ty = ny;
+        stepCount++;
+        if (tDepth > maxDepth) maxDepth = tDepth;
+        break;
+      }
+      case '~': {
+        var depthFactor2 = Math.pow(lengthScale, tDepth);
+        var wave = Math.sin(stepCount * 0.8) * 0.3;
+        var j2 = jitter > 0 ? (rngFn() - 0.5) * 2 * jitter : 0;
+        var tropBend2 = tropism * tDepth * 2;
+        var fa2 = tAngle + j2 + wave * angle + tropBend2;
+        var rad2 = fa2 * DEG;
+        var nx2 = tx + depthFactor2 * Math.cos(rad2);
+        var ny2 = ty + depthFactor2 * Math.sin(rad2);
+        segments.push({ x1: tx, y1: ty, x2: nx2, y2: ny2, depth: tDepth, width: tWidth, kind: inLeaf ? 'leaf' : 'stem' });
+        tx = nx2; ty = ny2;
+        stepCount++;
+        break;
+      }
+      case '+': tAngle += angle; break;
+      case '-': tAngle -= angle; break;
+      case '|': tAngle += 180; break;
+      case '!': tWidth *= widthDecay; break;
+      case '@': {
+        var n = petals || 5;
+        var sz = leafSize * Math.pow(lengthScale, tDepth) * 0.5;
+        for (var pi = 0; pi < n; pi++) {
+          var pa = tAngle + (pi * 360) / n;
+          var prad = pa * DEG;
+          var px = tx + sz * Math.cos(prad);
+          var py = ty + sz * Math.sin(prad);
+          segments.push({ x1: tx, y1: ty, x2: px, y2: py, depth: tDepth, width: tWidth * 0.4, kind: 'flower' });
+        }
+        break;
+      }
+      case '{': inLeaf = true; break;
+      case '}': inLeaf = false; break;
+      case '&': {
+        var gravStr = Math.abs(tropism) > 0.001 ? tropism * 1500 : 5;
+        tAngle += gravStr;
+        break;
+      }
+      case '[':
+        stack.push({ x: tx, y: ty, angle: tAngle, depth: tDepth, width: tWidth });
+        tDepth++;
+        tWidth *= widthDecay;
+        break;
+      case ']': {
+        var s = stack.pop();
+        if (s) { tx = s.x; ty = s.y; tAngle = s.angle; tDepth = s.depth; tWidth = s.width; }
+        break;
+      }
+    }
+  }
+  return { segments: segments, maxDepth: maxDepth };
+}
+
+// ============================================================
+// Rendering
+// ============================================================
+
+var PALETTES = {
+  stem:   ['#6b5310', '#8b6914', '#a0782c', '#c4a35a', '#e8d5a0'],
+  leaf:   ['#15803d', '#16a34a', '#22c55e', '#4ade80', '#86efac'],
+  flower: ['#db2777', '#ec4899', '#f472b6', '#f9a8d4', '#fbbf24'],
+  geo:    ['#4338ca', '#6366f1', '#7c6fe0', '#a78bfa', '#c4b5fd'],
+};
+
+function renderToCanvas(segments, maxDepth) {
+  var dpr = window.devicePixelRatio || 1;
+  var area = document.querySelector('.canvas-area');
+  var W = area.clientWidth;
+  var H = area.clientHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Background
+  ctx2d.fillStyle = '#0a0a0f';
+  ctx2d.fillRect(0, 0, W, H);
+
+  if (segments.length === 0) return;
+
+  // Bounding box
+  var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (var i = 0; i < segments.length; i++) {
+    var s = segments[i];
+    if (s.x1 < minX) minX = s.x1; if (s.x2 < minX) minX = s.x2;
+    if (s.x1 > maxX) maxX = s.x1; if (s.x2 > maxX) maxX = s.x2;
+    if (s.y1 < minY) minY = s.y1; if (s.y2 < minY) minY = s.y2;
+    if (s.y1 > maxY) maxY = s.y1; if (s.y2 > maxY) maxY = s.y2;
+  }
+
+  var margin = 40;
+  var bboxW = maxX - minX || 1;
+  var bboxH = maxY - minY || 1;
+  var scale = Math.min((W - margin * 2) / bboxW, (H - margin * 2) / bboxH);
+  var offX = margin + ((W - margin * 2) - bboxW * scale) / 2 - minX * scale;
+  var offY = margin + ((H - margin * 2) - bboxH * scale) / 2 - minY * scale;
+
+  function txf(x) { return x * scale + offX; }
+  function tyf(y) { return y * scale + offY; }
+
+  // Detect style
+  var hasLeaves = false, hasFlowers = false, hasBranching = false;
+  for (var di = 0; di < segments.length; di++) {
+    if (segments[di].kind === 'leaf') hasLeaves = true;
+    if (segments[di].kind === 'flower') hasFlowers = true;
+    if (segments[di].depth > 0) hasBranching = true;
+  }
+  var isGeometric = !hasBranching && !hasLeaves && !hasFlowers;
+
+  // Glow pass
+  ctx2d.save();
+  ctx2d.globalAlpha = 0.12;
+  ctx2d.filter = 'blur(6px)';
+  ctx2d.lineCap = 'round';
+  for (var gi = 0; gi < segments.length; gi++) {
+    var gs = segments[gi];
+    var gcol = gs.kind === 'flower' ? PALETTES.flower[2] :
+               gs.kind === 'leaf' ? PALETTES.leaf[2] :
+               isGeometric ? PALETTES.geo[2] : PALETTES.stem[2];
+    ctx2d.strokeStyle = gcol;
+    ctx2d.lineWidth = Math.max(2, gs.width * 6);
+    ctx2d.beginPath();
+    ctx2d.moveTo(txf(gs.x1), tyf(gs.y1));
+    ctx2d.lineTo(txf(gs.x2), tyf(gs.y2));
+    ctx2d.stroke();
+  }
+  ctx2d.restore();
+
+  // Main render
+  ctx2d.lineCap = 'round';
+  ctx2d.lineJoin = 'round';
+
+  // Sort: stems first, leaves, flowers last
+  var sorted = segments.slice().sort(function(a, b) {
+    var order = { stem: 0, leaf: 1, flower: 2 };
+    return (order[a.kind] || 0) - (order[b.kind] || 0);
+  });
+
+  for (var ri = 0; ri < sorted.length; ri++) {
+    var seg = sorted[ri];
+    var depthRatio = maxDepth > 0 ? seg.depth / maxDepth : 0;
+    var palette, alpha;
+
+    if (seg.kind === 'flower') {
+      palette = PALETTES.flower;
+      alpha = 0.85;
+    } else if (seg.kind === 'leaf') {
+      palette = PALETTES.leaf;
+      alpha = 0.65 + depthRatio * 0.35;
+    } else if (isGeometric) {
+      palette = PALETTES.geo;
+      alpha = 0.55 + (1 - depthRatio) * 0.45;
+    } else {
+      palette = PALETTES.stem;
+      alpha = 0.45 + (1 - depthRatio) * 0.55;
+    }
+
+    var colIdx = Math.min(palette.length - 1, Math.floor(depthRatio * palette.length));
+    ctx2d.globalAlpha = alpha;
+    ctx2d.strokeStyle = palette[colIdx];
+
+    var baseWidth = isGeometric ? 1.5 : Math.max(0.5, seg.width * 3 * (1 - depthRatio * 0.5));
+    ctx2d.lineWidth = baseWidth;
+
+    ctx2d.beginPath();
+    ctx2d.moveTo(txf(seg.x1), tyf(seg.y1));
+    ctx2d.lineTo(txf(seg.x2), tyf(seg.y2));
+    ctx2d.stroke();
+
+    // Flower centers
+    if (seg.kind === 'flower') {
+      ctx2d.globalAlpha = 0.9;
+      ctx2d.fillStyle = '#fbbf24';
+      ctx2d.beginPath();
+      ctx2d.arc(txf(seg.x2), tyf(seg.y2), Math.max(1.5, baseWidth), 0, Math.PI * 2);
+      ctx2d.fill();
+    }
+  }
+
+  ctx2d.globalAlpha = 1;
+}
+
+// ============================================================
+// Main render + animation
+// ============================================================
+
+function render(animStep) {
+  var axiom = document.getElementById('axiom').value || 'F';
+  var rules = {};
+  for (var k in currentRules) rules[k] = currentRules[k];
+  var angleVal = +document.getElementById('angle').value;
+  var iterations = animStep != null ? animStep : +document.getElementById('iterations').value;
+  var jitterVal = +document.getElementById('jitter').value;
+  var tropismVal = +document.getElementById('tropism').value / 100;
+  var lengthScaleVal = +document.getElementById('lengthScale').value / 100;
+  var widthDecayVal = +document.getElementById('widthDecay').value / 100;
+  var leafSizeVal = +document.getElementById('leafSize').value / 100;
+  var petalsVal = +document.getElementById('petals').value;
+  var useStochastic = document.getElementById('stochasticToggle').checked;
+
+  var rng = mulberry32(seed);
+
+  var result = generateString(
+    axiom, rules,
+    useStochastic ? stochasticRules : null,
+    iterations, rng
+  );
+
+  rng = mulberry32(seed);
+  var params = {
+    angle: angleVal, jitter: jitterVal, tropism: tropismVal,
+    lengthScale: lengthScaleVal, widthDecay: widthDecayVal,
+    leafSize: leafSizeVal, petals: petalsVal,
+    rngFn: rng,
+  };
+
+  var traced = traceTurtle(result.final, params);
+  renderToCanvas(traced.segments, traced.maxDepth);
+
+  document.getElementById('infoLen').textContent = result.final.length.toLocaleString();
+  document.getElementById('infoPoints').textContent = traced.segments.length.toLocaleString();
+  document.getElementById('infoDepth').textContent = traced.maxDepth;
+  document.getElementById('infoSeed').textContent = seed;
+}
+
+// --- Animate growth ---
+function animateGrowth() {
+  if (animating) { stopAnimation(); return; }
+  animating = true;
+  var maxIter = +document.getElementById('iterations').value;
+  var step = 0;
+  function tick() {
+    if (!animating || step > maxIter) { animating = false; return; }
+    render(step);
+    step++;
+    animFrame = requestAnimationFrame(function() { setTimeout(tick, 350); });
+  }
+  tick();
+}
+
+function stopAnimation() {
+  animating = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+}
+
+// --- Mutate ---
+function mutate() {
+  var keys = Object.keys(currentRules);
+  if (keys.length === 0) return;
+
+  var r = Math.random();
+  if (r < 0.4) {
+    var el = document.getElementById('angle');
+    el.value = Math.max(1, Math.min(180, +el.value + (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * 15 + 1)));
+  } else if (r < 0.8) {
+    var key = keys[Math.floor(Math.random() * keys.length)];
+    var chars = 'F+-[]G~!|@{}&';
+    var pos = Math.floor(Math.random() * (currentRules[key].length + 1));
+    var ch = chars[Math.floor(Math.random() * chars.length)];
+    currentRules[key] = currentRules[key].slice(0, pos) + ch + currentRules[key].slice(pos);
+  } else {
+    var sliders = ['jitter', 'tropism', 'lengthScale', 'widthDecay'];
+    var sl = sliders[Math.floor(Math.random() * sliders.length)];
+    var el2 = document.getElementById(sl);
+    var delta = (Math.random() - 0.5) * (+el2.max - +el2.min) * 0.15;
+    el2.value = Math.max(+el2.min, Math.min(+el2.max, +el2.value + delta));
+  }
+
+  updateSliderLabels();
+  rebuildRuleEditor();
+  seed = Math.floor(Math.random() * 2**32);
+  render();
+}
+
+// --- Export ---
+function exportPNG() {
+  var link = document.createElement('a');
+  link.download = 'arboretum-' + Date.now() + '.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+// --- Event bindings ---
+document.getElementById('renderBtn').onclick = function() { stopAnimation(); render(); };
+document.getElementById('randomSeedBtn').onclick = function() { seed = Math.floor(Math.random() * 2**32); render(); };
+document.getElementById('mutateBtn').onclick = mutate;
+document.getElementById('exportBtn').onclick = exportPNG;
+document.getElementById('animateToggle').onchange = function() { if (this.checked) animateGrowth(); else stopAnimation(); };
+document.getElementById('axiom').addEventListener('keydown', function(e) { if (e.key === 'Enter') render(); });
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  switch (e.key.toLowerCase()) {
+    case ' ': e.preventDefault(); stopAnimation(); render(); break;
+    case 'r': seed = Math.floor(Math.random() * 2**32); render(); break;
+    case 'm': mutate(); break;
+    case 's': exportPNG(); break;
+    case 'a': animateGrowth(); break;
+  }
+});
+
+// Resize
+window.addEventListener('resize', function() { if (!animating) render(); });
+
+// --- Init ---
+loadPreset(0);
+</script>
+</body>
+</html>

@@ -1481,7 +1481,7 @@ export const SPECIES_COLORS: Record<string, { bg: string; colors: string[] }> = 
   'noise':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a0a', '#3b3b0d', '#6b6b16', '#a8a822', '#d4d44a', '#eeff88', '#ffffcc'] },
   'flowfield':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a1a', '#0d3b3b', '#166b6b', '#22a8a8', '#4ad4d4', '#88eeff', '#ccffff'] },
   'sandpile':            { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0a1a', '#3b0d3b', '#6b166b', '#a822a8', '#d44ad4', '#f088f0', '#ffccff'] },
-  'magnetic-pendulum':   { bg: '#0a0a0f', colors: ['#0a0a0f', '#0d1a0d', '#163b16', '#226b22', '#22a855', '#4ad488', '#88ffbb', '#ccffee'] },
+  'harmonograph':        { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0d2d', '#2d1a5b', '#4a2d8b', '#6b44b8', '#9d6be0', '#c8a0f5', '#e8d4ff'] },
 };
 
 export function speciesGradient(type: string, steps: number = 8): string[] {
@@ -1616,251 +1616,227 @@ export function renderColorMap(grid: number[][], genome: Genome): string[][] {
     })
   );
 }
-// --- Scoring ---
+// --- Scoring (optimized: merged passes, flat BFS, typed arrays, zero-alloc) ---
+// Perf wins vs original: Map over Record (faster iteration), Uint8Array visited +
+// Uint32Array BFS queue (zero tuple/GC), merged density/edge/quadrant pass,
+// eliminated Math.max(...spread) stack-overflow risk, hoisted row refs, inlined clamp
 export function score(grid: number[][]): PieceMetrics {
   const height = grid.length;
   const width = grid[0]?.length ?? 0;
   const total = width * height;
   if (total === 0) return { complexity: 0, symmetry: 0, density: 0, novelty: 0, edgeActivity: 0, structuralInterest: 0, fractalDimension: 0, informationDensity: 0, spatialCoherence: 0, compositionBalance: 0, rhythmicRegularity: 0, aestheticHarmony: 0 };
 
-  // Density
+  // === Pass 1: Merged scan — density, value histogram, maxVal, edgeActivity, quadrant mass ===
+  const counts = new Map<number, number>();
   let filled = 0;
-  const counts: Record<number, number> = {};
-  for (const row of grid) {
-    for (const cell of row) {
+  let maxVal = 0;
+  let edgeChanges = 0;
+  let edgePairs = 0;
+  const halfH = height >> 1;
+  const halfW = width >> 1;
+  let qTL = 0, qTR = 0, qBL = 0, qBR = 0;
+
+  for (let y = 0; y < height; y++) {
+    const row = grid[y];
+    const nextRow = y + 1 < height ? grid[y + 1] : null;
+    const isTop = y < halfH;
+    for (let x = 0; x < width; x++) {
+      const cell = row[x];
       if (cell > 0) filled++;
-      counts[cell] = (counts[cell] ?? 0) + 1;
+      if (cell > maxVal) maxVal = cell;
+      counts.set(cell, (counts.get(cell) ?? 0) + 1);
+      // Horizontal edge
+      if (x + 1 < width) { edgePairs++; if (cell !== row[x + 1]) edgeChanges++; }
+      // Vertical edge
+      if (nextRow) { edgePairs++; if (cell !== nextRow[x]) edgeChanges++; }
+      // Quadrant mass
+      if (isTop) { if (x < halfW) qTL += cell; else qTR += cell; }
+      else       { if (x < halfW) qBL += cell; else qBR += cell; }
     }
   }
   const density = filled / total;
+  const edgeActivity = edgePairs > 0 ? edgeChanges / edgePairs : 0;
 
-  // Complexity (Shannon entropy)
+  // === Entropy (from Map — no Object.values allocation) ===
   let entropy = 0;
-  for (const count of Object.values(counts)) {
-    const p = count / total;
+  let uniqueValues = 0;
+  const invTotal = 1 / total;
+  for (const count of counts.values()) {
+    const p = count * invTotal;
     if (p > 0) entropy -= p * Math.log2(p);
+    uniqueValues++;
   }
   const complexity = entropy;
 
-  // Symmetry (horizontal)
+  // === Symmetry (hoisted row refs, pre-computed half) ===
   let symMatches = 0;
   let symTotal = 0;
-  for (const row of grid) {
-    for (let x = 0; x < Math.floor(width / 2); x++) {
+  const halfWidth = width >> 1;
+  const halfHeight = height >> 1;
+  for (let y = 0; y < height; y++) {
+    const row = grid[y];
+    for (let x = 0; x < halfWidth; x++) {
       symTotal++;
       if (row[x] === row[width - 1 - x]) symMatches++;
     }
   }
-  // Vertical symmetry
-  for (let y = 0; y < Math.floor(height / 2); y++) {
+  for (let y = 0; y < halfHeight; y++) {
+    const rowTop = grid[y];
+    const rowBot = grid[height - 1 - y];
     for (let x = 0; x < width; x++) {
       symTotal++;
-      if (grid[y][x] === grid[height - 1 - y][x]) symMatches++;
+      if (rowTop[x] === rowBot[x]) symMatches++;
     }
   }
   const symmetry = symTotal > 0 ? symMatches / symTotal : 0;
 
-  // Edge activity
-  let edgeChanges = 0;
-  let edgePairs = 0;
-  for (const row of grid) {
-    for (let x = 0; x < width - 1; x++) {
-      edgePairs++;
-      if (row[x] !== row[x + 1]) edgeChanges++;
-    }
-  }
-  for (let x = 0; x < width; x++) {
-    for (let y = 0; y < height - 1; y++) {
-      edgePairs++;
-      if (grid[y][x] !== grid[y + 1][x]) edgeChanges++;
-    }
-  }
-  const edgeActivity = edgePairs > 0 ? edgeChanges / edgePairs : 0;
-
-  // Structural interest — reward clustered regions over uniform noise
-  // Uses a simple flood-fill-like count of distinct regions
-  let regionCount = 0;
-  const visited = Array.from({ length: height }, () => new Array(width).fill(false));
+  // === Spatial coherence (Moran's I — merged variance + correlation pass) ===
+  const invMaxVal = maxVal > 0 ? 1 / maxVal : 1;
+  const meanNorm = density;
+  let coherenceSum = 0;
+  let coherencePairs = 0;
+  let cellVariance = 0;
   for (let y = 0; y < height; y++) {
+    const row = grid[y];
+    const nextRow = y + 1 < height ? grid[y + 1] : null;
     for (let x = 0; x < width; x++) {
-      if (!visited[y][x] && grid[y][x] > 0) {
+      const v = row[x] * invMaxVal;
+      const vDev = v - meanNorm;
+      cellVariance += vDev * vDev;
+      if (x + 1 < width) { coherenceSum += vDev * (row[x + 1] * invMaxVal - meanNorm); coherencePairs++; }
+      if (nextRow) { coherenceSum += vDev * (nextRow[x] * invMaxVal - meanNorm); coherencePairs++; }
+    }
+  }
+  cellVariance /= total;
+  const rawCoherence = cellVariance > 0 && coherencePairs > 0 ? (coherenceSum / coherencePairs) / cellVariance : 0;
+  const spatialCoherence = rawCoherence < 0 ? 0 : rawCoherence > 1 ? 1 : rawCoherence;
+
+  // === Structural interest — flat-index BFS with typed arrays (zero tuple allocation) ===
+  let regionCount = 0;
+  const visited = new Uint8Array(total);
+  const bfsQueue = new Uint32Array(total); // pre-allocated, reused across regions
+  for (let y = 0; y < height; y++) {
+    const yOff = y * width;
+    for (let x = 0; x < width; x++) {
+      const idx = yOff + x;
+      if (!visited[idx] && grid[y][x] > 0) {
         regionCount++;
-        // BFS flood fill — index-based to avoid O(n) shift()
-        const queue: [number, number][] = [[y, x]];
-        let qi = 0;
-        visited[y][x] = true;
-        while (qi < queue.length) {
-          const [cy, cx] = queue[qi++];
-          for (const [dy, dx] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-            const ny = cy + dy, nx = cx + dx;
-            if (ny >= 0 && ny < height && nx >= 0 && nx < width && !visited[ny][nx] && grid[ny][nx] > 0) {
-              visited[ny][nx] = true;
-              queue.push([ny, nx]);
-            }
-          }
+        let qHead = 0, qTail = 0;
+        bfsQueue[qTail++] = idx;
+        visited[idx] = 1;
+        while (qHead < qTail) {
+          const ci = bfsQueue[qHead++];
+          const cy = (ci / width) | 0, cx = ci - cy * width;
+          if (cy > 0)          { const ni = ci - width; if (!visited[ni] && grid[cy - 1][cx] > 0) { visited[ni] = 1; bfsQueue[qTail++] = ni; } }
+          if (cy + 1 < height) { const ni = ci + width; if (!visited[ni] && grid[cy + 1][cx] > 0) { visited[ni] = 1; bfsQueue[qTail++] = ni; } }
+          if (cx > 0)          { const ni = ci - 1;     if (!visited[ni] && grid[cy][cx - 1] > 0) { visited[ni] = 1; bfsQueue[qTail++] = ni; } }
+          if (cx + 1 < width)  { const ni = ci + 1;     if (!visited[ni] && grid[cy][cx + 1] > 0) { visited[ni] = 1; bfsQueue[qTail++] = ni; } }
         }
       }
     }
   }
-  // Normalize: sweet spot is ~5-30 regions for interesting structure
   const regionNorm = total > 0 ? Math.min(regionCount / (total * 0.02), 1) : 0;
-  const structuralInterest = 1 - Math.abs(regionNorm - 0.5) * 2; // peak at moderate region count
+  const structuralInterest = 1 - Math.abs(regionNorm - 0.5) * 2;
 
-  // Fractal dimension (box-counting method)
-  // Count how many boxes of size s contain a non-empty cell, for several scales
-  // The slope of log(count) vs log(1/s) approximates the fractal dimension
+  // === Fractal dimension (box-counting, inlined regression) ===
   const fractalDimension = computeBoxCountingDimension(grid, width, height);
 
-  // Information density: Shannon entropy normalized by grid area
-  // Measures how efficiently the visual space encodes information
-  // High = every cell contributes unique information; Low = redundant/uniform
-  const maxEntropy = Math.log2(Math.max(Object.keys(counts).length, 2));
+  // === Information density ===
+  const maxEntropy = Math.log2(uniqueValues > 2 ? uniqueValues : 2);
   const informationDensity = maxEntropy > 0 ? (entropy / maxEntropy) * density : 0;
 
-  // Spatial coherence (simplified Moran's I) — measures spatial autocorrelation
-  // High coherence = nearby cells tend to have similar values (structured patterns)
-  // Low coherence = neighboring cells are unrelated (random noise)
-  let coherenceSum = 0;
-  let coherencePairs = 0;
-  const maxVal = Math.max(...Object.keys(counts).map(Number), 1);
-  const meanNorm = density;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const v = grid[y][x] / maxVal;
-      if (x + 1 < width) {
-        coherenceSum += (v - meanNorm) * (grid[y][x + 1] / maxVal - meanNorm);
-        coherencePairs++;
-      }
-      if (y + 1 < height) {
-        coherenceSum += (v - meanNorm) * (grid[y + 1][x] / maxVal - meanNorm);
-        coherencePairs++;
-      }
-    }
-  }
-  let cellVariance = 0;
-  for (const row of grid) {
-    for (const cell of row) {
-      cellVariance += ((cell / maxVal) - meanNorm) ** 2;
-    }
-  }
-  cellVariance /= total;
-  const rawCoherence = cellVariance > 0 && coherencePairs > 0
-    ? (coherenceSum / coherencePairs) / cellVariance
-    : 0;
-  const spatialCoherence = Math.max(0, Math.min(rawCoherence, 1));
-
-  // Composition balance — visual weight distribution across quadrants
-  // 1.0 = perfectly balanced, 0.0 = all mass in one quadrant
-  const halfH = Math.floor(height / 2);
-  const halfW = Math.floor(width / 2);
-  const quadMass = [0, 0, 0, 0]; // TL, TR, BL, BR
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const qi = (y < halfH ? 0 : 2) + (x < halfW ? 0 : 1);
-      quadMass[qi] += grid[y][x];
-    }
-  }
-  const totalMass = quadMass[0] + quadMass[1] + quadMass[2] + quadMass[3];
+  // === Composition balance (from pre-computed quadrant masses) ===
+  const totalMass = qTL + qTR + qBL + qBR;
   let compositionBalance = 0;
   if (totalMass > 0) {
-    const ideal = totalMass / 4;
+    const ideal = totalMass * 0.25;
     const maxDeviation = ideal * 3;
-    const deviation = quadMass.reduce((s, m) => s + Math.abs(m - ideal), 0);
-    compositionBalance = Math.max(0, 1 - deviation / maxDeviation);
+    const deviation = Math.abs(qTL - ideal) + Math.abs(qTR - ideal) + Math.abs(qBL - ideal) + Math.abs(qBR - ideal);
+    compositionBalance = 1 - deviation / maxDeviation;
+    if (compositionBalance < 0) compositionBalance = 0;
   }
 
-  // Rhythmic regularity — periodic pattern strength via autocorrelation at multiple scales
-  // High = tile-like repeating patterns, low = aperiodic
+  // === Rhythmic regularity (hoisted row refs, pre-computed loop bounds) ===
   let rhythmSum = 0;
   let rhythmCount = 0;
   const lags = [2, 3, 4, 6, 8];
-  for (const lag of lags) {
+  for (let li = 0; li < 5; li++) {
+    const lag = lags[li];
     if (lag >= width && lag >= height) continue;
     let matchH = 0, pairsH = 0;
     let matchV = 0, pairsV = 0;
     if (lag < width) {
       for (let y = 0; y < height; y++) {
-        for (let x = 0; x + lag < width; x++) {
+        const row = grid[y];
+        for (let x = 0, xEnd = width - lag; x < xEnd; x++) {
           pairsH++;
-          if (grid[y][x] === grid[y][x + lag]) matchH++;
+          if (row[x] === row[x + lag]) matchH++;
         }
       }
     }
     if (lag < height) {
-      for (let y = 0; y + lag < height; y++) {
+      for (let y = 0, yEnd = height - lag; y < yEnd; y++) {
+        const row = grid[y], lagRow = grid[y + lag];
         for (let x = 0; x < width; x++) {
           pairsV++;
-          if (grid[y][x] === grid[y + lag][x]) matchV++;
+          if (row[x] === lagRow[x]) matchV++;
         }
       }
     }
     const hCorr = pairsH > 0 ? matchH / pairsH : 0;
     const vCorr = pairsV > 0 ? matchV / pairsV : 0;
-    rhythmSum += Math.max(hCorr, vCorr);
+    rhythmSum += hCorr > vCorr ? hCorr : vCorr;
     rhythmCount++;
   }
   const rhythmicRegularity = rhythmCount > 0 ? rhythmSum / rhythmCount : 0;
 
   // Aesthetic harmony: measures how well the metrics work together
-  // High harmony = structured complexity (high complexity + high coherence + moderate density)
-  // Low harmony = noise (high complexity + low coherence) or emptiness (low complexity + low density)
-  const complexityCoherence = Math.min(complexity / 2, 1) * spatialCoherence; // structured complexity > random noise
-  const densityFit = 1 - Math.abs(density - 0.4) * 2; // moderate density is most versatile
-  const balanceStructure = compositionBalance * (structuralInterest * 0.7 + 0.3); // balanced + interesting
-  const edgeFractalSync = edgeActivity * Math.min((fractalDimension ?? 0) / 1.8, 1); // edges that form fractals
-  const aestheticHarmony = Math.max(0, Math.min(1,
-    complexityCoherence * 0.3 +
-    densityFit * 0.15 +
-    balanceStructure * 0.25 +
-    edgeFractalSync * 0.2 +
-    informationDensity * 0.1
-  ));
+  const complexityCoherence = Math.min(complexity / 2, 1) * spatialCoherence;
+  const densityFit = 1 - Math.abs(density - 0.4) * 2;
+  const balanceStructure = compositionBalance * (structuralInterest * 0.7 + 0.3);
+  const edgeFractalSync = edgeActivity * Math.min((fractalDimension ?? 0) / 1.8, 1);
+  let aestheticHarmony = complexityCoherence * 0.3 + densityFit * 0.15 + balanceStructure * 0.25 + edgeFractalSync * 0.2 + informationDensity * 0.1;
+  if (aestheticHarmony < 0) aestheticHarmony = 0;
+  if (aestheticHarmony > 1) aestheticHarmony = 1;
 
   return { complexity, symmetry, density, novelty: 0, edgeActivity, structuralInterest, fractalDimension, informationDensity, spatialCoherence, compositionBalance, rhythmicRegularity, aestheticHarmony };
 }
 
 function computeBoxCountingDimension(grid: number[][], width: number, height: number): number {
-  const side = Math.min(width, height);
+  const side = width < height ? width : height;
   if (side < 4) return 0;
 
-  // Use box sizes that are powers of 2, from 2 up to side/2
   const sizes: number[] = [];
-  for (let s = 2; s <= side / 2; s *= 2) {
-    sizes.push(s);
-  }
+  for (let s = 2; s <= side >> 1; s <<= 1) sizes.push(s);
   if (sizes.length < 2) return 0;
 
-  const points: [number, number][] = []; // [log(1/s), log(count)]
-  for (const s of sizes) {
+  // Inline linear regression — no intermediate points array
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  let n = 0;
+  for (let si = 0; si < sizes.length; si++) {
+    const s = sizes[si];
     let boxCount = 0;
     for (let by = 0; by + s <= height; by += s) {
       for (let bx = 0; bx + s <= width; bx += s) {
         let hasContent = false;
-        outer: for (let y = by; y < by + s; y++) {
+        for (let y = by; y < by + s && !hasContent; y++) {
+          const row = grid[y];
           for (let x = bx; x < bx + s; x++) {
-            if (grid[y][x] > 0) { hasContent = true; break outer; }
+            if (row[x] > 0) { hasContent = true; break; }
           }
         }
         if (hasContent) boxCount++;
       }
     }
     if (boxCount > 0) {
-      points.push([Math.log(1 / s), Math.log(boxCount)]);
+      const lx = Math.log(1 / s), ly = Math.log(boxCount);
+      sumX += lx; sumY += ly; sumXY += lx * ly; sumXX += lx * lx;
+      n++;
     }
   }
-
-  if (points.length < 2) return 0;
-
-  // Linear regression for slope (fractal dimension estimate)
-  const n = points.length;
-  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-  for (const [x, y] of points) {
-    sumX += x; sumY += y; sumXY += x * y; sumXX += x * x;
-  }
+  if (n < 2) return 0;
   const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-
-  // Clamp to [0, 2] — theoretical range for 2D patterns
-  return Math.max(0, Math.min(slope, 2));
+  return slope < 0 ? 0 : slope > 2 ? 2 : slope;
 }
 
 // Compute novelty: how different is this piece's fingerprint from a set of others?
@@ -1978,6 +1954,7 @@ function getIdealDensity(genomeType?: Genome["type"]): number | null {
     case "fractal-flame": return 0.25;       // organic flame structures with density clusters
     case "sandpile": return null;              // full coverage — score by state variety
     case "magnetic-pendulum": return null;    // full coverage — score by basin variety
+    case "harmonograph": return 0.15;           // thin decaying curves, sparse is beautiful
     case "particle-life": return 0.3;        // clustered particle density patterns
     case "turmite": return 0.35;             // emergent highway patterns with visited/unvisited contrast
     default: return 0.4;
@@ -1998,7 +1975,8 @@ function getSymmetryScale(genomeType?: Genome["type"]): number {
     case "flowfield": return 0.35;        // flow fields can have emergent swirl symmetry
     case "dla": return 0.35;                 // DLA can have emergent radial symmetry
     case "sandpile": return 0.15;            // sandpile has inherent 4-fold symmetry
-    case "magnetic-pendulum": return 0.2;    // basin fractals have rotational symmetry
+    case "magnetic-pendulum": return 0.2;
+    case "harmonograph": return 0.3;          // pendulums can produce emergent symmetry    // basin fractals have rotational symmetry
     case "particle-life": return 0.35;      // emergent cluster symmetry
     case "turmite": return 0.3;              // turmites can produce symmetric highways
     default: return 0.3;                  // original scale
@@ -2089,7 +2067,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield", "dla", "fractal-flame", "sandpile", "magnetic-pendulum", "particle-life"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield", "dla", "fractal-flame", "sandpile", "harmonograph", "magnetic-pendulum", "particle-life", "turmite"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
@@ -2494,6 +2472,8 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     mutated.rule = mutateParticleLife(mutated.rule as ParticleLifeRule, rng);
   } else if (mutated.type === "turmite") {
     mutated.rule = mutateTurmite(mutated.rule as TurmiteRule, rng);
+  } else if (mutated.type === "harmonograph") {
+    mutated.rule = mutateHarmonograph(mutated.rule as HarmonographRule, rng);
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -2693,6 +2673,10 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
     child.rule = crossoverSandpile(a.rule as SandpileRule, b.rule as SandpileRule, rng);
   } else if (child.type === "magnetic-pendulum") {
     child.rule = crossoverMagneticPendulum(a.rule as MagneticPendulumRule, b.rule as MagneticPendulumRule, rng);
+  } else if (child.type === "particle-life") {
+    child.rule = crossoverParticleLife(a.rule as ParticleLifeRule, b.rule as ParticleLifeRule, rng);
+  } else if (child.type === "turmite") {
+    child.rule = crossoverTurmite(a.rule as TurmiteRule, b.rule as TurmiteRule, rng);
   }
 
   return child;
@@ -3129,6 +3113,33 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
     };
   }
+  }
+  if (type === "particle-life") {
+    return {
+      type: "particle-life",
+      rule: randomParticleLifeRule(rng),
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "turmite") {
+    return {
+      type: "turmite",
+      rule: randomTurmiteRule(rng),
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "harmonograph") {
+    return {
+      type: "harmonograph",
+      rule: randomHarmonographRule(rng),
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
   }
   // Default: 2d
   const birthCount = 1 + Math.floor(rng() * 3);

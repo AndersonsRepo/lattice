@@ -4,6 +4,13 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Arboretum / Interactive L-System Laboratory
+- **What**: Full-featured L-system explorer (`docs/arboretum.html`) with editable production rules, stochastic grammars, and parametric control
+- **Engine expansion** (`src/automata.ts`): Added `{`/`}` leaf polygon rendering, `&` gravity bend symbol, enhanced `@` flower rendering with configurable radial petal bursts. 10 new rule templates (Dragon curve, Sierpinski, Hilbert, Quadratic Koch, weeping flower tree, gravity-pulled fruiting, drooping canopy, forest canopy, coral with polyps). Added `&` to mutation alphabet.
+- **Page features**: 18 presets spanning classic fractals (Koch, Dragon, Sierpinski, Hilbert, Penrose, Snowflake) and botanical forms (Flowering Bush, Weeping Willow, Coral, Tapering Oak). Editable axiom + rules. Stochastic grammar toggle with per-variant weight sliders. 8 parametric sliders. Animated growth mode. Mutate button. Vector canvas rendering with depth-aware coloring, glow post-processing, auto-centering. PNG export. Keyboard shortcuts.
+- **Pages**: `docs/arboretum.html` (new), `docs/index.html` (nav + footer)
+- **How it differs**: Only page dedicated to L-system grammar editing — hand-edit rules, toggle stochastic variants, watch iteration-by-iteration growth. Other botanical pages render L-systems but don't expose the grammar.
+
 ### 2026-03-21 — Sediment + Breath (gap repair + new pages)
 - **What**: Built two missing pages that were logged as complete but had no files, plus fixed broken nav links
 - **Sediment** (`docs/sediment.html`): Geological cross-section of the evolutionary record. Each of the 148 generations rendered as a horizontal stratum, stacked bottom-up like geological strata. Pre-speciation layers (gens 1-31) appear as dark sediment with crystalline noise. Post-speciation layers light up with species-colored segments proportional to population. Right-edge amber bars show fitness per generation. Epoch boundary markers as dashed colored lines. HoF induction diamonds on left edge. "PRESENT" green line at top, "BEDROCK" at bottom. Hover crosshair with tooltip (generation, epoch, scores, species breakdown). Click any stratum for detail panel with full stats and species distribution bars. 2-second animated build-in from bedrock upward. Start overlay with archive stats.

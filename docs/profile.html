@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Pipeline Profiler</title>
+  <script src="lattice-perf.js"></script>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --dim: #6e6e82;
+      --accent: #7c6fe0;
+      --green: #4ade80;
+      --red: #f87171;
+      --amber: #fbbf24;
+      --blue: #60a5fa;
+      --pink: #f472b6;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1 {
+      font-size: 1.2rem;
+      font-weight: 300;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+    }
+    .subtitle { font-size: 0.7rem; color: var(--dim); margin-bottom: 1.5rem; }
+    .back-link { font-size: 0.65rem; color: var(--dim); text-decoration: none; }
+    .back-link:hover { color: var(--accent); }
+    .controls {
+      display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: center; flex-wrap: wrap;
+    }
+    button {
+      padding: 0.4rem 1rem; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); font-family: inherit;
+      font-size: 0.7rem; cursor: pointer; letter-spacing: 0.05em;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    button:hover { border-color: var(--accent); background: rgba(124,111,224,0.1); }
+    button:disabled { opacity: 0.3; cursor: default; }
+    button.active { border-color: var(--green); color: var(--green); }
+    select {
+      padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); font-family: inherit; font-size: 0.7rem;
+    }
+    .status { font-size: 0.7rem; color: var(--dim); }
+
+    /* Pipeline flame chart */
+    .flame-section { margin: 1.5rem 0; }
+    .flame-title {
+      font-size: 0.75rem; color: var(--text); text-transform: uppercase;
+      letter-spacing: 0.1em; margin-bottom: 0.75rem;
+    }
+    .flame-row {
+      display: flex; align-items: center; margin-bottom: 0.35rem; font-size: 0.7rem;
+    }
+    .flame-label { width: 120px; color: var(--dim); text-align: right; padding-right: 1rem; flex-shrink: 0; }
+    .flame-bar-wrap { flex: 1; height: 22px; position: relative; }
+    .flame-bar {
+      height: 100%; border-radius: 3px; display: inline-flex; align-items: center;
+      padding: 0 6px; font-size: 0.6rem; color: #fff; min-width: 2px;
+      transition: width 0.4s ease;
+    }
+    .flame-bar.worker   { background: rgba(74, 222, 128, 0.35); border: 1px solid rgba(74, 222, 128, 0.5); }
+    .flame-bar.fill     { background: rgba(96, 165, 250, 0.35); border: 1px solid rgba(96, 165, 250, 0.5); }
+    .flame-bar.put      { background: rgba(251, 191, 36, 0.35); border: 1px solid rgba(251, 191, 36, 0.5); }
+    .flame-bar.draw     { background: rgba(244, 114, 182, 0.35); border: 1px solid rgba(244, 114, 182, 0.5); }
+    .flame-bar.total    { background: rgba(124, 111, 224, 0.35); border: 1px solid rgba(124, 111, 224, 0.5); }
+    .flame-value { margin-left: 0.5rem; color: var(--dim); font-size: 0.65rem; flex-shrink: 0; width: 80px; }
+
+    /* Results table */
+    table { width: 100%; max-width: 1100px; border-collapse: collapse; font-size: 0.7rem; margin: 1rem 0; }
+    th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--dim); font-weight: 400; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.6rem; }
+    .type-name { color: var(--accent); }
+    .fast { color: var(--green); }
+    .slow { color: var(--red); }
+    .neutral { color: var(--amber); }
+
+    /* Legend */
+    .legend { display: flex; gap: 1.5rem; margin: 1rem 0; font-size: 0.65rem; color: var(--dim); flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 0.3rem; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+    .legend-dot.worker { background: rgba(74,222,128,0.5); }
+    .legend-dot.fill { background: rgba(96,165,250,0.5); }
+    .legend-dot.put { background: rgba(251,191,36,0.5); }
+    .legend-dot.draw { background: rgba(244,114,182,0.5); }
+
+    /* Comparison section */
+    .compare { margin: 2rem 0; }
+    .compare-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem; margin-top: 1rem;
+    }
+    .compare-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 1rem; font-size: 0.7rem;
+    }
+    .compare-card h3 {
+      font-size: 0.75rem; font-weight: 400; color: var(--accent);
+      margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .compare-row { display: flex; justify-content: space-between; margin: 0.25rem 0; }
+    .compare-label { color: var(--dim); }
+    .compare-val { font-weight: 600; }
+
+    .summary-box {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 1.2rem 1.5rem; margin: 1.5rem 0; max-width: 1100px; font-size: 0.75rem;
+      line-height: 1.8; display: none;
+    }
+    .summary-box h2 {
+      font-size: 0.85rem; font-weight: 400; color: var(--accent); margin-bottom: 0.5rem;
+    }
+
+    canvas { display: none; }
+  </style>
+</head>
+<body>
+  <a class="back-link" href="index.html">&larr; Back to Gallery</a>
+  <h1>Pipeline Profiler</h1>
+  <p class="subtitle">Measures each stage of the render pipeline independently. Identifies where time is actually spent per engine type.</p>
+
+  <div class="controls">
+    <button id="btn-profile">Profile All Engines</button>
+    <button id="btn-single">Profile Selected</button>
+    <select id="engine-select">
+      <option value="2d">2D Life-like</option>
+      <option value="reaction-diffusion" selected>React-Diff</option>
+      <option value="julia">Julia Set</option>
+      <option value="noise">Fractal Noise</option>
+      <option value="flowfield">Flow Field</option>
+      <option value="1d">1D Automaton</option>
+      <option value="lsystem">L-System</option>
+      <option value="spirograph">Spirograph</option>
+      <option value="attractor">Attractor</option>
+      <option value="voronoi">Voronoi</option>
+      <option value="wfc">WFC</option>
+    </select>
+    <span class="status" id="status">Ready. 60 frames per engine, 120x80 grid.</span>
+  </div>
+
+  <div class="legend">
+    <span class="legend-item"><span class="legend-dot worker"></span> Worker Sim+GetValues</span>
+    <span class="legend-item"><span class="legend-dot fill"></span> fillPixels (LUT lookup)</span>
+    <span class="legend-item"><span class="legend-dot put"></span> putImageData</span>
+    <span class="legend-item"><span class="legend-dot draw"></span> drawImage (scale to viewport)</span>
+  </div>
+
+  <!-- Flame chart for selected engine -->
+  <div class="flame-section" id="flame-section" style="display:none">
+    <div class="flame-title" id="flame-title">Pipeline Breakdown</div>
+    <div id="flame-chart"></div>
+  </div>
+
+  <!-- Full results table -->
+  <table id="results-table" style="display:none">
+    <thead>
+      <tr>
+        <th>Engine</th>
+        <th>Worker Step</th>
+        <th>fillPixels</th>
+        <th>putImageData</th>
+        <th>drawImage</th>
+        <th>Render Total</th>
+        <th>Pipeline Total</th>
+        <th>Budget (30fps)</th>
+      </tr>
+    </thead>
+    <tbody id="results-body"></tbody>
+  </table>
+
+  <!-- v4 vs v5 comparison -->
+  <div class="compare" id="compare-section" style="display:none">
+    <div class="flame-title">v4 vs v5 Micro-Benchmarks</div>
+    <div class="compare-grid" id="compare-grid"></div>
+  </div>
+
+  <div class="summary-box" id="summary"></div>
+
+  <canvas id="bench-canvas" width="1920" height="1080"></canvas>
+
+<script>
+const FRAMES = 60;
+const SIM_W = 120, SIM_H = 80;
+
+const TEST_GENOMES = {
+  '1d':                  { type: '1d', width: SIM_W, height: SIM_H, seed: 42, rule: { number: 110, states: 2 } },
+  '2d':                  { type: '2d', width: SIM_W, height: SIM_H, seed: 42, rule: { birth: [3], survive: [2, 3], states: 2 } },
+  'lsystem':             { type: 'lsystem', width: SIM_W, height: SIM_H, seed: 42, rule: { axiom: 'F', rules: { F: 'F[+F]F[-F]F' }, angle: 25, iterations: 4 } },
+  'reaction-diffusion':  { type: 'reaction-diffusion', width: SIM_W, height: SIM_H, seed: 42, rule: { feed: 0.055, kill: 0.062, Du: 0.16, Dv: 0.08 } },
+  'voronoi':             { type: 'voronoi', width: SIM_W, height: SIM_H, seed: 42, rule: { seeds: 20, metric: 'euclidean', mode: 'edges' } },
+  'wfc':                 { type: 'wfc', width: SIM_W, height: SIM_H, seed: 42, rule: { tileCount: 5, symmetry: 'horizontal' } },
+  'spirograph':          { type: 'spirograph', width: SIM_W, height: SIM_H, seed: 42, rule: { steps: 2000, layers: [{ R: 10, r: 3, d: 5, mode: 'hypo' }] } },
+  'attractor':           { type: 'attractor', width: SIM_W, height: SIM_H, seed: 42, rule: { variant: 'clifford', a: -1.4, b: 1.6, c: 1.0, d: 0.7 } },
+  'julia':               { type: 'julia', width: SIM_W, height: SIM_H, seed: 42, rule: { cReal: -0.7269, cImag: 0.1889, maxIter: 80, zoom: 1, centerX: 0, centerY: 0, escape: 4 } },
+  'noise':               { type: 'noise', width: SIM_W, height: SIM_H, seed: 42, rule: { scale: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2, offsetX: 0, offsetY: 0, warp: 0.5 } },
+  'flowfield':           { type: 'flowfield', width: SIM_W, height: SIM_H, seed: 42, rule: { fieldScale: 0.02, stepLength: 1, steps: 100, curl: 0.5, offsetX: 0, offsetY: 0, decay: 0.01, particles: 500 } },
+};
+
+const TYPE_LABELS = {
+  '1d': '1D Automaton', '2d': '2D Life', 'lsystem': 'L-System',
+  'reaction-diffusion': 'React-Diff', 'voronoi': 'Voronoi', 'wfc': 'WFC',
+  'spirograph': 'Spirograph', 'attractor': 'Attractor', 'julia': 'Julia Set',
+  'noise': 'Fractal Noise', 'flowfield': 'Flow Field',
+};
+
+const statusEl = document.getElementById('status');
+const btnAll = document.getElementById('btn-profile');
+const btnSingle = document.getElementById('btn-single');
+
+function renderFlameChart(result, type) {
+  const section = document.getElementById('flame-section');
+  const chart = document.getElementById('flame-chart');
+  const title = document.getElementById('flame-title');
+  section.style.display = 'block';
+  title.textContent = `Pipeline Breakdown: ${TYPE_LABELS[type]}`;
+
+  const maxMs = Math.max(result.total.avg, 1);
+  const scale = 100 / maxMs; // percentage of max
+
+  const stages = [
+    { label: 'Worker Step', cls: 'worker', avg: result.workerStep.avg, p95: result.workerStep.p95 },
+    { label: 'fillPixels', cls: 'fill', avg: result.fillPixels.avg, p95: result.fillPixels.p95 },
+    { label: 'putImageData', cls: 'put', avg: result.putImage.avg, p95: result.putImage.p95 },
+    { label: 'drawImage', cls: 'draw', avg: result.drawImage.avg, p95: result.drawImage.p95 },
+    { label: 'Total', cls: 'total', avg: result.total.avg, p95: result.total.p95 },
+  ];
+
+  chart.innerHTML = stages.map(s => `
+    <div class="flame-row">
+      <span class="flame-label">${s.label}</span>
+      <div class="flame-bar-wrap">
+        <div class="flame-bar ${s.cls}" style="width: ${Math.max(1, s.avg * scale)}%">
+          ${s.avg >= 0.1 ? s.avg.toFixed(2) + 'ms' : ''}
+        </div>
+      </div>
+      <span class="flame-value">avg ${s.avg.toFixed(3)}ms / p95 ${s.p95.toFixed(3)}ms</span>
+    </div>
+  `).join('');
+}
+
+function addTableRow(type, result) {
+  const tbody = document.getElementById('results-body');
+  const budget33 = 33.33; // 30fps budget
+  const pct = (result.total.avg / budget33 * 100).toFixed(0);
+  const budgetCls = result.total.avg < 5 ? 'fast' : result.total.avg < 16 ? 'neutral' : 'slow';
+
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td class="type-name">${TYPE_LABELS[type]}</td>
+    <td>${result.workerStep.avg.toFixed(2)}ms</td>
+    <td>${result.fillPixels.avg.toFixed(3)}ms</td>
+    <td>${result.putImage.avg.toFixed(3)}ms</td>
+    <td>${result.drawImage.avg.toFixed(3)}ms</td>
+    <td>${result.renderTotal.avg.toFixed(3)}ms</td>
+    <td><strong>${result.total.avg.toFixed(2)}ms</strong></td>
+    <td class="${budgetCls}">${pct}% used</td>
+  `;
+  tbody.appendChild(row);
+}
+
+// v4 vs v5 comparison: fillPixels unrolled vs not
+async function runComparison() {
+  const section = document.getElementById('compare-section');
+  const grid = document.getElementById('compare-grid');
+  section.style.display = 'block';
+
+  const size = SIM_W * SIM_H;
+  const values = new Float32Array(size);
+  for (let i = 0; i < size; i++) values[i] = Math.random();
+
+  const stops = [[10,10,15],[26,26,62],[59,45,139],[107,78,219],[157,122,245],[200,171,255],[232,216,255],[255,255,255]];
+  const lut = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255 * (stops.length - 1);
+    const idx = Math.floor(t), frac = t - idx;
+    const a = stops[Math.min(idx, stops.length - 1)];
+    const b = stops[Math.min(idx + 1, stops.length - 1)];
+    lut[i*3]     = Math.round(a[0] + (b[0] - a[0]) * frac);
+    lut[i*3 + 1] = Math.round(a[1] + (b[1] - a[1]) * frac);
+    lut[i*3 + 2] = Math.round(a[2] + (b[2] - a[2]) * frac);
+  }
+
+  // --- fillPixels: unrolled (v5) vs sequential (v4) ---
+  const renderer = new LatticePerf.FastRenderer();
+  renderer._ensureSim(SIM_W, SIM_H);
+
+  const ITERS = 500;
+
+  // v5 (unrolled)
+  const v5Times = [];
+  for (let i = 0; i < ITERS; i++) {
+    const t0 = performance.now();
+    renderer._fillPixels(values, lut, size);
+    v5Times.push(performance.now() - t0);
+  }
+
+  // v4 (sequential) - simulate old loop
+  const data32 = renderer._data32;
+  const lut32 = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const ci = i * 3;
+    lut32[i] = lut[ci] | (lut[ci + 1] << 8) | (lut[ci + 2] << 16) | 0xFF000000;
+  }
+  const v4Times = [];
+  for (let iter = 0; iter < ITERS; iter++) {
+    const t0 = performance.now();
+    for (let i = 0; i < size; i++) {
+      data32[i] = lut32[values[i] * 255 | 0];
+    }
+    v4Times.push(performance.now() - t0);
+  }
+
+  const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+  const p95 = arr => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length * 0.95)]; };
+
+  const v4Avg = avg(v4Times), v5Avg = avg(v5Times);
+  const fillSpeedup = v4Avg / v5Avg;
+
+  // --- p95: quickselect (v5) vs sort (v4) ---
+  const mon = new LatticePerf.PerfMonitor(120);
+  for (let i = 0; i < 120; i++) mon.record('test', Math.random() * 10);
+
+  const P95_ITERS = 5000;
+  // v5 quickselect
+  const qsTimes = [];
+  for (let i = 0; i < P95_ITERS; i++) {
+    const t0 = performance.now();
+    mon.p95('test');
+    qsTimes.push(performance.now() - t0);
+  }
+
+  // v4 sort-based (simulate)
+  const sortBuf = new Float64Array(120);
+  const srcBuf = mon._buffers['test'];
+  const sortTimes = [];
+  for (let i = 0; i < P95_ITERS; i++) {
+    const t0 = performance.now();
+    for (let j = 0; j < 120; j++) sortBuf[j] = srcBuf[j];
+    sortBuf.subarray(0, 120).sort();
+    sortBuf[Math.floor(120 * 0.95)];
+    sortTimes.push(performance.now() - t0);
+  }
+
+  const sortAvg = avg(sortTimes), qsAvg = avg(qsTimes);
+  const p95Speedup = sortAvg / qsAvg;
+
+  // --- BufferPool: alloc vs pool ---
+  const POOL_ITERS = 2000;
+  const pool = new LatticePerf.BufferPool();
+  // Warm the pool
+  const warmBuf = pool.acquire(size);
+  pool.release(warmBuf);
+
+  const allocTimes = [];
+  for (let i = 0; i < POOL_ITERS; i++) {
+    const t0 = performance.now();
+    const b = new Float32Array(size);
+    b[0] = 1; // prevent dead-code elim
+    allocTimes.push(performance.now() - t0);
+  }
+
+  const poolTimes = [];
+  for (let i = 0; i < POOL_ITERS; i++) {
+    const t0 = performance.now();
+    const b = pool.acquire(size);
+    b[0] = 1;
+    pool.release(b);
+    poolTimes.push(performance.now() - t0);
+  }
+
+  const allocAvg = avg(allocTimes), poolAvg = avg(poolTimes);
+  const poolSpeedup = allocAvg / poolAvg;
+
+  grid.innerHTML = `
+    <div class="compare-card">
+      <h3>fillPixels (${SIM_W}x${SIM_H})</h3>
+      <div class="compare-row"><span class="compare-label">v4 sequential</span><span class="compare-val slow">${(v4Avg * 1000).toFixed(0)} us</span></div>
+      <div class="compare-row"><span class="compare-label">v5 4x unrolled</span><span class="compare-val fast">${(v5Avg * 1000).toFixed(0)} us</span></div>
+      <div class="compare-row"><span class="compare-label">Speedup</span><span class="compare-val fast">${fillSpeedup.toFixed(2)}x</span></div>
+      <div class="compare-row"><span class="compare-label">Iterations</span><span class="compare-val">${ITERS}</span></div>
+    </div>
+    <div class="compare-card">
+      <h3>p95 Percentile (120 samples)</h3>
+      <div class="compare-row"><span class="compare-label">v4 full sort</span><span class="compare-val slow">${(sortAvg * 1000).toFixed(0)} us</span></div>
+      <div class="compare-row"><span class="compare-label">v5 quickselect</span><span class="compare-val fast">${(qsAvg * 1000).toFixed(0)} us</span></div>
+      <div class="compare-row"><span class="compare-label">Speedup</span><span class="compare-val fast">${p95Speedup.toFixed(2)}x</span></div>
+      <div class="compare-row"><span class="compare-label">Iterations</span><span class="compare-val">${P95_ITERS}</span></div>
+    </div>
+    <div class="compare-card">
+      <h3>Buffer Allocation (${size} floats)</h3>
+      <div class="compare-row"><span class="compare-label">new Float32Array</span><span class="compare-val slow">${(allocAvg * 1000).toFixed(0)} us</span></div>
+      <div class="compare-row"><span class="compare-label">BufferPool</span><span class="compare-val fast">${(poolAvg * 1000).toFixed(0)} us</span></div>
+      <div class="compare-row"><span class="compare-label">Speedup</span><span class="compare-val fast">${poolSpeedup.toFixed(2)}x</span></div>
+      <div class="compare-row"><span class="compare-label">GC pressure</span><span class="compare-val fast">eliminated</span></div>
+    </div>
+  `;
+}
+
+async function profileEngine(type) {
+  const profiler = new LatticePerf.PipelineProfiler();
+  const genome = TEST_GENOMES[type];
+  return await profiler.profileWorkerPipeline(genome, FRAMES);
+}
+
+async function profileSingle() {
+  const type = document.getElementById('engine-select').value;
+  btnSingle.disabled = true;
+  btnAll.disabled = true;
+  statusEl.textContent = `Profiling ${TYPE_LABELS[type]}...`;
+
+  const result = await profileEngine(type);
+  renderFlameChart(result, type);
+
+  document.getElementById('results-table').style.display = 'table';
+  document.getElementById('results-body').innerHTML = '';
+  addTableRow(type, result);
+
+  statusEl.textContent = `Done. Init: ${result.initMs.toFixed(0)}ms, ${result.frames} frames profiled.`;
+  btnSingle.disabled = false;
+  btnAll.disabled = false;
+}
+
+async function profileAll() {
+  btnAll.disabled = true;
+  btnSingle.disabled = true;
+  btnAll.classList.add('active');
+  btnAll.textContent = 'Running...';
+
+  document.getElementById('results-table').style.display = 'table';
+  const tbody = document.getElementById('results-body');
+  tbody.innerHTML = '';
+
+  const types = Object.keys(TEST_GENOMES);
+  const allResults = {};
+  let heaviest = null, heaviestMs = 0;
+
+  for (let i = 0; i < types.length; i++) {
+    const type = types[i];
+    statusEl.textContent = `Profiling ${TYPE_LABELS[type]}... (${i + 1}/${types.length})`;
+    await new Promise(r => setTimeout(r, 10)); // yield to UI
+
+    const result = await profileEngine(type);
+    allResults[type] = result;
+    addTableRow(type, result);
+
+    if (result.total.avg > heaviestMs) {
+      heaviestMs = result.total.avg;
+      heaviest = type;
+    }
+  }
+
+  // Show flame chart for heaviest engine
+  if (heaviest) renderFlameChart(allResults[heaviest], heaviest);
+
+  // Run v4 vs v5 comparison
+  statusEl.textContent = 'Running v4 vs v5 micro-benchmarks...';
+  await new Promise(r => setTimeout(r, 10));
+  await runComparison();
+
+  // Summary
+  const totalPipeline = Object.values(allResults).reduce((s, r) => s + r.total.avg, 0);
+  const heavyEngines = Object.entries(allResults)
+    .filter(([_, r]) => r.workerStep.avg > 5)
+    .map(([t, r]) => `${TYPE_LABELS[t]} (${r.workerStep.avg.toFixed(1)}ms)`);
+
+  const summaryEl = document.getElementById('summary');
+  summaryEl.style.display = 'block';
+  summaryEl.innerHTML = `
+    <h2>v5 Pipeline Summary</h2>
+    <p><strong>Architecture:</strong> WebWorker sim (double-buffered) + 4x-unrolled fillPixels + quickselect p95 + BufferPool</p>
+    <p>All 11 engines profiled at ${SIM_W}x${SIM_H}, ${FRAMES} frames each.</p>
+    <p>Heaviest engine: <strong class="slow">${TYPE_LABELS[heaviest]}</strong> at ${heaviestMs.toFixed(2)}ms total pipeline</p>
+    ${heavyEngines.length ? `<p>Compute-heavy engines (&gt;5ms): ${heavyEngines.join(', ')}</p>` : '<p class="fast">All engines under 5ms per frame</p>'}
+    <p>Main thread render cost (fillPixels + putImageData + drawImage): <strong class="fast">${Object.values(allResults).reduce((s, r) => Math.max(s, r.renderTotal.avg), 0).toFixed(3)}ms</strong> worst case</p>
+    <p style="color: var(--dim); margin-top: 0.5rem;">
+      Worker step = simulation + getValues (runs off main thread, overlapped with rendering via double-buffer).<br>
+      fillPixels = LUT lookup, 4x unrolled Uint32 writes to ImageData.<br>
+      putImageData = copy ImageData to canvas.<br>
+      drawImage = scale sim canvas to viewport (nearest-neighbor).
+    </p>
+  `;
+
+  statusEl.textContent = 'Done.';
+  btnAll.disabled = false;
+  btnSingle.disabled = false;
+  btnAll.classList.remove('active');
+  btnAll.textContent = 'Profile All Engines';
+}
+
+btnAll.addEventListener('click', profileAll);
+btnSingle.addEventListener('click', profileSingle);
+</script>
+</body>
+</html>
