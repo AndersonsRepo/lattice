@@ -179,6 +179,7 @@ export const SPECIES_THEMES: Record<string, ColorTheme> = {
   "magnetic-pendulum":   { hue: 310, chroma: 0.16, harmony: "mono",    lMin: 0.05, lMax: 0.92 },
   "particle-life":       { hue: 145, chroma: 0.18, harmony: "triadic",  lMin: 0.05, lMax: 0.93 },
   "flame":               { hue: 10,  chroma: 0.20, harmony: "analogous", lMin: 0.05, lMax: 0.95 },
+  "turmite":             { hue: 45,  chroma: 0.16, harmony: "complementary", lMin: 0.05, lMax: 0.93 },
 };
 
 /** Get the 8-step color array for a species type (drop-in replacement for hardcoded TYPE_COLORS) */

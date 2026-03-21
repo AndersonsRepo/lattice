@@ -4,6 +4,25 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Particle Life Engine + Interactive Showcase
+- **What**: New generative engine — Particle Life (artificial ecology). N species of particles interact via an attraction/repulsion matrix. Simple rules produce emergent swarms, hunters, orbits, symbiosis, and chains.
+- **Engine** (`src/particle-life.ts`):
+  - `ParticleLifeRule` interface: species count, per-species particle count, NxN attraction matrix, force radius, friction, force multiplier
+  - `evolveParticleLife()` — simulates at 4x resolution on toroidal field, accumulates density, returns quantized grid for evolution system
+  - Full mutation (matrix perturbation, species add/remove), crossover (matrix interpolation), random rule generation
+  - 3 seed genomes: "Hunters and Prey", "Symbiosis", "Orbital Dance"
+- **Integration** (`src/automata.ts`):
+  - Added to Genome type union, SPECIES_COLORS (warm red-pink gradient), scoring weights (favors structural interest + coherence), mutation/crossover dispatch, randomGenomeOfType, type-swap pool
+- **Interactive page** (`docs/particle-life.html`):
+  - Full-screen real-time Canvas simulation with glowing particles and configurable trails
+  - 7 curated presets: Hunters & Prey, Symbiosis, Orbital Dance, Primordial Soup, Chains, Galaxies, Explosion
+  - Live-editable NxN interaction matrix (click+drag cells, red=repel/green=attract)
+  - Sliders: species, particles per species, interaction radius, friction, force, trail persistence, glow radius
+  - Mouse/touch interaction: click and drag to attract particles
+  - Keyboard shortcuts: H=toggle controls, Space=pause, R=randomize
+  - Frosted-glass control panel, HUD with species/particle/FPS stats
+- **How it differs**: Unlike physarum (single chemical trail) or flow fields (static vector field), particle life has *multi-species agency* — each particle decides independently based on who's nearby. The emergent behaviors (chasing, orbiting, flocking) arise from the asymmetry of the interaction matrix, not from any field or gradient.
+
 ### 2026-03-21 — Performance Pipeline Optimization
 - **What**: Profiled and optimized the evolution scoring pipeline and frontend rendering infrastructure
 - **Score function optimization** (`src/automata.ts`):
@@ -682,3 +701,10 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Page** (`docs/basins.html`): Full-screen interactive basin fractal explorer. Progressive rendering with 4 quality tiers (fast/med/high/ultra) using off-screen canvas and ImageData pixel writes. Three color modes: **basins** (solid magnet colors modulated by settle time brightness), **settle** (luminosity maps time-to-convergence), **smooth** (256-step gradient per basin for cinematic richness). Click-to-trace animated pendulum trajectories with per-segment alpha fade and radial glow on the moving point. Scroll-to-zoom with cursor-anchored zoom. Shift+drag to pan. Magnet count selector (2-6), 5 physics sliders, color mode switcher, randomize, save PNG, trace toggle, reset view. Keyboard shortcuts (H/R/S/T/0/?). Frosted-glass panel with section labels. Magnet markers rendered as glowing dots with index labels. Progressive render with gradient progress bar.
 - **Pages**: `docs/basins.html` (new), `src/magnetic-pendulum.ts` (new), `src/automata.ts` (modified — import, Genome union, scoring, mutation, crossover, random genome, seed genomes, species color), `src/evolve.ts` (modified — import, dispatch case, type label)
 - **How it differs**: The magnetic pendulum is fundamentally different from all other engines — it's a dynamical system where the *art is the boundary*, not the interior. Strange attractors plot trajectory density; Julia sets color by escape time; this colors by *destination*. The fractal complexity emerges from the impossibility of predicting which magnet wins when you're near the boundary between basins. Low friction produces intricate, deeply nested fractal boundaries. High friction produces smooth, simple basins. The interactive page lets you witness this directly — trace a pendulum from any point and watch chaos unfold as the bob whips between magnets before settling.
+
+### 2026-03-21 — Turmite Engine + Interactive Explorer (autonomous session)
+- **What**: New generative art engine (`turmite`) implementing generalized Langton's Ant — 2D Turing machines that walk a grid, following state transitions based on cell color and internal state. Plus an interactive explorer page (`docs/turmite.html`).
+- **Engine** (`src/turmite.ts`): Multi-color (2-8), multi-state (1-4) turmite simulation with full transition table: `transitions[state][color] → [newColor, turn, newState]`. Turn directions: none/right/u-turn/left. Supports 1-6 ants with configurable spacing (center/cross/corners/random). Toroidal wrapping or boundary bouncing. Output combines cell color state (60%) with log-scaled visit density (40%) for richer visual texture. Internal resolution 2x with 2x2 downsampling. Full evolution integration: random genome generation, mutation (9 channels), crossover, 5 seed genomes (classic Langton RL, symmetric RRL, dense LLRR, multi-ant interference, stateful 2×3). Species color theme: hue 45, complementary harmony.
+- **Page** (`docs/turmite.html`): Split-pane interactive explorer. Full-screen pixelated canvas with real-time animation. Sidebar with: 8 curated presets (Langton's Ant, RRL, LLRR, RLLR, Spiral, Fibonacci, Stateful, Snowflake), live-editable transition table with dropdowns, parameter sliders (ants/colors/states), wrap toggle, 5-level speed control (1/10/100/500/2000 steps per frame), play/pause/step/reset/PNG. Click canvas to place ants. Keyboard shortcuts (Space/S/R/D/1-5).
+- **Files**: `src/turmite.ts` (new), `docs/turmite.html` (new), `src/automata.ts` (modified), `src/evolve.ts` (modified), `src/palette.ts` (modified), `docs/index.html` (modified)
+- **How it differs**: Turmites are unique among Lattice's engines because they're *local* — a single point agent building structure step-by-step, rather than a global field computation. The beauty comes from the phase transition between chaos and order: classic Langton's Ant scribbles chaotically for ~10,000 steps then suddenly constructs a perfect diagonal highway forever. Multi-color variants produce filled symmetric regions. Multiple ants create interference patterns where highways collide and redirect.

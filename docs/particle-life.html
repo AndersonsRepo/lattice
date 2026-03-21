@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Particle Life</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title { pointer-events: auto; }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .hud-title .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .hud-title .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    .panel {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      pointer-events: auto;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      max-width: 340px;
+      max-height: calc(100vh - 5rem);
+      overflow-y: auto;
+      font-size: 0.65rem;
+      letter-spacing: 0.03em;
+      transition: opacity 0.3s ease;
+    }
+
+    .panel.collapsed { opacity: 0; pointer-events: none; }
+
+    .panel h2 {
+      font-size: 0.7rem;
+      font-weight: 400;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.4rem;
+    }
+
+    .panel-section { margin-bottom: 0.8rem; }
+
+    .panel-section h3 {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.4rem;
+    }
+
+    .matrix-grid {
+      display: grid;
+      gap: 2px;
+      margin-bottom: 0.5rem;
+    }
+
+    .matrix-cell {
+      width: 100%;
+      aspect-ratio: 1;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .matrix-cell:hover { border-color: var(--accent); }
+
+    .matrix-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.35rem;
+    }
+
+    .slider-row label {
+      color: var(--text-dim);
+      min-width: 70px;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      margin: 0 0.4rem;
+      accent-color: var(--accent);
+      height: 3px;
+    }
+
+    .slider-row .val {
+      color: var(--green);
+      min-width: 32px;
+      text-align: right;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+
+    .btn {
+      background: rgba(124, 111, 224, 0.15);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      background: rgba(124, 111, 224, 0.3);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+    .btn.active {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    .preset-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .preset-btn {
+      background: rgba(124, 111, 224, 0.08);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.3rem 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.6rem;
+      text-align: left;
+      transition: all 0.2s ease;
+    }
+    .preset-btn:hover {
+      border-color: var(--accent);
+      background: rgba(124, 111, 224, 0.15);
+    }
+    .preset-btn .preset-name { color: var(--green); }
+    .preset-btn .preset-desc { color: var(--text-dim); font-size: 0.55rem; }
+
+    .toggle-btn {
+      position: absolute;
+      bottom: 1.25rem;
+      right: 1.25rem;
+      pointer-events: auto;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.6rem;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      letter-spacing: 0.05em;
+    }
+    .toggle-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+    .panel::-webkit-scrollbar { width: 4px; }
+    .panel::-webkit-scrollbar-track { background: transparent; }
+    .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div class="hud">
+    <div class="hud-top">
+      <div class="hud-title">
+        <h1>Particle Life</h1>
+        <a href="index.html" class="back-link">&larr; lattice</a>
+      </div>
+      <div class="hud-stats" id="stats">
+        <div>species <span class="val" id="stat-species">4</span></div>
+        <div>particles <span class="val" id="stat-particles">0</span></div>
+        <div>fps <span class="val" id="stat-fps">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel">
+    <h2>Controls</h2>
+
+    <div class="panel-section">
+      <h3>Presets</h3>
+      <div class="preset-list" id="presets"></div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Interaction Matrix</h3>
+      <div class="matrix-grid" id="matrix"></div>
+      <div style="color: var(--text-dim); font-size: 0.5rem; margin-top: 0.3rem;">
+        Click + drag to adjust. Red = repel, green = attract.
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Parameters</h3>
+      <div class="slider-row">
+        <label>species</label>
+        <input type="range" id="sl-species" min="2" max="8" step="1" value="4">
+        <span class="val" id="v-species">4</span>
+      </div>
+      <div class="slider-row">
+        <label>per species</label>
+        <input type="range" id="sl-count" min="20" max="500" step="10" value="200">
+        <span class="val" id="v-count">200</span>
+      </div>
+      <div class="slider-row">
+        <label>radius</label>
+        <input type="range" id="sl-radius" min="20" max="200" step="5" value="80">
+        <span class="val" id="v-radius">80</span>
+      </div>
+      <div class="slider-row">
+        <label>friction</label>
+        <input type="range" id="sl-friction" min="0.05" max="0.95" step="0.05" value="0.5">
+        <span class="val" id="v-friction">0.50</span>
+      </div>
+      <div class="slider-row">
+        <label>force</label>
+        <input type="range" id="sl-force" min="0.2" max="8" step="0.2" value="2">
+        <span class="val" id="v-force">2.0</span>
+      </div>
+      <div class="slider-row">
+        <label>trails</label>
+        <input type="range" id="sl-trails" min="0" max="0.98" step="0.02" value="0.85">
+        <span class="val" id="v-trails">0.85</span>
+      </div>
+      <div class="slider-row">
+        <label>glow</label>
+        <input type="range" id="sl-glow" min="0" max="20" step="1" value="8">
+        <span class="val" id="v-glow">8</span>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="btn-randomize">randomize</button>
+      <button class="btn" id="btn-reset">reset</button>
+      <button class="btn" id="btn-pause">pause</button>
+    </div>
+  </div>
+
+  <button class="toggle-btn" id="toggle">[H] hide controls</button>
+
+  <script>
+    const SPECIES_HUES = [
+      { hex: '#e84057' },  // red
+      { hex: '#3dc97a' },  // green
+      { hex: '#5b8df5' },  // blue
+      { hex: '#e8a825' },  // amber
+      { hex: '#b06af0' },  // purple
+      { hex: '#3dc9c9' },  // cyan
+      { hex: '#e84098' },  // pink
+      { hex: '#6db830' },  // lime
+    ];
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+    let running = true;
+    let trailAlpha = 0.85;
+    let glowRadius = 8;
+
+    let numSpecies = 4;
+    let perSpecies = 200;
+    let radius = 80;
+    let friction = 0.5;
+    let forceFactor = 2;
+    let matrix = [];
+
+    let px, py, vx, vy, ps;
+    let total = 0;
+
+    let mouseX = -1e4, mouseY = -1e4;
+    let mouseDown = false;
+
+    let frameCount = 0;
+    let lastFpsTime = performance.now();
+
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+
+    function randomMatrix(n) {
+      const m = [];
+      for (let i = 0; i < n; i++) {
+        const row = [];
+        for (let j = 0; j < n; j++) {
+          row.push(i === j ? 0.1 + Math.random() * 0.4 : (Math.random() - 0.5) * 2);
+        }
+        m.push(row);
+      }
+      return m;
+    }
+
+    function initParticles() {
+      total = numSpecies * perSpecies;
+      px = new Float32Array(total);
+      py = new Float32Array(total);
+      vx = new Float32Array(total);
+      vy = new Float32Array(total);
+      ps = new Uint8Array(total);
+
+      for (let s = 0; s < numSpecies; s++) {
+        const cx = W * 0.2 + Math.random() * W * 0.6;
+        const cy = H * 0.2 + Math.random() * H * 0.6;
+        for (let i = 0; i < perSpecies; i++) {
+          const idx = s * perSpecies + i;
+          px[idx] = cx + (Math.random() - 0.5) * W * 0.3;
+          py[idx] = cy + (Math.random() - 0.5) * H * 0.3;
+          vx[idx] = (Math.random() - 0.5) * 0.5;
+          vy[idx] = (Math.random() - 0.5) * 0.5;
+          ps[idx] = s;
+        }
+      }
+
+      document.getElementById('stat-particles').textContent = total;
+      document.getElementById('stat-species').textContent = numSpecies;
+    }
+
+    function step() {
+      const rSq = radius * radius;
+      const halfW = W * 0.5, halfH = H * 0.5;
+
+      for (let i = 0; i < total; i++) {
+        let fx = 0, fy = 0;
+        const si = ps[i];
+        const xi = px[i], yi = py[i];
+
+        for (let j = 0; j < total; j++) {
+          if (i === j) continue;
+
+          let dx = px[j] - xi;
+          let dy = py[j] - yi;
+
+          if (dx > halfW) dx -= W;
+          else if (dx < -halfW) dx += W;
+          if (dy > halfH) dy -= H;
+          else if (dy < -halfH) dy += H;
+
+          const dSq = dx * dx + dy * dy;
+          if (dSq > rSq || dSq < 1) continue;
+
+          const dist = Math.sqrt(dSq);
+          const inv = 1 / dist;
+          const t = dist / radius;
+
+          let force;
+          if (t < 0.3) {
+            force = (t / 0.3 - 1);
+          } else {
+            force = matrix[si][ps[j]] * (1 - Math.abs(2 * t - 1.3));
+          }
+
+          fx += dx * inv * force * forceFactor;
+          fy += dy * inv * force * forceFactor;
+        }
+
+        if (mouseDown) {
+          let mdx = mouseX - xi;
+          let mdy = mouseY - yi;
+          const md = Math.sqrt(mdx * mdx + mdy * mdy);
+          if (md > 5 && md < 300) {
+            const mf = 3 / md;
+            fx += mdx * mf;
+            fy += mdy * mf;
+          }
+        }
+
+        vx[i] = (vx[i] + fx) * friction;
+        vy[i] = (vy[i] + fy) * friction;
+      }
+
+      for (let i = 0; i < total; i++) {
+        px[i] = ((px[i] + vx[i]) % W + W) % W;
+        py[i] = ((py[i] + vy[i]) % H + H) % H;
+      }
+    }
+
+    function draw() {
+      if (trailAlpha > 0) {
+        ctx.fillStyle = `rgba(10, 10, 15, ${1 - trailAlpha})`;
+        ctx.fillRect(0, 0, W, H);
+      } else {
+        ctx.fillStyle = '#0a0a0f';
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      const useGlow = glowRadius > 0;
+      if (useGlow) ctx.shadowBlur = glowRadius;
+
+      for (let i = 0; i < total; i++) {
+        const spec = SPECIES_HUES[ps[i]];
+        ctx.fillStyle = spec.hex;
+        if (useGlow) ctx.shadowColor = spec.hex;
+
+        const speed = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]);
+        const sz = 1.5 + Math.min(speed * 0.3, 1.5);
+
+        ctx.beginPath();
+        ctx.arc(px[i], py[i], sz, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+    }
+
+    function loop() {
+      if (running) step();
+      draw();
+
+      frameCount++;
+      const now = performance.now();
+      if (now - lastFpsTime > 500) {
+        document.getElementById('stat-fps').textContent =
+          Math.round(frameCount / ((now - lastFpsTime) / 1000));
+        frameCount = 0;
+        lastFpsTime = now;
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    // --- Matrix UI ---
+    function buildMatrixUI() {
+      const grid = document.getElementById('matrix');
+      grid.innerHTML = '';
+      const n = numSpecies;
+      grid.style.gridTemplateColumns = `24px repeat(${n}, 1fr)`;
+      grid.style.gridTemplateRows = `24px repeat(${n}, 1fr)`;
+
+      grid.appendChild(document.createElement('div'));
+      for (let j = 0; j < n; j++) {
+        const lbl = document.createElement('div');
+        lbl.className = 'matrix-label';
+        lbl.style.color = SPECIES_HUES[j].hex;
+        lbl.textContent = j + 1;
+        grid.appendChild(lbl);
+      }
+
+      for (let i = 0; i < n; i++) {
+        const lbl = document.createElement('div');
+        lbl.className = 'matrix-label';
+        lbl.style.color = SPECIES_HUES[i].hex;
+        lbl.textContent = i + 1;
+        grid.appendChild(lbl);
+
+        for (let j = 0; j < n; j++) {
+          const cell = document.createElement('div');
+          cell.className = 'matrix-cell';
+          updateCellColor(cell, matrix[i][j]);
+
+          const ii = i, jj = j;
+          let dragging = false;
+
+          cell.addEventListener('mousedown', (e) => { dragging = true; e.preventDefault(); });
+          cell.addEventListener('mousemove', (e) => {
+            if (!dragging) return;
+            const rect = cell.getBoundingClientRect();
+            const val = 1 - ((e.clientY - rect.top) / rect.height) * 2;
+            matrix[ii][jj] = Math.max(-1, Math.min(1, val));
+            updateCellColor(cell, matrix[ii][jj]);
+          });
+          cell.addEventListener('click', (e) => {
+            const rect = cell.getBoundingClientRect();
+            const val = 1 - ((e.clientY - rect.top) / rect.height) * 2;
+            matrix[ii][jj] = Math.max(-1, Math.min(1, val));
+            updateCellColor(cell, matrix[ii][jj]);
+          });
+          document.addEventListener('mouseup', () => { dragging = false; });
+
+          grid.appendChild(cell);
+        }
+      }
+    }
+
+    function updateCellColor(cell, val) {
+      const v = Math.max(-1, Math.min(1, val));
+      if (v > 0) {
+        cell.style.background = `rgba(40, ${80 + Math.round(v * 180)}, 40, ${0.3 + v * 0.5})`;
+      } else if (v < 0) {
+        cell.style.background = `rgba(${80 + Math.round(-v * 180)}, 40, 40, ${0.3 + (-v) * 0.5})`;
+      } else {
+        cell.style.background = 'rgba(40, 40, 50, 0.3)';
+      }
+      cell.title = v.toFixed(2);
+    }
+
+    // --- Presets ---
+    const PRESETS = [
+      {
+        name: 'Hunters & Prey',
+        desc: 'Asymmetric chase dynamics',
+        species: 4, count: 200, radius: 80, friction: 0.5, force: 2,
+        matrix: [
+          [ 0.3, -0.8,  0.5,  0.1],
+          [ 0.7,  0.2, -0.6,  0.3],
+          [-0.5,  0.8,  0.3, -0.4],
+          [ 0.1, -0.3,  0.6,  0.2],
+        ]
+      },
+      {
+        name: 'Symbiosis',
+        desc: 'Mutual attraction creates living clusters',
+        species: 3, count: 250, radius: 100, friction: 0.4, force: 1.5,
+        matrix: [
+          [ 0.4,  0.6, -0.3],
+          [ 0.5,  0.3,  0.7],
+          [-0.4,  0.6,  0.2],
+        ]
+      },
+      {
+        name: 'Orbital Dance',
+        desc: 'Strong asymmetry creates orbital paths',
+        species: 5, count: 150, radius: 70, friction: 0.6, force: 2.5,
+        matrix: [
+          [ 0.2,  0.9, -0.7,  0.1,  0.3],
+          [-0.8,  0.3,  0.6, -0.2,  0.1],
+          [ 0.5, -0.5,  0.2,  0.8, -0.6],
+          [ 0.1,  0.3, -0.4,  0.3,  0.7],
+          [-0.3,  0.2,  0.5, -0.6,  0.2],
+        ]
+      },
+      {
+        name: 'Primordial Soup',
+        desc: 'Gentle chaos swirling together',
+        species: 6, count: 120, radius: 60, friction: 0.55, force: 1.2,
+        matrix: Array.from({length: 6}, (_, i) =>
+          Array.from({length: 6}, (_, j) =>
+            i === j ? 0.2 : Math.sin((i + j) * 1.7) * 0.6
+          )
+        )
+      },
+      {
+        name: 'Chains',
+        desc: 'Species form linked strands',
+        species: 4, count: 180, radius: 90, friction: 0.35, force: 3,
+        matrix: [
+          [ 0.1,  0.9, -0.9,  0.0],
+          [-0.9,  0.1,  0.9,  0.0],
+          [ 0.0, -0.9,  0.1,  0.9],
+          [ 0.9,  0.0, -0.9,  0.1],
+        ]
+      },
+      {
+        name: 'Galaxies',
+        desc: 'Self-organizing rotating clusters',
+        species: 3, count: 300, radius: 120, friction: 0.65, force: 1.8,
+        matrix: [
+          [ 0.5,  0.3, -0.8],
+          [-0.7,  0.4,  0.5],
+          [ 0.6, -0.6,  0.3],
+        ]
+      },
+      {
+        name: 'Explosion',
+        desc: 'Repulsion with flashes of order',
+        species: 5, count: 160, radius: 55, friction: 0.7, force: 4,
+        matrix: Array.from({length: 5}, (_, i) =>
+          Array.from({length: 5}, (_, j) =>
+            i === j ? -0.3 : (i + j) % 3 === 0 ? 0.8 : -0.7
+          )
+        )
+      },
+    ];
+
+    function loadPreset(p) {
+      numSpecies = p.species;
+      perSpecies = p.count;
+      radius = p.radius;
+      friction = p.friction;
+      forceFactor = p.force;
+      matrix = p.matrix.map(r => [...r]);
+
+      document.getElementById('sl-species').value = numSpecies;
+      document.getElementById('v-species').textContent = numSpecies;
+      document.getElementById('sl-count').value = perSpecies;
+      document.getElementById('v-count').textContent = perSpecies;
+      document.getElementById('sl-radius').value = radius;
+      document.getElementById('v-radius').textContent = radius;
+      document.getElementById('sl-friction').value = friction;
+      document.getElementById('v-friction').textContent = friction.toFixed(2);
+      document.getElementById('sl-force').value = forceFactor;
+      document.getElementById('v-force').textContent = forceFactor.toFixed(1);
+
+      buildMatrixUI();
+      initParticles();
+    }
+
+    function buildPresetUI() {
+      const list = document.getElementById('presets');
+      PRESETS.forEach(p => {
+        const btn = document.createElement('button');
+        btn.className = 'preset-btn';
+        btn.innerHTML = `<span class="preset-name">${p.name}</span> <span class="preset-desc">${p.desc}</span>`;
+        btn.addEventListener('click', () => loadPreset(p));
+        list.appendChild(btn);
+      });
+    }
+
+    function bindSlider(id, setter, fmt) {
+      const sl = document.getElementById('sl-' + id);
+      const vl = document.getElementById('v-' + id);
+      sl.addEventListener('input', () => {
+        const v = parseFloat(sl.value);
+        setter(v);
+        vl.textContent = fmt ? fmt(v) : v;
+      });
+    }
+
+    function init() {
+      resize();
+      window.addEventListener('resize', resize);
+
+      matrix = randomMatrix(numSpecies);
+      initParticles();
+      buildMatrixUI();
+      buildPresetUI();
+
+      bindSlider('species', v => {
+        numSpecies = v;
+        while (matrix.length < v) {
+          matrix.push(Array.from({length: v}, () => (Math.random() - 0.5) * 2));
+        }
+        matrix = matrix.slice(0, v).map(row => {
+          while (row.length < v) row.push((Math.random() - 0.5) * 2);
+          return row.slice(0, v);
+        });
+        buildMatrixUI();
+        initParticles();
+      });
+      bindSlider('count', v => { perSpecies = v; initParticles(); });
+      bindSlider('radius', v => { radius = v; });
+      bindSlider('friction', v => { friction = v; }, v => v.toFixed(2));
+      bindSlider('force', v => { forceFactor = v; }, v => v.toFixed(1));
+      bindSlider('trails', v => { trailAlpha = v; }, v => v.toFixed(2));
+      bindSlider('glow', v => { glowRadius = v; });
+
+      document.getElementById('btn-randomize').addEventListener('click', () => {
+        matrix = randomMatrix(numSpecies);
+        buildMatrixUI();
+        initParticles();
+      });
+
+      document.getElementById('btn-reset').addEventListener('click', () => initParticles());
+
+      document.getElementById('btn-pause').addEventListener('click', () => {
+        running = !running;
+        const btn = document.getElementById('btn-pause');
+        btn.textContent = running ? 'pause' : 'play';
+        btn.classList.toggle('active', !running);
+      });
+
+      const panel = document.getElementById('panel');
+      const toggle = document.getElementById('toggle');
+      toggle.addEventListener('click', () => {
+        panel.classList.toggle('collapsed');
+        toggle.textContent = panel.classList.contains('collapsed')
+          ? '[H] show controls' : '[H] hide controls';
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'h' || e.key === 'H') toggle.click();
+        else if (e.key === ' ') { e.preventDefault(); document.getElementById('btn-pause').click(); }
+        else if (e.key === 'r' || e.key === 'R') document.getElementById('btn-randomize').click();
+      });
+
+      canvas.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+      canvas.addEventListener('mousedown', (e) => { if (e.target === canvas) mouseDown = true; });
+      canvas.addEventListener('mouseup', () => { mouseDown = false; });
+      canvas.addEventListener('mouseleave', () => { mouseDown = false; });
+
+      canvas.addEventListener('touchstart', (e) => {
+        mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY; mouseDown = true;
+      });
+      canvas.addEventListener('touchmove', (e) => {
+        mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY;
+      });
+      canvas.addEventListener('touchend', () => { mouseDown = false; });
+
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, W, H);
+
+      loop();
+    }
+
+    init();
+  </script>
+</body>
+</html>
