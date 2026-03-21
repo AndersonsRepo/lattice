@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Symphony</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .bg-glow {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 800px; height: 800px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.2;
+      pointer-events: none;
+      transition: opacity 3s ease, background 3s ease;
+      z-index: 0;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 3.5rem;
+      color: var(--accent);
+      margin-bottom: 1.5rem;
+      text-shadow: 0 0 40px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-text {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-sub {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      margin-top: 1rem;
+      opacity: 0.5;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* Back link */
+    .back-link {
+      position: fixed;
+      top: 1.5rem;
+      left: 1.5rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      z-index: 10;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    /* Main layout */
+    .main {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      padding: 1.5rem;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .header h1 {
+      font-size: 1.4rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+    }
+    .header .sub {
+      color: var(--text-dim);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      margin-top: 0.3rem;
+    }
+
+    /* Generation info display */
+    .gen-display {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.8rem;
+      flex-wrap: wrap;
+    }
+    .gen-num {
+      font-size: 2.5rem;
+      font-weight: 200;
+      color: var(--green);
+      text-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+      font-variant-numeric: tabular-nums;
+      min-width: 4ch;
+      text-align: center;
+    }
+    .gen-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+    .gen-stat {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+    .gen-stat span { color: var(--text); }
+    .epoch-badge {
+      padding: 0.25rem 0.8rem;
+      border-radius: 10px;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border: 1px solid;
+      transition: all 0.5s ease;
+    }
+
+    /* Visualization canvas */
+    .viz-container {
+      flex: 1;
+      width: 100%;
+      max-width: 1100px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      min-height: 0;
+    }
+
+    .spectrum-canvas {
+      width: 100%;
+      flex: 1;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      min-height: 180px;
+    }
+
+    /* Species voices panel */
+    .voices-panel {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 0.4rem;
+    }
+    .voice-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      transition: all 0.4s ease;
+      cursor: default;
+    }
+    .voice-chip.active {
+      border-color: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+    .voice-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      transition: transform 0.3s;
+    }
+    .voice-chip.active .voice-dot { transform: scale(1.5); }
+    .voice-label { text-transform: uppercase; }
+    .voice-vol {
+      font-variant-numeric: tabular-nums;
+      min-width: 2ch;
+      text-align: right;
+      opacity: 0.6;
+    }
+
+    /* Timeline scrubber */
+    .timeline-container {
+      width: 100%;
+      max-width: 1100px;
+      position: relative;
+      height: 50px;
+      margin-bottom: 0.3rem;
+    }
+    .timeline-canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.6rem 1.2rem;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      margin-bottom: 0.5rem;
+    }
+    .ctrl-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 0.25rem;
+      font-size: 1rem;
+      transition: color 0.2s, transform 0.15s;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .ctrl-btn:hover { color: var(--text); transform: scale(1.1); }
+    .ctrl-btn.active { color: var(--green); }
+    .ctrl-btn.play-btn {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      color: var(--accent);
+    }
+    .ctrl-btn.play-btn:hover { background: var(--accent); color: #fff; }
+
+    .volume-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 70px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 11px; height: 11px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .speed-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      user-select: none;
+      cursor: pointer;
+    }
+    .speed-label:hover { color: var(--text); }
+
+    /* Narrative text */
+    .narrative {
+      position: fixed;
+      bottom: 6rem;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--amber);
+      letter-spacing: 0.1em;
+      opacity: 0;
+      transition: opacity 1s ease;
+      pointer-events: none;
+      text-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
+      white-space: nowrap;
+      z-index: 5;
+    }
+    .narrative.visible { opacity: 1; }
+
+    /* Bell flash */
+    .bell-flash {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 50% 40%, rgba(251, 191, 36, 0.08) 0%, transparent 60%);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      z-index: 2;
+    }
+    .bell-flash.active { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="bg-glow" id="bgGlow"></div>
+  <div class="bell-flash" id="bellFlash"></div>
+  <a href="index.html" class="back-link">&larr; lattice</a>
+
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">&#9838;</div>
+    <div class="start-text">click to begin</div>
+    <div class="start-sub">148 generations of evolution, composed as sound</div>
+  </div>
+
+  <div class="main">
+    <div class="header">
+      <h1>Symphony</h1>
+      <div class="sub">the sound of evolution</div>
+    </div>
+
+    <div class="gen-display">
+      <div class="gen-num" id="genNum">0</div>
+      <div class="gen-stats">
+        <div class="gen-stat">best <span id="bestScore">0.000</span></div>
+        <div class="gen-stat">avg <span id="avgScore">0.000</span></div>
+        <div class="gen-stat">hall of fame <span id="hofSize">0</span></div>
+      </div>
+      <div class="epoch-badge" id="epochBadge">emergence</div>
+    </div>
+
+    <div class="voices-panel" id="voicesPanel"></div>
+
+    <div class="viz-container">
+      <canvas class="spectrum-canvas" id="spectrumCanvas"></canvas>
+    </div>
+
+    <div class="timeline-container">
+      <canvas class="timeline-canvas" id="timelineCanvas"></canvas>
+    </div>
+
+    <div class="controls">
+      <button class="ctrl-btn" id="prevBtn" title="Previous (Left arrow)">&#9664;&#9664;</button>
+      <button class="ctrl-btn play-btn" id="playBtn" title="Play/Pause (Space)">&#9654;</button>
+      <button class="ctrl-btn" id="nextBtn" title="Next (Right arrow)">&#9654;&#9654;</button>
+      <span class="speed-label" id="speedLabel" title="Click to change speed">1&times;</span>
+      <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.01" value="0.6" title="Volume">
+      <span class="speed-label" style="opacity:0.5">&#9834;</span>
+    </div>
+  </div>
+
+  <div class="narrative" id="narrative"></div>
+
+  <script>
+    // ── Data ──
+    let galleryData = null;
+    let history = [];
+
+    // ── Species colors & config ──
+    const SPECIES_COLORS = {
+      '1d':                  '#ef4444',
+      '2d':                  '#4ade80',
+      'reaction-diffusion':  '#a855f7',
+      'wfc':                 '#ec4899',
+      'lsystem':             '#22d3ee',
+      'spirograph':          '#fbbf24',
+      'attractor':           '#f97316',
+      'voronoi':             '#3b82f6',
+      'julia':               '#e879f9',
+      'noise':               '#6b7280',
+      'flowfield':           '#14b8a6'
+    };
+
+    const ALL_SPECIES = Object.keys(SPECIES_COLORS);
+
+    // Musical mapping: each species gets a waveform + octave offset
+    const SPECIES_VOICE = {
+      '1d':                  { wave: 'sawtooth', octave: 0 },
+      '2d':                  { wave: 'triangle', octave: 0 },
+      'reaction-diffusion':  { wave: 'sine',     octave: -1 },
+      'wfc':                 { wave: 'square',   octave: 0 },
+      'lsystem':             { wave: 'triangle', octave: 1 },
+      'spirograph':          { wave: 'sine',     octave: 1 },
+      'attractor':           { wave: 'sawtooth', octave: -1 },
+      'voronoi':             { wave: 'sine',     octave: 0 },
+      'julia':               { wave: 'triangle', octave: 1 },
+      'noise':               { wave: 'sawtooth', octave: -1 },
+      'flowfield':           { wave: 'sine',     octave: 0 }
+    };
+
+    // Epoch → musical mode (scale intervals from root, in semitones)
+    const EPOCH_MODES = {
+      'emergence': { intervals: [0, 2, 4, 7, 9],      root: 48, name: 'C pentatonic',   color: '#7c6fe0' },
+      'order':     { intervals: [0, 2, 3, 5, 7, 9, 10], root: 50, name: 'D dorian',       color: '#4ade80' },
+      'chaos':     { intervals: [0, 1, 3, 5, 7, 8, 10], root: 52, name: 'E phrygian',     color: '#ef4444' },
+      'harmony':   { intervals: [0, 2, 4, 5, 7, 9, 10], root: 53, name: 'F mixolydian',   color: '#fbbf24' }
+    };
+
+    // ── Audio engine ──
+    let audioCtx = null;
+    let masterGain = null;
+    let compressor = null;
+    let reverbGain = null;
+    let convolver = null;
+    const oscillators = {};    // species → { osc, gain }
+    const bellOscillators = [];
+
+    function initAudio() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+      // Master chain: compressor → master gain → destination
+      compressor = audioCtx.createDynamicsCompressor();
+      compressor.threshold.value = -24;
+      compressor.knee.value = 12;
+      compressor.ratio.value = 4;
+
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = parseFloat(document.getElementById('volumeSlider').value) * 0.3;
+
+      // Reverb
+      reverbGain = audioCtx.createGain();
+      reverbGain.gain.value = 0.25;
+      convolver = audioCtx.createConvolver();
+      convolver.buffer = createReverbIR(3.0);
+
+      compressor.connect(masterGain);
+      masterGain.connect(audioCtx.destination);
+      compressor.connect(reverbGain);
+      reverbGain.connect(convolver);
+      convolver.connect(masterGain);
+
+      // Create one oscillator per species
+      ALL_SPECIES.forEach(sp => {
+        const voice = SPECIES_VOICE[sp];
+        const osc = audioCtx.createOscillator();
+        osc.type = voice.wave;
+        osc.frequency.value = 0;
+
+        const gain = audioCtx.createGain();
+        gain.gain.value = 0;
+
+        osc.connect(gain);
+        gain.connect(compressor);
+        osc.start();
+
+        oscillators[sp] = { osc, gain };
+      });
+
+      // Sub-bass drone
+      const drone = audioCtx.createOscillator();
+      drone.type = 'sine';
+      drone.frequency.value = 55; // A1
+      const droneGain = audioCtx.createGain();
+      droneGain.gain.value = 0.04;
+      const droneLfo = audioCtx.createOscillator();
+      droneLfo.frequency.value = 0.07;
+      const droneLfoGain = audioCtx.createGain();
+      droneLfoGain.gain.value = 8;
+      droneLfo.connect(droneLfoGain);
+      droneLfoGain.connect(drone.frequency);
+      drone.connect(droneGain);
+      droneGain.connect(compressor);
+      drone.start();
+      droneLfo.start();
+    }
+
+    function createReverbIR(duration) {
+      const len = audioCtx.sampleRate * duration;
+      const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-3.5 * i / len);
+        }
+      }
+      return buf;
+    }
+
+    function midiToFreq(midi) {
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    // Map a value 0-1 to a note in the current epoch's mode
+    function valueToNote(value, epoch, octaveOffset = 0) {
+      const mode = EPOCH_MODES[epoch] || EPOCH_MODES['emergence'];
+      const scaleLen = mode.intervals.length;
+      const noteIdx = Math.floor(value * scaleLen * 2.5); // spread across ~2.5 octaves
+      const octave = Math.floor(noteIdx / scaleLen);
+      const degree = noteIdx % scaleLen;
+      const midi = mode.root + octave * 12 + mode.intervals[degree] + octaveOffset * 12;
+      return midiToFreq(Math.max(30, Math.min(100, midi)));
+    }
+
+    // Bell sound for Hall of Fame inductions
+    function playBell(freq) {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.15;
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.5);
+      osc.connect(gain);
+      gain.connect(compressor);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 2.5);
+
+      // Harmonic
+      const osc2 = audioCtx.createOscillator();
+      osc2.type = 'sine';
+      osc2.frequency.value = freq * 2.5;
+      const gain2 = audioCtx.createGain();
+      gain2.gain.value = 0.06;
+      gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+      osc2.connect(gain2);
+      gain2.connect(compressor);
+      osc2.start();
+      osc2.stop(audioCtx.currentTime + 1.5);
+
+      // Flash
+      const flash = document.getElementById('bellFlash');
+      flash.classList.add('active');
+      setTimeout(() => flash.classList.remove('active'), 300);
+    }
+
+    // Update all voices for a generation
+    function sonifyGeneration(gen, transitionTime = 0.8) {
+      if (!audioCtx) return;
+      const t = audioCtx.currentTime;
+      const ramp = t + transitionTime;
+
+      const epoch = gen.epoch;
+      const bestNorm = (gen.bestScore - 0.5) / 0.4; // normalize ~0.5-0.9 to 0-1
+      const avgNorm = (gen.avgScore - 0.4) / 0.4;
+      const counts = gen.speciesCounts || {};
+      const totalPop = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+
+      ALL_SPECIES.forEach(sp => {
+        const { osc, gain } = oscillators[sp];
+        const count = counts[sp] || 0;
+        const voice = SPECIES_VOICE[sp];
+
+        if (count > 0) {
+          // Frequency: species gets a note based on its proportion of population
+          const proportion = count / totalPop;
+          const noteValue = Math.min(1, bestNorm + proportion * 0.3);
+          const freq = valueToNote(Math.max(0, noteValue), epoch, voice.octave);
+          osc.frequency.linearRampToValueAtTime(freq, ramp);
+
+          // Volume: proportional to count, capped
+          const vol = Math.min(0.12, proportion * 0.2);
+          gain.gain.linearRampToValueAtTime(vol, ramp);
+        } else {
+          gain.gain.linearRampToValueAtTime(0, ramp);
+        }
+      });
+    }
+
+    // ── State ──
+    let playing = false;
+    let currentGenIdx = 0;
+    let speed = 1;
+    const speeds = [0.25, 0.5, 1, 2, 4];
+    let speedIdx = 2;
+    let playTimer = null;
+    let lastHofSize = 0;
+    let lastEpoch = null;
+    let narrativeTimeout = null;
+
+    // ── Visualization ──
+    let analyserNode = null;
+    let analyserData = null;
+    let spectrumCtx = null;
+    let timelineCtx = null;
+    let animFrame = null;
+
+    // Track pitch history for waterfall
+    const pitchHistory = [];
+    const MAX_HISTORY = 200;
+
+    function initViz() {
+      const specCanvas = document.getElementById('spectrumCanvas');
+      const tlCanvas = document.getElementById('timelineCanvas');
+      spectrumCtx = specCanvas.getContext('2d');
+      timelineCtx = tlCanvas.getContext('2d');
+
+      if (audioCtx) {
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 2048;
+        analyserNode.smoothingTimeConstant = 0.82;
+        masterGain.connect(analyserNode);
+        analyserData = new Uint8Array(analyserNode.frequencyBinCount);
+      }
+
+      resizeCanvases();
+      window.addEventListener('resize', resizeCanvases);
+      drawLoop();
+    }
+
+    function resizeCanvases() {
+      const dpr = window.devicePixelRatio || 1;
+      [document.getElementById('spectrumCanvas'), document.getElementById('timelineCanvas')].forEach(c => {
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * dpr;
+        c.height = rect.height * dpr;
+        c.getContext('2d').scale(dpr, dpr);
+      });
+      drawTimeline();
+    }
+
+    function drawLoop() {
+      drawSpectrum();
+      animFrame = requestAnimationFrame(drawLoop);
+    }
+
+    function drawSpectrum() {
+      const canvas = document.getElementById('spectrumCanvas');
+      const ctx = spectrumCtx;
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+
+      ctx.fillStyle = 'rgba(10, 10, 15, 0.15)';
+      ctx.fillRect(0, 0, w, h);
+
+      if (!analyserNode || !playing) {
+        // Draw static waterfall from history
+        drawWaterfall(ctx, w, h);
+        return;
+      }
+
+      analyserNode.getByteFrequencyData(analyserData);
+
+      // Record current frame for waterfall
+      const snapshot = new Uint8Array(analyserData.length);
+      snapshot.set(analyserData);
+      pitchHistory.push(snapshot);
+      if (pitchHistory.length > MAX_HISTORY) pitchHistory.shift();
+
+      // Draw waterfall spectrogram
+      drawWaterfall(ctx, w, h);
+
+      // Draw current frequency bars on top
+      const barCount = 64;
+      const barW = w / barCount;
+      const step = Math.floor(analyserData.length / barCount);
+
+      const gen = history[currentGenIdx];
+      const epochColor = gen ? EPOCH_MODES[gen.epoch]?.color || '#7c6fe0' : '#7c6fe0';
+
+      for (let i = 0; i < barCount; i++) {
+        const val = analyserData[i * step] / 255;
+        const barH = val * h * 0.6;
+        const x = i * barW;
+
+        ctx.fillStyle = epochColor + Math.round(val * 180).toString(16).padStart(2, '0');
+        ctx.fillRect(x, h - barH, barW - 1, barH);
+
+        // Peak dot
+        if (val > 0.3) {
+          ctx.fillStyle = epochColor;
+          ctx.beginPath();
+          ctx.arc(x + barW / 2, h - barH - 4, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function drawWaterfall(ctx, w, h) {
+      if (pitchHistory.length < 2) return;
+      const rows = pitchHistory.length;
+      const rowH = h / MAX_HISTORY;
+      const cols = 64;
+      const step = Math.floor((pitchHistory[0]?.length || 1024) / cols);
+
+      for (let r = 0; r < rows; r++) {
+        const data = pitchHistory[r];
+        const y = (r / MAX_HISTORY) * h;
+        const colW = w / cols;
+
+        for (let c = 0; c < cols; c++) {
+          const val = data[c * step] / 255;
+          if (val < 0.05) continue;
+          const hue = 260 - val * 120; // purple → green
+          ctx.fillStyle = `hsla(${hue}, 70%, 50%, ${val * 0.3})`;
+          ctx.fillRect(c * colW, y, colW, rowH + 1);
+        }
+      }
+    }
+
+    function drawTimeline() {
+      const canvas = document.getElementById('timelineCanvas');
+      const ctx = timelineCtx;
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+
+      ctx.clearRect(0, 0, w, h);
+
+      if (!history.length) return;
+
+      const n = history.length;
+
+      // Epoch color bands
+      for (let i = 0; i < n; i++) {
+        const x = (i / n) * w;
+        const bw = w / n + 1;
+        const epochColor = EPOCH_MODES[history[i].epoch]?.color || '#7c6fe0';
+        ctx.fillStyle = epochColor + '18';
+        ctx.fillRect(x, 0, bw, h);
+      }
+
+      // Best score line
+      ctx.beginPath();
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < n; i++) {
+        const x = (i / n) * w;
+        const y = h - ((history[i].bestScore - 0.5) / 0.4) * h;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Avg score line (dimmer)
+      ctx.beginPath();
+      ctx.strokeStyle = '#7c6fe040';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < n; i++) {
+        const x = (i / n) * w;
+        const y = h - ((history[i].avgScore - 0.4) / 0.4) * h;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Hall of Fame induction dots
+      let prevHof = 0;
+      for (let i = 0; i < n; i++) {
+        if (history[i].hallOfFameSize > prevHof) {
+          const x = (i / n) * w;
+          ctx.fillStyle = '#fbbf24';
+          ctx.beginPath();
+          ctx.arc(x, 4, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        prevHof = history[i].hallOfFameSize;
+      }
+
+      // Playhead
+      const px = (currentGenIdx / n) * w;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(px - 1, 0, 2, h);
+      ctx.fillStyle = '#ffffff40';
+      ctx.fillRect(px - 4, 0, 8, h);
+    }
+
+    // ── Playback ──
+    function goToGen(idx) {
+      if (idx < 0) idx = 0;
+      if (idx >= history.length) idx = history.length - 1;
+      currentGenIdx = idx;
+
+      const gen = history[idx];
+      if (!gen) return;
+
+      // Update display
+      document.getElementById('genNum').textContent = gen.generation;
+      document.getElementById('bestScore').textContent = gen.bestScore.toFixed(3);
+      document.getElementById('avgScore').textContent = gen.avgScore.toFixed(3);
+      document.getElementById('hofSize').textContent = gen.hallOfFameSize;
+
+      const epochBadge = document.getElementById('epochBadge');
+      const epochColor = EPOCH_MODES[gen.epoch]?.color || '#7c6fe0';
+      epochBadge.textContent = gen.epoch;
+      epochBadge.style.borderColor = epochColor;
+      epochBadge.style.color = epochColor;
+
+      // Update background glow
+      document.getElementById('bgGlow').style.background =
+        `radial-gradient(circle, ${epochColor}20 0%, transparent 70%)`;
+
+      // Update voice chips
+      updateVoiceChips(gen);
+
+      // Sonify
+      sonifyGeneration(gen, playing ? (1.5 / speed) : 0.5);
+
+      // Check for narrative events
+      checkNarrative(gen, idx);
+
+      // Bell for new HOF
+      if (gen.hallOfFameSize > lastHofSize && idx > 0) {
+        const bellFreq = 800 + gen.bestScore * 600;
+        playBell(bellFreq);
+      }
+      lastHofSize = gen.hallOfFameSize;
+
+      // Epoch change
+      if (gen.epoch !== lastEpoch && lastEpoch !== null) {
+        showNarrative(`mode shift \u2014 ${lastEpoch} \u2192 ${gen.epoch} (${EPOCH_MODES[gen.epoch]?.name || ''})`);
+      }
+      lastEpoch = gen.epoch;
+
+      drawTimeline();
+    }
+
+    function updateVoiceChips(gen) {
+      const counts = gen.speciesCounts || {};
+      const panel = document.getElementById('voicesPanel');
+      const chips = panel.querySelectorAll('.voice-chip');
+      chips.forEach(chip => {
+        const sp = chip.dataset.species;
+        const count = counts[sp] || 0;
+        chip.classList.toggle('active', count > 0);
+        chip.querySelector('.voice-vol').textContent = count;
+      });
+    }
+
+    function checkNarrative(gen, idx) {
+      // First life
+      if (idx > 0 && history[idx - 1].hallOfFameSize === 0 && gen.hallOfFameSize > 0) {
+        showNarrative('first life \u2014 a piece worthy of the hall of fame');
+        return;
+      }
+      // Speciation event (first time species appear)
+      const prevCounts = idx > 0 ? (history[idx - 1].speciesCounts || {}) : {};
+      const counts = gen.speciesCounts || {};
+      for (const sp of Object.keys(counts)) {
+        if (!prevCounts[sp] && counts[sp] > 0) {
+          showNarrative(`new species \u2014 ${sp} enters the population`);
+          return;
+        }
+      }
+      // Score milestones
+      if (idx > 0 && gen.bestScore >= 0.8 && history[idx - 1].bestScore < 0.8) {
+        showNarrative('fitness milestone \u2014 score exceeds 80%');
+        return;
+      }
+      if (idx > 0 && gen.bestScore >= 0.75 && history[idx - 1].bestScore < 0.75) {
+        showNarrative('fitness milestone \u2014 score exceeds 75%');
+        return;
+      }
+    }
+
+    function showNarrative(text) {
+      const el = document.getElementById('narrative');
+      el.textContent = text;
+      el.classList.add('visible');
+      clearTimeout(narrativeTimeout);
+      narrativeTimeout = setTimeout(() => el.classList.remove('visible'), 4000);
+    }
+
+    function togglePlay() {
+      playing = !playing;
+      document.getElementById('playBtn').innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+
+      if (playing) {
+        if (currentGenIdx >= history.length - 1) currentGenIdx = 0;
+        scheduleNext();
+      } else {
+        clearTimeout(playTimer);
+        // Fade out voices
+        if (audioCtx) {
+          const t = audioCtx.currentTime + 0.5;
+          ALL_SPECIES.forEach(sp => {
+            oscillators[sp]?.gain.gain.linearRampToValueAtTime(0, t);
+          });
+        }
+      }
+    }
+
+    function scheduleNext() {
+      if (!playing) return;
+      const intervalMs = 2000 / speed;
+      playTimer = setTimeout(() => {
+        if (currentGenIdx < history.length - 1) {
+          goToGen(currentGenIdx + 1);
+          scheduleNext();
+        } else {
+          playing = false;
+          document.getElementById('playBtn').innerHTML = '&#9654;';
+        }
+      }, intervalMs);
+    }
+
+    function cycleSpeed() {
+      speedIdx = (speedIdx + 1) % speeds.length;
+      speed = speeds[speedIdx];
+      document.getElementById('speedLabel').textContent = speed + '\u00d7';
+      if (playing) {
+        clearTimeout(playTimer);
+        scheduleNext();
+      }
+    }
+
+    // ── UI setup ──
+    function buildVoiceChips() {
+      const panel = document.getElementById('voicesPanel');
+      ALL_SPECIES.forEach(sp => {
+        const chip = document.createElement('div');
+        chip.className = 'voice-chip';
+        chip.dataset.species = sp;
+        chip.style.color = SPECIES_COLORS[sp];
+        chip.innerHTML = `<span class="voice-dot" style="background:${SPECIES_COLORS[sp]}"></span>` +
+          `<span class="voice-label">${sp}</span>` +
+          `<span class="voice-vol">0</span>`;
+        panel.appendChild(chip);
+      });
+    }
+
+    function bindControls() {
+      document.getElementById('playBtn').addEventListener('click', togglePlay);
+      document.getElementById('prevBtn').addEventListener('click', () => goToGen(currentGenIdx - 1));
+      document.getElementById('nextBtn').addEventListener('click', () => goToGen(currentGenIdx + 1));
+      document.getElementById('speedLabel').addEventListener('click', cycleSpeed);
+      document.getElementById('volumeSlider').addEventListener('input', e => {
+        if (masterGain) masterGain.gain.value = parseFloat(e.target.value) * 0.3;
+      });
+
+      // Timeline click to scrub
+      const tlCanvas = document.getElementById('timelineCanvas');
+      tlCanvas.addEventListener('click', e => {
+        const rect = tlCanvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        goToGen(Math.round(x * (history.length - 1)));
+      });
+
+      // Keyboard
+      document.addEventListener('keydown', e => {
+        if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+        if (e.code === 'ArrowLeft') { e.preventDefault(); goToGen(currentGenIdx - 1); }
+        if (e.code === 'ArrowRight') { e.preventDefault(); goToGen(currentGenIdx + 1); }
+        if (e.code === 'ArrowUp') { e.preventDefault(); cycleSpeed(); }
+      });
+    }
+
+    // ── Init ──
+    async function loadData() {
+      try {
+        const resp = await fetch('gallery.json');
+        galleryData = await resp.json();
+        history = galleryData.history || [];
+      } catch (e) {
+        console.error('Failed to load gallery.json:', e);
+        history = [];
+      }
+    }
+
+    async function init() {
+      await loadData();
+      buildVoiceChips();
+      bindControls();
+
+      document.getElementById('startOverlay').addEventListener('click', () => {
+        document.getElementById('startOverlay').classList.add('hidden');
+        initAudio();
+        initViz();
+        goToGen(0);
+      });
+
+      // Initialize timeline even before click
+      const specCanvas = document.getElementById('spectrumCanvas');
+      const tlCanvas = document.getElementById('timelineCanvas');
+      spectrumCtx = specCanvas.getContext('2d');
+      timelineCtx = tlCanvas.getContext('2d');
+      resizeCanvases();
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Forge</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    /* --- HUD overlay --- */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title {
+      pointer-events: auto;
+    }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .hud-title .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .hud-title .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    /* --- Control panel --- */
+    .panel {
+      position: absolute;
+      right: 1.25rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 220px;
+      background: rgba(18, 18, 26, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 1rem;
+      pointer-events: auto;
+      z-index: 20;
+      max-height: 80vh;
+      overflow-y: auto;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+
+    .panel.collapsed {
+      opacity: 0;
+      transform: translateY(-50%) translateX(240px);
+      pointer-events: none;
+    }
+
+    .panel::-webkit-scrollbar { width: 3px; }
+    .panel::-webkit-scrollbar-track { background: transparent; }
+    .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .panel-section {
+      margin-bottom: 0.85rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+    .section-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.5rem;
+    }
+
+    /* Material buttons */
+    .material-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.3rem;
+    }
+
+    .mat-btn {
+      padding: 0.35rem 0.4rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .mat-btn:hover { border-color: var(--accent); color: var(--text); }
+    .mat-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* Sliders */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .slider-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      width: 60px;
+      flex-shrink: 0;
+    }
+
+    .slider-val {
+      font-size: 0.55rem;
+      color: var(--accent);
+      width: 32px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      flex: 1;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    /* Toggle buttons */
+    .toggle-row {
+      display: flex;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+    }
+
+    .toggle-btn {
+      padding: 0.3rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.5rem;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .toggle-btn:hover { border-color: var(--accent); color: var(--text); }
+    .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* Action buttons */
+    .action-row {
+      display: flex;
+      gap: 0.3rem;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 0.4rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .action-btn:hover { border-color: var(--accent); color: var(--text); background: rgba(124, 111, 224, 0.08); }
+
+    /* Mic indicator */
+    .mic-indicator {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      margin-right: 0.3rem;
+      transition: background 0.2s;
+    }
+    .mic-indicator.active {
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+    }
+
+    /* Panel toggle */
+    .panel-toggle {
+      position: absolute;
+      right: 1.25rem;
+      bottom: 1.25rem;
+      pointer-events: auto;
+      z-index: 20;
+      padding: 0.5rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(18, 18, 26, 0.85);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: all 0.2s;
+    }
+    .panel-toggle:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Start overlay */
+    .start-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 100;
+      background: rgba(10, 10, 15, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: opacity 0.6s;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .start-overlay h2 {
+      font-size: 1.5rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+      margin-bottom: 0.75rem;
+    }
+    .start-overlay p {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      max-width: 420px;
+      text-align: center;
+      line-height: 1.7;
+    }
+    .start-overlay .hint {
+      margin-top: 2rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      opacity: 0.6;
+      letter-spacing: 0.1em;
+    }
+
+    /* Keyboard hints */
+    .key-hints {
+      position: absolute;
+      left: 1.25rem;
+      bottom: 1.25rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.03em;
+      line-height: 1.8;
+      opacity: 0.5;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .key-hints kbd {
+      display: inline-block;
+      padding: 0.1rem 0.35rem;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: rgba(18, 18, 26, 0.6);
+      font-family: inherit;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+    }
+  </style>
+</head>
+<body>
+  <!-- Start overlay -->
+  <div class="start-overlay" id="startOverlay">
+    <h2>Forge</h2>
+    <p>An interactive particle forge. Move your mouse to create gravitational wells.
+       Click to spawn bursts. Hold to attract. Right-click to repel.
+       Enable your microphone and sound shapes the simulation.</p>
+    <div class="hint">click anywhere to begin</div>
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <!-- HUD -->
+  <div class="hud">
+    <div class="hud-top">
+      <div class="hud-title">
+        <h1>Forge</h1>
+        <a href="index.html" class="back-link">&larr; lattice</a>
+      </div>
+      <div class="hud-stats" id="stats">
+        <div>particles <span class="val" id="statCount">0</span></div>
+        <div>fps <span class="val" id="statFps">0</span></div>
+        <div>wells <span class="val" id="statWells">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Control panel -->
+  <div class="panel" id="panel">
+    <div class="panel-section">
+      <div class="section-label">Material</div>
+      <div class="material-grid" id="materialGrid">
+        <button class="mat-btn active" data-mat="ember">Ember</button>
+        <button class="mat-btn" data-mat="plasma">Plasma</button>
+        <button class="mat-btn" data-mat="silk">Silk</button>
+        <button class="mat-btn" data-mat="void">Void</button>
+        <button class="mat-btn" data-mat="crystal">Crystal</button>
+        <button class="mat-btn" data-mat="moss">Moss</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Physics</div>
+      <div class="slider-row">
+        <span class="slider-label">Gravity</span>
+        <input type="range" id="gravity" min="0" max="100" value="50">
+        <span class="slider-val" id="gravityVal">50</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Friction</span>
+        <input type="range" id="friction" min="0" max="100" value="20">
+        <span class="slider-val" id="frictionVal">20</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Turbulence</span>
+        <input type="range" id="turbulence" min="0" max="100" value="30">
+        <span class="slider-val" id="turbulenceVal">30</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Lifespan</span>
+        <input type="range" id="lifespan" min="10" max="100" value="60">
+        <span class="slider-val" id="lifespanVal">60</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Flow Field</div>
+      <div class="slider-row">
+        <span class="slider-label">Scale</span>
+        <input type="range" id="flowScale" min="1" max="100" value="40">
+        <span class="slider-val" id="flowScaleVal">40</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Speed</span>
+        <input type="range" id="flowSpeed" min="0" max="100" value="15">
+        <span class="slider-val" id="flowSpeedVal">15</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Rendering</div>
+      <div class="slider-row">
+        <span class="slider-label">Trail</span>
+        <input type="range" id="trail" min="0" max="100" value="85">
+        <span class="slider-val" id="trailVal">85</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Size</span>
+        <input type="range" id="psize" min="1" max="100" value="30">
+        <span class="slider-val" id="psizeVal">30</span>
+      </div>
+      <div class="toggle-row">
+        <button class="toggle-btn active" id="toggleGlow">Glow</button>
+        <button class="toggle-btn" id="toggleConnect">Links</button>
+        <button class="toggle-btn active" id="toggleFlow">Flow</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label"><span class="mic-indicator" id="micDot"></span>Microphone</div>
+      <div class="toggle-row" style="margin-bottom: 0.4rem;">
+        <button class="toggle-btn" id="toggleMic">Enable Mic</button>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Sensitivity</span>
+        <input type="range" id="micSens" min="1" max="100" value="50">
+        <span class="slider-val" id="micSensVal">50</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Actions</div>
+      <div class="action-row" style="margin-bottom: 0.3rem;">
+        <button class="action-btn" id="btnClear">Clear</button>
+        <button class="action-btn" id="btnBurst">Burst</button>
+        <button class="action-btn" id="btnExport">PNG</button>
+      </div>
+      <div class="action-row">
+        <button class="action-btn" id="btnSymmetry">Symmetry: Off</button>
+        <button class="action-btn" id="btnGravMode">Mode: Attract</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="panel-toggle" id="panelToggle">Tab — controls</button>
+
+  <div class="key-hints">
+    <kbd>1-6</kbd> material &nbsp;
+    <kbd>Space</kbd> burst &nbsp;
+    <kbd>C</kbd> clear &nbsp;
+    <kbd>S</kbd> symmetry &nbsp;
+    <kbd>M</kbd> mic &nbsp;
+    <kbd>Tab</kbd> panel
+  </div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    // --- Canvas setup ---
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // --- Materials ---
+    const MATERIALS = {
+      ember:   { colors: ['#ff6b35', '#ff4500', '#fbbf24', '#ef4444'], blendMode: 'lighter' },
+      plasma:  { colors: ['#7c6fe0', '#c084fc', '#818cf8', '#e879f9'], blendMode: 'lighter' },
+      silk:    { colors: ['#c8c8d4', '#a8a8b8', '#e8e8ef', '#9898aa'], blendMode: 'screen' },
+      void:    { colors: ['#1a1a2e', '#2d1b69', '#4a1942', '#16213e'], blendMode: 'lighter' },
+      crystal: { colors: ['#4ade80', '#22d3ee', '#34d399', '#06b6d4'], blendMode: 'lighter' },
+      moss:    { colors: ['#4ade80', '#22c55e', '#86efac', '#166534'], blendMode: 'lighter' },
+    };
+
+    // --- State ---
+    let particles = [];
+    let wells = [];
+    let material = 'ember';
+    let showGlow = true;
+    let showConnect = false;
+    let showFlow = true;
+    let symmetryMode = 0; // 0=off, 1=mirror-x, 2=mirror-xy, 3=radial-4
+    const SYMMETRY_LABELS = ['Off', 'Mirror', 'Quad', 'Radial'];
+    let gravMode = 1; // 1=attract, -1=repel
+    let mouse = { x: W / 2, y: H / 2, down: false, rightDown: false };
+    let time = 0;
+    let panelVisible = true;
+
+    // Audio
+    let audioCtx = null;
+    let analyser = null;
+    let micStream = null;
+    let micActive = false;
+    let micLevel = 0;
+    let micFreqBands = new Float32Array(8);
+
+    // Params
+    const params = {
+      gravity: 50, friction: 20, turbulence: 30, lifespan: 60,
+      flowScale: 40, flowSpeed: 15, trail: 85, psize: 30, micSens: 50
+    };
+
+    const MAX_PARTICLES = 12000;
+    const SPAWN_RATE = 8;
+
+    // --- Perlin noise (simple) ---
+    const PERM = new Uint8Array(512);
+    const GRAD = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+    function initNoise() {
+      const p = new Uint8Array(256);
+      for (let i = 0; i < 256; i++) p[i] = i;
+      for (let i = 255; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [p[i], p[j]] = [p[j], p[i]];
+      }
+      for (let i = 0; i < 512; i++) PERM[i] = p[i & 255];
+    }
+    initNoise();
+
+    function noise2d(x, y) {
+      const xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
+      const xf = x - Math.floor(x), yf = y - Math.floor(y);
+      const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+      const aa = PERM[PERM[xi] + yi], ab = PERM[PERM[xi] + yi + 1];
+      const ba = PERM[PERM[xi + 1] + yi], bb = PERM[PERM[xi + 1] + yi + 1];
+      const g = (h, dx, dy) => { const g = GRAD[h & 7]; return g[0] * dx + g[1] * dy; };
+      const x1 = g(aa, xf, yf) + u * (g(ba, xf - 1, yf) - g(aa, xf, yf));
+      const x2 = g(ab, xf, yf - 1) + u * (g(bb, xf - 1, yf - 1) - g(ab, xf, yf - 1));
+      return x1 + v * (x2 - x1);
+    }
+
+    // --- Particle ---
+    function createParticle(x, y, vx, vy) {
+      const mat = MATERIALS[material];
+      const color = mat.colors[Math.floor(Math.random() * mat.colors.length)];
+      const life = (params.lifespan / 100) * (2 + Math.random() * 4);
+      return { x, y, vx: vx || 0, vy: vy || 0, color, life, maxLife: life, size: 1 + Math.random() * 2, mat: material };
+    }
+
+    function spawnBurst(cx, cy, count) {
+      for (let i = 0; i < count; i++) {
+        if (particles.length >= MAX_PARTICLES) break;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1 + Math.random() * 4;
+        particles.push(createParticle(cx, cy, Math.cos(angle) * speed, Math.sin(angle) * speed));
+      }
+    }
+
+    function spawnSymmetric(x, y, vx, vy) {
+      const points = [[x, y, vx, vy]];
+      if (symmetryMode >= 1) points.push([W - x, y, -vx, vy]);
+      if (symmetryMode >= 2) {
+        points.push([x, H - y, vx, -vy]);
+        points.push([W - x, H - y, -vx, -vy]);
+      }
+      if (symmetryMode === 3) {
+        points.length = 0;
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI * 2 * i) / 6;
+          const cos = Math.cos(a), sin = Math.sin(a);
+          const dx = x - W / 2, dy = y - H / 2;
+          const rx = dx * cos - dy * sin + W / 2;
+          const ry = dx * sin + dy * cos + H / 2;
+          const rvx = vx * cos - vy * sin;
+          const rvy = vx * sin + vy * cos;
+          points.push([rx, ry, rvx, rvy]);
+        }
+      }
+      for (const [px, py, pvx, pvy] of points) {
+        if (particles.length < MAX_PARTICLES) {
+          particles.push(createParticle(px, py, pvx, pvy));
+        }
+      }
+    }
+
+    // --- Wells (gravity sources) ---
+    function addWell(x, y, strength) {
+      wells.push({ x, y, strength, life: 0.5 + Math.random() * 0.5 });
+    }
+
+    // --- Flow field ---
+    function flowAngle(x, y, t) {
+      const scale = 0.001 + (params.flowScale / 100) * 0.015;
+      const speed = (params.flowSpeed / 100) * 0.002;
+      return noise2d(x * scale, y * scale + t * speed) * Math.PI * 4;
+    }
+
+    // --- Audio ---
+    async function initMic() {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const source = audioCtx.createMediaStreamSource(micStream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.8;
+        source.connect(analyser);
+        micActive = true;
+        document.getElementById('micDot').classList.add('active');
+        document.getElementById('toggleMic').classList.add('active');
+        document.getElementById('toggleMic').textContent = 'Disable Mic';
+      } catch (e) {
+        console.warn('Mic access denied:', e);
+      }
+    }
+
+    function stopMic() {
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+      if (audioCtx) {
+        audioCtx.close();
+        audioCtx = null;
+      }
+      analyser = null;
+      micActive = false;
+      micLevel = 0;
+      micFreqBands.fill(0);
+      document.getElementById('micDot').classList.remove('active');
+      document.getElementById('toggleMic').classList.remove('active');
+      document.getElementById('toggleMic').textContent = 'Enable Mic';
+    }
+
+    function updateAudio() {
+      if (!micActive || !analyser) return;
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+      const sens = params.micSens / 50;
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      micLevel = Math.min(1, (sum / data.length / 128) * sens);
+
+      // Split into 8 frequency bands
+      const bandSize = Math.floor(data.length / 8);
+      for (let b = 0; b < 8; b++) {
+        let bSum = 0;
+        for (let i = b * bandSize; i < (b + 1) * bandSize; i++) bSum += data[i];
+        micFreqBands[b] = Math.min(1, (bSum / bandSize / 128) * sens);
+      }
+    }
+
+    // --- Physics update ---
+    function update(dt) {
+      time += dt;
+      const grav = (params.gravity / 50) * 200;
+      const fric = 1 - (params.friction / 100) * 0.06;
+      const turb = (params.turbulence / 100) * 3;
+
+      // Mic modulation
+      const micTurb = micActive ? micLevel * 2 : 0;
+      const micSize = micActive ? 1 + micLevel * 2 : 1;
+      const micSpawn = micActive ? Math.floor(micLevel * 6) : 0;
+
+      // Spawn at mouse if down
+      if (mouse.down || mouse.rightDown) {
+        const count = SPAWN_RATE + micSpawn;
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 0.5 + Math.random() * 2;
+          spawnSymmetric(
+            mouse.x + (Math.random() - 0.5) * 20,
+            mouse.y + (Math.random() - 0.5) * 20,
+            Math.cos(angle) * speed,
+            Math.sin(angle) * speed
+          );
+        }
+      }
+
+      // Continuous ambient spawn from edges (low rate)
+      if (particles.length < MAX_PARTICLES * 0.3) {
+        for (let i = 0; i < 2; i++) {
+          const side = Math.floor(Math.random() * 4);
+          let x, y;
+          if (side === 0) { x = Math.random() * W; y = 0; }
+          else if (side === 1) { x = W; y = Math.random() * H; }
+          else if (side === 2) { x = Math.random() * W; y = H; }
+          else { x = 0; y = Math.random() * H; }
+          particles.push(createParticle(x, y));
+        }
+      }
+
+      // Decay wells
+      for (let i = wells.length - 1; i >= 0; i--) {
+        wells[i].life -= dt;
+        if (wells[i].life <= 0) wells.splice(i, 1);
+      }
+
+      // Update particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+
+        // Flow field
+        if (showFlow) {
+          const angle = flowAngle(p.x, p.y, time);
+          p.vx += Math.cos(angle) * turb * dt;
+          p.vy += Math.sin(angle) * turb * dt;
+        }
+
+        // Mic turbulence
+        if (micActive && micLevel > 0.05) {
+          const mAngle = noise2d(p.x * 0.005 + time * 0.5, p.y * 0.005) * Math.PI * 2;
+          p.vx += Math.cos(mAngle) * micTurb * dt;
+          p.vy += Math.sin(mAngle) * micTurb * dt;
+        }
+
+        // Gravity wells
+        for (const w of wells) {
+          const dx = w.x - p.x, dy = w.y - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) + 10;
+          const force = (grav * w.strength) / (dist * dist) * dt;
+          p.vx += (dx / dist) * force;
+          p.vy += (dy / dist) * force;
+        }
+
+        // Mouse gravity (always active when cursor is on screen)
+        if (true) {
+          const dx = mouse.x - p.x, dy = mouse.y - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) + 10;
+          if (dist < 300) {
+            const strength = mouse.down ? 0.8 : (mouse.rightDown ? -1.2 : 0.15);
+            const force = (grav * strength * 0.3) / (dist) * dt;
+            p.vx += (dx / dist) * force;
+            p.vy += (dy / dist) * force;
+          }
+        }
+
+        // Friction
+        p.vx *= fric;
+        p.vy *= fric;
+
+        // Integrate
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Wrap edges
+        if (p.x < -10) p.x = W + 10;
+        if (p.x > W + 10) p.x = -10;
+        if (p.y < -10) p.y = H + 10;
+        if (p.y > H + 10) p.y = -10;
+      }
+    }
+
+    // --- Render ---
+    function render() {
+      // Trail fade
+      const trailAlpha = 0.01 + (1 - params.trail / 100) * 0.3;
+      ctx.fillStyle = `rgba(10, 10, 15, ${trailAlpha})`;
+      ctx.fillRect(0, 0, W, H);
+
+      const baseSize = 0.5 + (params.psize / 100) * 3;
+      const micSizeMul = micActive ? 1 + micLevel * 1.5 : 1;
+
+      // Connection lines
+      if (showConnect) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineWidth = 0.3;
+        const maxDist = 60;
+        for (let i = 0; i < particles.length; i += 3) {
+          const a = particles[i];
+          for (let j = i + 3; j < particles.length; j += 3) {
+            const b = particles[j];
+            const dx = a.x - b.x, dy = a.y - b.y;
+            const d = dx * dx + dy * dy;
+            if (d < maxDist * maxDist) {
+              const alpha = (1 - Math.sqrt(d) / maxDist) * 0.15 * (a.life / a.maxLife);
+              ctx.strokeStyle = a.color.replace(')', `,${alpha})`).replace('rgb', 'rgba');
+              ctx.beginPath();
+              ctx.moveTo(a.x, a.y);
+              ctx.lineTo(b.x, b.y);
+              ctx.stroke();
+            }
+          }
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      // Particles
+      for (const p of particles) {
+        const mat = MATERIALS[p.mat];
+        const alpha = Math.min(1, p.life / p.maxLife * 2);
+        const size = p.size * baseSize * micSizeMul;
+
+        ctx.globalCompositeOperation = mat.blendMode;
+
+        if (showGlow && size > 1) {
+          // Glow halo
+          const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size * 4);
+          grad.addColorStop(0, p.color + Math.floor(alpha * 40).toString(16).padStart(2, '0'));
+          grad.addColorStop(1, p.color + '00');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, size * 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Core
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+
+      // Mouse cursor well indicator
+      const cursorRadius = 20 + (micActive ? micLevel * 30 : 0);
+      ctx.strokeStyle = `rgba(124, 111, 224, ${mouse.down ? 0.4 : (mouse.rightDown ? 0.3 : 0.12)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(mouse.x, mouse.y, cursorRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Mic visualization ring
+      if (micActive && micLevel > 0.05) {
+        for (let b = 0; b < 8; b++) {
+          const a1 = (b / 8) * Math.PI * 2 - Math.PI / 2;
+          const a2 = ((b + 1) / 8) * Math.PI * 2 - Math.PI / 2;
+          const r = cursorRadius + 8 + micFreqBands[b] * 30;
+          ctx.strokeStyle = `rgba(74, 222, 128, ${0.15 + micFreqBands[b] * 0.4})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(mouse.x, mouse.y, r, a1, a2);
+          ctx.stroke();
+        }
+      }
+
+      // Flow field visualization (subtle)
+      if (showFlow) {
+        ctx.globalAlpha = 0.03;
+        ctx.strokeStyle = '#7c6fe0';
+        ctx.lineWidth = 0.5;
+        const step = 50;
+        for (let x = 0; x < W; x += step) {
+          for (let y = 0; y < H; y += step) {
+            const angle = flowAngle(x, y, time);
+            const len = 12;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+            ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Well indicators
+      for (const w of wells) {
+        const alpha = w.life * 0.3;
+        ctx.strokeStyle = `rgba(124, 111, 224, ${alpha})`;
+        ctx.lineWidth = 1;
+        const r = 15 + (1 - w.life) * 30;
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Vignette
+      const vg = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.75);
+      vg.addColorStop(0, 'rgba(10, 10, 15, 0)');
+      vg.addColorStop(1, 'rgba(10, 10, 15, 0.6)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // --- HUD update ---
+    function updateHud() {
+      document.getElementById('statCount').textContent = particles.length;
+      document.getElementById('statWells').textContent = wells.length;
+    }
+
+    // --- Main loop ---
+    let lastTime = 0;
+    let fpsFrames = 0, fpsTime = 0;
+
+    function loop(timestamp) {
+      const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
+      lastTime = timestamp;
+
+      fpsFrames++;
+      fpsTime += dt;
+      if (fpsTime >= 0.5) {
+        document.getElementById('statFps').textContent = Math.round(fpsFrames / fpsTime);
+        fpsFrames = 0;
+        fpsTime = 0;
+        updateHud();
+      }
+
+      updateAudio();
+      update(dt);
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    // --- Input ---
+    canvas.addEventListener('mousemove', e => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    });
+
+    canvas.addEventListener('mousedown', e => {
+      if (e.button === 0) mouse.down = true;
+      if (e.button === 2) mouse.rightDown = true;
+      addWell(e.clientX, e.clientY, e.button === 2 ? -1 : 1);
+    });
+
+    canvas.addEventListener('mouseup', e => {
+      if (e.button === 0) mouse.down = false;
+      if (e.button === 2) mouse.rightDown = false;
+    });
+
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Touch support
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      mouse.x = t.clientX;
+      mouse.y = t.clientY;
+      mouse.down = true;
+      addWell(t.clientX, t.clientY, 1);
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      mouse.x = t.clientX;
+      mouse.y = t.clientY;
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', () => { mouse.down = false; });
+
+    // --- Panel controls ---
+    function bindSlider(id) {
+      const el = document.getElementById(id);
+      const valEl = document.getElementById(id + 'Val');
+      el.addEventListener('input', () => {
+        params[id] = parseInt(el.value);
+        valEl.textContent = el.value;
+      });
+    }
+
+    ['gravity', 'friction', 'turbulence', 'lifespan', 'flowScale', 'flowSpeed', 'trail', 'psize', 'micSens'].forEach(bindSlider);
+
+    // Material buttons
+    document.querySelectorAll('.mat-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mat-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        material = btn.dataset.mat;
+      });
+    });
+
+    // Toggles
+    document.getElementById('toggleGlow').addEventListener('click', function() {
+      showGlow = !showGlow; this.classList.toggle('active');
+    });
+    document.getElementById('toggleConnect').addEventListener('click', function() {
+      showConnect = !showConnect; this.classList.toggle('active');
+    });
+    document.getElementById('toggleFlow').addEventListener('click', function() {
+      showFlow = !showFlow; this.classList.toggle('active');
+    });
+    document.getElementById('toggleMic').addEventListener('click', () => {
+      micActive ? stopMic() : initMic();
+    });
+
+    // Actions
+    document.getElementById('btnClear').addEventListener('click', () => {
+      particles = []; wells = [];
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, W, H);
+    });
+
+    document.getElementById('btnBurst').addEventListener('click', () => {
+      spawnBurst(W / 2, H / 2, 200);
+    });
+
+    document.getElementById('btnExport').addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = `lattice-forge-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+
+    document.getElementById('btnSymmetry').addEventListener('click', function() {
+      symmetryMode = (symmetryMode + 1) % 4;
+      this.textContent = 'Symmetry: ' + SYMMETRY_LABELS[symmetryMode];
+    });
+
+    document.getElementById('btnGravMode').addEventListener('click', function() {
+      gravMode *= -1;
+      this.textContent = gravMode === 1 ? 'Mode: Attract' : 'Mode: Repel';
+    });
+
+    // Panel toggle
+    const panel = document.getElementById('panel');
+    document.getElementById('panelToggle').addEventListener('click', () => {
+      panelVisible = !panelVisible;
+      panel.classList.toggle('collapsed');
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT') return;
+      switch (e.key) {
+        case 'Tab':
+          e.preventDefault();
+          panelVisible = !panelVisible;
+          panel.classList.toggle('collapsed');
+          break;
+        case ' ':
+          e.preventDefault();
+          spawnBurst(mouse.x, mouse.y, 200);
+          break;
+        case 'c': case 'C':
+          particles = []; wells = [];
+          ctx.fillStyle = '#0a0a0f';
+          ctx.fillRect(0, 0, W, H);
+          break;
+        case 's': case 'S':
+          symmetryMode = (symmetryMode + 1) % 4;
+          document.getElementById('btnSymmetry').textContent = 'Symmetry: ' + SYMMETRY_LABELS[symmetryMode];
+          break;
+        case 'm': case 'M':
+          micActive ? stopMic() : initMic();
+          break;
+        case '1': material = 'ember'; break;
+        case '2': material = 'plasma'; break;
+        case '3': material = 'silk'; break;
+        case '4': material = 'void'; break;
+        case '5': material = 'crystal'; break;
+        case '6': material = 'moss'; break;
+      }
+      // Update material buttons visually
+      if ('123456'.includes(e.key)) {
+        const mats = ['ember', 'plasma', 'silk', 'void', 'crystal', 'moss'];
+        document.querySelectorAll('.mat-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector(`[data-mat="${mats[parseInt(e.key) - 1]}"]`)?.classList.add('active');
+      }
+    });
+
+    // --- Start ---
+    const overlay = document.getElementById('startOverlay');
+    overlay.addEventListener('click', () => {
+      overlay.classList.add('hidden');
+      // Seed with initial burst
+      spawnBurst(W / 2, H / 2, 150);
+      requestAnimationFrame(loop);
+    });
+
+    // Pre-fill background
+    ctx.fillStyle = '#0a0a0f';
+    ctx.fillRect(0, 0, W, H);
+  })();
+  </script>
+</body>
+</html>
