@@ -14,6 +14,10 @@ export { evolveFlame, VARIATION_NAMES };
 import { DLARule, evolveDLA, mutateDLA, crossoverDLA, randomDLARule, DLA_SEED_GENOMES } from "./dla.js";
 export type { DLARule };
 export { evolveDLA };
+// Import cymatics engine
+import { CymaticsRule, evolveCymatics, mutateCymatics, crossoverCymatics, randomCymaticsRule, CYMATICS_SEED_GENOMES_PARTIAL } from "./cymatics.js";
+export type { CymaticsRule };
+export { evolveCymatics };
 
 // Unicode palettes for rendering (light → dense)
 const PALETTE = [" ", "░", "▒", "▓", "█", "╱", "╲", "╳", "◊", "◆", "●", "○", "◐", "◑", "◒", "◓"];
@@ -1577,7 +1581,7 @@ function computeBoxCountingDimension(grid: number[][], width: number, height: nu
 // Compute novelty: how different is this piece's fingerprint from a set of others?
 export function computeNovelty(metrics: PieceMetrics, population: PieceMetrics[]): number {
   if (population.length === 0) return 1;
-  const keys: (keyof PieceMetrics)[] = ["complexity", "symmetry", "density", "edgeActivity", "structuralInterest", "fractalDimension", "informationDensity", "spatialCoherence"];
+  const keys: (keyof PieceMetrics)[] = ["complexity", "symmetry", "density", "edgeActivity", "structuralInterest", "fractalDimension", "informationDensity", "spatialCoherence", "compositionBalance", "rhythmicRegularity"];
   let totalDist = 0;
   for (const other of population) {
     let dist = 0;
@@ -2146,7 +2150,19 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
   }
 
   // Palette swap (30% chance — higher than before to push visual variety)
-  if (rng() < 0.3) {
+
+  // Color theme mutation (25% chance) — evolve colors in OKLCH space
+  if (rng() < 0.25) {
+    if (mutated.colorTheme) {
+      mutated.colorTheme = mutateColorTheme(mutated.colorTheme, rng);
+      mutated.colorTheme = { ...mutated.colorTheme, stops: themeToColors(mutated.colorTheme) };
+    } else {
+      // Initialize color theme from species defaults
+      const baseTheme = SPECIES_THEMES[mutated.type] || SPECIES_THEMES["2d"];
+      mutated.colorTheme = mutateColorTheme(baseTheme, rng);
+      mutated.colorTheme = { ...mutated.colorTheme, stops: themeToColors(mutated.colorTheme) };
+    }
+  }  if (rng() < 0.3) {
     mutated.palette = ALL_PALETTES[Math.floor(rng() * ALL_PALETTES.length)];
   }
 
@@ -2578,6 +2594,68 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
     return {
       type: "dla",
       rule: randomDLARule(rng),
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "fractal-flame") {
+    // Known interesting flame presets
+    const presets = [
+      // Sierpinski gasket-like
+      [
+        { a: 0.5, b: 0, c: 0, d: 0, e: 0.5, f: 0, variation: 0, color: 0, weight: 1 },
+        { a: 0.5, b: 0, c: 0.5, d: 0, e: 0.5, f: 0, variation: 0, color: 0.5, weight: 1 },
+        { a: 0.5, b: 0, c: 0.25, d: 0, e: 0.5, f: 0.5, variation: 0, color: 1, weight: 1 },
+      ],
+      // Swirl flame
+      [
+        { a: 0.6, b: -0.4, c: 0.1, d: 0.4, e: 0.6, f: 0.0, variation: 3, color: 0.2, weight: 1.2 },
+        { a: -0.5, b: 0.3, c: -0.1, d: -0.3, e: -0.5, f: 0.2, variation: 1, color: 0.7, weight: 0.8 },
+        { a: 0.3, b: 0.5, c: 0.0, d: -0.5, e: 0.3, f: 0.0, variation: 5, color: 0.5, weight: 1.0 },
+      ],
+      // Organic tendrils
+      [
+        { a: 0.7, b: 0.2, c: 0.0, d: -0.2, e: 0.7, f: 0.0, variation: 6, color: 0.1, weight: 1.5 },
+        { a: -0.3, b: -0.6, c: 0.2, d: 0.6, e: -0.3, f: -0.1, variation: 9, color: 0.6, weight: 0.9 },
+      ],
+      // Heart flame
+      [
+        { a: 0.5, b: -0.5, c: 0.0, d: 0.5, e: 0.5, f: 0.0, variation: 7, color: 0.3, weight: 1.0 },
+        { a: -0.4, b: 0.4, c: 0.1, d: -0.4, e: -0.4, f: 0.2, variation: 2, color: 0.8, weight: 1.0 },
+        { a: 0.6, b: 0.0, c: -0.1, d: 0.0, e: 0.6, f: 0.0, variation: 4, color: 0.5, weight: 0.7 },
+      ],
+      // Diamond spiral
+      [
+        { a: 0.4, b: -0.3, c: 0.0, d: 0.3, e: 0.4, f: 0.0, variation: 11, color: 0.0, weight: 1.3 },
+        { a: -0.5, b: 0.5, c: 0.0, d: -0.5, e: -0.5, f: 0.0, variation: 10, color: 0.5, weight: 1.0 },
+        { a: 0.3, b: 0.0, c: 0.2, d: 0.0, e: 0.3, f: -0.2, variation: 12, color: 1.0, weight: 0.8 },
+      ],
+    ];
+    const preset = presets[Math.floor(rng() * presets.length)];
+    // Add jitter to preset
+    const xforms = preset.map(xf => ({
+      ...xf,
+      a: xf.a + (rng() - 0.5) * 0.15,
+      b: xf.b + (rng() - 0.5) * 0.15,
+      c: xf.c + (rng() - 0.5) * 0.1,
+      d: xf.d + (rng() - 0.5) * 0.15,
+      e: xf.e + (rng() - 0.5) * 0.15,
+      f: xf.f + (rng() - 0.5) * 0.1,
+    }));
+    return {
+      type: "fractal-flame",
+      rule: {
+        xforms,
+        iterations: 100000 + Math.floor(rng() * 200000),
+        symmetry: rng() < 0.4 ? 1 : 2 + Math.floor(rng() * 4),
+        gamma: 3 + rng() * 1.5,
+        brightness: 1.5 + rng() * 1.5,
+        quantize: 4 + Math.floor(rng() * 4),
+        zoom: 0.8 + rng() * 1.2,
+        centerX: (rng() - 0.5) * 0.3,
+        centerY: (rng() - 0.5) * 0.3,
+      },
       width: 48 + Math.floor(rng() * 16),
       height: 28 + Math.floor(rng() * 10),
       palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],

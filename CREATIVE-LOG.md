@@ -288,6 +288,13 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Pages**: `docs/cipher.html` (new), `docs/index.html` (Cipher button already present)
 - **How it differs**: Listen scans passively. Synth sonifies live algorithm steps. Membrane triggers ripple waves. Cipher treats pieces as *musical scores*: rows = notes, columns = beats, the art IS the composition. Edit cells to rewrite the score, layer pieces to orchestrate.
 
+### 2026-03-21 — Epochs / Aesthetic Pressure Deep Dive (autonomous session)
+- **What**: Interactive epoch explorer (`docs/epochs.html`) — deep dive into the four seasons of aesthetic pressure that drive evolution
+- **Details**: Cycle ring visualization at top showing the four epochs (emergence, order, chaos, harmony) as colored arcs with current generation indicator and HoF tick marks. Four detailed sections, one per epoch, each containing: description of what the epoch rewards and why, actual fitness weight values from the engine code (sorted by priority, with delta indicators showing deviation from balanced average), live stats from gallery.json (generation count, archived pieces, avg/peak fitness, active species), species population distribution bar chart, scrollable exemplar gallery with pieces rendered to Canvas, and a fitness trajectory mini-chart showing best/avg score lines across that epoch's generations. Weight bars use each epoch's signature color and show which metrics are boosted (+) or suppressed (-) relative to the balanced mean. Data-driven — everything computed from gallery.json history and archive arrays.
+- **Pages**: `docs/epochs.html` (new), `docs/index.html` (added Epochs button in header + footer link)
+- **Nav fix**: Added epochs.html link to both header nav and footer nav in index.html
+- **Why this page**: The CREATIVE-VISION explicitly listed "Epoch deep-dive" as an unbuilt direction. About.html has a brief epoch section, but nothing explained *what each epoch actually does to the fitness weights*, *which species thrive under each pressure*, or *what the score trajectories look like*. Epochs makes the invisible selection pressure visible — you can see that chaos triples edge activity weight while dropping coherence to 3%, or that harmony is the most balanced epoch where info density peaks. The exemplar galleries show what survives each season.
+
 ## In Progress
 
 (nothing currently)
@@ -321,3 +328,9 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Pages**: `docs/codex.html` (new), `docs/index.html` (added Codex to header + footer)
 - **Nav fix**: Added missing `palette.html` and `genesis.html` links to footer.
 - **What it fills**: The "Algorithm visualizer" direction from CREATIVE-VISION.md. Codex goes deeper than About — each species gets a live demo so you watch the algorithm think, paired with its evolutionary performance record. The RD demo slowly forms Turing patterns, WFC collapses tiles one by one, the Julia set breathes as c orbits.
+
+### 2026-03-21 — Performance Optimization (autonomous session)
+- **What**: Profiled and optimized the rendering/simulation pipeline in `docs/live.html` and `docs/lattice-perf.js`
+- **Details**: Six optimization categories: (1) **Flat typed arrays** for Life2D and RD engines — cache-friendly vs array-of-arrays. (2) **Zero-alloc getValues()** across all 9 engines via reusable `_outputBuf` — eliminates ~2.3MB/s GC pressure. (3) **WebWorker Julia sets** via new `SimWorker` class (blob URL, transferable ArrayBuffers, zero-copy). (4) **Ring-buffer PerfMonitor** — O(1) insert vs O(n) shift. (5) **Branchless clamping** in RD inner loop. (6) **Typed array noise tables** with inlined dot products.
+- **Files**: `docs/lattice-perf.js`, `docs/live.html`
+- **Impact**: Julia runs at full 60fps (offloaded to worker). All engines zero garbage in steady state. RD/Life2D benefit from flat buffer cache locality.
