@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Synesthesia</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --cyan: #22d3ee;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .bg-glow {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 800px; height: 800px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.2;
+      pointer-events: none;
+      transition: opacity 2s ease, background 3s ease;
+      z-index: 0;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.94);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 3.5rem;
+      color: var(--accent);
+      margin-bottom: 1.2rem;
+      text-shadow: 0 0 40px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-text {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-sub {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      margin-top: 1rem;
+      opacity: 0.5;
+      max-width: 420px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    .back-link {
+      position: fixed;
+      top: 1.2rem;
+      left: 1.2rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      z-index: 10;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    .main {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      padding: 0.8rem 1rem;
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+    .main.visible { opacity: 1; }
+
+    .header {
+      text-align: center;
+      margin-bottom: 0.4rem;
+    }
+    .header h1 {
+      font-size: 1.3rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+    }
+    .header .sub {
+      color: var(--text-dim);
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      margin-top: 0.15rem;
+    }
+
+    /* Grid canvas */
+    .canvas-wrap {
+      position: relative;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      width: 100%;
+      max-width: 1000px;
+    }
+
+    #gridCanvas {
+      border-radius: 8px;
+      cursor: crosshair;
+      image-rendering: pixelated;
+    }
+
+    /* Ripple overlay */
+    #rippleCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      pointer-events: none;
+      border-radius: 8px;
+    }
+
+    /* Info strip */
+    .info-strip {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 0.3rem 0;
+    }
+    .info-item {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .info-item span { color: var(--text); font-variant-numeric: tabular-nums; }
+    .info-item .hl { color: var(--green); }
+    .info-item .ac { color: var(--accent); }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.4rem 1rem;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      margin: 0.3rem 0;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .ctrl-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 0.2rem 0.4rem;
+      font-size: 0.9rem;
+      transition: color 0.2s, transform 0.15s;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .ctrl-btn:hover { color: var(--text); transform: scale(1.1); }
+    .ctrl-btn.active { color: var(--green); }
+    .ctrl-btn.play-btn {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      color: var(--accent);
+      padding: 0;
+    }
+    .ctrl-btn.play-btn:hover { background: var(--accent); color: #fff; }
+
+    .sep { width: 1px; height: 18px; background: var(--border); flex-shrink: 0; }
+
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .mode-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.6rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mode-btn:hover { color: var(--text); }
+    .mode-btn.active { background: var(--accent); color: #fff; }
+
+    .vol-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 60px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    .vol-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .ctrl-label {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* Piece selector */
+    .selector {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 700px;
+      margin-top: 0.2rem;
+      max-height: 40px;
+      overflow: hidden;
+    }
+    .sel-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.3s;
+      padding: 0;
+    }
+    .sel-dot:hover { border-color: var(--accent); transform: scale(1.3); }
+    .sel-dot.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    /* Waveform bar (thin) */
+    #waveBar {
+      width: 100%;
+      max-width: 1000px;
+      height: 24px;
+      border-radius: 4px;
+      margin: 0.15rem 0;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); }
+  </style>
+</head>
+<body>
+  <div class="bg-glow" id="bgGlow"></div>
+  <a href="index.html" class="back-link">&larr; Gallery</a>
+
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">&#10053;</div>
+    <div class="start-text">Click anywhere to enter</div>
+    <div class="start-sub">Touch the grid to play it as an instrument. Each cell is a tone. Each algorithm, a different voice.</div>
+  </div>
+
+  <div class="main" id="main">
+    <div class="header">
+      <h1>Synesthesia</h1>
+      <div class="sub">the grid is your instrument</div>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="gridCanvas"></canvas>
+      <canvas id="rippleCanvas"></canvas>
+    </div>
+
+    <canvas id="waveBar" height="24"></canvas>
+
+    <div class="info-strip" id="infoStrip">
+      <div class="info-item">Type: <span class="ac" id="infoType">—</span></div>
+      <div class="info-item">Score: <span class="hl" id="infoScore">—</span></div>
+      <div class="info-item">Gen: <span id="infoGen">—</span></div>
+      <div class="info-item">Scale: <span class="ac" id="infoScale">—</span></div>
+      <div class="info-item">Traversal: <span class="hl" id="infoTraversal">touch</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="ctrl-btn" id="prevBtn" title="Previous piece">&#9664;</button>
+      <button class="ctrl-btn play-btn" id="playBtn" title="Auto-traverse">&#9654;</button>
+      <button class="ctrl-btn" id="nextBtn" title="Next piece">&#9654;</button>
+
+      <div class="sep"></div>
+
+      <div class="mode-toggle" id="traversalToggle">
+        <button class="mode-btn active" data-mode="touch" title="Touch/hover to play">Touch</button>
+        <button class="mode-btn" data-mode="rain" title="Notes fall like rain">Rain</button>
+        <button class="mode-btn" data-mode="spiral" title="Spiral outward from center">Spiral</button>
+        <button class="mode-btn" data-mode="wave" title="Rolling wave across grid">Wave</button>
+        <button class="mode-btn" data-mode="random" title="Random walk">Wander</button>
+      </div>
+
+      <div class="sep"></div>
+
+      <span class="ctrl-label">Vol</span>
+      <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="40">
+
+      <div class="sep"></div>
+
+      <span class="ctrl-label">Tempo</span>
+      <input type="range" class="vol-slider" id="tempoSlider" min="10" max="200" value="80" style="width:50px">
+    </div>
+
+    <div class="selector" id="selector"></div>
+  </div>
+
+  <script>
+    // ==================== Constants ====================
+
+    const TYPE_COLORS = {
+      '1d': { h: 260, s: 70, base: '#6b4edb' },
+      '2d': { h: 145, s: 70, base: '#4ade80' },
+      'lsystem': { h: 35, s: 80, base: '#f5b84a' },
+      'reaction-diffusion': { h: 290, s: 70, base: '#d44af5' },
+      'voronoi': { h: 195, s: 70, base: '#4ad4f5' },
+      'wfc': { h: 330, s: 70, base: '#f54a9d' },
+      'spirograph': { h: 75, s: 70, base: '#d4f54a' },
+      'attractor': { h: 20, s: 70, base: '#f59d6b' },
+      'julia': { h: 165, s: 70, base: '#4af5d4' },
+      'noise': { h: 55, s: 50, base: '#d4d44a' },
+      'flowfield': { h: 185, s: 60, base: '#4ad4d4' },
+      'magnetic-pendulum': { h: 0, s: 65, base: '#ef4444' },
+      'flame': { h: 25, s: 80, base: '#ff8c42' },
+    };
+
+    // Musical scales per genome type — gives each algorithm a distinct harmonic character
+    const TYPE_SCALES = {
+      '1d':                  { name: 'Pentatonic',    intervals: [0, 2, 4, 7, 9] },
+      '2d':                  { name: 'Minor',         intervals: [0, 2, 3, 5, 7, 8, 10] },
+      'lsystem':             { name: 'Lydian',        intervals: [0, 2, 4, 6, 7, 9, 11] },
+      'reaction-diffusion':  { name: 'Phrygian',      intervals: [0, 1, 3, 5, 7, 8, 10] },
+      'voronoi':             { name: 'Whole Tone',    intervals: [0, 2, 4, 6, 8, 10] },
+      'wfc':                 { name: 'Dorian',        intervals: [0, 2, 3, 5, 7, 9, 10] },
+      'spirograph':          { name: 'Major',         intervals: [0, 2, 4, 5, 7, 9, 11] },
+      'attractor':           { name: 'Locrian',       intervals: [0, 1, 3, 5, 6, 8, 10] },
+      'julia':               { name: 'Harmonic Min',  intervals: [0, 2, 3, 5, 7, 8, 11] },
+      'noise':               { name: 'Blues',          intervals: [0, 3, 5, 6, 7, 10] },
+      'flowfield':           { name: 'Mixolydian',    intervals: [0, 2, 4, 5, 7, 9, 10] },
+      'magnetic-pendulum':   { name: 'Diminished',    intervals: [0, 2, 3, 5, 6, 8, 9, 11] },
+      'flame':               { name: 'Hungarian',     intervals: [0, 2, 3, 6, 7, 8, 11] },
+    };
+
+    // Waveform per genome type
+    const TYPE_WAVE = {
+      '1d': 'square',
+      '2d': 'triangle',
+      'lsystem': 'sawtooth',
+      'reaction-diffusion': 'sine',
+      'voronoi': 'triangle',
+      'wfc': 'square',
+      'spirograph': 'sine',
+      'attractor': 'sawtooth',
+      'julia': 'sine',
+      'noise': 'triangle',
+      'flowfield': 'sine',
+      'magnetic-pendulum': 'sawtooth',
+      'flame': 'triangle',
+    };
+
+    function charIntensity(ch) {
+      if (ch === ' ') return 0;
+      const light = '\u00B7.:~\u2801';
+      const med1 = '\u2591\u2022\u2248\u2803\u25B3\u25BD\u2726';
+      const med2 = '\u2592\u25CB\u223F\u2807\u25C7\u2727\u2766';
+      const med3 = '\u2593\u25CF\u224B\u280F\u25C8\u2605\u273F';
+      const heavy = '\u2588\u25C6\u2307\u281F\u2B21\u2736\u2740\u2741';
+      const max = '\u2573\u25D0\u25D1\u25D2\u25D3\u2301\u283F\u28FF\u2B22\u2739\u273A';
+      if (light.includes(ch)) return 1;
+      if (med1.includes(ch)) return 2;
+      if (med2.includes(ch)) return 3;
+      if (med3.includes(ch)) return 4;
+      if (heavy.includes(ch)) return 5;
+      if (max.includes(ch)) return 6;
+      return 3;
+    }
+
+    function parseGrid(rendered) {
+      if (!rendered) return [];
+      return rendered.split('\n').filter(l => l.length > 0)
+        .map(line => [...line].map(ch => charIntensity(ch)));
+    }
+
+    function typeLabel(t) {
+      return { '1d': '1D Automaton', '2d': '2D Life', 'lsystem': 'L-System',
+        'reaction-diffusion': 'Reaction-Diffusion', 'voronoi': 'Voronoi',
+        'wfc': 'WFC', 'spirograph': 'Spirograph', 'attractor': 'Attractor',
+        'julia': 'Julia Set', 'noise': 'Fractal Noise', 'flowfield': 'Flow Field',
+        'magnetic-pendulum': 'Pendulum', 'flame': 'Flame' }[t] || t;
+    }
+
+    // ==================== Audio Engine ====================
+
+    class SynesthesiaEngine {
+      constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.convolver = null;
+        this.compressor = null;
+        this.analyser = null;
+        this.activeNotes = new Map(); // key "r,c" → { osc, gain, timeout }
+        this.grid = [];
+        this.rows = 0;
+        this.cols = 0;
+        this.freqMap = []; // freqMap[r][c] → frequency
+        this.volume = 0.4;
+        this.genomeType = '1d';
+      }
+
+      init() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Compressor to prevent clipping with many simultaneous notes
+        this.compressor = this.ctx.createDynamicsCompressor();
+        this.compressor.threshold.value = -20;
+        this.compressor.knee.value = 10;
+        this.compressor.ratio.value = 8;
+        this.compressor.attack.value = 0.005;
+        this.compressor.release.value = 0.1;
+
+        // Reverb
+        this.convolver = this.ctx.createConvolver();
+        this.convolver.buffer = this._createReverbIR(2.5, 2.0);
+
+        const reverbGain = this.ctx.createGain();
+        reverbGain.gain.value = 0.3;
+
+        // Master
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = this.volume * 0.12;
+
+        // Analyser
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 256;
+
+        // Routing
+        this.compressor.connect(this.masterGain);
+        this.masterGain.connect(this.analyser);
+        this.analyser.connect(this.ctx.destination);
+        this.masterGain.connect(reverbGain);
+        reverbGain.connect(this.convolver);
+        this.convolver.connect(this.ctx.destination);
+      }
+
+      _createReverbIR(duration, decay) {
+        const rate = this.ctx.sampleRate;
+        const len = rate * duration;
+        const ir = this.ctx.createBuffer(2, len, rate);
+        for (let ch = 0; ch < 2; ch++) {
+          const d = ir.getChannelData(ch);
+          for (let i = 0; i < len; i++) {
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+          }
+        }
+        return ir;
+      }
+
+      loadPiece(piece) {
+        // Kill all active notes
+        for (const [, note] of this.activeNotes) {
+          this._killNote(note);
+        }
+        this.activeNotes.clear();
+
+        this.grid = parseGrid(piece.rendered);
+        this.rows = this.grid.length;
+        this.cols = this.rows > 0 ? this.grid[0].length : 0;
+        this.genomeType = piece.genome?.type || '1d';
+
+        // Build frequency map: rows → pitch (high to low), columns → slight detune
+        this._buildFreqMap();
+      }
+
+      _buildFreqMap() {
+        const scale = TYPE_SCALES[this.genomeType] || TYPE_SCALES['1d'];
+        const baseFreq = 130.81; // C3
+        this.freqMap = [];
+
+        for (let r = 0; r < this.rows; r++) {
+          const row = [];
+          // Map row to pitch — top rows are high, bottom are low
+          const noteIndex = this.rows - 1 - r;
+          const octave = Math.floor(noteIndex / scale.intervals.length);
+          const degree = scale.intervals[noteIndex % scale.intervals.length];
+          const semitones = degree + octave * 12;
+          const baseRowFreq = baseFreq * Math.pow(2, semitones / 12);
+
+          for (let c = 0; c < this.cols; c++) {
+            // Slight column-based detune for spatial width
+            const detuneCents = ((c / this.cols) - 0.5) * 6;
+            row.push(baseRowFreq * Math.pow(2, detuneCents / 1200));
+          }
+          this.freqMap.push(row);
+        }
+      }
+
+      triggerCell(r, c) {
+        if (!this.ctx || r < 0 || r >= this.rows || c < 0 || c >= this.cols) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+
+        const intensity = this.grid[r]?.[c] || 0;
+        if (intensity === 0) return; // silent cell
+
+        const key = `${r},${c}`;
+
+        // If already playing, refresh the timeout
+        if (this.activeNotes.has(key)) {
+          const existing = this.activeNotes.get(key);
+          clearTimeout(existing.timeout);
+          existing.timeout = setTimeout(() => this._fadeOut(key), 600);
+          return;
+        }
+
+        const freq = this.freqMap[r]?.[c];
+        if (!freq) return;
+
+        const now = this.ctx.currentTime;
+        const wave = TYPE_WAVE[this.genomeType] || 'sine';
+        const amp = (intensity / 6) * 0.35;
+
+        // Primary oscillator
+        const osc = this.ctx.createOscillator();
+        osc.type = wave;
+        osc.frequency.value = freq;
+
+        // Gain envelope
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(amp, now + 0.02);
+
+        osc.connect(gain);
+        gain.connect(this.compressor);
+        osc.start(now);
+
+        const timeout = setTimeout(() => this._fadeOut(key), 600);
+
+        this.activeNotes.set(key, { osc, gain, timeout });
+      }
+
+      _fadeOut(key) {
+        const note = this.activeNotes.get(key);
+        if (!note) return;
+        const now = this.ctx.currentTime;
+        note.gain.gain.cancelScheduledValues(now);
+        note.gain.gain.setValueAtTime(note.gain.gain.value, now);
+        note.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+        setTimeout(() => this._killNote(note), 500);
+        this.activeNotes.delete(key);
+      }
+
+      _killNote(note) {
+        try { note.osc.stop(); } catch (e) {}
+        try { note.osc.disconnect(); } catch (e) {}
+        try { note.gain.disconnect(); } catch (e) {}
+        clearTimeout(note.timeout);
+      }
+
+      setVolume(v) {
+        this.volume = v;
+        if (this.masterGain) {
+          this.masterGain.gain.setTargetAtTime(v * 0.12, this.ctx.currentTime, 0.05);
+        }
+      }
+
+      getFrequencyData() {
+        if (!this.analyser) return new Uint8Array(0);
+        const d = new Uint8Array(this.analyser.frequencyBinCount);
+        this.analyser.getByteFrequencyData(d);
+        return d;
+      }
+    }
+
+    // ==================== Traversal Patterns ====================
+
+    class Traversal {
+      constructor(rows, cols) {
+        this.rows = rows;
+        this.cols = cols;
+        this.mode = 'touch';
+        this.time = 0;
+        this.bpm = 80;
+        this.spiralIndex = 0;
+        this.spiralPath = this._buildSpiral();
+        this.wanderR = Math.floor(rows / 2);
+        this.wanderC = Math.floor(cols / 2);
+        this.accumulator = 0;
+      }
+
+      _buildSpiral() {
+        const path = [];
+        const visited = new Set();
+        let r = Math.floor(this.rows / 2);
+        let c = Math.floor(this.cols / 2);
+        const dirs = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+        let dir = 0;
+        let steps = 1;
+        let stepCount = 0;
+        let turnCount = 0;
+
+        while (path.length < this.rows * this.cols) {
+          if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) {
+            const k = `${r},${c}`;
+            if (!visited.has(k)) {
+              visited.add(k);
+              path.push([r, c]);
+            }
+          }
+          r += dirs[dir][0];
+          c += dirs[dir][1];
+          stepCount++;
+          if (stepCount >= steps) {
+            stepCount = 0;
+            dir = (dir + 1) % 4;
+            turnCount++;
+            if (turnCount >= 2) {
+              turnCount = 0;
+              steps++;
+            }
+          }
+          if (path.length === 0 && r >= this.rows * 2) break;
+        }
+        return path;
+      }
+
+      update(dt) {
+        if (this.mode === 'touch') return [];
+
+        const beatsPerSec = this.bpm / 60;
+        // Notes per beat varies by mode
+        const notesPerBeat = this.mode === 'rain' ? 3 : this.mode === 'random' ? 2 : 1;
+        this.accumulator += dt * beatsPerSec * notesPerBeat;
+
+        const cells = [];
+        while (this.accumulator >= 1) {
+          this.accumulator -= 1;
+          const cell = this._nextCell();
+          if (cell) cells.push(cell);
+        }
+        return cells;
+      }
+
+      _nextCell() {
+        switch (this.mode) {
+          case 'rain': {
+            const c = Math.floor(Math.random() * this.cols);
+            const r = Math.floor(Math.random() * this.rows);
+            return [r, c];
+          }
+          case 'spiral': {
+            if (this.spiralPath.length === 0) return null;
+            const cell = this.spiralPath[this.spiralIndex % this.spiralPath.length];
+            this.spiralIndex++;
+            return cell;
+          }
+          case 'wave': {
+            this.time++;
+            const col = this.time % this.cols;
+            // Play multiple rows in this column based on a sine wave pattern
+            const centerRow = Math.floor(this.rows / 2 + Math.sin(this.time * 0.15) * this.rows * 0.35);
+            const r = Math.max(0, Math.min(this.rows - 1, centerRow));
+            return [r, col];
+          }
+          case 'random': {
+            // Random walk
+            this.wanderR += Math.floor(Math.random() * 3) - 1;
+            this.wanderC += Math.floor(Math.random() * 3) - 1;
+            this.wanderR = Math.max(0, Math.min(this.rows - 1, this.wanderR));
+            this.wanderC = Math.max(0, Math.min(this.cols - 1, this.wanderC));
+            return [this.wanderR, this.wanderC];
+          }
+          default: return null;
+        }
+      }
+
+      reset() {
+        this.spiralIndex = 0;
+        this.time = 0;
+        this.accumulator = 0;
+        this.wanderR = Math.floor(this.rows / 2);
+        this.wanderC = Math.floor(this.cols / 2);
+      }
+    }
+
+    // ==================== Ripple System ====================
+
+    class RippleSystem {
+      constructor() {
+        this.ripples = []; // { r, c, t, maxT, intensity }
+      }
+
+      add(r, c, intensity) {
+        this.ripples.push({ r, c, t: 0, maxT: 1.2, intensity: intensity / 6 });
+        if (this.ripples.length > 80) this.ripples.shift();
+      }
+
+      update(dt) {
+        for (let i = this.ripples.length - 1; i >= 0; i--) {
+          this.ripples[i].t += dt;
+          if (this.ripples[i].t >= this.ripples[i].maxT) {
+            this.ripples.splice(i, 1);
+          }
+        }
+      }
+    }
+
+    // ==================== Renderer ====================
+
+    class GridRenderer {
+      constructor(canvas, rippleCanvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.rCanvas = rippleCanvas;
+        this.rCtx = rippleCanvas.getContext('2d');
+        this.grid = [];
+        this.cellW = 1;
+        this.cellH = 1;
+        this.typeColor = { h: 260, s: 70 };
+      }
+
+      loadGrid(grid, genomeType, wrapEl) {
+        this.grid = grid;
+        const rows = grid.length;
+        const cols = grid[0]?.length || 0;
+        if (rows === 0 || cols === 0) return;
+
+        this.typeColor = TYPE_COLORS[genomeType] || TYPE_COLORS['1d'];
+
+        // Fit to container
+        const rect = wrapEl.getBoundingClientRect();
+        const maxW = rect.width - 20;
+        const maxH = rect.height - 10;
+        const cellW = Math.floor(Math.min(maxW / cols, maxH / rows));
+        const cw = Math.max(3, Math.min(16, cellW));
+        this.cellW = cw;
+        this.cellH = cw;
+
+        const w = cols * cw;
+        const h = rows * cw;
+        this.canvas.width = w;
+        this.canvas.height = h;
+        this.canvas.style.width = w + 'px';
+        this.canvas.style.height = h + 'px';
+        this.rCanvas.width = w;
+        this.rCanvas.height = h;
+        this.rCanvas.style.width = w + 'px';
+        this.rCanvas.style.height = h + 'px';
+      }
+
+      cellFromMouse(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const c = Math.floor(x / this.cellW);
+        const r = Math.floor(y / this.cellH);
+        if (r < 0 || r >= this.grid.length || c < 0 || c >= (this.grid[0]?.length || 0)) return null;
+        return [r, c];
+      }
+
+      render(activeCells, cursorCell) {
+        const { ctx, canvas, grid, cellW, cellH } = this;
+        if (grid.length === 0) return;
+
+        const rows = grid.length;
+        const cols = grid[0].length;
+        const { h, s } = this.typeColor;
+
+        ctx.fillStyle = '#0a0a0f';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const activeSet = new Set(activeCells.map(([r, c]) => `${r},${c}`));
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const val = grid[r][c];
+            if (val === 0) continue;
+
+            const x = c * cellW;
+            const y = r * cellH;
+            let lightness = 8 + (val / 6) * 40;
+
+            // Highlight active cells
+            if (activeSet.has(`${r},${c}`)) {
+              lightness += 30;
+            }
+
+            // Cursor proximity glow
+            if (cursorCell) {
+              const dr = Math.abs(r - cursorCell[0]);
+              const dc = Math.abs(c - cursorCell[1]);
+              const dist = Math.sqrt(dr * dr + dc * dc);
+              if (dist < 4) {
+                lightness += (1 - dist / 4) * 15;
+              }
+            }
+
+            ctx.fillStyle = `hsl(${h}, ${s}%, ${Math.min(lightness, 92)}%)`;
+            ctx.fillRect(x, y, cellW - (cellW > 4 ? 1 : 0), cellH - (cellW > 4 ? 1 : 0));
+          }
+        }
+      }
+
+      renderRipples(ripples) {
+        const { rCtx: ctx, rCanvas: canvas, cellW, cellH } = this;
+        const { h, s } = this.typeColor;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (const rip of ripples) {
+          const progress = rip.t / rip.maxT;
+          const radius = progress * cellW * 5;
+          const alpha = (1 - progress) * rip.intensity * 0.6;
+
+          const cx = rip.c * cellW + cellW / 2;
+          const cy = rip.r * cellH + cellH / 2;
+
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.strokeStyle = `hsla(${h}, ${s}%, 70%, ${alpha})`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // ==================== Waveform Bar ====================
+
+    class WaveBar {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+      }
+
+      render(freqData, typeColor) {
+        const { ctx, canvas } = this;
+        const { h, s } = typeColor || { h: 260, s: 70 };
+
+        // Match parent width
+        const parentW = canvas.parentElement?.clientWidth || 1000;
+        if (canvas.width !== parentW) {
+          canvas.width = parentW;
+          canvas.style.width = parentW + 'px';
+        }
+
+        ctx.fillStyle = 'rgba(10, 10, 15, 0.8)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (!freqData || freqData.length === 0) return;
+
+        const bars = Math.min(96, freqData.length);
+        const bw = canvas.width / bars;
+
+        for (let i = 0; i < bars; i++) {
+          const val = freqData[i] / 255;
+          const bh = val * canvas.height * 0.9;
+          const l = 15 + val * 55;
+          ctx.fillStyle = `hsl(${h}, ${s}%, ${l}%)`;
+          ctx.fillRect(i * bw + 0.5, canvas.height - bh, bw - 0.5, bh);
+        }
+      }
+    }
+
+    // ==================== App ====================
+
+    let engine = null;
+    let renderer = null;
+    let waveBar = null;
+    let traversal = null;
+    let ripples = null;
+    let pieces = [];
+    let currentIndex = 0;
+    let autoPlaying = false;
+    let cursorCell = null;
+    let lastFrameTime = 0;
+    let mouseDown = false;
+    let lastTrigger = '';
+
+    const $ = id => document.getElementById(id);
+    const startOverlay = $('startOverlay');
+    const main = $('main');
+    const gridCanvas = $('gridCanvas');
+    const rippleCanvas = $('rippleCanvas');
+    const canvasWrap = $('canvasWrap');
+    const playBtn = $('playBtn');
+    const prevBtn = $('prevBtn');
+    const nextBtn = $('nextBtn');
+    const volSlider = $('volSlider');
+    const tempoSlider = $('tempoSlider');
+    const selector = $('selector');
+    const bgGlow = $('bgGlow');
+
+    async function loadPieces() {
+      const res = await fetch('./gallery.json');
+      const data = await res.json();
+      const hofIds = new Set((data.hallOfFame || []).map(p => p.id));
+      const hof = (data.hallOfFame || []).sort((a, b) => b.score - a.score);
+      const current = (data.pieces || []).filter(p => !hofIds.has(p.id)).sort((a, b) => b.score - a.score);
+      pieces = [...hof, ...current].filter(p => p.rendered);
+    }
+
+    function buildSelector() {
+      selector.innerHTML = pieces.slice(0, 80).map((p, i) => {
+        const tc = TYPE_COLORS[p.genome?.type] || TYPE_COLORS['1d'];
+        return `<button class="sel-dot ${i === 0 ? 'active' : ''}" data-i="${i}" title="${typeLabel(p.genome?.type)} ${(p.score * 100).toFixed(0)}%" style="border-color:${tc.base}"></button>`;
+      }).join('');
+
+      selector.addEventListener('click', e => {
+        const dot = e.target.closest('.sel-dot');
+        if (dot) selectPiece(parseInt(dot.dataset.i));
+      });
+    }
+
+    function selectPiece(i) {
+      currentIndex = i;
+      const piece = pieces[i];
+      const grid = parseGrid(piece.rendered);
+      const type = piece.genome?.type || '1d';
+      const tc = TYPE_COLORS[type] || TYPE_COLORS['1d'];
+      const scale = TYPE_SCALES[type] || TYPE_SCALES['1d'];
+
+      // Update info
+      $('infoType').textContent = typeLabel(type);
+      $('infoScore').textContent = (piece.score * 100).toFixed(1) + '%';
+      $('infoGen').textContent = piece.generation;
+      $('infoScale').textContent = scale.name;
+
+      // Glow
+      bgGlow.style.background = `radial-gradient(circle, ${tc.base}20 0%, transparent 70%)`;
+
+      // Selector dots
+      selector.querySelectorAll('.sel-dot').forEach((d, j) => d.classList.toggle('active', j === i));
+
+      // Renderer
+      renderer.loadGrid(grid, type, canvasWrap);
+      renderer.render([], null);
+
+      // Audio
+      engine.loadPiece(piece);
+
+      // Traversal
+      traversal = new Traversal(grid.length, grid[0]?.length || 0);
+      traversal.mode = getCurrentMode();
+      traversal.bpm = parseInt(tempoSlider.value);
+
+      // Ripples
+      ripples = new RippleSystem();
+    }
+
+    function getCurrentMode() {
+      const active = document.querySelector('#traversalToggle .mode-btn.active');
+      return active?.dataset.mode || 'touch';
+    }
+
+    function toggleAutoPlay() {
+      autoPlaying = !autoPlaying;
+      playBtn.innerHTML = autoPlaying ? '&#10074;&#10074;' : '&#9654;';
+      if (autoPlaying && traversal.mode === 'touch') {
+        // Switch to rain if currently on touch
+        setTraversalMode('rain');
+      }
+    }
+
+    function setTraversalMode(mode) {
+      document.querySelectorAll('#traversalToggle .mode-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+      });
+      if (traversal) {
+        traversal.mode = mode;
+        traversal.reset();
+      }
+      $('infoTraversal').textContent = mode;
+
+      if (mode === 'touch') {
+        autoPlaying = false;
+        playBtn.innerHTML = '&#9654;';
+      } else if (!autoPlaying) {
+        autoPlaying = true;
+        playBtn.innerHTML = '&#10074;&#10074;';
+      }
+    }
+
+    // ==================== Main Loop ====================
+
+    function frame(time) {
+      requestAnimationFrame(frame);
+
+      const dt = lastFrameTime ? (time - lastFrameTime) / 1000 : 0;
+      lastFrameTime = time;
+
+      if (!traversal || !renderer || !engine) return;
+
+      const activeCells = [];
+
+      // Auto-traversal
+      if (autoPlaying && traversal.mode !== 'touch') {
+        const cells = traversal.update(dt);
+        for (const [r, c] of cells) {
+          engine.triggerCell(r, c);
+          const intensity = renderer.grid[r]?.[c] || 0;
+          if (intensity > 0) {
+            ripples.add(r, c, intensity);
+            activeCells.push([r, c]);
+          }
+        }
+      }
+
+      // Ripples
+      ripples.update(dt);
+
+      // Render
+      renderer.render(activeCells, cursorCell);
+      renderer.renderRipples(ripples.ripples);
+
+      // Waveform
+      const tc = TYPE_COLORS[pieces[currentIndex]?.genome?.type] || TYPE_COLORS['1d'];
+      waveBar.render(engine.getFrequencyData(), tc);
+    }
+
+    // ==================== Input Handlers ====================
+
+    function handlePointer(e) {
+      const cell = renderer.cellFromMouse(e);
+      cursorCell = cell;
+      if (!cell) return;
+      const [r, c] = cell;
+      const key = `${r},${c}`;
+
+      // Rate-limit: don't retrigger same cell within ~80ms
+      if (key === lastTrigger) return;
+      lastTrigger = key;
+      setTimeout(() => { if (lastTrigger === key) lastTrigger = ''; }, 80);
+
+      engine.triggerCell(r, c);
+      const intensity = renderer.grid[r]?.[c] || 0;
+      if (intensity > 0) {
+        ripples.add(r, c, intensity);
+      }
+    }
+
+    // ==================== Init ====================
+
+    startOverlay.addEventListener('click', async () => {
+      startOverlay.classList.add('hidden');
+      main.classList.add('visible');
+
+      engine = new SynesthesiaEngine();
+      engine.init();
+      renderer = new GridRenderer(gridCanvas, rippleCanvas);
+      waveBar = new WaveBar($('waveBar'));
+      ripples = new RippleSystem();
+
+      await loadPieces();
+      if (pieces.length === 0) return;
+
+      buildSelector();
+      selectPiece(0);
+      requestAnimationFrame(frame);
+    });
+
+    // Mouse/touch on canvas
+    gridCanvas.addEventListener('mousemove', e => {
+      if (getCurrentMode() === 'touch' || mouseDown) handlePointer(e);
+      else cursorCell = renderer?.cellFromMouse(e) || null;
+    });
+    gridCanvas.addEventListener('mousedown', e => {
+      mouseDown = true;
+      handlePointer(e);
+    });
+    gridCanvas.addEventListener('mouseup', () => mouseDown = false);
+    gridCanvas.addEventListener('mouseleave', () => {
+      mouseDown = false;
+      cursorCell = null;
+    });
+
+    // Touch
+    gridCanvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      handlePointer(t);
+    }, { passive: false });
+    gridCanvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      handlePointer(t);
+    }, { passive: false });
+
+    // Controls
+    playBtn.addEventListener('click', toggleAutoPlay);
+    prevBtn.addEventListener('click', () => selectPiece((currentIndex - 1 + pieces.length) % pieces.length));
+    nextBtn.addEventListener('click', () => selectPiece((currentIndex + 1) % pieces.length));
+
+    volSlider.addEventListener('input', () => engine?.setVolume(volSlider.value / 100));
+    tempoSlider.addEventListener('input', () => {
+      if (traversal) traversal.bpm = parseInt(tempoSlider.value);
+    });
+
+    document.querySelectorAll('#traversalToggle .mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => setTraversalMode(btn.dataset.mode));
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space') { e.preventDefault(); toggleAutoPlay(); }
+      if (e.code === 'ArrowLeft') prevBtn.click();
+      if (e.code === 'ArrowRight') nextBtn.click();
+      if (e.code === 'ArrowUp') { e.preventDefault(); volSlider.value = Math.min(100, +volSlider.value + 10); volSlider.dispatchEvent(new Event('input')); }
+      if (e.code === 'ArrowDown') { e.preventDefault(); volSlider.value = Math.max(0, +volSlider.value - 10); volSlider.dispatchEvent(new Event('input')); }
+      if (e.key === '1') setTraversalMode('touch');
+      if (e.key === '2') setTraversalMode('rain');
+      if (e.key === '3') setTraversalMode('spiral');
+      if (e.key === '4') setTraversalMode('wave');
+      if (e.key === '5') setTraversalMode('random');
+    });
+  </script>
+</body>
+</html>
