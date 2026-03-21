@@ -4,6 +4,12 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Sonify / Genetic Synthesis (autonomous session)
+- **What**: Immersive sonification page (`docs/sonify.html`) where each piece's genome DNA defines its own unique synthesizer
+- **Details**: Unlike existing audio pages (Listen, Synth, Symphony, Resonance) which use generic oscillators, Sonify treats the genome parameters as the instrument patch itself. **12 genome-specific synthesis engines**: 1D automata → wavetable synthesis (rule number = waveform shape), 2D life → additive synthesis (birth numbers = active harmonics), L-system → melodic sequencer (symbols = notes/rests), reaction-diffusion → FM synthesis (feed = mod freq ratio, kill = mod index), voronoi → spatial pad voices (seeds = positioned sources), WFC → rhythmic grid (tiles = percussive hits), spirograph → ring modulation (R/r = carrier/mod ratio), attractor → chaotic oscillator (coefficients drive pitch), julia → fractal harmonics (escape time = overtone depth), noise → subtractive (octaves = cascaded bandpass filters), flowfield → granular (particles = grains with Gaussian envelopes), magnetic pendulum → resonant filter banks (magnets = resonant peaks). **Metrics shape the master sound**: complexity → harmonic richness, symmetry → stereo width, density → presence, edge activity → LFO depth, novelty → detuning, fractal dimension → spectral texture. Sub-bass drone + harmonic pad layer uses metrics for continuous ambient bed. Web Audio API with convolution reverb, dynamics compressor, stereo panning. Real-time waveform + frequency spectrum + synth wave visualizers. Hall of Fame browser with species-colored dots. Transport controls, tempo (20-200 BPM), volume, root note selection (all 12 keys). DNA strand visualization shows genome parameters as colored bars. Instrument mapping panel shows exactly how each genome parameter maps to an audio parameter. Keyboard shortcuts (Space, arrows, R). Dark aesthetic with sidebar layout.
+- **Pages**: `docs/sonify.html` (new), `docs/index.html` (added Sonify button)
+- **Inspiration**: The other audio pages treat pieces as data to be scanned or stepped through — the synthesis is always the same generic oscillator bank regardless of genome type. Sonify inverts this: the piece's DNA IS the synthesizer. A reaction-diffusion piece sounds fundamentally different from a WFC piece because feed/kill rates become FM parameters while tile adjacency becomes rhythm. The genome doesn't just provide data — it defines the instrument.
+
 ### 2026-03-21 — Prism / Kaleidoscopic Algorithm Explorer (autonomous session)
 - **What**: Interactive kaleidoscope that refracts generative algorithms through geometric symmetry (`docs/prism.html`)
 - **Details**: Full-screen Canvas 2D renderer that computes a single wedge of an algorithm's output, then reflects it N times to create kaleidoscopic symmetry. **6 algorithms**: Julia set (animated c parameter), domain-warped flow field, reaction-diffusion approximation, fractal noise with ridge detection, spirograph interference, and wave source interference. **Controls**: symmetry order (2-16 fold), animation speed, zoom level, mouse warp intensity, 8 color palettes (Amethyst, Emerald, Ember, Frost, Blood Moon, Aurora, Void, Neon). **Mouse interaction**: cursor position warps algorithm parameters. **Audio reactivity**: microphone input modulates zoom, brightness, and time. **Keyboard**: 1-6 switch algorithms, arrows adjust symmetry, H toggles panel, space pauses. **Export**: PNG download. 22KB total, no dependencies.
@@ -160,6 +166,17 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 - **Details**:
   - **ImageData rendering** (`docs/lattice-perf.js`): Replaced per-pixel `ctx.fillRect()` with bulk `ImageData` writes + single `putImageData()` + GPU-accelerated `drawImage()` scaling. For a 120×80 grid scaled to 1920×1080, this eliminates ~9,600 `fillRect` calls and ~9,600 `rgb()` string allocations per frame, replacing them with 1 `putImageData` + 1 `drawImage`.
   - **Reaction-Diffusion buffer swap**: Pre-allocated double buffers in the constructor; `step()` now swaps buffer references instead of allocating `2×H` `Float64Array`s per substep (8–20 substeps/frame = 16–40 eliminated allocations/frame).
+
+### 2026-03-21 — WebWorker Pipeline / Simulation Offloading (autonomous session)
+- **What**: Moved all simulation computation off the main thread via WebWorkers
+- **Details**:
+  - **WebWorker** (`docs/lattice-worker.js`): All 11 engines in a shared worker with optimizations (double-buffered RD/Life2D, birth/survive LUT, pre-allocated value buffers). Protocol: init (genome) → step → transfers Float32Array values via transferable objects (zero-copy).
+  - **Live mode** (`docs/live.html`): Simulation in background threads. Transitions run two workers concurrently (true parallelism). Main thread sim cost: ~0ms. Back-pressure via stepPending flag.
+  - **Julia inner loop**: Pre-computed inverse dimensions and scale factors, cached Math.log(2).
+  - **NoiseField**: Gradient tables as Float64Array for better JIT.
+  - **Benchmark** (`docs/bench.html`): Added WebWorker offloading section.
+- **Pages**: `docs/lattice-worker.js` (new), `docs/live.html` (worker integration), `docs/bench.html` (updated)
+- **Impact**: Main thread sim: 2-15ms/frame → ~0ms. No frame drops on heavy sims. True thread parallelism for transitions.
   - **Life2D double buffering**: Pre-allocated next-grid rows in constructor; `step()` swaps `grid`↔`nextGrid` pointers instead of allocating `H` `Float32Array`s per step. Added `Uint8Array(9)` lookup tables for birth/survive rules (replaces `Array.includes()` per cell).
   - **Cached vignette**: Radial gradient rendered once to offscreen canvas, redrawn via `drawImage` each frame (eliminates `createRadialGradient()` per frame).
   - **Performance monitor**: `PerfMonitor` class tracks sim/render/frame timings with rolling averages and P95. Logs to console every 300 frames in live mode.
