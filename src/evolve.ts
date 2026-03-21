@@ -3,12 +3,13 @@
  * Lattice — Evolution Runner
  *
  * Each run:
- * 1. Loads the current population from gallery/population.json
+ * 1. Loads the current population (Supabase primary, JSON fallback)
  * 2. Generates new pieces by mutating the best performers
  * 3. Scores and ranks all pieces
  * 4. Keeps the top N, culls the rest
  * 5. Saves standout pieces to gallery/
- * 6. Writes a summary for Discord notification
+ * 6. Archives ALL generated pieces to Supabase
+ * 7. Writes a summary for Discord notification
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, appendFileSync } from "fs";
@@ -38,6 +39,16 @@ import {
   getEpoch,
   getEpochDescription,
 } from "./automata.js";
+import {
+  isSupabaseConfigured,
+  loadPopulation as sbLoadPopulation,
+  savePopulation as sbSavePopulation,
+  loadHistory as sbLoadHistory,
+  saveGeneration as sbSaveGeneration,
+  addToHallOfFame as sbAddToHallOfFame,
+  archivePieces as sbArchivePieces,
+  getHallOfFame as sbGetHallOfFame,
+} from "./supabase.js";
 
 const PROJECT_DIR = join(import.meta.dirname, "..");
 const GALLERY_DIR = join(PROJECT_DIR, "gallery");
@@ -85,7 +96,13 @@ interface Population {
   };
 }
 
-function loadPopulation(): Population {
+// ---------------------------------------------------------------------------
+// Data layer — Supabase primary, JSON fallback
+// ---------------------------------------------------------------------------
+
+let useSupabase = isSupabaseConfigured();
+
+function loadPopulationFromJSON(): Population {
   if (existsSync(POPULATION_FILE)) {
     return JSON.parse(readFileSync(POPULATION_FILE, "utf-8"));
   }
@@ -97,11 +114,96 @@ function loadPopulation(): Population {
   };
 }
 
-function savePopulation(pop: Population): void {
+function savePopulationToJSON(pop: Population): void {
   const tmp = POPULATION_FILE + ".tmp";
   writeFileSync(tmp, JSON.stringify(pop, null, 2));
   renameSync(tmp, POPULATION_FILE);
 }
+
+async function loadPop(): Promise<Population> {
+  if (useSupabase) {
+    try {
+      const [pieces, hallOfFame] = await Promise.all([
+        sbLoadPopulation(),
+        sbGetHallOfFame(),
+      ]);
+      // Determine generation from the highest generation in population
+      const generation = pieces.reduce((max, p) => Math.max(max, p.generation), 0);
+      // Stats are derived — totalPiecesEver comes from JSON fallback since Supabase
+      // doesn't track cumulative stats in the population table
+      const jsonPop = loadPopulationFromJSON();
+      return {
+        generation,
+        pieces,
+        hallOfFame,
+        stats: jsonPop.stats, // keep cumulative stats from JSON
+      };
+    } catch (err) {
+      console.warn(`  [supabase] Failed to load population, falling back to JSON: ${err}`);
+      useSupabase = false;
+    }
+  }
+  return loadPopulationFromJSON();
+}
+
+async function savePop(pop: Population): Promise<void> {
+  // Always save to JSON (guaranteed fallback)
+  savePopulationToJSON(pop);
+
+  if (useSupabase) {
+    try {
+      await sbSavePopulation(pop.pieces);
+      console.log("  [supabase] Population saved");
+    } catch (err) {
+      console.warn(`  [supabase] Failed to save population: ${err}`);
+    }
+  }
+}
+
+async function saveGen(record: GenerationRecord, epoch: string): Promise<void> {
+  if (useSupabase) {
+    try {
+      await sbSaveGeneration({
+        generation: record.generation,
+        epoch,
+        bestScore: record.bestScore,
+        avgScore: record.avgScore,
+        speciesCounts: record.speciesCounts,
+        hallOfFameSize: record.hallOfFameSize,
+        bestPieceId: record.bestPiece?.id,
+        bestPieceGenome: record.bestPiece?.genome,
+        populationSize: POPULATION_SIZE,
+      });
+      console.log("  [supabase] Generation record saved");
+    } catch (err) {
+      console.warn(`  [supabase] Failed to save generation: ${err}`);
+    }
+  }
+}
+
+async function saveHallOfFameEntries(entries: Piece[], epoch: string): Promise<void> {
+  if (!useSupabase || entries.length === 0) return;
+  try {
+    await Promise.all(entries.map((p) => sbAddToHallOfFame(p, epoch)));
+    console.log(`  [supabase] ${entries.length} hall of fame entries saved`);
+  } catch (err) {
+    console.warn(`  [supabase] Failed to save hall of fame: ${err}`);
+  }
+}
+
+async function archiveAllPieces(pieces: Piece[], epoch: string): Promise<void> {
+  if (!useSupabase || pieces.length === 0) return;
+  try {
+    await sbArchivePieces(pieces, epoch);
+    console.log(`  [supabase] ${pieces.length} pieces archived`);
+  } catch (err) {
+    console.warn(`  [supabase] Failed to archive pieces: ${err}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Piece generation
+// ---------------------------------------------------------------------------
 
 function generatePiece(genome: Genome, generation: number, populationMetrics?: PieceMetrics[]): Piece {
   let grid: number[][];
@@ -226,10 +328,16 @@ function formatPieceForDiscord(piece: Piece): string {
   ].join("\n");
 }
 
-function run(): void {
+async function run(): Promise<void> {
   mkdirSync(GALLERY_DIR, { recursive: true });
 
-  const pop = loadPopulation();
+  if (useSupabase) {
+    console.log("  [supabase] Connected — using Supabase as primary data store");
+  } else {
+    console.log("  [supabase] Not configured — using JSON files only");
+  }
+
+  const pop = await loadPop();
   const gen = pop.generation + 1;
   const rng = () => Math.random(); // use true random for evolution
 
@@ -366,14 +474,15 @@ function run(): void {
   pop.stats.bestScoreEver = Math.max(pop.stats.bestScoreEver, bestScore);
   pop.stats.avgScore = avgScore;
 
-  savePopulation(pop);
+  // Save population to both Supabase and JSON
+  await savePop(pop);
 
   // Track generation history for the timeline chart
   let history: GenerationRecord[] = [];
   if (existsSync(HISTORY_FILE)) {
     try { history = JSON.parse(readFileSync(HISTORY_FILE, "utf-8")); } catch {}
   }
-  history.push({
+  const genRecord: GenerationRecord = {
     generation: gen,
     bestScore: bestScore,
     avgScore: avgScore,
@@ -387,8 +496,20 @@ function run(): void {
       score: survivors[0].score,
       metrics: survivors[0].metrics,
     } : undefined,
-  });
+  };
+  history.push(genRecord);
   writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+
+  // Save generation record and archive ALL pieces (survivors + culled) to Supabase
+  await saveGen(genRecord, epoch);
+  await archiveAllPieces(allPieces.map((p) => ({ ...p, grid: [] })), epoch);
+  await saveHallOfFameEntries(
+    newHallEntries.map((p) => {
+      const full = generatePiece(p.genome, gen);
+      return { ...full, id: p.id };
+    }),
+    epoch
+  );
 
   // Export gallery.json for GitHub Pages site
   const DOCS_DIR = join(PROJECT_DIR, "docs");
@@ -462,6 +583,9 @@ function run(): void {
   console.log(`  Avg score: ${(avgScore * 100).toFixed(1)}%`);
   console.log(`  Hall of Fame: ${pop.hallOfFame.length} pieces`);
   console.log(`  Total pieces ever: ${pop.stats.totalPiecesEver}`);
+  if (useSupabase) {
+    console.log(`  [supabase] All data synced to cloud`);
+  }
 
   // Notify Discord with best piece or summary
   if (newHallEntries.length > 0) {

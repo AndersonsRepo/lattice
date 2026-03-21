@@ -538,11 +538,57 @@
       }[epoch] || '';
     }
 
+    // Supabase live data config (anon key — safe for browser, RLS protects writes)
+    const SUPABASE_URL = 'https://fwwjtlafcrzeqfuqmexs.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ3d2p0bGFmY3J6ZXFmdXFtZXhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNjAzNTAsImV4cCI6MjA4MzczNjM1MH0.caaW2yQl0o9WGfwvNRrcdPZXmYIZKgBaCpqzc-gXt5M';
+
+    async function fetchSupabaseLive() {
+      const headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Accept-Profile': 'lattice',
+        'Accept': 'application/json',
+      };
+      const base = SUPABASE_URL + '/rest/v1';
+      const [popRes, genRes, hofRes] = await Promise.all([
+        fetch(base + '/population?order=score.desc&limit=8', { headers }),
+        fetch(base + '/generations?order=generation.asc', { headers }),
+        fetch(base + '/hall_of_fame?order=score.desc&limit=20', { headers }),
+      ]);
+      if (!popRes.ok || !genRes.ok || !hofRes.ok) throw new Error('Supabase fetch failed');
+      const [pieces, generations, hallOfFame] = await Promise.all([popRes.json(), genRes.json(), hofRes.json()]);
+      if (generations.length === 0) throw new Error('No data in Supabase');
+      const latest = generations[generations.length - 1];
+      const history = generations.map(g => ({
+        generation: g.generation, bestScore: g.best_score, avgScore: g.avg_score,
+        epoch: g.epoch, speciesCounts: g.species_counts, hallOfFameSize: g.hall_of_fame_size,
+        timestamp: g.created_at,
+        bestPiece: g.best_piece_id ? { id: g.best_piece_id, genome: g.best_piece_genome, score: g.best_score, metrics: {} } : undefined,
+      }));
+      return {
+        generation: latest.generation,
+        stats: { totalPiecesEver: 0, bestScoreEver: Math.max(...generations.map(g => g.best_score)), avgScore: latest.avg_score },
+        history,
+        archive: [],
+        hallOfFame: hallOfFame.map(h => ({ id: h.id, genome: h.genome, score: h.score, metrics: h.metrics, rendered: h.rendered, generation: h.generation, createdAt: h.inducted_at })),
+        pieces: pieces.map(p => ({ id: p.id, genome: p.genome, score: p.score, metrics: p.metrics, rendered: p.rendered, generation: p.generation, createdAt: p.created_at })),
+      };
+    }
+
     async function loadGallery() {
       try {
-        const res = await fetch('./gallery.json');
-        if (!res.ok) throw new Error('No gallery data');
-        const data = await res.json();
+        // Try live Supabase data first
+        let data;
+        try {
+          data = await fetchSupabaseLive();
+          console.log('[lattice] Loaded live data from Supabase');
+        } catch (e) {
+          // Fall back to static gallery.json
+          const res = await fetch('./gallery.json');
+          if (!res.ok) throw new Error('No gallery data');
+          data = await res.json();
+          console.log('[lattice] Loaded static gallery.json (Supabase unavailable)');
+        }
         renderStats(data);
         renderTimeline(data.history);
         renderSpeciesChart(data.history);

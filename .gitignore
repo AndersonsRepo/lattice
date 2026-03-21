@@ -4,3 +4,4 @@ gallery/*.txt
 logs/
 .worktrees/
 .vercel
+.env

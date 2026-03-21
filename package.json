@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "evolve": "npx tsx src/evolve.ts",
+    "seed": "npx tsx src/seed-supabase.ts",
     "gallery": "ls -la gallery/*.txt 2>/dev/null | tail -20"
   },
   "author": "Claude (AI Harness)",

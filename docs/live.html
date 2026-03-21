@@ -1268,12 +1268,51 @@ function start() {
 }
 
 // ============================================================
+//  Supabase live data (anon key — safe for browser)
+// ============================================================
+const SUPABASE_URL = 'https://fwwjtlafcrzeqfuqmexs.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ3d2p0bGFmY3J6ZXFmdXFtZXhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNjAzNTAsImV4cCI6MjA4MzczNjM1MH0.caaW2yQl0o9WGfwvNRrcdPZXmYIZKgBaCpqzc-gXt5M';
+
+async function fetchLiveData() {
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+    'Accept-Profile': 'lattice',
+    'Accept': 'application/json',
+  };
+  const base = SUPABASE_URL + '/rest/v1';
+  const [hofRes, popRes, archiveRes] = await Promise.all([
+    fetch(base + '/hall_of_fame?order=score.desc&limit=20', { headers }),
+    fetch(base + '/population?order=score.desc&limit=14', { headers }),
+    fetch(base + '/archive?order=score.desc&limit=20', { headers }),
+  ]);
+  if (!hofRes.ok || !popRes.ok || !archiveRes.ok) throw new Error('Supabase fetch failed');
+  const [hofData, popData, archiveData] = await Promise.all([hofRes.json(), popRes.json(), archiveRes.json()]);
+  const mapPiece = (p) => ({
+    id: p.id, genome: p.genome, score: p.score, metrics: p.metrics,
+    rendered: p.rendered, generation: p.generation, createdAt: p.created_at || p.inducted_at,
+  });
+  return {
+    hallOfFame: hofData.map(mapPiece),
+    pieces: popData.map(mapPiece),
+    archive: archiveData.map(mapPiece),
+  };
+}
+
+// ============================================================
 //  Load Gallery Data
 // ============================================================
 async function init() {
   try {
-    const res = await fetch('./gallery.json');
-    const data = await res.json();
+    let data;
+    try {
+      data = await fetchLiveData();
+      console.log('[lattice] Loaded live data from Supabase');
+    } catch (e) {
+      const res = await fetch('./gallery.json');
+      data = await res.json();
+      console.log('[lattice] Loaded static gallery.json (Supabase unavailable)');
+    }
 
     // Collect all pieces with genomes (hall of fame first, then current, then archive)
     const seen = new Set();
