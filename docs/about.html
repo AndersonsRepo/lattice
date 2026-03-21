@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — How It Works</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #ef4444;
+      --cyan: #22d3ee;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Back button ── */
+    #back-btn {
+      position: fixed;
+      top: 1.2rem;
+      left: 1.5rem;
+      z-index: 100;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+      background: none;
+      border: none;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    #back-btn:hover { color: var(--text); }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 5rem 1.5rem 3rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      opacity: 0.12;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero h1 {
+      font-size: 2.4rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+      margin-bottom: 0.6rem;
+    }
+
+    .hero .subtitle {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      max-width: 520px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── Sections ── */
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    section {
+      padding: 3rem 0;
+      border-top: 1px solid var(--border);
+    }
+
+    section:first-of-type { border-top: none; }
+
+    .section-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 400;
+      color: var(--text);
+      margin-bottom: 1rem;
+      letter-spacing: 0.04em;
+    }
+
+    p {
+      color: var(--text-dim);
+      font-size: 0.82rem;
+      line-height: 1.75;
+      margin-bottom: 1rem;
+    }
+
+    p:last-child { margin-bottom: 0; }
+
+    /* ── Loop diagram ── */
+    .loop-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      padding: 2rem 0;
+      flex-wrap: wrap;
+    }
+
+    .loop-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 1rem 0.8rem;
+      min-width: 100px;
+      position: relative;
+    }
+
+    .loop-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: border-color 0.4s, box-shadow 0.4s;
+    }
+
+    .loop-step.active .loop-icon {
+      border-color: var(--accent);
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .loop-label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-align: center;
+      transition: color 0.4s;
+    }
+
+    .loop-step.active .loop-label {
+      color: var(--accent);
+    }
+
+    .loop-arrow {
+      color: var(--border);
+      font-size: 1rem;
+      margin: 0 -0.2rem;
+      flex-shrink: 0;
+    }
+
+    /* ── Species grid ── */
+    .species-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
+      padding: 1.5rem 0;
+    }
+
+    .species-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+
+    .species-card:hover {
+      border-color: var(--accent);
+    }
+
+    .species-card canvas {
+      width: 100%;
+      height: 80px;
+      border-radius: 3px;
+      margin-bottom: 0.75rem;
+      background: var(--bg);
+    }
+
+    .species-name {
+      font-size: 0.78rem;
+      color: var(--text);
+      margin-bottom: 0.3rem;
+    }
+
+    .species-desc {
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    .species-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-right: 0.4rem;
+      vertical-align: middle;
+    }
+
+    /* ── Epoch timeline ── */
+    .epoch-track {
+      display: flex;
+      gap: 0;
+      margin: 1.5rem 0;
+      border-radius: 6px;
+      overflow: hidden;
+      height: 56px;
+    }
+
+    .epoch-band {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.3rem;
+      transition: opacity 0.3s;
+      cursor: default;
+      position: relative;
+    }
+
+    .epoch-band:hover { opacity: 0.85; }
+
+    .epoch-band .epoch-name {
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .epoch-band .epoch-gens {
+      font-size: 0.55rem;
+      opacity: 0.7;
+    }
+
+    /* ── Metrics vis ── */
+    .metrics-vis {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 0.75rem;
+      padding: 1.5rem 0;
+    }
+
+    .metric-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.8rem;
+    }
+
+    .metric-name {
+      font-size: 0.68rem;
+      color: var(--text);
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .metric-bar-track {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 0.3rem;
+    }
+
+    .metric-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 1.5s ease;
+      width: 0;
+    }
+
+    .metric-desc {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    /* ── Mutation demo ── */
+    .mutation-demo {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      padding: 1.5rem 0;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .mutation-specimen {
+      width: 140px;
+      text-align: center;
+    }
+
+    .mutation-specimen canvas {
+      width: 140px;
+      height: 100px;
+      border-radius: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      margin-bottom: 0.4rem;
+    }
+
+    .mutation-specimen .gen-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+    }
+
+    .mutation-arrow {
+      font-size: 1.2rem;
+      color: var(--accent);
+      animation: pulseArrow 2s ease-in-out infinite;
+    }
+
+    @keyframes pulseArrow { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+    .mutate-btn {
+      display: block;
+      margin: 1rem auto 0;
+      padding: 0.5rem 1.5rem;
+      background: transparent;
+      border: 1px solid var(--accent);
+      border-radius: 20px;
+      color: var(--accent);
+      font-family: inherit;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .mutate-btn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* ── Stats footer ── */
+    .stats-row {
+      display: flex;
+      justify-content: center;
+      gap: 2.5rem;
+      padding: 2rem 0;
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-top: 0.2rem;
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 2rem 1.5rem 3rem;
+      border-top: 1px solid var(--border);
+    }
+
+    footer a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      transition: color 0.2s;
+    }
+
+    footer a:hover { color: var(--accent); }
+
+    .nav-links {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 1.6rem; letter-spacing: 0.15em; }
+      .loop-diagram { gap: 0; }
+      .loop-step { min-width: 70px; padding: 0.6rem 0.3rem; }
+      .loop-icon { width: 36px; height: 36px; font-size: 0.9rem; }
+      .mutation-demo { flex-direction: column; }
+      .mutation-arrow { transform: rotate(90deg); }
+      .species-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<a id="back-btn" href="index.html">&larr; Lattice</a>
+
+<!-- ── Hero with live background ── -->
+<div class="hero">
+  <canvas id="hero-bg"></canvas>
+  <div class="hero-content">
+    <h1>How It Works</h1>
+    <p class="subtitle">
+      Lattice is an autonomous evolutionary system. It generates art, scores it,
+      mutates the survivors, and repeats &mdash; indefinitely.
+      No human selects what lives or dies. The algorithm is the curator.
+    </p>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ── Section 1: The Loop ── -->
+  <section>
+    <div class="section-label">01 &mdash; The Core Loop</div>
+    <h2>Generate &rarr; Score &rarr; Select &rarr; Mutate &rarr; Repeat</h2>
+    <p>
+      Every hour, the evolution engine runs a generation. It takes the current population
+      of 12 genomes, breeds 6 offspring through mutation and crossover, scores every piece
+      on 8 fitness metrics, keeps the top 12, and discards the rest.
+      Pieces scoring &ge;70% enter the permanent Hall of Fame.
+    </p>
+
+    <div class="loop-diagram" id="loop-diagram">
+      <div class="loop-step" data-step="0">
+        <div class="loop-icon">&#9881;</div>
+        <div class="loop-label">Generate</div>
+      </div>
+      <div class="loop-arrow">&rarr;</div>
+      <div class="loop-step" data-step="1">
+        <div class="loop-icon">&#9878;</div>
+        <div class="loop-label">Render</div>
+      </div>
+      <div class="loop-arrow">&rarr;</div>
+      <div class="loop-step" data-step="2">
+        <div class="loop-icon">&#9733;</div>
+        <div class="loop-label">Score</div>
+      </div>
+      <div class="loop-arrow">&rarr;</div>
+      <div class="loop-step" data-step="3">
+        <div class="loop-icon">&#9986;</div>
+        <div class="loop-label">Select</div>
+      </div>
+      <div class="loop-arrow">&rarr;</div>
+      <div class="loop-step" data-step="4">
+        <div class="loop-icon">&#9883;</div>
+        <div class="loop-label">Mutate</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Section 2: Species ── -->
+  <section>
+    <div class="section-label">02 &mdash; Species</div>
+    <h2>11 Generative Engines</h2>
+    <p>
+      Each genome has a type &mdash; a generative engine that interprets its parameters
+      into visual output. The population contains a mix of species competing for survival
+      under the same fitness function.
+    </p>
+
+    <div class="species-grid" id="species-grid">
+      <!-- Filled by JS -->
+    </div>
+  </section>
+
+  <!-- ── Section 3: Epochs ── -->
+  <section>
+    <div class="section-label">03 &mdash; Epochs</div>
+    <h2>Shifting Aesthetic Pressure</h2>
+    <p>
+      Every 10 generations, the fitness weights shift to a new epoch.
+      This prevents the population from converging on a single optimal form &mdash;
+      what thrives in one epoch may struggle in the next.
+      The cycle repeats: emergence &rarr; order &rarr; chaos &rarr; harmony.
+    </p>
+
+    <div class="epoch-track">
+      <div class="epoch-band" style="background: #7c6fe025; color: #a78bfa;">
+        <span class="epoch-name">Emergence</span>
+        <span class="epoch-gens">Complexity + Novelty</span>
+      </div>
+      <div class="epoch-band" style="background: #4ade8018; color: #4ade80;">
+        <span class="epoch-name">Order</span>
+        <span class="epoch-gens">Symmetry + Structure</span>
+      </div>
+      <div class="epoch-band" style="background: #ef444418; color: #ef4444;">
+        <span class="epoch-name">Chaos</span>
+        <span class="epoch-gens">Edge Activity + Entropy</span>
+      </div>
+      <div class="epoch-band" style="background: #fbbf2418; color: #fbbf24;">
+        <span class="epoch-name">Harmony</span>
+        <span class="epoch-gens">Balance Across All</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Section 4: Scoring ── -->
+  <section>
+    <div class="section-label">04 &mdash; Fitness</div>
+    <h2>8 Metrics, No Human Judgment</h2>
+    <p>
+      Every piece is scored on 8 quantitative metrics. The weights change per epoch
+      and per species type &mdash; a Julia set is judged differently than a cellular automaton.
+      The composite score determines survival.
+    </p>
+
+    <div class="metrics-vis" id="metrics-vis">
+      <!-- Filled by JS -->
+    </div>
+  </section>
+
+  <!-- ── Section 5: Mutation ── -->
+  <section>
+    <div class="section-label">05 &mdash; Mutation</div>
+    <h2>Small Changes, Large Consequences</h2>
+    <p>
+      Offspring inherit their parent's genome with small perturbations: a rule bit flips,
+      a feed rate drifts, an angle shifts by a few degrees, a palette swaps.
+      Most mutations are neutral. Some are lethal. Rarely, one is transcendent.
+    </p>
+
+    <div class="mutation-demo" id="mutation-demo">
+      <div class="mutation-specimen">
+        <canvas id="parent-canvas" width="280" height="200"></canvas>
+        <div class="gen-label">Parent</div>
+      </div>
+      <div class="mutation-arrow">&rarr;</div>
+      <div class="mutation-specimen">
+        <canvas id="child1-canvas" width="280" height="200"></canvas>
+        <div class="gen-label">Offspring A</div>
+      </div>
+      <div class="mutation-arrow">&rarr;</div>
+      <div class="mutation-specimen">
+        <canvas id="child2-canvas" width="280" height="200"></canvas>
+        <div class="gen-label">Offspring B</div>
+      </div>
+    </div>
+    <button class="mutate-btn" id="mutate-btn">&#8635; Mutate Again</button>
+  </section>
+
+  <!-- ── Section 6: Numbers ── -->
+  <section id="stats-section">
+    <div class="section-label">06 &mdash; The Record So Far</div>
+    <h2>A System That Runs Itself</h2>
+    <p>
+      Lattice has been running autonomously since March 2026. No human selects
+      which pieces survive. No human tunes the parameters. The system discovers
+      what is beautiful through the only method available: iteration.
+    </p>
+    <div class="stats-row" id="stats-row">
+      <!-- Filled by JS from gallery.json -->
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="nav-links">
+    <a href="index.html">Gallery</a>
+    <a href="live.html">Live</a>
+    <a href="listen.html">Listen</a>
+    <a href="create.html">Create</a>
+    <a href="atlas.html">Atlas</a>
+    <a href="origin.html">Origin</a>
+    <a href="dream.html">Dream</a>
+    <a href="pulse.html">Pulse</a>
+  </div>
+  <a href="https://github.com/AndersonsRepo/lattice">Source</a>
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════
+// Hero background — subtle 1D Wolfram automaton
+// ═══════════════════════════════════════════════
+(function heroBackground() {
+  const c = document.getElementById('hero-bg');
+  const ctx = c.getContext('2d');
+  let W, H, cellSize, cols, rows, grid;
+
+  function init() {
+    W = c.width = c.offsetWidth * devicePixelRatio;
+    H = c.height = c.offsetHeight * devicePixelRatio;
+    cellSize = Math.max(3, Math.floor(W / 200));
+    cols = Math.ceil(W / cellSize);
+    rows = Math.ceil(H / cellSize);
+    grid = [];
+    const row0 = new Uint8Array(cols);
+    row0[Math.floor(cols / 2)] = 1;
+    grid.push(row0);
+    const rule = 110;
+    for (let r = 1; r < rows; r++) {
+      const prev = grid[r - 1];
+      const next = new Uint8Array(cols);
+      for (let i = 0; i < cols; i++) {
+        const l = prev[(i - 1 + cols) % cols];
+        const center = prev[i];
+        const right = prev[(i + 1) % cols];
+        const idx = (l << 2) | (center << 1) | right;
+        next[i] = (rule >> idx) & 1;
+      }
+      grid.push(next);
+    }
+    draw();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (let r = 0; r < rows; r++) {
+      for (let i = 0; i < cols; i++) {
+        if (grid[r][i]) {
+          ctx.fillStyle = `rgba(124, 111, 224, ${0.15 + Math.random() * 0.1})`;
+          ctx.fillRect(i * cellSize, r * cellSize, cellSize - 1, cellSize - 1);
+        }
+      }
+    }
+  }
+
+  init();
+  window.addEventListener('resize', init);
+})();
+
+// ═══════════════════════════════════════════════
+// Loop diagram animation — highlight steps in sequence
+// ═══════════════════════════════════════════════
+(function loopAnimation() {
+  const steps = document.querySelectorAll('.loop-step');
+  let current = 0;
+  function tick() {
+    steps.forEach(s => s.classList.remove('active'));
+    steps[current].classList.add('active');
+    current = (current + 1) % steps.length;
+  }
+  tick();
+  setInterval(tick, 1800);
+})();
+
+// ═══════════════════════════════════════════════
+// Species cards with live mini-renderers
+// ═══════════════════════════════════════════════
+const SPECIES = [
+  { name: '1D Automaton', color: '#4ade80', desc: 'Wolfram elementary rules. One row generates the next from a 3-cell neighborhood.' },
+  { name: '2D Life-like', color: '#22d3ee', desc: 'Birth/survive rules on a 2D grid. Conway\'s Game of Life and its relatives.' },
+  { name: 'L-System', color: '#a78bfa', desc: 'Lindenmayer grammars. String rewriting drives a turtle that draws fractal plants.' },
+  { name: 'Reaction-Diffusion', color: '#c084fc', desc: 'Gray-Scott model. Two virtual chemicals interact, forming spots, stripes, and mazes.' },
+  { name: 'Voronoi', color: '#38bdf8', desc: 'Seed points partition the plane by nearest distance. Edges, gradients, dual graphs.' },
+  { name: 'Wave Function Collapse', color: '#f472b6', desc: 'Constraint-solving: tiles placed so every adjacency satisfies local rules.' },
+  { name: 'Spirograph', color: '#fbbf24', desc: 'Overlaid hypotrochoids and epitrochoids. Rolling circles tracing intricate curves.' },
+  { name: 'Strange Attractor', color: '#fb923c', desc: 'Clifford and De Jong attractors. Chaotic trajectories that trace emergent structure.' },
+  { name: 'Julia Set', color: '#e879f9', desc: 'Iterated z² + c in the complex plane. Fractal boundaries of infinite detail.' },
+  { name: 'Fractal Noise', color: '#94a3b8', desc: 'Layered Perlin noise with domain warping. Organic terrain-like textures.' },
+  { name: 'Flow Field', color: '#2dd4bf', desc: 'Particles trace paths through a curl-noise vector field. Streamlines become structure.' },
+];
+
+(function renderSpecies() {
+  const grid = document.getElementById('species-grid');
+  SPECIES.forEach((sp, i) => {
+    const card = document.createElement('div');
+    card.className = 'species-card';
+    card.innerHTML = `
+      <canvas id="sp-canvas-${i}" width="440" height="160"></canvas>
+      <div class="species-name"><span class="species-dot" style="background:${sp.color}"></span>${sp.name}</div>
+      <div class="species-desc">${sp.desc}</div>
+    `;
+    grid.appendChild(card);
+    requestAnimationFrame(() => drawSpeciesDemo(i, sp));
+  });
+})();
+
+function drawSpeciesDemo(i, sp) {
+  const c = document.getElementById(`sp-canvas-${i}`);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+
+  const color = sp.color;
+  const seed = i * 7919 + 31;
+  let rng = seed;
+  function rand() { rng = (rng * 16807 + 0) % 2147483647; return rng / 2147483647; }
+
+  switch (i) {
+    case 0: { // 1D Automaton
+      const rule = 30;
+      const cols = 80, rows = 28;
+      const cw = W / cols, ch = H / rows;
+      const row0 = new Uint8Array(cols);
+      row0[40] = 1;
+      let prev = row0;
+      for (let r = 0; r < rows; r++) {
+        for (let x = 0; x < cols; x++) {
+          if (prev[x]) {
+            ctx.fillStyle = color;
+            ctx.globalAlpha = 0.3 + 0.5 * (r / rows);
+            ctx.fillRect(x * cw, r * ch, cw - 0.5, ch - 0.5);
+          }
+        }
+        const next = new Uint8Array(cols);
+        for (let x = 0; x < cols; x++) {
+          const l = prev[(x - 1 + cols) % cols], m = prev[x], ri = prev[(x + 1) % cols];
+          next[x] = (rule >> ((l << 2) | (m << 1) | ri)) & 1;
+        }
+        prev = next;
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 1: { // 2D Life
+      const sz = 40;
+      const cw = W / sz, ch = H / sz;
+      let g = Array.from({length: sz}, () => Array.from({length: sz}, () => rand() < 0.35 ? 1 : 0));
+      for (let step = 0; step < 8; step++) {
+        const n = g.map(r => [...r]);
+        for (let y = 1; y < sz-1; y++) for (let x = 1; x < sz-1; x++) {
+          let s = 0;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dy||dx) s += g[y+dy][x+dx];
+          n[y][x] = g[y][x] ? (s===2||s===3?1:0) : (s===3?1:0);
+        }
+        g = n;
+      }
+      for (let y = 0; y < sz; y++) for (let x = 0; x < sz; x++) {
+        if (g[y][x]) { ctx.fillStyle = color; ctx.globalAlpha = 0.5 + rand()*0.4; ctx.fillRect(x*cw, y*ch, cw-0.5, ch-0.5); }
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 2: { // L-System
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = 1;
+      let str = 'F';
+      const rules = {'F': 'F[+F]F[-F]F'};
+      for (let it = 0; it < 4; it++) {
+        let next = '';
+        for (const ch of str) next += rules[ch] || ch;
+        str = next;
+      }
+      let x = W/2, y = H - 10, a = -Math.PI/2;
+      const len = 3, angle = Math.PI/7;
+      const stack = [];
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (const ch of str) {
+        if (ch === 'F') { x += Math.cos(a)*len; y += Math.sin(a)*len; ctx.lineTo(x,y); }
+        else if (ch === '+') a += angle;
+        else if (ch === '-') a -= angle;
+        else if (ch === '[') stack.push([x,y,a]);
+        else if (ch === ']') { const s = stack.pop(); x=s[0]; y=s[1]; a=s[2]; ctx.moveTo(x,y); }
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 3: { // Reaction-Diffusion (simplified)
+      const sz = 60;
+      const cw = W/sz, ch = H/(sz*0.6);
+      for (let y = 0; y < sz*0.6; y++) for (let x = 0; x < sz; x++) {
+        const v = Math.sin(x*0.3+rand()*2)*Math.cos(y*0.4+rand()*2);
+        if (v > 0.1) { ctx.fillStyle = color; ctx.globalAlpha = v*0.6; ctx.fillRect(x*cw,y*ch,cw-0.5,ch-0.5); }
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 4: { // Voronoi
+      const pts = Array.from({length: 12}, () => [rand()*W, rand()*H]);
+      const imgData = ctx.createImageData(W, H);
+      const rgb = hexToRgb(color);
+      for (let py = 0; py < H; py += 2) for (let px = 0; px < W; px += 2) {
+        let min1 = Infinity, min2 = Infinity;
+        for (const p of pts) {
+          const d = Math.hypot(px-p[0], py-p[1]);
+          if (d < min1) { min2 = min1; min1 = d; } else if (d < min2) min2 = d;
+        }
+        const edge = 1 - Math.min((min2 - min1) / 30, 1);
+        const a = Math.floor(edge * 180);
+        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+          const idx = ((py+dy)*W+(px+dx))*4;
+          imgData.data[idx] = rgb[0]; imgData.data[idx+1] = rgb[1]; imgData.data[idx+2] = rgb[2]; imgData.data[idx+3] = a;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+      break;
+    }
+    case 5: { // WFC (tile pattern)
+      const tiles = ['#', '.', ':', '='];
+      const sz = 20;
+      const cw = W/sz, ch = H/sz;
+      for (let y = 0; y < sz; y++) for (let x = 0; x < sz; x++) {
+        const t = Math.floor(rand()*4);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.15 + t * 0.2;
+        ctx.fillRect(x*cw, y*ch, cw-1, ch-1);
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 6: { // Spirograph
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 0.8;
+      const R = 60, r2 = 23, d = 35;
+      ctx.beginPath();
+      for (let t = 0; t < 1000; t++) {
+        const a = t * 0.05;
+        const x = W/2 + (R-r2)*Math.cos(a) + d*Math.cos((R-r2)/r2*a);
+        const y = H/2 + (R-r2)*Math.sin(a) - d*Math.sin((R-r2)/r2*a);
+        t === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 7: { // Attractor
+      ctx.fillStyle = color;
+      let x = 0.1, y = 0.1;
+      const a = -1.7, b = 1.8, c = -0.9, d = -0.4;
+      for (let n = 0; n < 20000; n++) {
+        const nx = Math.sin(a*y) - Math.cos(b*x);
+        const ny = Math.sin(c*x) - Math.cos(d*y);
+        x = nx; y = ny;
+        const px = W/2 + x * W/5, py = H/2 + y * H/5;
+        ctx.globalAlpha = 0.06;
+        ctx.fillRect(px, py, 1.5, 1.5);
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 8: { // Julia set
+      const imgData = ctx.createImageData(W, H);
+      const rgb = hexToRgb(color);
+      const cr = -0.7, ci = 0.27015;
+      for (let py = 0; py < H; py += 2) for (let px = 0; px < W; px += 2) {
+        let zr = (px - W/2) / (W/4), zi = (py - H/2) / (H/3);
+        let it = 0, max = 40;
+        while (zr*zr + zi*zi < 4 && it < max) {
+          const tmp = zr*zr - zi*zi + cr;
+          zi = 2*zr*zi + ci; zr = tmp; it++;
+        }
+        const a = it < max ? Math.floor((it/max)*220) : 0;
+        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+          const idx = ((py+dy)*W+(px+dx))*4;
+          imgData.data[idx] = rgb[0]; imgData.data[idx+1] = rgb[1]; imgData.data[idx+2] = rgb[2]; imgData.data[idx+3] = a;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+      break;
+    }
+    case 9: { // Noise
+      const imgData = ctx.createImageData(W, H);
+      const rgb = hexToRgb(color);
+      for (let py = 0; py < H; py += 2) for (let px = 0; px < W; px += 2) {
+        const v = Math.sin(px*0.04)*Math.cos(py*0.05) + Math.sin(px*0.02+py*0.03)*0.5;
+        const a = Math.floor(Math.max(0, v + 0.5) * 160);
+        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+          const idx = ((py+dy)*W+(px+dx))*4;
+          imgData.data[idx] = rgb[0]; imgData.data[idx+1] = rgb[1]; imgData.data[idx+2] = rgb[2]; imgData.data[idx+3] = a;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+      break;
+    }
+    case 10: { // Flow field
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.8;
+      for (let n = 0; n < 200; n++) {
+        let x = rand()*W, y = rand()*H;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.globalAlpha = 0.25;
+        for (let s = 0; s < 30; s++) {
+          const a = Math.sin(x*0.01)*3 + Math.cos(y*0.012)*3;
+          x += Math.cos(a)*3; y += Math.sin(a)*3;
+          if (x < 0 || x > W || y < 0 || y > H) break;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+  }
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return [r, g, b];
+}
+
+// ═══════════════════════════════════════════════
+// Metrics visualization
+// ═══════════════════════════════════════════════
+const METRICS = [
+  { name: 'Complexity', color: 'var(--accent)', value: 72, desc: 'Entropy of cell distribution' },
+  { name: 'Symmetry', color: 'var(--green)', value: 58, desc: 'Horizontal + vertical mirror score' },
+  { name: 'Density', color: 'var(--amber)', value: 45, desc: 'Non-empty cell percentage' },
+  { name: 'Novelty', color: 'var(--cyan)', value: 84, desc: 'Distance from population average' },
+  { name: 'Edge Activity', color: 'var(--red)', value: 63, desc: 'Activity at grid boundaries' },
+  { name: 'Structure', color: '#c084fc', value: 71, desc: 'Clustered regions vs uniform noise' },
+  { name: 'Fractal Dim.', color: '#f472b6', value: 55, desc: 'Box-counting boundary complexity' },
+  { name: 'Info Density', color: '#38bdf8', value: 67, desc: 'Bits per cell, normalized' },
+];
+
+(function renderMetrics() {
+  const container = document.getElementById('metrics-vis');
+  METRICS.forEach((m, i) => {
+    const el = document.createElement('div');
+    el.className = 'metric-item';
+    el.innerHTML = `
+      <div class="metric-name">${m.name}</div>
+      <div class="metric-bar-track"><div class="metric-bar-fill" id="mbar-${i}" style="background:${m.color}"></div></div>
+      <div class="metric-desc">${m.desc}</div>
+    `;
+    container.appendChild(el);
+  });
+
+  // Animate bars on scroll
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        METRICS.forEach((m, i) => {
+          const bar = document.getElementById(`mbar-${i}`);
+          if (bar) bar.style.width = m.value + '%';
+        });
+        observer.disconnect();
+      }
+    });
+  }, { threshold: 0.3 });
+  observer.observe(container);
+})();
+
+// ═══════════════════════════════════════════════
+// Mutation demo — 2D life automata
+// ═══════════════════════════════════════════════
+let mutationSeed = 42;
+
+function simpleLCG(s) {
+  return function() { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+}
+
+function generate2DLife(canvas, birthProb, surviveExtra, seed) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+
+  const rng = simpleLCG(seed);
+  const sz = 28;
+  const cw = W / sz, ch = H / sz;
+  const birth = [3];
+  const survive = [2, 3, ...surviveExtra];
+
+  let grid = Array.from({length: sz}, () =>
+    Array.from({length: sz}, () => rng() < birthProb ? 1 : 0)
+  );
+
+  for (let step = 0; step < 6; step++) {
+    const next = grid.map(r => [...r]);
+    for (let y = 1; y < sz-1; y++) for (let x = 1; x < sz-1; x++) {
+      let s = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dy||dx) s += grid[y+dy][x+dx];
+      next[y][x] = grid[y][x] ? (survive.includes(s)?1:0) : (birth.includes(s)?1:0);
+    }
+    grid = next;
+  }
+
+  const colors = ['#4ade80', '#22d3ee', '#7c6fe0'];
+  for (let y = 0; y < sz; y++) for (let x = 0; x < sz; x++) {
+    if (grid[y][x]) {
+      ctx.fillStyle = colors[Math.floor(rng()*colors.length)];
+      ctx.globalAlpha = 0.4 + rng()*0.5;
+      ctx.fillRect(x*cw+0.5, y*ch+0.5, cw-1, ch-1);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function runMutation() {
+  mutationSeed += 7;
+  generate2DLife(document.getElementById('parent-canvas'), 0.38, [], mutationSeed);
+  generate2DLife(document.getElementById('child1-canvas'), 0.38 + 0.04, [], mutationSeed + 100);
+  generate2DLife(document.getElementById('child2-canvas'), 0.38 - 0.03, [4], mutationSeed + 200);
+}
+
+document.getElementById('mutate-btn').addEventListener('click', runMutation);
+runMutation();
+
+// ═══════════════════════════════════════════════
+// Stats from gallery.json
+// ═══════════════════════════════════════════════
+(async function loadStats() {
+  const container = document.getElementById('stats-row');
+  try {
+    const res = await fetch('gallery.json');
+    const data = await res.json();
+    const stats = [
+      { value: data.generation, label: 'Generations' },
+      { value: data.stats.totalPiecesEver.toLocaleString(), label: 'Pieces Created' },
+      { value: (data.stats.bestScoreEver * 100).toFixed(1) + '%', label: 'Peak Fitness' },
+      { value: (data.hallOfFame || []).length || '—', label: 'Hall of Fame' },
+      { value: Object.keys((data.history || []).reduce((acc, h) => {
+        Object.keys(h.speciesCounts || {}).forEach(k => acc[k] = 1);
+        return acc;
+      }, {})).length || 11, label: 'Species' },
+    ];
+    container.innerHTML = stats.map(s =>
+      `<div class="stat-item"><div class="stat-value">${s.value}</div><div class="stat-label">${s.label}</div></div>`
+    ).join('');
+  } catch {
+    container.innerHTML = '<div style="color:var(--text-dim);font-size:0.75rem;">Stats unavailable</div>';
+  }
+})();
+</script>
+
+</body>
+</html>
