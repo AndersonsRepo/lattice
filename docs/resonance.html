@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Resonance</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 4rem;
+      color: var(--accent);
+      text-shadow: 0 0 60px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-title {
+      font-size: 1.6rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-top: 1.5rem;
+    }
+    .start-sub {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      margin-top: 0.8rem;
+      max-width: 400px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .start-hint {
+      color: var(--text-dim);
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 2rem;
+      animation: breathe 3s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    /* Main layout */
+    .main {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Back link */
+    .back-link {
+      position: fixed;
+      top: 1.5rem;
+      left: 1.5rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      z-index: 10;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    /* Header bar */
+    .header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      padding: 1.2rem 4rem;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header-bar h1 {
+      font-size: 1.1rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+    .gen-display {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+    .gen-display .gen-num {
+      color: var(--green);
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .epoch-pill {
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.6rem;
+      border-radius: 8px;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      transition: all 0.5s ease;
+    }
+
+    /* Central visualization canvas */
+    .viz-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    #vizCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Species legend (vertical, right side) */
+    .species-legend {
+      position: fixed;
+      right: 1.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      z-index: 5;
+    }
+    .species-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      transition: all 0.3s;
+    }
+    .species-item.active { color: var(--text); }
+    .species-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      transition: all 0.3s;
+      flex-shrink: 0;
+    }
+    .species-item.active .species-dot {
+      box-shadow: 0 0 8px currentColor;
+    }
+    .species-bar {
+      width: 0;
+      height: 3px;
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    /* Bottom controls */
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.2rem;
+      padding: 0.8rem 2rem;
+      border-top: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.9);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      flex-shrink: 0;
+    }
+    .ctrl-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 0.3rem;
+      font-size: 1.1rem;
+      transition: color 0.2s, transform 0.15s;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .ctrl-btn:hover { color: var(--text); transform: scale(1.1); }
+    .ctrl-btn.active { color: var(--green); }
+    .ctrl-btn.play-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      color: var(--accent);
+    }
+    .ctrl-btn.play-btn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* Timeline scrubber */
+    .timeline-track {
+      flex: 1;
+      max-width: 500px;
+      height: 20px;
+      position: relative;
+      cursor: pointer;
+    }
+    .timeline-bg {
+      position: absolute;
+      top: 8px;
+      left: 0;
+      right: 0;
+      height: 4px;
+      border-radius: 2px;
+      overflow: hidden;
+      display: flex;
+    }
+    .timeline-epoch {
+      height: 100%;
+      transition: opacity 0.3s;
+    }
+    .timeline-cursor {
+      position: absolute;
+      top: 4px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+      transform: translateX(-50%);
+      transition: left 0.15s ease;
+      z-index: 2;
+    }
+
+    .speed-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      user-select: none;
+      min-width: 2em;
+      text-align: center;
+    }
+
+    .volume-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 70px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    /* Event flash overlay */
+    .event-flash {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 8;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .event-flash.hof {
+      background: radial-gradient(circle at center, rgba(251, 191, 36, 0.15) 0%, transparent 70%);
+    }
+    .event-flash.epoch {
+      background: radial-gradient(circle at center, rgba(124, 111, 224, 0.2) 0%, transparent 70%);
+    }
+
+    /* Narrative text */
+    .narrative {
+      position: fixed;
+      bottom: 5.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      z-index: 6;
+      pointer-events: none;
+    }
+    .narrative-text {
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--amber);
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      text-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
+      white-space: nowrap;
+    }
+    .narrative-text.visible { opacity: 1; }
+
+    /* Vignette */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 4;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(10,10,15,0.7) 100%);
+    }
+  </style>
+</head>
+<body>
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">&#8767;</div>
+    <div class="start-title">Resonance</div>
+    <div class="start-sub">
+      148 generations of evolution, sonified.<br>
+      Species become voices. Fitness becomes melody.<br>
+      Epochs become harmony. The system sings its own history.
+    </div>
+    <div class="start-hint">click anywhere to begin</div>
+  </div>
+
+  <div class="main" id="mainContent" style="opacity: 0; transition: opacity 1s ease;">
+    <a href="index.html" class="back-link">&larr; Gallery</a>
+
+    <div class="header-bar">
+      <h1>Resonance</h1>
+      <div class="gen-display">gen <span class="gen-num" id="genNum">1</span> / <span id="genTotal">148</span></div>
+      <div class="epoch-pill" id="epochPill">emergence</div>
+    </div>
+
+    <div class="viz-area">
+      <canvas id="vizCanvas"></canvas>
+    </div>
+
+    <div class="species-legend" id="speciesLegend"></div>
+
+    <div class="narrative">
+      <div class="narrative-text" id="narrativeText"></div>
+    </div>
+
+    <div class="event-flash" id="eventFlash"></div>
+    <div class="vignette"></div>
+
+    <div class="controls-bar">
+      <button class="ctrl-btn" id="restartBtn" title="Restart">&#8634;</button>
+      <button class="ctrl-btn play-btn" id="playBtn" title="Play / Pause">&#9654;</button>
+
+      <div class="timeline-track" id="timelineTrack">
+        <div class="timeline-bg" id="timelineBg"></div>
+        <div class="timeline-cursor" id="timelineCursor" style="left: 0%;"></div>
+      </div>
+
+      <span class="speed-label" id="speedLabel">1&times;</span>
+      <button class="ctrl-btn" id="speedBtn" title="Change speed">&#8635;</button>
+
+      <div style="width: 1px; height: 20px; background: var(--border);"></div>
+      <span style="font-size: 0.6rem; color: var(--text-dim);">&#9834;</span>
+      <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="60" title="Volume">
+    </div>
+  </div>
+
+<script>
+// ============================================================
+// Resonance — Evolution as Music
+// ============================================================
+
+const SPECIES_COLORS = {
+  '1d':                 '#6b4edb',
+  '2d':                 '#4ade80',
+  'lsystem':            '#f5b84a',
+  'reaction-diffusion': '#d44af5',
+  'voronoi':            '#4ad4f5',
+  'wfc':                '#f54a9d',
+  'spirograph':         '#d4f54a',
+  'attractor':          '#f59d6b',
+  'julia':              '#4af5d4',
+  'noise':              '#d4d44a',
+  'flowfield':          '#4ad4d4',
+};
+
+// Each species gets a distinct oscillator timbre + base octave
+const SPECIES_VOICE = {
+  '1d':                 { wave: 'square',   octave: 3, detune: -5  },
+  '2d':                 { wave: 'triangle', octave: 3, detune: 3   },
+  'lsystem':            { wave: 'sawtooth', octave: 4, detune: -8  },
+  'reaction-diffusion': { wave: 'sine',     octave: 2, detune: 7   },
+  'voronoi':            { wave: 'triangle', octave: 4, detune: -3  },
+  'wfc':                { wave: 'sine',     octave: 3, detune: 12  },
+  'spirograph':         { wave: 'triangle', octave: 5, detune: -6  },
+  'attractor':          { wave: 'sawtooth', octave: 2, detune: 5   },
+  'julia':              { wave: 'sine',     octave: 4, detune: -10 },
+  'noise':              { wave: 'square',   octave: 2, detune: 15  },
+  'flowfield':          { wave: 'triangle', octave: 3, detune: -12 },
+};
+
+// Epoch chord roots (MIDI note numbers) + mood
+const EPOCH_CHORDS = {
+  emergence: { root: 57, intervals: [0, 3, 7, 10], color: '#7c6fe0' },  // Am7 — mysterious
+  order:     { root: 60, intervals: [0, 4, 7, 11], color: '#4ade80' },  // Cmaj7 — bright
+  chaos:     { root: 62, intervals: [0, 3, 7, 10, 14], color: '#ef4444' }, // Dm9 — tense
+  harmony:   { root: 65, intervals: [0, 4, 7, 12], color: '#fbbf24' },  // F+oct — warm
+};
+
+const SPEEDS = [0.5, 1, 2, 4, 8];
+
+// Convert MIDI note to frequency
+function midiToFreq(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+// Map a score (0.5-0.85) to a melody note (MIDI 48-72)
+function scoreToMidi(score) {
+  const t = Math.max(0, Math.min(1, (score - 0.5) / 0.35));
+  // Use pentatonic scale: 0,2,4,7,9 semitones
+  const pentatonic = [0, 2, 4, 7, 9];
+  const totalSemitones = t * 24; // two octaves
+  const octave = Math.floor(totalSemitones / 12);
+  const within = totalSemitones % 12;
+  // Snap to nearest pentatonic degree
+  let closest = pentatonic[0];
+  for (const p of pentatonic) {
+    if (Math.abs(p - within) < Math.abs(closest - within)) closest = p;
+  }
+  return 48 + octave * 12 + closest;
+}
+
+// Species note within its chord context
+function speciesNote(species, epochChord) {
+  const voice = SPECIES_VOICE[species];
+  if (!voice) return 220;
+  const rootFreq = midiToFreq(epochChord.root + (voice.octave - 3) * 12);
+  // Pick an interval based on species name hash
+  let hash = 0;
+  for (let i = 0; i < species.length; i++) hash = (hash * 31 + species.charCodeAt(i)) & 0xffff;
+  const interval = epochChord.intervals[hash % epochChord.intervals.length];
+  return midiToFreq(epochChord.root + (voice.octave - 3) * 12 + interval) + voice.detune;
+}
+
+
+// ============================================================
+// Audio Engine
+// ============================================================
+class ResonanceEngine {
+  constructor() {
+    this.ctx = null;
+    this.master = null;
+    this.compressor = null;
+    this.reverb = null;
+    this.reverbGain = null;
+    this.analyser = null;
+
+    // Voices
+    this.epochDrone = null;     // Sustained chord pad for current epoch
+    this.melodyOsc = null;      // Fitness melody
+    this.melodyGain = null;
+    this.speciesOscs = {};      // Per-species oscillator
+    this.speciesGains = {};
+    this.bellBuffer = null;     // HoF bell sound
+
+    this.volume = 0.6;
+  }
+
+  init() {
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Compressor to prevent clipping
+    this.compressor = this.ctx.createDynamicsCompressor();
+    this.compressor.threshold.value = -20;
+    this.compressor.ratio.value = 6;
+    this.compressor.attack.value = 0.01;
+    this.compressor.release.value = 0.2;
+
+    // Master gain
+    this.master = this.ctx.createGain();
+    this.master.gain.value = this.volume * 0.12;
+
+    // Reverb (long tail for ambient feel)
+    this.reverb = this.ctx.createConvolver();
+    this.reverb.buffer = this._createReverbIR(4.0, 2.8);
+    this.reverbGain = this.ctx.createGain();
+    this.reverbGain.gain.value = 0.35;
+
+    // Analyser
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 512;
+
+    // Routing
+    this.master.connect(this.compressor);
+    this.compressor.connect(this.analyser);
+    this.analyser.connect(this.ctx.destination);
+    this.master.connect(this.reverbGain);
+    this.reverbGain.connect(this.reverb);
+    this.reverb.connect(this.ctx.destination);
+
+    // Bell buffer (pre-computed)
+    this.bellBuffer = this._createBellBuffer();
+
+    // Melody oscillator
+    this.melodyGain = this.ctx.createGain();
+    this.melodyGain.gain.value = 0;
+    this.melodyGain.connect(this.master);
+    this.melodyOsc = this.ctx.createOscillator();
+    this.melodyOsc.type = 'sine';
+    this.melodyOsc.frequency.value = 220;
+    this.melodyOsc.connect(this.melodyGain);
+    this.melodyOsc.start();
+
+    // Epoch drone pad (4 oscillators forming a chord)
+    this.epochOscs = [];
+    this.epochGains = [];
+    this.epochMasterGain = this.ctx.createGain();
+    this.epochMasterGain.gain.value = 0;
+    this.epochMasterGain.connect(this.master);
+    for (let i = 0; i < 5; i++) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = 100;
+      const g = this.ctx.createGain();
+      g.gain.value = 0;
+      osc.connect(g);
+      g.connect(this.epochMasterGain);
+      osc.start();
+      this.epochOscs.push(osc);
+      this.epochGains.push(g);
+    }
+  }
+
+  _createReverbIR(duration, decay) {
+    const rate = this.ctx.sampleRate;
+    const length = Math.floor(rate * duration);
+    const ir = this.ctx.createBuffer(2, length, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = ir.getChannelData(ch);
+      for (let i = 0; i < length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+      }
+    }
+    return ir;
+  }
+
+  _createBellBuffer() {
+    const rate = this.ctx.sampleRate;
+    const dur = 1.5;
+    const length = Math.floor(rate * dur);
+    const buf = this.ctx.createBuffer(1, length, rate);
+    const data = buf.getChannelData(0);
+    // Bell = sum of inharmonic partials with fast decay
+    const partials = [1, 2.76, 4.07, 5.31, 6.14];
+    const baseFreq = 1200;
+    for (let i = 0; i < length; i++) {
+      const t = i / rate;
+      let sample = 0;
+      for (let p = 0; p < partials.length; p++) {
+        const amp = Math.exp(-t * (3 + p * 2)) / partials.length;
+        sample += amp * Math.sin(2 * Math.PI * baseFreq * partials[p] * t);
+      }
+      data[i] = sample * 0.5;
+    }
+    return buf;
+  }
+
+  setVolume(v) {
+    this.volume = v;
+    if (this.master) {
+      this.master.gain.setTargetAtTime(v * 0.12, this.ctx.currentTime, 0.1);
+    }
+  }
+
+  resume() {
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  }
+
+  // Fade in all active voices
+  fadeIn() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.melodyGain.gain.setTargetAtTime(0.3, t, 0.8);
+    this.epochMasterGain.gain.setTargetAtTime(0.15, t, 1.0);
+  }
+
+  // Fade out all voices
+  fadeOut() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.melodyGain.gain.setTargetAtTime(0, t, 0.3);
+    this.epochMasterGain.gain.setTargetAtTime(0, t, 0.3);
+    Object.values(this.speciesGains).forEach(g => {
+      g.gain.setTargetAtTime(0, t, 0.3);
+    });
+  }
+
+  // Set the melody pitch from fitness score
+  setMelodyNote(score) {
+    if (!this.ctx) return;
+    const midi = scoreToMidi(score);
+    const freq = midiToFreq(midi);
+    this.melodyOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.4);
+  }
+
+  // Transition epoch chord
+  setEpoch(epochName) {
+    if (!this.ctx) return;
+    const chord = EPOCH_CHORDS[epochName] || EPOCH_CHORDS.emergence;
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < this.epochOscs.length; i++) {
+      if (i < chord.intervals.length) {
+        const freq = midiToFreq(chord.root - 12 + chord.intervals[i]); // one octave below for pad
+        this.epochOscs[i].frequency.setTargetAtTime(freq, t, 1.5);
+        this.epochGains[i].gain.setTargetAtTime(0.2, t, 1.0);
+      } else {
+        this.epochGains[i].gain.setTargetAtTime(0, t, 0.5);
+      }
+    }
+  }
+
+  // Update species voices based on population counts
+  setSpecies(speciesCounts, epochName) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const chord = EPOCH_CHORDS[epochName] || EPOCH_CHORDS.emergence;
+
+    // Create or update each species voice
+    for (const [species, count] of Object.entries(speciesCounts)) {
+      if (!this.speciesOscs[species]) {
+        const voice = SPECIES_VOICE[species];
+        if (!voice) continue;
+        const osc = this.ctx.createOscillator();
+        osc.type = voice.wave;
+        osc.frequency.value = speciesNote(species, chord);
+        const g = this.ctx.createGain();
+        g.gain.value = 0;
+        osc.connect(g);
+        g.connect(this.master);
+        osc.start();
+        this.speciesOscs[species] = osc;
+        this.speciesGains[species] = g;
+      }
+      // Volume proportional to count (max ~14 in population)
+      const vol = Math.min(count / 8, 1) * 0.08;
+      this.speciesGains[species].gain.setTargetAtTime(vol, t, 0.6);
+      // Update frequency to match current epoch harmony
+      this.speciesOscs[species].frequency.setTargetAtTime(
+        speciesNote(species, chord), t, 1.2
+      );
+    }
+
+    // Fade out species not in the current population
+    for (const species of Object.keys(this.speciesOscs)) {
+      if (!speciesCounts[species] || speciesCounts[species] === 0) {
+        this.speciesGains[species].gain.setTargetAtTime(0, t, 0.8);
+      }
+    }
+  }
+
+  // Play HoF bell
+  playBell() {
+    if (!this.ctx || !this.bellBuffer) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.bellBuffer;
+    const g = this.ctx.createGain();
+    g.gain.value = 0.25;
+    src.connect(g);
+    g.connect(this.master);
+    src.start();
+  }
+
+  getFrequencyData() {
+    if (!this.analyser) return new Uint8Array(0);
+    const data = new Uint8Array(this.analyser.frequencyBinCount);
+    this.analyser.getByteFrequencyData(data);
+    return data;
+  }
+}
+
+// ============================================================
+// Visualization
+// ============================================================
+class ResonanceViz {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.dpr = window.devicePixelRatio || 1;
+    this.resize();
+    this.ctx = canvas.getContext('2d');
+
+    // Particle systems
+    this.particles = [];
+    this.ripples = [];
+    this.fitnessTrail = []; // {x, y, score}
+  }
+
+  resize() {
+    const rect = this.canvas.parentElement.getBoundingClientRect();
+    this.w = rect.width;
+    this.h = rect.height;
+    this.canvas.width = this.w * this.dpr;
+    this.canvas.height = this.h * this.dpr;
+    this.canvas.style.width = this.w + 'px';
+    this.canvas.style.height = this.h + 'px';
+  }
+
+  draw(state, freqData, time) {
+    const ctx = this.ctx;
+    const w = this.w * this.dpr;
+    const h = this.h * this.dpr;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, this.w, this.h);
+
+    // Background gradient based on epoch
+    const epochColor = EPOCH_CHORDS[state.epoch]?.color || '#7c6fe0';
+    const grad = ctx.createRadialGradient(this.w / 2, this.h / 2, 0, this.w / 2, this.h / 2, this.w * 0.6);
+    grad.addColorStop(0, epochColor + '10');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, this.w, this.h);
+
+    // Draw frequency spectrum as a circular waveform in the center
+    this._drawCircularSpectrum(ctx, freqData, time, epochColor);
+
+    // Draw fitness trail line
+    this._drawFitnessTrail(ctx, state);
+
+    // Draw floating species particles
+    this._drawParticles(ctx, time);
+
+    // Draw ripples (HoF events)
+    this._drawRipples(ctx, time);
+  }
+
+  _drawCircularSpectrum(ctx, freqData, time, color) {
+    if (!freqData || freqData.length === 0) return;
+    const cx = this.w / 2;
+    const cy = this.h / 2;
+    const baseRadius = Math.min(this.w, this.h) * 0.15;
+    const maxExtend = Math.min(this.w, this.h) * 0.2;
+    const bins = Math.min(freqData.length, 128);
+
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+
+    for (let i = 0; i < bins; i++) {
+      const angle = (i / bins) * Math.PI * 2 - Math.PI / 2;
+      const magnitude = freqData[i] / 255;
+      const r = baseRadius + magnitude * maxExtend;
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    // Inner glow ring
+    ctx.globalAlpha = 0.1;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(cx, cy, baseRadius * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Breathing inner ring
+    const breathe = Math.sin(time * 0.001) * 0.3 + 0.7;
+    ctx.globalAlpha = 0.08 * breathe;
+    ctx.beginPath();
+    ctx.arc(cx, cy, baseRadius * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  _drawFitnessTrail(ctx, state) {
+    if (this.fitnessTrail.length < 2) return;
+
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#4ade80';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+
+    // Draw the trail as a flowing line at the bottom third
+    const yBase = this.h * 0.75;
+    const yRange = this.h * 0.2;
+    const xStart = this.w * 0.1;
+    const xEnd = this.w * 0.9;
+
+    for (let i = 0; i < this.fitnessTrail.length; i++) {
+      const t = i / Math.max(this.fitnessTrail.length - 1, 1);
+      const x = xStart + t * (xEnd - xStart);
+      const scoreNorm = (this.fitnessTrail[i] - 0.5) / 0.35;
+      const y = yBase - scoreNorm * yRange;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Bright dot at current position
+    if (this.fitnessTrail.length > 0) {
+      const lastIdx = this.fitnessTrail.length - 1;
+      const t = lastIdx / Math.max(this.fitnessTrail.length - 1, 1);
+      const x = xStart + t * (xEnd - xStart);
+      const scoreNorm = (this.fitnessTrail[lastIdx] - 0.5) / 0.35;
+      const y = yBase - scoreNorm * yRange;
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  _drawParticles(ctx, time) {
+    ctx.save();
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.003;
+      if (p.life <= 0) { this.particles.splice(i, 1); continue; }
+
+      const alpha = p.life * 0.6;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  _drawRipples(ctx, time) {
+    ctx.save();
+    for (let i = this.ripples.length - 1; i >= 0; i--) {
+      const r = this.ripples[i];
+      r.radius += 1.5;
+      r.life -= 0.01;
+      if (r.life <= 0) { this.ripples.splice(i, 1); continue; }
+
+      ctx.globalAlpha = r.life * 0.3;
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = r.color;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Add species particles
+  spawnSpeciesParticles(speciesCounts) {
+    for (const [species, count] of Object.entries(speciesCounts)) {
+      if (count <= 0) continue;
+      const color = SPECIES_COLORS[species] || '#888';
+      const num = Math.min(count, 3);
+      for (let i = 0; i < num; i++) {
+        this.particles.push({
+          x: this.w * (0.2 + Math.random() * 0.6),
+          y: this.h * (0.2 + Math.random() * 0.6),
+          vx: (Math.random() - 0.5) * 0.5,
+          vy: (Math.random() - 0.5) * 0.5 - 0.2,
+          r: 2 + Math.random() * 3,
+          color,
+          life: 1,
+        });
+      }
+    }
+  }
+
+  // Add HoF ripple
+  spawnRipple(color) {
+    this.ripples.push({
+      x: this.w / 2 + (Math.random() - 0.5) * this.w * 0.3,
+      y: this.h / 2 + (Math.random() - 0.5) * this.h * 0.3,
+      radius: 5,
+      color: color || '#fbbf24',
+      life: 1,
+    });
+  }
+
+  addFitnessPoint(score) {
+    this.fitnessTrail.push(score);
+  }
+
+  resetTrail() {
+    this.fitnessTrail = [];
+    this.particles = [];
+    this.ripples = [];
+  }
+}
+
+
+// ============================================================
+// Main Controller
+// ============================================================
+let galleryData = null;
+let history = [];
+let engine = null;
+let viz = null;
+
+let playing = false;
+let currentGen = 0;  // index into history
+let speed = 1;
+let genTimer = 0;
+const GEN_DURATION = 1200; // ms per generation at 1x
+
+let lastEpoch = '';
+let lastHofSize = 0;
+let narrativeTimeout = null;
+let animFrame = null;
+let lastFrameTime = 0;
+
+// DOM elements
+const startOverlay = document.getElementById('startOverlay');
+const mainContent = document.getElementById('mainContent');
+const genNum = document.getElementById('genNum');
+const genTotal = document.getElementById('genTotal');
+const epochPill = document.getElementById('epochPill');
+const playBtn = document.getElementById('playBtn');
+const speedLabel = document.getElementById('speedLabel');
+const speedBtn = document.getElementById('speedBtn');
+const volumeSlider = document.getElementById('volumeSlider');
+const timelineTrack = document.getElementById('timelineTrack');
+const timelineBg = document.getElementById('timelineBg');
+const timelineCursor = document.getElementById('timelineCursor');
+const narrativeText = document.getElementById('narrativeText');
+const eventFlash = document.getElementById('eventFlash');
+const speciesLegend = document.getElementById('speciesLegend');
+const restartBtn = document.getElementById('restartBtn');
+
+async function loadData() {
+  try {
+    const resp = await fetch('gallery.json');
+    galleryData = await resp.json();
+    history = galleryData.history || [];
+    genTotal.textContent = history.length;
+    buildTimeline();
+    buildSpeciesLegend();
+  } catch(e) {
+    console.error('Failed to load gallery.json:', e);
+  }
+}
+
+function buildTimeline() {
+  timelineBg.innerHTML = '';
+  if (history.length === 0) return;
+
+  // Group consecutive epochs
+  let segments = [];
+  let current = { epoch: history[0].epoch, start: 0 };
+  for (let i = 1; i < history.length; i++) {
+    if (history[i].epoch !== current.epoch) {
+      current.end = i;
+      segments.push(current);
+      current = { epoch: history[i].epoch, start: i };
+    }
+  }
+  current.end = history.length;
+  segments.push(current);
+
+  for (const seg of segments) {
+    const el = document.createElement('div');
+    el.className = 'timeline-epoch';
+    el.style.flex = (seg.end - seg.start);
+    el.style.background = EPOCH_CHORDS[seg.epoch]?.color || '#7c6fe0';
+    el.style.opacity = '0.4';
+    timelineBg.appendChild(el);
+  }
+}
+
+function buildSpeciesLegend() {
+  speciesLegend.innerHTML = '';
+  for (const [species, color] of Object.entries(SPECIES_COLORS)) {
+    const item = document.createElement('div');
+    item.className = 'species-item';
+    item.dataset.species = species;
+    item.innerHTML = `
+      <span class="species-dot" style="background: ${color};"></span>
+      <span class="species-bar" style="background: ${color};"></span>
+      <span>${species}</span>
+    `;
+    speciesLegend.appendChild(item);
+  }
+}
+
+function updateSpeciesLegend(speciesCounts) {
+  const items = speciesLegend.querySelectorAll('.species-item');
+  items.forEach(item => {
+    const sp = item.dataset.species;
+    const count = speciesCounts[sp] || 0;
+    const isActive = count > 0;
+    item.classList.toggle('active', isActive);
+    const bar = item.querySelector('.species-bar');
+    bar.style.width = (count * 4) + 'px';
+  });
+}
+
+function showNarrative(text, duration = 3000) {
+  narrativeText.textContent = text;
+  narrativeText.classList.add('visible');
+  if (narrativeTimeout) clearTimeout(narrativeTimeout);
+  narrativeTimeout = setTimeout(() => {
+    narrativeText.classList.remove('visible');
+  }, duration);
+}
+
+function flashEvent(type) {
+  eventFlash.className = 'event-flash ' + type;
+  eventFlash.style.opacity = '1';
+  setTimeout(() => { eventFlash.style.opacity = '0'; }, 400);
+}
+
+function setGeneration(idx) {
+  if (idx < 0 || idx >= history.length) return;
+  currentGen = idx;
+  const gen = history[idx];
+
+  // Update UI
+  genNum.textContent = gen.generation;
+  epochPill.textContent = gen.epoch;
+  epochPill.style.borderColor = EPOCH_CHORDS[gen.epoch]?.color || '#7c6fe0';
+  epochPill.style.color = EPOCH_CHORDS[gen.epoch]?.color || '#7c6fe0';
+
+  // Timeline cursor
+  const pct = (idx / Math.max(history.length - 1, 1)) * 100;
+  timelineCursor.style.left = pct + '%';
+
+  // Audio updates
+  if (engine && engine.ctx) {
+    engine.setMelodyNote(gen.bestScore);
+    engine.setSpecies(gen.speciesCounts || {}, gen.epoch);
+
+    // Epoch transition
+    if (gen.epoch !== lastEpoch) {
+      engine.setEpoch(gen.epoch);
+      if (lastEpoch && idx > 0) {
+        showNarrative(`epoch shift — ${lastEpoch} → ${gen.epoch}`, 3500);
+        flashEvent('epoch');
+      }
+      lastEpoch = gen.epoch;
+    }
+
+    // HoF induction
+    if (gen.hallOfFameSize > lastHofSize && lastHofSize > 0) {
+      engine.playBell();
+      flashEvent('hof');
+      if (gen.hallOfFameSize - lastHofSize === 1) {
+        showNarrative(`hall of fame induction — specimen #${gen.hallOfFameSize}`, 2500);
+      }
+    }
+    lastHofSize = gen.hallOfFameSize;
+
+    // Check for first species appearances
+    if (gen.speciesCounts && gen.bestPiece) {
+      const counts = gen.speciesCounts;
+      if (idx > 0) {
+        const prevCounts = history[idx - 1].speciesCounts || {};
+        for (const sp of Object.keys(counts)) {
+          if (!prevCounts[sp] && counts[sp] > 0) {
+            showNarrative(`new species — ${sp}`, 2500);
+          }
+        }
+      }
+    }
+  }
+
+  // Visual updates
+  if (viz) {
+    viz.addFitnessPoint(gen.bestScore);
+    viz.spawnSpeciesParticles(gen.speciesCounts || {});
+    if (gen.hallOfFameSize > lastHofSize - 1 && gen.hallOfFameSize > 0 && idx > 0) {
+      viz.spawnRipple('#fbbf24');
+    }
+  }
+
+  updateSpeciesLegend(gen.speciesCounts || {});
+}
+
+function tick(timestamp) {
+  if (!playing) return;
+  animFrame = requestAnimationFrame(tick);
+
+  if (!lastFrameTime) { lastFrameTime = timestamp; return; }
+  const dt = timestamp - lastFrameTime;
+  lastFrameTime = timestamp;
+
+  genTimer += dt * speed;
+  while (genTimer >= GEN_DURATION && currentGen < history.length - 1) {
+    genTimer -= GEN_DURATION;
+    setGeneration(currentGen + 1);
+  }
+
+  // Reached end
+  if (currentGen >= history.length - 1) {
+    showNarrative('evolution complete — ' + history.length + ' generations', 5000);
+    // Keep playing ambient sounds, just stop advancing
+  }
+
+  // Draw visualization
+  if (viz && engine) {
+    viz.draw(
+      { epoch: history[currentGen]?.epoch || 'emergence' },
+      engine.getFrequencyData(),
+      timestamp
+    );
+  }
+}
+
+function play() {
+  if (!engine) return;
+  playing = true;
+  engine.resume();
+  engine.fadeIn();
+  playBtn.innerHTML = '&#10074;&#10074;';
+  lastFrameTime = 0;
+  animFrame = requestAnimationFrame(tick);
+}
+
+function pause() {
+  playing = false;
+  engine.fadeOut();
+  playBtn.innerHTML = '&#9654;';
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+}
+
+function togglePlay() {
+  if (playing) pause();
+  else play();
+}
+
+function restart() {
+  pause();
+  currentGen = 0;
+  genTimer = 0;
+  lastEpoch = '';
+  lastHofSize = 0;
+  if (viz) viz.resetTrail();
+  setGeneration(0);
+  play();
+}
+
+// ============================================================
+// Init
+// ============================================================
+loadData();
+
+startOverlay.addEventListener('click', () => {
+  startOverlay.classList.add('hidden');
+  mainContent.style.opacity = '1';
+
+  engine = new ResonanceEngine();
+  engine.init();
+  engine.setVolume(volumeSlider.value / 100);
+
+  const canvas = document.getElementById('vizCanvas');
+  viz = new ResonanceViz(canvas);
+
+  // Set initial state
+  if (history.length > 0) {
+    engine.setEpoch(history[0].epoch);
+    lastEpoch = history[0].epoch;
+    lastHofSize = 0;
+    setGeneration(0);
+  }
+
+  // Start playing after a brief pause
+  setTimeout(() => play(), 300);
+});
+
+playBtn.addEventListener('click', togglePlay);
+restartBtn.addEventListener('click', restart);
+
+speedBtn.addEventListener('click', () => {
+  const idx = SPEEDS.indexOf(speed);
+  speed = SPEEDS[(idx + 1) % SPEEDS.length];
+  speedLabel.innerHTML = speed + '&times;';
+});
+
+volumeSlider.addEventListener('input', () => {
+  if (engine) engine.setVolume(volumeSlider.value / 100);
+});
+
+// Timeline click-to-seek
+timelineTrack.addEventListener('click', (e) => {
+  const rect = timelineTrack.getBoundingClientRect();
+  const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const idx = Math.round(t * (history.length - 1));
+  // Reset trail up to this point
+  if (viz) {
+    viz.resetTrail();
+    for (let i = 0; i <= idx; i++) {
+      viz.addFitnessPoint(history[i].bestScore);
+    }
+  }
+  lastEpoch = idx > 0 ? history[idx - 1].epoch : '';
+  lastHofSize = idx > 0 ? history[idx - 1].hallOfFameSize : 0;
+  genTimer = 0;
+  setGeneration(idx);
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (startOverlay && !startOverlay.classList.contains('hidden')) return;
+  switch(e.code) {
+    case 'Space':
+      e.preventDefault();
+      togglePlay();
+      break;
+    case 'ArrowRight':
+      if (currentGen < history.length - 1) setGeneration(currentGen + 1);
+      break;
+    case 'ArrowLeft':
+      if (currentGen > 0) {
+        if (viz) viz.fitnessTrail.pop();
+        setGeneration(currentGen - 1);
+      }
+      break;
+    case 'KeyR':
+      restart();
+      break;
+  }
+});
+
+// Handle resize
+window.addEventListener('resize', () => {
+  if (viz) viz.resize();
+});
+
+// Keep rendering even when paused (for particles fading out)
+function renderLoop(timestamp) {
+  requestAnimationFrame(renderLoop);
+  if (!playing && viz && engine) {
+    viz.draw(
+      { epoch: history[currentGen]?.epoch || 'emergence' },
+      engine.getFrequencyData(),
+      timestamp
+    );
+  }
+}
+requestAnimationFrame(renderLoop);
+</script>
+</body>
+</html>
