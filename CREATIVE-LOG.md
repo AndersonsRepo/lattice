@@ -4,6 +4,23 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Chromatics: Evolutionary Color Explorer + Palette System Enhancements
+- **What**: New `docs/chromatics.html` page exploring the evolutionary story of color, plus enhanced `src/palette.ts` with palette fingerprinting, similarity metrics, and clustering
+- **palette.ts enhancements**:
+  - **Palette fingerprinting** (`PaletteFingerprint`, `fingerprintPalette()`) — compact representation capturing avgL/C/H, ranges, hue spread, and temperature for fast comparison
+  - **Palette similarity** (`paletteSimilarity()`) — perceptual distance between two palettes using weighted OKLCH fingerprint comparison
+  - **Palette clustering** (`clusterPalettes()`) — agglomerative clustering groups palettes by perceptual similarity
+  - **Palette-fitness correlation** (`paletteContribution()`) — measures how palette aesthetics predict piece fitness
+- **Chromatics page** (`docs/chromatics.html`):
+  - **Palette Timeline** — every generation's best piece rendered as vertical color bands, showing how dominant colors shifted across the entire evolutionary history. Epoch markers at the bottom, HoF tick marks at top. Hover to inspect generation/species/score.
+  - **Color Space Scatter** — all HoF pieces plotted in OKLCH space (hue × chroma). Dot size proportional to fitness score. Click any dot to see its extracted palette, species, and full aesthetic breakdown (uniformity, contrast, chroma richness, hue spread).
+  - **Extracted Palettes** — k-means palette extraction from every HoF piece's rendered ASCII, displayed as clickable cards with species label and score.
+  - **Palette Breeding Lab** — select any two HoF palettes as parents, crossover in OKLAB space with adjustable mix ratio and mutation intensity. Mutate button creates a variant of Parent A. Live offspring preview with hex values.
+  - **Palette Clusters** — agglomerative clustering groups HoF palettes by perceptual similarity. Named clusters (Void Dwellers, Spectral Bloom, etc.) with centroid strip and member chips.
+  - **Color Blindness Preview** — all 13 species palettes simulated through protanopia, deuteranopia, tritanopia, and achromatopsia. Distinctness score per palette (minimum adjacent delta-E).
+- **Pages**: `docs/chromatics.html` (new), `docs/index.html` (nav + footer links), `src/palette.ts` (enhanced)
+- **How it differs**: `palette.html` is a color science reference tool (sliders, wheels, generators). Chromatics tells the evolutionary story — how color emerged, diverged, and clustered across 148 generations. The breeding lab lets you create palettes that don't exist yet, guided by real evolutionary data.
+
 ### 2026-03-21 — Performance Pipeline v5: Profiling, Hot-Path Optimization, Measurement
 - **What**: Profiled the full render pipeline (init → step → getValues → fillPixels → putImageData → drawImage), optimized hot paths, and built measurement infrastructure to verify improvements.
 - **Optimizations** (`docs/lattice-perf.js` v4 → v5):

@@ -166,8 +166,8 @@ export interface DLARule {
 }
 
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla" | "fractal-flame" | "physarum" | "sandpile" | "magnetic-pendulum" | "particle-life";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule | FlameRule | PhysarumRule | SandpileRule | MagneticPendulumRule | ParticleLifeRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla" | "fractal-flame" | "physarum" | "sandpile" | "magnetic-pendulum" | "particle-life" | "turmite";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule | FlameRule | PhysarumRule | SandpileRule | MagneticPendulumRule | ParticleLifeRule | TurmiteRule;
   width: number;
   height: number;
   palette: string[];
@@ -1975,6 +1975,7 @@ function getIdealDensity(genomeType?: Genome["type"]): number | null {
     case "sandpile": return null;              // full coverage — score by state variety
     case "magnetic-pendulum": return null;    // full coverage — score by basin variety
     case "particle-life": return 0.3;        // clustered particle density patterns
+    case "turmite": return 0.35;             // emergent highway patterns with visited/unvisited contrast
     default: return 0.4;
   }
 }
@@ -2080,7 +2081,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield", "dla", "fractal-flame", "sandpile", "magnetic-pendulum"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield", "dla", "fractal-flame", "sandpile", "magnetic-pendulum", "particle-life"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,

@@ -560,7 +560,7 @@
     <button class="ctrl-btn" id="btn-radar" title="Species Radar (R)">◎</button>
     <button class="ctrl-btn" id="btn-strata" title="Species Timeline (S)">▤</button>
     <button class="ctrl-btn" id="btn-metrics" title="Metrics Panel (M)">☰</button>
-    <button class="ctrl-btn" id="btn-landscape" title="Fitness Landscape (F)">◈</button>
+    <button class="ctrl-btn" id="btn-scatter" title="Metric Scatter (F)">◈</button>
   </div>
 </div>
 
@@ -1098,11 +1098,13 @@ window.addEventListener('keydown', e => {
     document.getElementById('btn-strata').click();
   } else if (e.key === 'm' || e.key === 'M') {
     document.getElementById('btn-metrics').click();
+  } else if (e.key === 'f' || e.key === 'F') {
+    document.getElementById('btn-scatter').click();
   }
 });
 
 // ── Toggle panels ────────────────────────────────────────────────────────────
-let radarVisible = false, strataVisible = false, metricsVisible = false, landscapeVisible = false;
+let radarVisible = false, strataVisible = false, metricsVisible = false, landscapeVisible = false, scatterVisible = false;
 
 document.getElementById('btn-radar').addEventListener('click', () => {
   radarVisible = !radarVisible;

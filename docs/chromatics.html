@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Chromatics</title>
+  <style>
+    :root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;--text:#c8c8d4;--text-dim:#6e6e82;--accent:#7c6fe0;--accent-glow:#7c6fe040;--green:#4ade80;--amber:#fbbf24;--red:#ef4444}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:var(--bg);color:var(--text);font-family:'SF Mono','Fira Code','Cascadia Code',monospace;min-height:100vh;overflow-x:hidden}
+    .container{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+    header{text-align:center;padding:3rem 0 2rem;border-bottom:1px solid var(--border);margin-bottom:2.5rem}
+    h1{font-size:2.5rem;font-weight:300;letter-spacing:0.3em;text-transform:uppercase;color:var(--accent);text-shadow:0 0 30px var(--accent-glow);margin-bottom:0.5rem}
+    .subtitle{color:var(--text-dim);font-size:0.85rem;letter-spacing:0.1em}
+    h2{font-size:1.1rem;font-weight:400;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);margin-bottom:1.25rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)}
+    .section{margin-bottom:3rem}
+    .desc{font-size:0.75rem;color:var(--text-dim);margin-bottom:1rem;line-height:1.5}
+    .back-link{display:inline-block;margin-top:0.75rem;color:var(--accent);text-decoration:none;font-size:0.75rem;letter-spacing:0.08em}
+    .back-link:hover{text-decoration:underline}
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.5rem}
+    footer{text-align:center;padding:2rem 0;color:var(--text-dim);font-size:0.7rem;border-top:1px solid var(--border);margin-top:2rem}
+    footer a{color:var(--accent);text-decoration:none}
+    footer a:hover{text-decoration:underline}
+
+    /* Palette timeline */
+    .timeline-canvas{width:100%;height:200px;border-radius:8px;background:var(--surface);cursor:crosshair}
+    .timeline-info{display:flex;gap:1.5rem;margin-top:0.75rem;font-size:0.7rem;color:var(--text-dim);flex-wrap:wrap}
+    .timeline-info .ti-label{color:var(--accent);text-transform:uppercase;letter-spacing:0.05em;margin-right:0.3rem}
+
+    /* Color scatter */
+    .scatter-wrap{display:flex;gap:1.5rem;align-items:flex-start;flex-wrap:wrap}
+    .scatter-canvas{width:420px;height:420px;border-radius:8px;background:var(--surface);cursor:crosshair;flex-shrink:0}
+    .scatter-sidebar{flex:1;min-width:240px}
+    .scatter-piece{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem}
+    .scatter-piece .sp-label{font-size:0.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem}
+    .scatter-piece .sp-colors{display:flex;gap:0;border-radius:4px;overflow:hidden;height:32px;margin-bottom:0.5rem}
+    .scatter-piece .sp-colors div{flex:1}
+    .scatter-piece .sp-meta{font-size:0.65rem;color:var(--text-dim);line-height:1.6}
+
+    /* Extracted palettes */
+    .extracted-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem}
+    .ext-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.75rem;cursor:pointer;transition:all 0.2s}
+    .ext-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+    .ext-card.selected{border-color:var(--accent);box-shadow:0 0 15px var(--accent-glow)}
+    .ext-strip{height:24px;border-radius:4px;overflow:hidden;display:flex;margin-bottom:0.5rem}
+    .ext-strip div{flex:1}
+    .ext-info{display:flex;justify-content:space-between;align-items:center;font-size:0.62rem;color:var(--text-dim)}
+    .ext-score{color:var(--green);font-weight:600}
+
+    /* Breeding lab */
+    .breed-wrap{display:flex;gap:1.5rem;align-items:stretch;flex-wrap:wrap}
+    .breed-parent{flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem;text-align:center}
+    .breed-parent.active{border-color:var(--accent)}
+    .breed-parent .bp-label{font-size:0.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem}
+    .breed-strip{height:36px;border-radius:6px;overflow:hidden;display:flex;margin-bottom:0.5rem}
+    .breed-strip div{flex:1}
+    .breed-center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;padding:0 0.5rem}
+    .breed-btn{padding:0.5rem 1.2rem;border:1px solid var(--accent);border-radius:20px;background:transparent;color:var(--accent);font-family:inherit;font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.2s}
+    .breed-btn:hover{background:var(--accent);color:#fff}
+    .breed-offspring{width:100%}
+    .breed-offspring-strip{height:48px;border-radius:6px;overflow:hidden;display:flex;margin:0.75rem 0}
+    .breed-offspring-strip div{flex:1;transition:background 0.3s}
+    .offspring-hexes{display:flex;justify-content:space-between;font-size:0.58rem;color:var(--text-dim)}
+    .breed-controls{display:flex;gap:0.75rem;margin-top:0.75rem;align-items:center;justify-content:center;flex-wrap:wrap}
+    .breed-controls label{font-size:0.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em}
+    .breed-slider{width:120px}
+
+    /* Color blindness */
+    .cb-tabs{display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap}
+    .cb-tab{padding:0.35rem 0.8rem;border:1px solid var(--border);border-radius:16px;background:transparent;color:var(--text-dim);font-family:inherit;font-size:0.65rem;letter-spacing:0.05em;cursor:pointer;transition:all 0.2s}
+    .cb-tab:hover{border-color:var(--accent);color:var(--text)}
+    .cb-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+    .cb-grid{display:flex;flex-direction:column;gap:0.5rem}
+    .cb-row{display:flex;align-items:center;gap:0.75rem}
+    .cb-label{width:140px;flex-shrink:0;font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em}
+    .cb-strip{flex:1;height:28px;border-radius:4px;overflow:hidden;display:flex}
+    .cb-strip div{flex:1}
+    .cb-badge{width:60px;text-align:right;font-size:0.62rem;font-weight:600}
+
+    /* Cluster map */
+    .cluster-grid{display:flex;flex-direction:column;gap:1.25rem}
+    .cluster-group{border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--surface)}
+    .cluster-header{display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem}
+    .cluster-centroid{height:24px;width:120px;border-radius:4px;overflow:hidden;display:flex}
+    .cluster-centroid div{flex:1}
+    .cluster-title{font-size:0.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em}
+    .cluster-count{font-size:0.62rem;color:var(--text-dim)}
+    .cluster-members{display:flex;gap:0.5rem;flex-wrap:wrap}
+    .cluster-chip{height:18px;width:60px;border-radius:3px;overflow:hidden;display:flex;cursor:pointer;transition:transform 0.15s}
+    .cluster-chip:hover{transform:scale(1.15)}
+    .cluster-chip div{flex:1}
+
+    /* Aesthetic scores */
+    .aes-bar{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem}
+    .aes-label{width:100px;font-size:0.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em}
+    .aes-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+    .aes-fill{height:100%;border-radius:3px;transition:width 0.4s}
+    .aes-val{width:40px;text-align:right;font-size:0.65rem;font-weight:600}
+
+    input[type="range"]{height:6px;-webkit-appearance:none;appearance:none;background:var(--border);border-radius:3px;outline:none}
+    input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px var(--accent-glow)}
+    @media(max-width:700px){.scatter-wrap{flex-direction:column}.scatter-canvas{width:100%}.breed-wrap{flex-direction:column}.extracted-grid{grid-template-columns:1fr}h1{font-size:1.6rem}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Chromatics</h1>
+      <p class="subtitle">The evolutionary story of color in lattice</p>
+      <a href="index.html" class="back-link">&larr; Back to Gallery</a>
+    </header>
+
+    <div class="section"><h2>Palette Timeline</h2>
+      <p class="desc">How dominant colors shifted across 148 generations. Each column is a generation; vertical bands show the piece's extracted palette. Hover to inspect.</p>
+      <canvas class="timeline-canvas" id="timeline-canvas" width="1060" height="200"></canvas>
+      <div class="timeline-info" id="timeline-info">
+        <span><span class="ti-label">Generation</span><span id="tl-gen">—</span></span>
+        <span><span class="ti-label">Epoch</span><span id="tl-epoch">—</span></span>
+        <span><span class="ti-label">Species</span><span id="tl-species">—</span></span>
+        <span><span class="ti-label">Score</span><span id="tl-score">—</span></span>
+      </div>
+    </div>
+
+    <div class="section"><h2>Color Space Scatter</h2>
+      <p class="desc">Every Hall of Fame piece plotted in OKLCH space. X = hue (0-360), Y = chroma. Dot size = fitness score. Click to inspect.</p>
+      <div class="scatter-wrap">
+        <canvas class="scatter-canvas" id="scatter-canvas" width="420" height="420"></canvas>
+        <div class="scatter-sidebar" id="scatter-sidebar">
+          <div class="scatter-piece" id="scatter-detail">
+            <div class="sp-label">Select a piece</div>
+            <div class="sp-colors" id="scatter-colors"></div>
+            <div class="sp-meta" id="scatter-meta">Hover or click a dot in the scatter plot to see its palette and metadata.</div>
+          </div>
+          <div style="margin-top:0.5rem">
+            <div class="sp-label" style="font-size:0.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem">Aesthetic Breakdown</div>
+            <div id="scatter-aesthetics"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section"><h2>Extracted Palettes</h2>
+      <p class="desc">Dominant colors extracted from each Hall of Fame piece via k-means clustering in OKLAB space. Click two to breed them below.</p>
+      <div class="extracted-grid" id="extracted-grid"></div>
+    </div>
+
+    <div class="section"><h2>Palette Breeding Lab</h2>
+      <p class="desc">Select two palettes from above, then crossover their color DNA in OKLAB space. Adjust the mix ratio and mutation intensity.</p>
+      <div class="breed-wrap">
+        <div class="breed-parent" id="parent-a"><div class="bp-label">Parent A</div><div class="breed-strip" id="parent-a-strip"></div><div class="ext-info" id="parent-a-info">Click a palette above</div></div>
+        <div class="breed-center">
+          <button class="breed-btn" id="breed-btn">Breed</button>
+          <button class="breed-btn" id="mutate-btn">Mutate</button>
+        </div>
+        <div class="breed-parent" id="parent-b"><div class="bp-label">Parent B</div><div class="breed-strip" id="parent-b-strip"></div><div class="ext-info" id="parent-b-info">Click a palette above</div></div>
+      </div>
+      <div class="breed-offspring" id="offspring-section" style="display:none">
+        <div class="breed-offspring-strip" id="offspring-strip"></div>
+        <div class="offspring-hexes" id="offspring-hexes"></div>
+        <div class="breed-controls">
+          <label>Mix</label><input type="range" class="breed-slider" id="breed-mix" min="0" max="100" value="50">
+          <label>Mutation</label><input type="range" class="breed-slider" id="breed-mutation" min="0" max="100" value="15">
+        </div>
+      </div>
+    </div>
+
+    <div class="section"><h2>Palette Clusters</h2>
+      <p class="desc">Hall of Fame palettes grouped by perceptual similarity. Pieces with similar color character cluster together regardless of algorithm type.</p>
+      <div class="cluster-grid" id="cluster-grid"></div>
+    </div>
+
+    <div class="section"><h2>Color Blindness Preview</h2>
+      <p class="desc">See how species palettes appear under different forms of color vision deficiency.</p>
+      <div class="cb-tabs" id="cb-tabs">
+        <button class="cb-tab active" data-type="normal">Normal</button>
+        <button class="cb-tab" data-type="protanopia">Protanopia</button>
+        <button class="cb-tab" data-type="deuteranopia">Deuteranopia</button>
+        <button class="cb-tab" data-type="tritanopia">Tritanopia</button>
+        <button class="cb-tab" data-type="achromatopsia">Achromatopsia</button>
+      </div>
+      <div class="cb-grid" id="cb-grid"></div>
+    </div>
+
+    <footer>
+      <p><a href="index.html">Gallery</a> &bull; <a href="palette.html">Palette Lab</a> &bull; <a href="live.html">Live</a> &bull; <a href="create.html">Create</a></p>
+      <p style="margin-top:0.5rem">Color science powered by OKLAB/OKLCH &bull; <a href="https://github.com/AndersonsRepo/lattice">Source</a></p>
+    </footer>
+  </div>
+
+<script>
+// ═══ Color Math (self-contained, mirrors palette.ts) ═══
+function srgbToLinear(c){return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
+function linearToSrgb(c){return c<=0.0031308?12.92*c:1.055*Math.pow(c,1/2.4)-0.055}
+function hexToRgb(h){return[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255]}
+function hexToOklab(hex){const[r,g,b]=hexToRgb(hex);const lr=srgbToLinear(r),lg=srgbToLinear(g),lb=srgbToLinear(b);const l=Math.cbrt(.4122214708*lr+.5363325363*lg+.0514459929*lb),m=Math.cbrt(.2119034982*lr+.6806995451*lg+.1073969566*lb),s=Math.cbrt(.0883024619*lr+.2024326293*lg+.6892650189*lb);return[.2104542553*l+.7936177850*m-.0040720468*s,1.9779984951*l-2.4285922050*m+.4505937099*s,.0259040371*l+.7827717662*m-.8086757660*s]}
+function oklabToOklch(L,a,b){return[L,Math.sqrt(a*a+b*b),((Math.atan2(b,a)*180/Math.PI)+360)%360]}
+function oklchToOklab(L,C,H){const h=H*Math.PI/180;return[L,C*Math.cos(h),C*Math.sin(h)]}
+function oklabToLinearRgb(L,a,b){const l=L+.3963377774*a+.2158037573*b,m=L-.1055613458*a-.0638541728*b,s=L-.0894841775*a-1.2914855480*b;return[4.0767416621*l*l*l-3.3077115913*m*m*m+.2309699292*s*s*s,-1.2684380046*l*l*l+2.6097574011*m*m*m-.3413193965*s*s*s,-.0041960863*l*l*l-.7034186147*m*m*m+1.7076147010*s*s*s]}
+function oklchToHex(L,C,H){let c=C;for(let i=0;i<25;i++){const[lL,la,lb]=oklchToOklab(L,c,H);const[r,g,b]=oklabToLinearRgb(lL,la,lb);if(r>=-.001&&r<=1.001&&g>=-.001&&g<=1.001&&b>=-.001&&b<=1.001){const f=v=>{const s=Math.round(linearToSrgb(Math.max(0,Math.min(1,v)))*255).toString(16);return s.length===1?'0'+s:s};return'#'+f(r)+f(g)+f(b)}c*=.95}const gr=Math.round(Math.max(0,Math.min(1,L))*255).toString(16).padStart(2,'0');return'#'+gr+gr+gr}
+function deltaE(h1,h2){const a=hexToOklab(h1),b=hexToOklab(h2);return Math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2)}
+
+// Color blindness simulation
+function simulateCB(hex,type){if(type==='normal')return hex;const[r,g,b]=hexToRgb(hex);const lr=srgbToLinear(r),lg=srgbToLinear(g),lb=srgbToLinear(b);let sr,sg,sb;switch(type){case'protanopia':sr=.152286*lr+1.052583*lg-.204868*lb;sg=.114503*lr+.786281*lg+.099216*lb;sb=-.003882*lr-.048116*lg+1.051998*lb;break;case'deuteranopia':sr=.367322*lr+.860646*lg-.227968*lb;sg=.280085*lr+.672501*lg+.047413*lb;sb=-.011820*lr+.042940*lg+.968881*lb;break;case'tritanopia':sr=1.255528*lr-.076749*lg-.178779*lb;sg=-.078411*lr+.930809*lg+.147602*lb;sb=.004733*lr+.691367*lg+.303900*lb;break;case'achromatopsia':const lum=.2126*lr+.7152*lg+.0722*lb;sr=sg=sb=lum;break}const f=v=>{const s=Math.round(linearToSrgb(Math.max(0,Math.min(1,v)))*255).toString(16);return s.length===1?'0'+s:s};return'#'+f(sr)+f(sg)+f(sb)}
+
+// Palette generation from theme
+function themeToColors(theme,steps=8){const hues=getHarmonyHues(theme.hue,theme.harmony);const colors=[];for(let i=0;i<steps;i++){const t=steps===1?.5:i/(steps-1);const L=theme.lMin+t*(theme.lMax-theme.lMin);const cScale=1-Math.pow(2*t-1,2)*.4;const hIdx=t*(hues.length-1);const hLow=hues[Math.floor(hIdx)];const hHigh=hues[Math.min(Math.ceil(hIdx),hues.length-1)];const hFrac=hIdx-Math.floor(hIdx);let dh=hHigh-hLow;if(dh>180)dh-=360;if(dh<-180)dh+=360;const h=(hLow+dh*hFrac+360)%360;colors.push(oklchToHex(L,theme.chroma*cScale,h))}return colors}
+function getHarmonyHues(base,mode){const offsets={mono:[0],complementary:[0,180],analogous:[-30,0,30],triadic:[0,120,240],split:[0,150,210],tetradic:[0,90,180,270]};return(offsets[mode]||[0]).map(o=>(base+o+360)%360)}
+
+// K-means in OKLAB
+function kMeansOklab(pixels,k){const centroids=[pixels[Math.floor(Math.random()*pixels.length)].slice()];for(let c=1;c<k;c++){const dists=pixels.map(p=>{let minD=Infinity;for(const ct of centroids){const d=(p[0]-ct[0])**2+(p[1]-ct[1])**2+(p[2]-ct[2])**2;if(d<minD)minD=d}return minD});const total=dists.reduce((a,b)=>a+b,0);let r=Math.random()*total,acc=0;for(let i=0;i<dists.length;i++){acc+=dists[i];if(acc>=r){centroids.push([...pixels[i]]);break}}}for(let iter=0;iter<15;iter++){const clusters=Array.from({length:k},()=>[]);for(const p of pixels){let minD=Infinity,minC=0;for(let c=0;c<k;c++){const d=(p[0]-centroids[c][0])**2+(p[1]-centroids[c][1])**2+(p[2]-centroids[c][2])**2;if(d<minD){minD=d;minC=c}}clusters[minC].push(p)}for(let c=0;c<k;c++){if(clusters[c].length===0)continue;const n=clusters[c].length;centroids[c]=[clusters[c].reduce((a,p)=>a+p[0],0)/n,clusters[c].reduce((a,p)=>a+p[1],0)/n,clusters[c].reduce((a,p)=>a+p[2],0)/n]}}return centroids.map(ct=>{const[L,C,H]=oklabToOklch(ct[0],ct[1],ct[2]);return oklchToHex(L,C,H)}).sort((a,b)=>hexToOklab(a)[0]-hexToOklab(b)[0])}
+
+// Extract palette from rendered ASCII
+function charIntensity(ch){if(ch===' ')return 0;const light='\u00B7.:~\u2801',med1='\u2591\u2022\u2248\u2803\u25B3\u25BD\u2726',med2='\u2592\u25CB\u223F\u2807\u25C7\u2727\u2766',med3='\u2593\u25CF\u224B\u280F\u25C8\u2605\u273F',heavy='\u2588\u25C6\u2307\u281F\u2B21\u2736\u2740\u2741',max='\u2573\u25D0\u25D1\u25D2\u25D3\u2301\u283F\u28FF\u2B22\u2739\u273A';if(light.includes(ch))return 1;if(med1.includes(ch))return 2;if(med2.includes(ch))return 3;if(med3.includes(ch))return 4;if(heavy.includes(ch))return 5;if(max.includes(ch))return 6;return 3}
+
+function extractPalette(rendered,typeColors,k=6){const pixels=[];const lines=rendered.split('\n');for(const line of lines)for(const ch of line){const intensity=charIntensity(ch);if(intensity===0)continue;const idx=Math.min(intensity,typeColors.length-1);pixels.push(hexToOklab(typeColors[idx]))}if(pixels.length<k)return typeColors.slice(0,k);return kMeansOklab(pixels,k)}
+
+// Species themes
+const SPECIES_THEMES={'1d':{hue:270,chroma:.18,harmony:'mono',lMin:.05,lMax:1},'2d':{hue:145,chroma:.18,harmony:'mono',lMin:.05,lMax:.95},'lsystem':{hue:35,chroma:.16,harmony:'mono',lMin:.05,lMax:.95},'reaction-diffusion':{hue:300,chroma:.19,harmony:'mono',lMin:.05,lMax:.95},'voronoi':{hue:200,chroma:.16,harmony:'mono',lMin:.05,lMax:.92},'wfc':{hue:340,chroma:.18,harmony:'mono',lMin:.05,lMax:.93},'spirograph':{hue:90,chroma:.17,harmony:'mono',lMin:.05,lMax:.95},'attractor':{hue:20,chroma:.14,harmony:'mono',lMin:.05,lMax:.92},'julia':{hue:170,chroma:.16,harmony:'mono',lMin:.05,lMax:.92},'noise':{hue:65,chroma:.15,harmony:'mono',lMin:.05,lMax:.95},'flowfield':{hue:185,chroma:.14,harmony:'mono',lMin:.05,lMax:.92},'magnetic-pendulum':{hue:310,chroma:.16,harmony:'mono',lMin:.05,lMax:.92},'flame':{hue:10,chroma:.2,harmony:'analogous',lMin:.05,lMax:.95}};
+const TYPE_LABELS={'1d':'Wolfram 1D','2d':'Life-like 2D','lsystem':'L-System','reaction-diffusion':'Reaction-Diffusion','voronoi':'Voronoi','wfc':'WFC','spirograph':'Spirograph','attractor':'Attractor','julia':'Julia Set','noise':'Noise','flowfield':'Flow Field','magnetic-pendulum':'Pendulum','flame':'Flame','dla':'DLA','physarum':'Physarum','cymatics':'Cymatics','moire':'Moir\u00e9'};
+
+function getSpeciesColors(type){const theme=SPECIES_THEMES[type]||SPECIES_THEMES['2d'];return themeToColors(theme)}
+function getEffectiveColors(piece){if(piece.genome?.colorTheme?.stops?.length)return piece.genome.colorTheme.stops;return getSpeciesColors(piece.genome?.type||'2d')}
+
+// Aesthetic scoring
+function scorePaletteAesthetics(colors){if(colors.length<2)return{uniformity:0,contrast:0,chromaRichness:0,hueSpread:0,overall:0};const des=[];for(let i=0;i<colors.length-1;i++)des.push(deltaE(colors[i],colors[i+1]));const avg=des.reduce((a,b)=>a+b,0)/des.length;const variance=des.reduce((a,d)=>a+(d-avg)**2,0)/des.length;const uniformity=avg>0?Math.max(0,1-Math.sqrt(variance)/avg):0;const lums=colors.map(c=>hexToOklab(c)[0]);const contrast=Math.min(1,(Math.max(...lums)-Math.min(...lums))/.8);const chromas=colors.map(c=>{const[L,a,b]=hexToOklab(c);return Math.sqrt(a*a+b*b)});const avgC=chromas.reduce((a,b)=>a+b,0)/chromas.length;const chromaVar=chromas.reduce((a,c)=>a+Math.abs(c-avgC),0)/chromas.length;const chromaRichness=Math.min(1,avgC/.15*.6+chromaVar/.05*.4);const hues=colors.filter(c=>{const[L,a,b]=hexToOklab(c);return Math.sqrt(a*a+b*b)>.02}).map(c=>{const[L,a,b]=hexToOklab(c);return((Math.atan2(b,a)*180/Math.PI)+360)%360});let hueSpread=0;if(hues.length>=2){const sorted=[...hues].sort((a,b)=>a-b);let maxGap=0;for(let i=1;i<sorted.length;i++)maxGap=Math.max(maxGap,sorted[i]-sorted[i-1]);maxGap=Math.max(maxGap,360-sorted[sorted.length-1]+sorted[0]);hueSpread=Math.min(1,(360-maxGap)/180)}const overall=uniformity*.3+contrast*.3+chromaRichness*.25+hueSpread*.15;return{uniformity,contrast,chromaRichness,hueSpread,overall}}
+
+// Palette similarity
+function paletteSimilarity(a,b){const fa=fingerprint(a),fb=fingerprint(b);let dh=Math.abs(fa.avgH-fb.avgH);if(dh>180)dh=360-dh;return Math.sqrt((fa.avgL-fb.avgL)**2*4+(fa.avgC-fb.avgC)**2*9+(dh/180)**2*2+(fa.lRange-fb.lRange)**2+(fa.temp-fb.temp)**2)}
+function fingerprint(colors){const oklch=colors.map(c=>{const[L,a,b]=hexToOklab(c);return[L,Math.sqrt(a*a+b*b),((Math.atan2(b,a)*180/Math.PI)+360)%360]});const ls=oklch.map(v=>v[0]),cs=oklch.map(v=>v[1]);const sinS=oklch.reduce((s,v)=>s+Math.sin(v[2]*Math.PI/180),0),cosS=oklch.reduce((s,v)=>s+Math.cos(v[2]*Math.PI/180),0);const avgH=((Math.atan2(sinS,cosS)*180/Math.PI)+360)%360;let temp=0;for(const c of colors){const[L,a,b]=hexToOklab(c);const C=Math.sqrt(a*a+b*b);if(C<.02)continue;const h=((Math.atan2(b,a)*180/Math.PI)+360)%360;temp+=(h<90?1:h>300?1:h<180?-1:h>270?-.5:0)*C}return{avgL:ls.reduce((a,b)=>a+b,0)/ls.length,avgC:cs.reduce((a,b)=>a+b,0)/cs.length,avgH,lRange:Math.max(...ls)-Math.min(...ls),temp:Math.max(-1,Math.min(1,temp/Math.max(1,colors.length)/.15))}}
+
+// Blend palettes in OKLAB
+function blendPalettes(a,b,t){const len=Math.max(a.length,b.length);return Array.from({length:len},(_,i)=>{const aIdx=Math.floor(i/len*a.length),bIdx=Math.floor(i/len*b.length);const aLab=hexToOklab(a[Math.min(aIdx,a.length-1)]),bLab=hexToOklab(b[Math.min(bIdx,b.length-1)]);const L=aLab[0]+(bLab[0]-aLab[0])*t,la=aLab[1]+(bLab[1]-aLab[1])*t,lb=aLab[2]+(bLab[2]-aLab[2])*t;const[lL,lC,lH]=oklabToOklch(L,la,lb);return oklchToHex(lL,lC,lH)})}
+
+// Mutate palette
+function mutatePalette(colors,intensity){return colors.map(c=>{const[L,a,b]=hexToOklab(c);const[lL,lC,lH]=oklabToOklch(L,a,b);const newL=Math.max(0,Math.min(1,lL+(Math.random()-.5)*.15*intensity));const newC=Math.max(0,Math.min(.3,lC+(Math.random()-.5)*.06*intensity));const newH=(lH+(Math.random()-.5)*30*intensity+360)%360;return oklchToHex(newL,newC,newH)})}
+
+// ═══ State ═══
+let gallery=null,hofPalettes=[],parentA=null,parentB=null,selectingParent='a',cbType='normal';
+
+// ═══ Data Loading ═══
+async function loadGallery(){try{const r=await fetch('gallery.json');gallery=await r.json();init()}catch(e){console.error('Failed to load gallery.json',e);document.querySelector('.container').innerHTML+='<p style="color:var(--red);text-align:center;padding:2rem">Failed to load gallery.json</p>'}}
+
+function init(){
+  // Extract palettes from all HoF pieces
+  const hof=gallery.hallOfFame||[];
+  hofPalettes=hof.map(p=>{
+    const typeColors=getEffectiveColors(p);
+    const extracted=p.rendered?extractPalette(p.rendered,typeColors,6):typeColors.slice(0,6);
+    return{id:p.id,type:p.genome?.type||'unknown',score:p.score||0,generation:p.generation||0,colors:extracted,fullColors:typeColors}
+  });
+
+  drawTimeline();
+  drawScatter();
+  buildExtractedGrid();
+  buildClusters();
+  buildCBGrid();
+}
+
+// ═══ Palette Timeline ═══
+function drawTimeline(){
+  const cv=document.getElementById('timeline-canvas');
+  const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+
+  const history=gallery.history||[];
+  if(history.length===0)return;
+
+  const colW=Math.max(1,W/history.length);
+
+  history.forEach((gen,i)=>{
+    const piece=gen.bestPiece;
+    if(!piece)return;
+    const colors=getEffectiveColors(piece);
+    const bandH=H/colors.length;
+    colors.forEach((c,j)=>{
+      ctx.fillStyle=c;
+      ctx.fillRect(i*colW,j*bandH,colW+1,bandH+1);
+    });
+
+    // Epoch marker at bottom
+    const epoch=gen.epoch||'emergence';
+    const epochColors={emergence:'#7c6fe0',order:'#4ade80',chaos:'#ef4444',harmony:'#fbbf24'};
+    ctx.fillStyle=epochColors[epoch]||'#7c6fe0';
+    ctx.fillRect(i*colW,H-3,colW+1,3);
+  });
+
+  // HoF markers
+  const hof=gallery.hallOfFame||[];
+  hof.forEach(p=>{
+    const gen=p.generation||0;
+    const x=gen/history.length*W;
+    ctx.strokeStyle='rgba(255,255,255,0.4)';
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,5);ctx.stroke();
+  });
+
+  // Hover interaction
+  cv.onmousemove=e=>{
+    const rect=cv.getBoundingClientRect();
+    const x=(e.clientX-rect.left)/rect.width;
+    const genIdx=Math.floor(x*history.length);
+    const gen=history[genIdx];
+    if(!gen)return;
+    document.getElementById('tl-gen').textContent=gen.generation||genIdx;
+    document.getElementById('tl-epoch').textContent=gen.epoch||'—';
+    document.getElementById('tl-species').textContent=gen.bestPiece?.genome?.type||'—';
+    document.getElementById('tl-score').textContent=gen.bestScore?.toFixed(3)||'—';
+  };
+}
+
+// ═══ Color Space Scatter ═══
+let scatterPieces=[];
+function drawScatter(){
+  const cv=document.getElementById('scatter-canvas');
+  const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+
+  // Grid lines
+  ctx.strokeStyle='rgba(30,30,46,0.8)';
+  ctx.lineWidth=1;
+  for(let h=0;h<=360;h+=60){const x=h/360*W;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();ctx.fillStyle='rgba(110,110,130,0.4)';ctx.font='9px monospace';ctx.fillText(h+'°',x+2,H-4)}
+  for(let c=0;c<=30;c+=5){const y=H-c/30*H;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();ctx.fillStyle='rgba(110,110,130,0.4)';ctx.font='9px monospace';ctx.fillText((c/100).toFixed(2),2,y-2)}
+
+  scatterPieces=[];
+  hofPalettes.forEach(p=>{
+    // Get dominant color (middle of palette)
+    const mid=p.colors[Math.floor(p.colors.length/2)];
+    const[L,a,b]=hexToOklab(mid);
+    const[,C,H_]=oklabToOklch(L,a,b);
+    const x=H_/360*W;
+    const y=H-Math.min(C,.3)/.3*H;
+    const r=4+p.score*12;
+    scatterPieces.push({...p,x,y,r,hue:H_,chroma:C});
+
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=mid+'88';ctx.fill();
+    ctx.strokeStyle=mid;ctx.lineWidth=1.5;ctx.stroke();
+  });
+
+  cv.onclick=e=>{
+    const rect=cv.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)/rect.width*W;
+    const my=(e.clientY-rect.top)/rect.height*H;
+    let closest=null,closestD=Infinity;
+    for(const p of scatterPieces){const d=Math.sqrt((mx-p.x)**2+(my-p.y)**2);if(d<p.r+4&&d<closestD){closestD=d;closest=p}}
+    if(closest)showScatterDetail(closest);
+  };
+}
+
+function showScatterDetail(piece){
+  const colorsEl=document.getElementById('scatter-colors');
+  colorsEl.innerHTML=piece.colors.map(c=>'<div style="background:'+c+'"></div>').join('');
+  document.querySelector('#scatter-detail .sp-label').textContent=(TYPE_LABELS[piece.type]||piece.type)+' — Gen '+piece.generation;
+  document.getElementById('scatter-meta').innerHTML='Score: <b style="color:var(--green)">'+piece.score.toFixed(3)+'</b> &bull; Hue: '+piece.hue.toFixed(0)+'&deg; &bull; Chroma: '+piece.chroma.toFixed(3);
+
+  const aes=scorePaletteAesthetics(piece.colors);
+  const el=document.getElementById('scatter-aesthetics');
+  el.innerHTML=['uniformity','contrast','chromaRichness','hueSpread','overall'].map(k=>{
+    const v=aes[k];
+    const color=k==='overall'?'var(--accent)':v>.7?'var(--green)':v>.4?'var(--amber)':'var(--red)';
+    return'<div class="aes-bar"><span class="aes-label">'+k.replace(/([A-Z])/g,' $1')+'</span><div class="aes-track"><div class="aes-fill" style="width:'+(v*100).toFixed(0)+'%;background:'+color+'"></div></div><span class="aes-val" style="color:'+color+'">'+(v*100).toFixed(0)+'</span></div>';
+  }).join('');
+}
+
+// ═══ Extracted Palettes ═══
+function buildExtractedGrid(){
+  const grid=document.getElementById('extracted-grid');
+  grid.innerHTML='';
+  hofPalettes.forEach((p,i)=>{
+    const card=document.createElement('div');
+    card.className='ext-card';
+    card.innerHTML='<div class="ext-strip">'+p.colors.map(c=>'<div style="background:'+c+'"></div>').join('')+'</div><div class="ext-info"><span>'+(TYPE_LABELS[p.type]||p.type)+'</span><span class="ext-score">'+(p.score*100).toFixed(0)+'%</span></div>';
+    card.onclick=()=>selectParent(p,card);
+    grid.appendChild(card);
+  });
+}
+
+function selectParent(palette,card){
+  if(!parentA||selectingParent==='a'){
+    parentA=palette;
+    selectingParent='b';
+    document.getElementById('parent-a').classList.add('active');
+    document.getElementById('parent-a-strip').innerHTML=palette.colors.map(c=>'<div style="background:'+c+'"></div>').join('');
+    document.getElementById('parent-a-info').textContent=(TYPE_LABELS[palette.type]||palette.type)+' — '+(palette.score*100).toFixed(0)+'%';
+    document.querySelectorAll('.ext-card').forEach(c=>c.classList.remove('selected'));
+    card.classList.add('selected');
+  }else{
+    parentB=palette;
+    selectingParent='a';
+    document.getElementById('parent-b').classList.add('active');
+    document.getElementById('parent-b-strip').innerHTML=palette.colors.map(c=>'<div style="background:'+c+'"></div>').join('');
+    document.getElementById('parent-b-info').textContent=(TYPE_LABELS[palette.type]||palette.type)+' — '+(palette.score*100).toFixed(0)+'%';
+    card.classList.add('selected');
+    breedPalettes();
+  }
+}
+
+// ═══ Breeding Lab ═══
+function breedPalettes(){
+  if(!parentA||!parentB)return;
+  document.getElementById('offspring-section').style.display='block';
+  updateOffspring();
+}
+
+function updateOffspring(){
+  if(!parentA||!parentB)return;
+  const mix=parseInt(document.getElementById('breed-mix').value)/100;
+  const mut=parseInt(document.getElementById('breed-mutation').value)/100;
+  let offspring=blendPalettes(parentA.colors,parentB.colors,mix);
+  if(mut>0)offspring=mutatePalette(offspring,mut);
+  const strip=document.getElementById('offspring-strip');
+  strip.innerHTML=offspring.map(c=>'<div style="background:'+c+'"></div>').join('');
+  document.getElementById('offspring-hexes').innerHTML=offspring.map(c=>'<span>'+c+'</span>').join('');
+}
+
+document.getElementById('breed-mix').oninput=updateOffspring;
+document.getElementById('breed-mutation').oninput=updateOffspring;
+document.getElementById('breed-btn').onclick=()=>{if(parentA&&parentB)updateOffspring()};
+document.getElementById('mutate-btn').onclick=()=>{
+  if(parentA){
+    const mut=parseInt(document.getElementById('breed-mutation').value)/100||.3;
+    const mutated=mutatePalette(parentA.colors,mut);
+    parentB={...parentA,colors:mutated};
+    document.getElementById('parent-b-strip').innerHTML=mutated.map(c=>'<div style="background:'+c+'"></div>').join('');
+    document.getElementById('parent-b-info').textContent='Mutant';
+    document.getElementById('parent-b').classList.add('active');
+    breedPalettes();
+  }
+};
+
+// ═══ Palette Clusters ═══
+function buildClusters(){
+  if(hofPalettes.length<3)return;
+  const maxClusters=Math.min(6,Math.ceil(hofPalettes.length/3));
+  // Simple agglomerative clustering
+  let clusters=hofPalettes.map(p=>({members:[p]}));
+  while(clusters.length>maxClusters){
+    let minD=Infinity,mi=0,mj=1;
+    for(let i=0;i<clusters.length;i++)for(let j=i+1;j<clusters.length;j++){
+      const d=paletteSimilarity(clusters[i].members[0].colors,clusters[j].members[0].colors);
+      if(d<minD){minD=d;mi=i;mj=j}
+    }
+    clusters[mi].members.push(...clusters[mj].members);
+    clusters.splice(mj,1);
+  }
+
+  const grid=document.getElementById('cluster-grid');
+  grid.innerHTML='';
+  const clusterNames=['Void Dwellers','Spectral Bloom','Deep Current','Ember Trail','Neon Moss','Crystal Vein'];
+  clusters.forEach((cl,i)=>{
+    const centroid=cl.members[0].colors;
+    const group=document.createElement('div');
+    group.className='cluster-group';
+    group.innerHTML='<div class="cluster-header"><div class="cluster-centroid">'+centroid.map(c=>'<div style="background:'+c+'"></div>').join('')+'</div><span class="cluster-title">'+(clusterNames[i]||'Cluster '+(i+1))+'</span><span class="cluster-count">'+cl.members.length+' piece'+(cl.members.length!==1?'s':'')+'</span></div><div class="cluster-members">'+cl.members.map(m=>'<div class="cluster-chip" title="'+(TYPE_LABELS[m.type]||m.type)+' — '+(m.score*100).toFixed(0)+'%">'+m.colors.map(c=>'<div style="background:'+c+'"></div>').join('')+'</div>').join('')+'</div>';
+    grid.appendChild(group);
+  });
+}
+
+// ═══ Color Blindness Preview ═══
+function buildCBGrid(){
+  const grid=document.getElementById('cb-grid');
+  grid.innerHTML='';
+  const types=Object.keys(SPECIES_THEMES);
+  types.forEach(type=>{
+    const colors=getSpeciesColors(type);
+    const simulated=colors.map(c=>simulateCB(c,cbType));
+    // Compute distinctness score
+    let minDE=Infinity;
+    for(let i=0;i<simulated.length-1;i++){const d=deltaE(simulated[i],simulated[i+1]);if(d<minDE)minDE=d}
+    const score=Math.min(100,minDE/.15*100);
+    const row=document.createElement('div');
+    row.className='cb-row';
+    row.innerHTML='<div class="cb-label">'+(TYPE_LABELS[type]||type)+'</div><div class="cb-strip">'+simulated.map(c=>'<div style="background:'+c+'"></div>').join('')+'</div><div class="cb-badge" style="color:'+(score>60?'var(--green)':score>30?'var(--amber)':'var(--red)')+'">'+(score).toFixed(0)+'%</div>';
+    grid.appendChild(row);
+  });
+}
+
+document.getElementById('cb-tabs').onclick=e=>{
+  if(!e.target.dataset.type)return;
+  cbType=e.target.dataset.type;
+  document.querySelectorAll('.cb-tab').forEach(b=>b.classList.remove('active'));
+  e.target.classList.add('active');
+  buildCBGrid();
+};
+
+// ═══ Boot ═══
+loadGallery();
+</script>
+</body>
+</html>
