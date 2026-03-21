@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Branching</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --botanical: #22c55e;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* === Main canvas === */
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas#main { display: block; border-radius: 4px; }
+    .canvas-info {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.7;
+      pointer-events: none;
+    }
+    .canvas-info .name { color: var(--botanical); text-transform: uppercase; letter-spacing: 0.12em; }
+    .canvas-info .grammar { color: var(--text-dim); font-size: 0.5rem; }
+    .grow-badge {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      font-size: 0.55rem;
+      color: var(--botanical);
+      letter-spacing: 0.1em;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .grow-badge.visible { opacity: 1; }
+
+    /* === Variation grid overlay === */
+    .var-grid {
+      position: absolute;
+      bottom: 1rem;
+      right: 1rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px;
+      background: rgba(10,10,15,0.85);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px;
+      backdrop-filter: blur(6px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .var-grid.visible { opacity: 1; pointer-events: auto; }
+    .var-cell {
+      width: 60px; height: 45px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      image-rendering: pixelated;
+    }
+    .var-cell:hover { border-color: var(--botanical); }
+    .var-cell.center { border-color: var(--accent); }
+
+    /* === Sidebar === */
+    .sidebar {
+      width: 320px;
+      min-width: 320px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 1rem 1rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header h1 {
+      font-size: 0.95rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--botanical);
+      margin-bottom: 0.15rem;
+    }
+    .sidebar-header .sub {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+    }
+    .sidebar-header .back {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.04em;
+    }
+    .sidebar-header .back:hover { color: var(--accent); }
+
+    /* Preset tabs */
+    .preset-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .preset-tab {
+      padding: 0.4rem 0.6rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      font-family: inherit;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .preset-tab:hover { color: var(--text); }
+    .preset-tab.active { color: var(--botanical); border-bottom-color: var(--botanical); }
+
+    .preset-list {
+      padding: 0.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.2rem;
+      max-height: 110px;
+      overflow-y: auto;
+      border-bottom: 1px solid var(--border);
+    }
+    .preset-list::-webkit-scrollbar { width: 3px; }
+    .preset-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .preset-btn {
+      padding: 0.25rem 0.3rem;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.48rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .preset-btn:hover { border-color: var(--botanical); color: var(--text); }
+    .preset-btn.active { background: var(--botanical); border-color: var(--botanical); color: #fff; }
+
+    /* Grammar editor */
+    .grammar-section {
+      padding: 0.6rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 0.4rem;
+    }
+    .rule-row {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      margin-bottom: 0.25rem;
+    }
+    .rule-sym {
+      font-size: 0.65rem;
+      color: var(--botanical);
+      width: 1rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .rule-arrow { color: var(--text-dim); font-size: 0.55rem; flex-shrink: 0; }
+    .rule-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.25rem 0.4rem;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.55rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .rule-input:focus { border-color: var(--botanical); }
+    .axiom-input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.25rem 0.4rem;
+      color: var(--amber);
+      font-family: inherit;
+      font-size: 0.55rem;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.2s;
+      margin-bottom: 0.3rem;
+    }
+    .axiom-input:focus { border-color: var(--amber); }
+    .grammar-tools {
+      display: flex;
+      gap: 0.25rem;
+      flex-wrap: wrap;
+      margin-top: 0.3rem;
+    }
+    .tool-btn {
+      font-size: 0.45rem;
+      color: var(--text-dim);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.12rem 0.35rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .tool-btn:hover { border-color: var(--botanical); color: var(--text); }
+
+    /* Sliders */
+    .controls {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.6rem 0.8rem;
+    }
+    .controls::-webkit-scrollbar { width: 3px; }
+    .controls::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .ctrl-group { margin-bottom: 0.55rem; }
+    .ctrl-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      margin-bottom: 0.2rem;
+      letter-spacing: 0.03em;
+    }
+    .ctrl-val { color: var(--green); font-variant-numeric: tabular-nums; }
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: var(--botanical);
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(34,197,94,0.3);
+    }
+
+    /* Action buttons */
+    .actions {
+      padding: 0.6rem 0.8rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .action-row { display: flex; gap: 0.3rem; }
+    .btn {
+      flex: 1;
+      padding: 0.45rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .btn:hover { border-color: var(--botanical); color: #fff; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--botanical), var(--accent));
+      border-color: transparent;
+      color: #fff;
+    }
+    .btn-primary:hover { box-shadow: 0 0 16px rgba(34,197,94,0.25); }
+
+    .shortcuts {
+      padding: 0.4rem 0.8rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.45rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+    }
+    .shortcuts kbd {
+      display: inline-block;
+      padding: 0.05rem 0.2rem;
+      border-radius: 3px;
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.15);
+      font-family: inherit;
+      font-size: 0.42rem;
+      color: var(--text);
+      margin-right: 0.1rem;
+    }
+
+    .seed-info {
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 0.2rem;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+    }
+    .seed-info:hover { color: var(--botanical); }
+
+    /* Color theme selector */
+    .theme-row {
+      display: flex;
+      gap: 0.2rem;
+      margin-bottom: 0.5rem;
+    }
+    .theme-swatch {
+      flex: 1;
+      height: 14px;
+      border-radius: 3px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+    .theme-swatch:hover { border-color: var(--text); transform: scaleY(1.4); }
+    .theme-swatch.active { border-color: #fff; box-shadow: 0 0 6px rgba(255,255,255,0.2); }
+
+    @media (max-width: 700px) {
+      body { flex-direction: column-reverse; }
+      .sidebar { width: 100%; min-width: unset; max-height: 55vh; border-left: none; border-top: 1px solid var(--border); }
+      .canvas-area { min-height: 45vh; }
+      .var-grid { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas-area">
+    <canvas id="main"></canvas>
+    <div class="canvas-info">
+      <span class="name" id="info-name"></span><br>
+      <span class="grammar" id="info-grammar"></span>
+    </div>
+    <div class="grow-badge" id="grow-badge">GROWING...</div>
+    <div class="var-grid" id="var-grid"></div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Branching</h1>
+      <span class="sub">L-System Laboratory</span><br>
+      <a href="index.html" class="back">&larr; gallery</a>
+    </div>
+
+    <div class="preset-tabs" id="preset-tabs"></div>
+    <div class="preset-list" id="preset-list"></div>
+
+    <div class="grammar-section">
+      <div class="section-label">Grammar</div>
+      <input type="text" class="axiom-input" id="axiom" value="F" spellcheck="false" placeholder="Axiom">
+      <div id="rule-editor"></div>
+      <div class="grammar-tools">
+        <button class="tool-btn" id="btn-add-rule">+ rule</button>
+        <button class="tool-btn" id="btn-add-stochastic">+ stochastic</button>
+      </div>
+    </div>
+
+    <div class="controls" id="controls"></div>
+
+    <div class="seed-info" id="seed-info" title="Click to randomize seed"></div>
+
+    <div class="actions">
+      <div class="action-row">
+        <button class="btn btn-primary" id="btn-random">Randomize</button>
+        <button class="btn" id="btn-mutate">Mutate</button>
+      </div>
+      <div class="action-row">
+        <button class="btn" id="btn-animate">Animate</button>
+        <button class="btn" id="btn-variations">Variations</button>
+        <button class="btn" id="btn-download">PNG</button>
+      </div>
+    </div>
+
+    <div class="shortcuts">
+      <kbd>R</kbd> Random
+      <kbd>M</kbd> Mutate
+      <kbd>A</kbd> Animate
+      <kbd>V</kbd> Variations
+      <kbd>S</kbd> Save
+      <kbd>1</kbd>-<kbd>9</kbd> Presets
+    </div>
+  </div>
+
+<script>
+// ============================================================
+//  Lattice Branching — L-System Laboratory
+//  Full L-system engine with stochastic grammars, parametric
+//  extensions, animated growth, and variation grid
+// ============================================================
+
+const canvas = document.getElementById('main');
+const ctx = canvas.getContext('2d');
+
+// --- PRNG ---
+function mulberry32(seed) {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// --- Color gradients ---
+const GRADIENTS = {
+  verdant:    ['#0a0a0f','#0a1a0f','#0d3b1a','#166b2d','#22a94e','#4ade80','#7af5a8','#c8ffe0'],
+  autumn:     ['#0a0a0f','#2d1a0a','#6b3b0d','#a86b16','#dba822','#f5d44a','#ffe888','#fffacc'],
+  sakura:     ['#0a0a0f','#1a0a1a','#3b0d3b','#6b166b','#a822a8','#d44ad4','#f088f0','#ffccff'],
+  frost:      ['#0a0a0f','#0a0a2d','#0d0d6b','#1616a8','#2222db','#4a4af5','#8888ff','#ccccff'],
+  twilight:   ['#0a0a0f','#1a0a1a','#3b0d2d','#6b1648','#a82268','#d44a88','#f088b8','#ffcce0'],
+  moss:       ['#0a0a0f','#0a1a0a','#1a3b0d','#2d6b16','#48a822','#6bd44a','#a0f088','#d8ffcc'],
+  coral:      ['#0a0a0f','#2d0a0a','#6b1a0d','#a83b16','#db6822','#f5a04a','#ffc888','#ffe8cc'],
+  ocean:      ['#0a0a0f','#0a0f1a','#0d1a3b','#162d6b','#2248a8','#4a6edb','#88a8f5','#cce0ff'],
+  ember:      ['#0a0a0f','#2d0a0a','#6b0d0d','#a81616','#db2222','#f54a4a','#ff8888','#ffcccc'],
+  bone:       ['#0a0a0f','#1a1a1a','#2d2d2d','#4a4a4a','#6e6e6e','#9a9a9a','#c8c8c8','#e8e8e8'],
+  amethyst:   ['#0a0a0f','#120a2d','#1f0d5a','#3316a0','#4a22db','#6e4af5','#a088ff','#d0ccff'],
+};
+function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function buildLUT(name) {
+  const stops = (GRADIENTS[name] || GRADIENTS.verdant).map(hexToRgb);
+  const lut = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255 * (stops.length - 1);
+    const idx = Math.floor(t), frac = t - idx;
+    const a = stops[Math.min(idx, stops.length - 1)];
+    const b = stops[Math.min(idx + 1, stops.length - 1)];
+    lut[i*3]   = Math.round(a[0]+(b[0]-a[0])*frac);
+    lut[i*3+1] = Math.round(a[1]+(b[1]-a[1])*frac);
+    lut[i*3+2] = Math.round(a[2]+(b[2]-a[2])*frac);
+  }
+  return lut;
+}
+
+// ============================================================
+//  L-System Grammar Engine
+// ============================================================
+function generateLSystem(axiom, rules, stochastic, iterations, rng) {
+  let current = axiom;
+  for (let i = 0; i < iterations; i++) {
+    let next = '';
+    for (let ci = 0; ci < current.length; ci++) {
+      const ch = current[ci];
+      if (stochastic && stochastic[ch]) {
+        const alts = stochastic[ch];
+        const total = alts.reduce((s, a) => s + a.weight, 0);
+        let r = rng() * total;
+        let chosen = alts[0].production;
+        for (const alt of alts) { r -= alt.weight; if (r <= 0) { chosen = alt.production; break; } }
+        next += chosen;
+      } else {
+        next += rules[ch] || ch;
+      }
+    }
+    current = next;
+    if (current.length > 100000) break;
+  }
+  return current;
+}
+
+// ============================================================
+//  Turtle Graphics — trace path
+// ============================================================
+function traceTurtle(str, params, rng) {
+  const { angle, angleJitter, lengthScale, tropism, widthDecay,
+          leafSize, flowerPetals, branchProbability, seasonalPhase,
+          heliotropism, stepWave } = params;
+  const pts = [];
+  let tx = 0, ty = 0, ta = -90, td = 0, tw = 1.0;
+  const stack = [];
+  let step = 0;
+
+  for (let ci = 0; ci < str.length; ci++) {
+    const ch = str[ci];
+    switch (ch) {
+      case 'F': case 'G': {
+        const waveMod = stepWave > 0 ? 1 + stepWave * Math.sin(step * 0.5) * 0.3 : 1;
+        const df = Math.pow(lengthScale, td) * waveMod;
+        const j = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
+        const tb = tropism * td * 2;
+        const fa = ta + j + tb;
+        const rad = fa * Math.PI / 180;
+        const nx = tx + df * Math.cos(rad);
+        const ny = ty + df * Math.sin(rad);
+        pts.push({ x: tx, y: ty, nx, ny, depth: td, width: tw, type: 'line' });
+        tx = nx; ty = ny; step++;
+        break;
+      }
+      case '~': {
+        const df = Math.pow(lengthScale, td);
+        const wave = Math.sin(step * 0.8) * 0.3;
+        const j = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
+        const tb = tropism * td * 2;
+        const fa = ta + j + wave * angle + tb;
+        const rad = fa * Math.PI / 180;
+        const nx = tx + df * Math.cos(rad);
+        const ny = ty + df * Math.sin(rad);
+        pts.push({ x: tx, y: ty, nx, ny, depth: td, width: tw, type: 'line' });
+        tx = nx; ty = ny; step++;
+        break;
+      }
+      case '+': ta += angle; break;
+      case '-': ta -= angle; break;
+      case '|': ta += 180; break;
+      case '!': tw *= widthDecay; break;
+      case '@': {
+        if (seasonalPhase > 0.8 && rng() < seasonalPhase) break;
+        const p = flowerPetals || 5;
+        const df = Math.pow(lengthScale, td) * leafSize;
+        for (let pi = 0; pi < p; pi++) {
+          const pa = ta + (pi * 360) / p;
+          const pr = pa * Math.PI / 180;
+          const pl = df * (0.8 + rng() * 0.4);
+          pts.push({ x: tx, y: ty, nx: tx + pl * Math.cos(pr), ny: ty + pl * Math.sin(pr),
+                     depth: Math.max(0, td - 1), width: tw * 1.3, type: 'flower' });
+        }
+        pts.push({ x: tx, y: ty, nx: tx, ny: ty, depth: Math.max(0, td - 1), width: tw * 1.5, type: 'center' });
+        break;
+      }
+      case '{': break; // leaf open — visual only in line mode
+      case '}': break;
+      case '&': {
+        const gs = Math.abs(tropism) > 0 ? tropism * 15 : 5;
+        ta += gs;
+        break;
+      }
+      case '[': {
+        if (branchProbability > 0 && rng() < branchProbability) {
+          let bd = 1;
+          while (++ci < str.length && bd > 0) {
+            if (str[ci] === '[') bd++;
+            else if (str[ci] === ']') bd--;
+          }
+          ci--;
+          break;
+        }
+        stack.push({ x: tx, y: ty, a: ta, d: td, w: tw });
+        td++; tw *= widthDecay;
+        break;
+      }
+      case ']': {
+        const s = stack.pop();
+        if (s) { tx = s.x; ty = s.y; ta = s.a; td = s.d; tw = s.w; }
+        break;
+      }
+      case '%': {
+        let bd = 0;
+        while (++ci < str.length) {
+          if (str[ci] === '[') bd++;
+          else if (str[ci] === ']') { if (bd === 0) { ci--; break; } bd--; }
+        }
+        break;
+      }
+      case '$': {
+        if (heliotropism !== 0) {
+          const target = -90 + heliotropism;
+          ta += (target - ta) * 0.15;
+        }
+        break;
+      }
+      case '^': ta += (rng() - 0.5) * 10 * Math.pow(0.9, td); break;
+    }
+  }
+  return pts;
+}
+
+// ============================================================
+//  Renderer — smooth anti-aliased lines with depth-based color
+// ============================================================
+function renderLines(pts, canvasW, canvasH, lut, bgColor) {
+  if (pts.length === 0) { ctx.fillStyle = bgColor; ctx.fillRect(0, 0, canvasW, canvasH); return; }
+
+  // Bounding box
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of pts) {
+    for (const v of [p.x, p.nx]) { if (v < minX) minX = v; if (v > maxX) maxX = v; }
+    for (const v of [p.y, p.ny]) { if (v < minY) minY = v; if (v > maxY) maxY = v; }
+  }
+
+  const margin = 30;
+  const bw = maxX - minX || 1, bh = maxY - minY || 1;
+  const scale = Math.min((canvasW - margin * 2) / bw, (canvasH - margin * 2) / bh);
+  const ox = margin + ((canvasW - margin * 2) - bw * scale) / 2 - minX * scale;
+  const oy = margin + ((canvasH - margin * 2) - bh * scale) / 2 - minY * scale;
+
+  // Find max depth for color normalization
+  let maxDepth = 0;
+  for (const p of pts) if (p.depth > maxDepth) maxDepth = p.depth;
+  maxDepth = Math.max(maxDepth, 1);
+
+  // Clear
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  // Draw lines with depth-based coloring
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (const p of pts) {
+    const x1 = p.x * scale + ox, y1 = p.y * scale + oy;
+    const x2 = p.nx * scale + ox, y2 = p.ny * scale + oy;
+    const ci = Math.round((1 - p.depth / maxDepth) * 220 + 30);
+    const r = lut[ci * 3], g = lut[ci * 3 + 1], b = lut[ci * 3 + 2];
+    const alpha = Math.max(0.3, 1 - p.depth / maxDepth * 0.5);
+
+    if (p.type === 'flower') {
+      ctx.strokeStyle = `rgba(${r},${g},${b},${alpha * 0.8})`;
+      ctx.lineWidth = Math.max(1, p.width * 2 * scale * 0.15);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      // Petal dot
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+      ctx.beginPath();
+      ctx.arc(x2, y2, Math.max(1.5, p.width * scale * 0.12), 0, Math.PI * 2);
+      ctx.fill();
+    } else if (p.type === 'center') {
+      ctx.fillStyle = `rgba(${Math.min(255,r+40)},${Math.min(255,g+40)},${Math.min(255,b+40)},${alpha})`;
+      ctx.beginPath();
+      ctx.arc(x1, y1, Math.max(2, p.width * scale * 0.15), 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      const lw = Math.max(0.5, p.width * 3 * scale * 0.06);
+      // Glow layer
+      if (lw > 1.5) {
+        ctx.strokeStyle = `rgba(${r},${g},${b},${alpha * 0.15})`;
+        ctx.lineWidth = lw * 3;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      // Main line
+      ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+  }
+}
+
+// ============================================================
+//  Presets — organized by category
+// ============================================================
+const CATEGORIES = {
+  'Botanical': [
+    { name: 'Oak Tree', axiom: 'F', rules: { F: 'FF+[+F-F-F]-[-F+F+F]' }, angle: 25, iterations: 4, angleJitter: 3, lengthScale: 0.82, tropism: -0.05, widthDecay: 0.75 },
+    { name: 'Barnsley Fern', axiom: 'X', rules: { X: 'F-[[X]+X]+F[+FX]-X', F: 'FF' }, angle: 25, iterations: 5, angleJitter: 2, lengthScale: 0.78, tropism: -0.1, widthDecay: 0.72 },
+    { name: 'Binary Tree', axiom: 'X', rules: { X: 'F[+X][-X]FX', F: 'FF' }, angle: 30, iterations: 5, lengthScale: 0.8, widthDecay: 0.78 },
+    { name: 'Weeping Willow', axiom: 'F', rules: { F: 'FF&[+F{~F}@][-F{~F}@]' }, angle: 20, iterations: 4, angleJitter: 5, lengthScale: 0.75, tropism: 0.15, widthDecay: 0.7, flowerPetals: 4, leafSize: 0.3 },
+    { name: 'Cherry Blossom', axiom: 'X', rules: { X: 'F[@][+X][-X]FX', F: 'FF' }, angle: 25, iterations: 5, angleJitter: 4, lengthScale: 0.8, tropism: -0.08, widthDecay: 0.76, flowerPetals: 5, leafSize: 0.4,
+      stochastic: { X: [{ production: 'F[@][+X][-X]FX', weight: 0.6 }, { production: 'F[+X@]F[-X@]+X', weight: 0.4 }] } },
+    { name: 'Dense Bush', axiom: 'F', rules: { F: 'FF[+F+F+F][-F-F-F]' }, angle: 22, iterations: 3, angleJitter: 4, widthDecay: 0.8 },
+    { name: 'Climbing Vine', axiom: 'X', rules: { X: 'F~[+X]F~[-X]~FX', F: '~F~F' }, angle: 30, iterations: 5, angleJitter: 8, lengthScale: 0.85, tropism: 0.05, widthDecay: 0.8, stepWave: 0.6 },
+  ],
+  'Fractal': [
+    { name: 'Koch Curve', axiom: 'F', rules: { F: 'F+F-F-F+F' }, angle: 90, iterations: 4 },
+    { name: 'Koch Snowflake', axiom: 'F-F-F-F-F-F', rules: { F: 'F+F-F-F+F' }, angle: 60, iterations: 4 },
+    { name: 'Sierpinski', axiom: 'F', rules: { F: 'F-G+F+G-F', G: 'GG' }, angle: 120, iterations: 6 },
+    { name: 'Dragon Curve', axiom: 'X', rules: { X: 'X+YF+', Y: '-FX-Y' }, angle: 90, iterations: 10 },
+    { name: 'Hilbert Curve', axiom: 'X', rules: { X: '-YF+XFX+FY-', Y: '+XF-YFY-FX+' }, angle: 90, iterations: 5 },
+    { name: 'Gosper Curve', axiom: 'X', rules: { X: 'XF-F+F-XF+F+XF-F+F-X' }, angle: 60, iterations: 3 },
+    { name: 'Levy C Curve', axiom: 'F', rules: { F: 'F+F--F+F' }, angle: 45, iterations: 10 },
+    { name: 'Peano Curve', axiom: 'X', rules: { X: 'XFYFX+F+YFXFY-F-XFYFX', Y: 'YFXFY-F-XFYFX+F+YFXFY' }, angle: 90, iterations: 3 },
+  ],
+  'Organic': [
+    { name: 'Kelp Forest', axiom: 'X', rules: { X: 'F[+X]~F~[-X]~F', F: '~F~F' }, angle: 28, iterations: 5, angleJitter: 6, lengthScale: 0.85, tropism: -0.08, widthDecay: 0.8, stepWave: 0.4 },
+    { name: 'Coral Polyps', axiom: 'X', rules: { X: '~F[+X]~F[-X]@', F: '~F~F!' }, angle: 35, iterations: 5, angleJitter: 5, flowerPetals: 6, leafSize: 0.25 },
+    { name: 'Staghorn', axiom: 'X', rules: { X: 'F[+X][+X][-X]FX', F: 'FF!' }, angle: 22, iterations: 4, angleJitter: 3, lengthScale: 0.8, widthDecay: 0.72 },
+    { name: 'Spreading Moss', axiom: 'X', rules: { X: 'F^[+X]^[-X]^[+X]F', F: 'F!F' }, angle: 40, iterations: 5, angleJitter: 8, lengthScale: 0.78, widthDecay: 0.7 },
+    { name: 'Lichen Mat', axiom: 'F', rules: { F: 'F[+F][-F][^F]F[+F]' }, angle: 45, iterations: 4, angleJitter: 10, lengthScale: 0.75, widthDecay: 0.65 },
+    { name: 'Rosette', axiom: 'X', rules: { X: 'F[+X]F[-X][++X][--X]', F: 'F!F' }, angle: 36, iterations: 4, angleJitter: 2, lengthScale: 0.75, widthDecay: 0.7 },
+  ],
+  'Stochastic': [
+    { name: 'Random Bush', axiom: 'F', rules: { F: 'FF-[-F+F+F]+[+F-F-F]' }, angle: 22, iterations: 4, angleJitter: 5, lengthScale: 0.82, widthDecay: 0.78,
+      stochastic: { F: [{ production: 'FF-[-F+F+F]+[+F-F-F]', weight: 0.6 }, { production: 'F[+F]F[-F]F', weight: 0.4 }] } },
+    { name: 'Wild Meadow', axiom: 'X', rules: { X: 'F[+X][-X]FX', F: 'FF' }, angle: 25, iterations: 5, angleJitter: 8, tropism: -0.05, branchProbability: 0.2,
+      stochastic: { X: [{ production: 'F[+X][-X]FX', weight: 0.4 }, { production: 'F[+X@]F[-X]', weight: 0.3 }, { production: 'F~[+X]~[-X]~F', weight: 0.3 }] } },
+    { name: 'Autumn Tree', axiom: 'X', rules: { X: 'F!F[+X@]&[-X@]F^X', F: 'FF' }, angle: 22, iterations: 5, angleJitter: 6, lengthScale: 0.78, tropism: -0.12, widthDecay: 0.72, leafSize: 0.45, flowerPetals: 5, seasonalPhase: 0.5, heliotropism: 8,
+      stochastic: { X: [{ production: 'F!F[+X@]&[-X@]F^X', weight: 0.5 }, { production: 'F[+X]F[-X@]^FX', weight: 0.3 }, { production: 'F!F&[+X{~F}][-X{~F}]@', weight: 0.2 }] } },
+    { name: 'Winter Bare', axiom: 'X', rules: { X: 'F!F[+X][-X]FX', F: 'FF' }, angle: 20, iterations: 5, angleJitter: 4, lengthScale: 0.76, tropism: -0.06, widthDecay: 0.7, branchProbability: 0.3, seasonalPhase: 0.9 },
+  ],
+};
+
+// ============================================================
+//  State
+// ============================================================
+let state = {
+  axiom: 'F',
+  rules: { F: 'FF+[+F-F-F]-[-F+F+F]' },
+  stochastic: null,
+  angle: 25,
+  iterations: 4,
+  angleJitter: 3,
+  lengthScale: 0.82,
+  tropism: -0.05,
+  widthDecay: 0.75,
+  leafSize: 0.3,
+  flowerPetals: 0,
+  branchProbability: 0,
+  seasonalPhase: 0,
+  heliotropism: 0,
+  stepWave: 0,
+  seed: 42,
+  gradient: 'verdant',
+};
+let currentPreset = 'Oak Tree';
+let currentCategory = 'Botanical';
+let animating = false;
+let showVariations = false;
+
+// ============================================================
+//  UI Construction
+// ============================================================
+function buildPresetTabs() {
+  const container = document.getElementById('preset-tabs');
+  container.innerHTML = '';
+  for (const cat of Object.keys(CATEGORIES)) {
+    const btn = document.createElement('button');
+    btn.className = 'preset-tab' + (cat === currentCategory ? ' active' : '');
+    btn.textContent = cat;
+    btn.onclick = () => { currentCategory = cat; buildPresetTabs(); buildPresetList(); };
+    container.appendChild(btn);
+  }
+}
+
+function buildPresetList() {
+  const container = document.getElementById('preset-list');
+  container.innerHTML = '';
+  for (const p of CATEGORIES[currentCategory]) {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn' + (p.name === currentPreset ? ' active' : '');
+    btn.textContent = p.name;
+    btn.onclick = () => loadPreset(p);
+    container.appendChild(btn);
+  }
+}
+
+function loadPreset(p) {
+  currentPreset = p.name;
+  state.axiom = p.axiom;
+  state.rules = { ...p.rules };
+  state.stochastic = p.stochastic ? JSON.parse(JSON.stringify(p.stochastic)) : null;
+  state.angle = p.angle;
+  state.iterations = p.iterations;
+  state.angleJitter = p.angleJitter || 0;
+  state.lengthScale = p.lengthScale || 1;
+  state.tropism = p.tropism || 0;
+  state.widthDecay = p.widthDecay || 0.85;
+  state.leafSize = p.leafSize || 0.3;
+  state.flowerPetals = p.flowerPetals || 0;
+  state.branchProbability = p.branchProbability || 0;
+  state.seasonalPhase = p.seasonalPhase || 0;
+  state.heliotropism = p.heliotropism || 0;
+  state.stepWave = p.stepWave || 0;
+  buildPresetList();
+  buildGrammarEditor();
+  buildControls();
+  render();
+}
+
+const SLIDER_DEFS = [
+  { key: 'angle', label: 'Angle', min: 1, max: 180, step: 1 },
+  { key: 'iterations', label: 'Iterations', min: 1, max: 8, step: 1 },
+  { key: 'angleJitter', label: 'Angle Jitter', min: 0, max: 15, step: 0.5 },
+  { key: 'lengthScale', label: 'Length Scale', min: 0.5, max: 1, step: 0.01 },
+  { key: 'tropism', label: 'Tropism', min: -0.3, max: 0.3, step: 0.01 },
+  { key: 'widthDecay', label: 'Width Decay', min: 0.5, max: 1, step: 0.01 },
+  { key: 'leafSize', label: 'Leaf Size', min: 0, max: 1, step: 0.05 },
+  { key: 'flowerPetals', label: 'Flower Petals', min: 0, max: 8, step: 1 },
+  { key: 'branchProbability', label: 'Pruning', min: 0, max: 0.5, step: 0.01 },
+  { key: 'seasonalPhase', label: 'Season', min: 0, max: 1, step: 0.01 },
+  { key: 'heliotropism', label: 'Heliotropism', min: -30, max: 30, step: 1 },
+  { key: 'stepWave', label: 'Step Wave', min: 0, max: 1, step: 0.01 },
+];
+
+function buildControls() {
+  const container = document.getElementById('controls');
+  container.innerHTML = '';
+
+  // Color theme swatches
+  const themeDiv = document.createElement('div');
+  themeDiv.innerHTML = '<div class="section-label">Color Theme</div>';
+  const row = document.createElement('div');
+  row.className = 'theme-row';
+  for (const name of Object.keys(GRADIENTS)) {
+    const swatch = document.createElement('div');
+    swatch.className = 'theme-swatch' + (name === state.gradient ? ' active' : '');
+    const stops = GRADIENTS[name];
+    swatch.style.background = `linear-gradient(135deg, ${stops[2]}, ${stops[4]}, ${stops[6]})`;
+    swatch.title = name;
+    swatch.onclick = () => { state.gradient = name; buildControls(); render(); };
+    row.appendChild(swatch);
+  }
+  themeDiv.appendChild(row);
+  container.appendChild(themeDiv);
+
+  // Sliders
+  for (const def of SLIDER_DEFS) {
+    const group = document.createElement('div');
+    group.className = 'ctrl-group';
+    const val = state[def.key];
+    group.innerHTML = `
+      <div class="ctrl-label"><span>${def.label}</span><span class="ctrl-val" id="val-${def.key}">${typeof val === 'number' ? (Number.isInteger(def.step) ? val : val.toFixed(2)) : val}</span></div>
+      <input type="range" id="slider-${def.key}" min="${def.min}" max="${def.max}" step="${def.step}" value="${val}">
+    `;
+    container.appendChild(group);
+    const slider = group.querySelector('input');
+    slider.addEventListener('input', () => {
+      state[def.key] = parseFloat(slider.value);
+      group.querySelector('.ctrl-val').textContent = Number.isInteger(def.step) ? state[def.key] : state[def.key].toFixed(2);
+      currentPreset = 'Custom';
+      buildPresetList();
+      render();
+    });
+  }
+}
+
+function buildGrammarEditor() {
+  document.getElementById('axiom').value = state.axiom;
+  const editor = document.getElementById('rule-editor');
+  editor.innerHTML = '';
+
+  for (const [sym, prod] of Object.entries(state.rules)) {
+    const row = document.createElement('div');
+    row.className = 'rule-row';
+    row.innerHTML = `
+      <span class="rule-sym">${sym}</span>
+      <span class="rule-arrow">&rarr;</span>
+      <input type="text" class="rule-input" value="${prod}" data-sym="${sym}" spellcheck="false">
+    `;
+    editor.appendChild(row);
+    row.querySelector('.rule-input').addEventListener('input', (e) => {
+      state.rules[e.target.dataset.sym] = e.target.value;
+      currentPreset = 'Custom';
+      buildPresetList();
+      render();
+    });
+  }
+
+  // Show stochastic variants if present
+  if (state.stochastic) {
+    for (const [sym, alts] of Object.entries(state.stochastic)) {
+      for (let i = 0; i < alts.length; i++) {
+        const row = document.createElement('div');
+        row.className = 'rule-row';
+        row.innerHTML = `
+          <span class="rule-sym" style="color:var(--accent);font-size:0.5rem">${sym}~${i+1}</span>
+          <span class="rule-arrow" style="font-size:0.45rem">w${alts[i].weight.toFixed(1)}</span>
+          <input type="text" class="rule-input" value="${alts[i].production}" spellcheck="false" style="font-size:0.5rem">
+        `;
+        editor.appendChild(row);
+        const input = row.querySelector('.rule-input');
+        const idx = i;
+        input.addEventListener('input', () => {
+          state.stochastic[sym][idx].production = input.value;
+          currentPreset = 'Custom';
+          render();
+        });
+      }
+    }
+  }
+}
+
+// Axiom input
+document.getElementById('axiom').addEventListener('input', (e) => {
+  state.axiom = e.target.value;
+  currentPreset = 'Custom';
+  buildPresetList();
+  render();
+});
+
+// Add rule button
+document.getElementById('btn-add-rule').addEventListener('click', () => {
+  const syms = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const existing = Object.keys(state.rules);
+  let newSym = '';
+  for (const c of syms) { if (!existing.includes(c)) { newSym = c; break; } }
+  if (!newSym) return;
+  state.rules[newSym] = 'F';
+  buildGrammarEditor();
+  render();
+});
+
+// Add stochastic button
+document.getElementById('btn-add-stochastic').addEventListener('click', () => {
+  if (!state.stochastic) state.stochastic = {};
+  const sym = Object.keys(state.rules)[0] || 'F';
+  if (!state.stochastic[sym]) {
+    state.stochastic[sym] = [
+      { production: state.rules[sym] || 'F', weight: 0.6 },
+      { production: 'F[+F][-F]', weight: 0.4 },
+    ];
+  }
+  buildGrammarEditor();
+  render();
+});
+
+// ============================================================
+//  Render & Resize
+// ============================================================
+function getCanvasSize() {
+  const area = document.querySelector('.canvas-area');
+  const w = Math.floor(area.clientWidth * 0.92);
+  const h = Math.floor(area.clientHeight * 0.92);
+  const dpr = window.devicePixelRatio || 1;
+  return { w, h, dpr };
+}
+
+function render(overrideIter) {
+  const { w, h, dpr } = getCanvasSize();
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const rng = mulberry32(state.seed);
+  const iters = overrideIter !== undefined ? overrideIter : state.iterations;
+  const str = generateLSystem(state.axiom, state.rules, state.stochastic, iters, rng);
+  const rng2 = mulberry32(state.seed + 1);
+  const pts = traceTurtle(str, { ...state, iterations: iters }, rng2);
+  const lut = buildLUT(state.gradient);
+  renderLines(pts, w, h, lut, '#0a0a0f');
+
+  // Update info
+  document.getElementById('info-name').textContent = currentPreset;
+  const ruleStr = Object.entries(state.rules).map(([k,v]) => `${k}→${v}`).join('  ');
+  document.getElementById('info-grammar').textContent = `${state.axiom} | ${ruleStr} | ${iters}× ${state.angle}°`;
+  document.getElementById('seed-info').textContent = `seed: ${state.seed}`;
+}
+
+function resize() { render(); }
+window.addEventListener('resize', resize);
+
+// ============================================================
+//  Animated growth
+// ============================================================
+function animateGrowth() {
+  if (animating) return;
+  animating = true;
+  const badge = document.getElementById('grow-badge');
+  badge.classList.add('visible');
+  let iter = 0;
+  const maxIter = state.iterations;
+
+  function step() {
+    if (iter > maxIter) {
+      animating = false;
+      badge.classList.remove('visible');
+      return;
+    }
+    render(iter);
+    iter++;
+    setTimeout(step, 400);
+  }
+  step();
+}
+
+// ============================================================
+//  Variation grid — 3x3 grid of parameter neighbors
+// ============================================================
+function renderVariationGrid() {
+  showVariations = !showVariations;
+  const gridEl = document.getElementById('var-grid');
+  if (!showVariations) { gridEl.classList.remove('visible'); return; }
+
+  gridEl.innerHTML = '';
+  gridEl.classList.add('visible');
+
+  const variations = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const varState = { ...state };
+      varState.angle = state.angle + dx * 5;
+      varState.angleJitter = Math.max(0, state.angleJitter + dy * 2);
+      varState.seed = state.seed + dx * 100 + dy * 1000;
+      variations.push({ dx, dy, state: varState });
+    }
+  }
+
+  for (const v of variations) {
+    const miniCanvas = document.createElement('canvas');
+    miniCanvas.className = 'var-cell' + (v.dx === 0 && v.dy === 0 ? ' center' : '');
+    miniCanvas.width = 120;
+    miniCanvas.height = 90;
+
+    const miniCtx = miniCanvas.getContext('2d');
+    const rng = mulberry32(v.state.seed);
+    const str = generateLSystem(v.state.axiom, v.state.rules, v.state.stochastic, v.state.iterations, rng);
+    const rng2 = mulberry32(v.state.seed + 1);
+    const pts = traceTurtle(str, v.state, rng2);
+
+    // Mini render
+    if (pts.length > 0) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const p of pts) {
+        for (const val of [p.x, p.nx]) { if (val < minX) minX = val; if (val > maxX) maxX = val; }
+        for (const val of [p.y, p.ny]) { if (val < minY) minY = val; if (val > maxY) maxY = val; }
+      }
+      const bw = maxX - minX || 1, bh = maxY - minY || 1;
+      const scale = Math.min(110 / bw, 80 / bh);
+      const ox = 5 + (110 - bw * scale) / 2 - minX * scale;
+      const oy = 5 + (80 - bh * scale) / 2 - minY * scale;
+      let maxD = 0;
+      for (const p of pts) if (p.depth > maxD) maxD = p.depth;
+      maxD = Math.max(maxD, 1);
+      const lut = buildLUT(state.gradient);
+
+      miniCtx.fillStyle = '#0a0a0f';
+      miniCtx.fillRect(0, 0, 120, 90);
+      miniCtx.lineCap = 'round';
+
+      for (const p of pts) {
+        const ci = Math.round((1 - p.depth / maxD) * 220 + 30);
+        const r = lut[ci*3], g = lut[ci*3+1], b = lut[ci*3+2];
+        miniCtx.strokeStyle = `rgba(${r},${g},${b},${Math.max(0.4, 1 - p.depth/maxD*0.5)})`;
+        miniCtx.lineWidth = Math.max(0.5, p.width * 1.5 * scale * 0.06);
+        miniCtx.beginPath();
+        miniCtx.moveTo(p.x * scale + ox, p.y * scale + oy);
+        miniCtx.lineTo(p.nx * scale + ox, p.ny * scale + oy);
+        miniCtx.stroke();
+      }
+    } else {
+      miniCtx.fillStyle = '#0a0a0f';
+      miniCtx.fillRect(0, 0, 120, 90);
+    }
+
+    miniCanvas.onclick = () => {
+      state.angle = v.state.angle;
+      state.angleJitter = v.state.angleJitter;
+      state.seed = v.state.seed;
+      buildControls();
+      render();
+      renderVariationGrid(); // refresh
+      renderVariationGrid(); // toggle back on
+    };
+
+    gridEl.appendChild(miniCanvas);
+  }
+}
+
+// ============================================================
+//  Mutate
+// ============================================================
+function mutate() {
+  const rng = mulberry32(Date.now());
+  const r = rng();
+  if (r < 0.3) {
+    state.angle = Math.max(1, Math.min(180, state.angle + Math.round((rng() - 0.5) * 20)));
+  } else if (r < 0.5) {
+    state.angleJitter = Math.max(0, Math.min(15, state.angleJitter + (rng() - 0.5) * 4));
+  } else if (r < 0.65) {
+    state.lengthScale = Math.max(0.5, Math.min(1, state.lengthScale + (rng() - 0.5) * 0.1));
+  } else if (r < 0.75) {
+    state.tropism = Math.max(-0.3, Math.min(0.3, state.tropism + (rng() - 0.5) * 0.08));
+  } else if (r < 0.85) {
+    state.widthDecay = Math.max(0.5, Math.min(1, state.widthDecay + (rng() - 0.5) * 0.1));
+  } else {
+    // Mutate a rule
+    const keys = Object.keys(state.rules);
+    const key = keys[Math.floor(rng() * keys.length)];
+    const chars = 'F+-[]G~!@{}&^';
+    const pos = Math.floor(rng() * (state.rules[key].length + 1));
+    const ch = chars[Math.floor(rng() * chars.length)];
+    if (rng() < 0.3 && state.rules[key].length > 3) {
+      // Delete a char
+      const dp = Math.floor(rng() * state.rules[key].length);
+      state.rules[key] = state.rules[key].slice(0, dp) + state.rules[key].slice(dp + 1);
+    } else {
+      state.rules[key] = state.rules[key].slice(0, pos) + ch + state.rules[key].slice(pos);
+    }
+  }
+  state.seed = Math.floor(Math.random() * 2**32);
+  currentPreset = 'Mutant';
+  buildControls();
+  buildGrammarEditor();
+  buildPresetList();
+  render();
+}
+
+// ============================================================
+//  Randomize
+// ============================================================
+function randomize() {
+  const cats = Object.values(CATEGORIES);
+  const allPresets = cats.flat();
+  const p = allPresets[Math.floor(Math.random() * allPresets.length)];
+  state.seed = Math.floor(Math.random() * 2**32);
+  loadPreset(p);
+}
+
+// ============================================================
+//  Download PNG
+// ============================================================
+function downloadPNG() {
+  const link = document.createElement('a');
+  link.download = `lattice-branching-${currentPreset.toLowerCase().replace(/\s+/g, '-')}-${state.seed}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+// ============================================================
+//  Button wiring
+// ============================================================
+document.getElementById('btn-random').onclick = randomize;
+document.getElementById('btn-mutate').onclick = mutate;
+document.getElementById('btn-animate').onclick = animateGrowth;
+document.getElementById('btn-variations').onclick = renderVariationGrid;
+document.getElementById('btn-download').onclick = downloadPNG;
+document.getElementById('seed-info').onclick = () => {
+  state.seed = Math.floor(Math.random() * 2**32);
+  render();
+};
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key.toLowerCase()) {
+    case 'r': randomize(); break;
+    case 'm': mutate(); break;
+    case 'a': animateGrowth(); break;
+    case 'v': renderVariationGrid(); break;
+    case 's': downloadPNG(); break;
+    default:
+      if (e.key >= '1' && e.key <= '9') {
+        const presets = CATEGORIES[currentCategory];
+        const idx = parseInt(e.key) - 1;
+        if (idx < presets.length) loadPreset(presets[idx]);
+      }
+  }
+});
+
+// ============================================================
+//  Init
+// ============================================================
+buildPresetTabs();
+buildPresetList();
+buildGrammarEditor();
+buildControls();
+loadPreset(CATEGORIES.Botanical[0]);
+</script>
+</body>
+</html>
