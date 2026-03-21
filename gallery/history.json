@@ -13128,5 +13128,106 @@
         "structuralInterest": 0.9738283627510651
       }
     }
+  },
+  {
+    "generation": 148,
+    "bestScore": 0.823068,
+    "avgScore": 0.6817420714285714,
+    "epoch": "chaos",
+    "speciesCounts": {
+      "wfc": 4,
+      "reaction-diffusion": 1,
+      "2d": 1,
+      "voronoi": 1,
+      "1d": 1,
+      "julia": 1,
+      "lsystem": 1,
+      "spirograph": 1,
+      "noise": 1,
+      "attractor": 1,
+      "flowfield": 1
+    },
+    "hallOfFameSize": 20,
+    "timestamp": "2026-03-21T12:13:52.163Z",
+    "bestPiece": {
+      "id": "gen140-mmzo8dw5",
+      "genome": {
+        "rule": {
+          "weights": [
+            1.082715910053557,
+            0.4609340402945051,
+            0.9320795412727589,
+            0.430483551100687,
+            0.6271941659037381,
+            0.6833409095935754,
+            0.8289680574880451
+          ],
+          "symmetry": "horizontal",
+          "adjacency": [
+            [
+              0,
+              1
+            ],
+            [
+              5
+            ],
+            [
+              2,
+              0,
+              3
+            ],
+            [
+              3,
+              2,
+              4
+            ],
+            [
+              1,
+              6
+            ],
+            [
+              6
+            ],
+            [
+              2,
+              3
+            ]
+          ],
+          "tileCount": 7
+        },
+        "seed": 3031751281,
+        "type": "wfc",
+        "width": 53,
+        "height": 31,
+        "lineage": [
+          "99e8984f",
+          "45737f37",
+          "a64cab3f",
+          "99e8984f",
+          "×"
+        ],
+        "palette": [
+          " ",
+          ".",
+          ":",
+          "❦",
+          "✿",
+          "❀",
+          "❁"
+        ],
+        "mutations": 6
+      },
+      "score": 0.823068,
+      "metrics": {
+        "density": 0.6287279367011565,
+        "novelty": 0.9207096554177098,
+        "symmetry": 0.6102435977514054,
+        "complexity": 2.5391222464590664,
+        "edgeActivity": 0.7454715802623361,
+        "fractalDimension": 2,
+        "informationDensity": 0.5686552414534557,
+        "structuralInterest": 0.9738283627510651
+      }
+    }
   }
 ]
