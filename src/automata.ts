@@ -117,9 +117,21 @@ export interface FlowFieldRule {
   decay: number;           // trail brightness decay (0.5-1.0, 1=no decay)
 }
 
+
+export interface DLARule {
+  seeds: number;            // number of initial seed points (1-8)
+  seedShape: "center" | "line" | "circle" | "scatter";  // seed arrangement
+  stickiness: number;       // probability of sticking on contact (0.1-1.0)
+  maxParticles: number;     // total particles to aggregate (500-8000)
+  bias: number;             // directional bias angle in radians (0 = none)
+  biasStrength: number;     // strength of directional bias (0-0.5)
+  branchAngle: number;      // branching angle preference (0-1, 0=isotropic)
+  quantize: number;         // output states based on arrival order (3-8)
+}
+
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule;
   width: number;
   height: number;
   palette: string[];
@@ -133,6 +145,13 @@ export interface LSystemRule {
   rules: Record<string, string>;
   angle: number;
   iterations: number;
+  // Stochastic grammar: alternate rules chosen probabilistically per symbol
+  stochastic?: Record<string, { production: string; weight: number }[]>;
+  // Parametric extensions for organic/botanical forms
+  angleJitter?: number;        // random angle perturbation per step (0-15 degrees)
+  lengthScale?: number;        // branch length multiplier per depth (0.5-1.0, default 1)
+  tropism?: number;            // gravity pull factor (-0.3 to 0.3, negative = upward growth)
+  widthDecay?: number;         // stroke width decay per depth (0.5-1.0, default 0.85)
 }
 
 export interface Piece {
@@ -155,6 +174,7 @@ export interface PieceMetrics {
   structuralInterest: number;  // clustered regions vs uniform noise
   fractalDimension: number;    // box-counting fractal dimension (0-2, higher = more complex boundary)
   informationDensity: number;  // bits per cell normalized — how efficiently the visual space encodes info
+  spatialCoherence: number;    // spatial autocorrelation — nearby cells relate to each other (structure vs noise)
 }
 
 // --- Pseudorandom number generator (deterministic from seed) ---
@@ -290,28 +310,44 @@ function countNeighbors(grid: number[][], x: number, y: number, w: number, h: nu
   return count;
 }
 
-// --- L-System (thick brush, depth-aware, auto-centered) ---
+// --- L-System (thick brush, depth-aware, auto-centered, stochastic + parametric) ---
 export function evolveLSystem(genome: Genome): number[][] {
   const rule = genome.rule as LSystemRule;
   const { width, height } = genome;
   const maxState = Math.max((genome.palette?.length ?? 2) - 1, 1);
+  const rng = mulberry32(genome.seed);
+  const angleJitter = rule.angleJitter ?? 0;
+  const lengthScale = rule.lengthScale ?? 1;
+  const tropism = rule.tropism ?? 0;
 
-  // Generate L-system string
+  // Generate L-system string with stochastic grammar support
   let current = rule.axiom;
   for (let i = 0; i < rule.iterations; i++) {
     let next = "";
     for (const ch of current) {
-      next += rule.rules[ch] ?? ch;
+      if (rule.stochastic && rule.stochastic[ch]) {
+        // Weighted random selection from stochastic alternatives
+        const alts = rule.stochastic[ch];
+        const totalWeight = alts.reduce((s, a) => s + a.weight, 0);
+        let r = rng() * totalWeight;
+        let chosen = alts[0].production;
+        for (const alt of alts) {
+          r -= alt.weight;
+          if (r <= 0) { chosen = alt.production; break; }
+        }
+        next += chosen;
+      } else {
+        next += rule.rules[ch] ?? ch;
+      }
     }
     current = next;
     if (current.length > 15000) break; // safety limit
   }
 
-  // Phase 1: Trace turtle path on unbounded canvas to find bounding box
+  // Phase 1: Trace turtle path with parametric extensions
   const points: { x: number; y: number; depth: number }[] = [];
   let tx = 0, ty = 0;
   let tAngle = -90;
-  const tStep = 1;
   let tDepth = 0;
   const tStack: { x: number; y: number; angle: number; depth: number }[] = [];
 
@@ -319,8 +355,17 @@ export function evolveLSystem(genome: Genome): number[][] {
     switch (ch) {
       case "F":
       case "G": {
-        const nx = tx + tStep * Math.cos((tAngle * Math.PI) / 180);
-        const ny = ty + tStep * Math.sin((tAngle * Math.PI) / 180);
+        // Length scales down with depth for natural tapering
+        const depthFactor = Math.pow(lengthScale, tDepth);
+        const step = depthFactor;
+        // Angle jitter adds organic irregularity
+        const jitter = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
+        const effectiveAngle = tAngle + jitter;
+        // Tropism bends branches toward/away from gravity (positive = down)
+        const tropismBend = tropism * tDepth * 2;
+        const finalAngle = effectiveAngle + tropismBend;
+        const nx = tx + step * Math.cos((finalAngle * Math.PI) / 180);
+        const ny = ty + step * Math.sin((finalAngle * Math.PI) / 180);
         points.push({ x: nx, y: ny, depth: tDepth });
         tx = nx;
         ty = ny;
@@ -1181,6 +1226,110 @@ export function evolveFlowField(genome: Genome): number[][] {
   return grid;
 }
 
+
+// --- Color System (OKLAB perceptual color space) ---
+
+export interface OklabColor { L: number; a: number; b: number; }
+export interface OklchColor { L: number; C: number; h: number; }
+export type HarmonyRule = 'complementary' | 'analogous' | 'triadic' | 'split-complementary' | 'tetradic';
+
+function srgbToLinear(c: number): number {
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+function linearToSrgb(c: number): number {
+  return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+}
+
+export function hexToOklab(hex: string): OklabColor {
+  const r = srgbToLinear(parseInt(hex.slice(1, 3), 16) / 255);
+  const g = srgbToLinear(parseInt(hex.slice(3, 5), 16) / 255);
+  const b = srgbToLinear(parseInt(hex.slice(5, 7), 16) / 255);
+  const l_ = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m_ = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s_ = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return {
+    L: 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+    a: 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+    b: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+  };
+}
+
+export function oklabToHex(lab: OklabColor): string {
+  const l = lab.L + 0.3963377774 * lab.a + 0.2158037573 * lab.b;
+  const m = lab.L - 0.1055613458 * lab.a - 0.0638541728 * lab.b;
+  const s = lab.L - 0.0894841775 * lab.a - 1.2914855480 * lab.b;
+  const rv = Math.round(Math.max(0, Math.min(1, linearToSrgb(+4.0767416621 * l*l*l - 3.3077115913 * m*m*m + 0.2309699292 * s*s*s))) * 255);
+  const gv = Math.round(Math.max(0, Math.min(1, linearToSrgb(-1.2684380046 * l*l*l + 2.6097574011 * m*m*m - 0.3413193965 * s*s*s))) * 255);
+  const bv = Math.round(Math.max(0, Math.min(1, linearToSrgb(-0.0041960863 * l*l*l - 0.7034186147 * m*m*m + 1.7076147010 * s*s*s))) * 255);
+  return '#' + [rv, gv, bv].map(c => c.toString(16).padStart(2, '0')).join('');
+}
+
+export function oklabToOklch(lab: OklabColor): OklchColor {
+  return { L: lab.L, C: Math.sqrt(lab.a * lab.a + lab.b * lab.b), h: ((Math.atan2(lab.b, lab.a) * 180 / Math.PI) + 360) % 360 };
+}
+
+export function oklchToOklab(lch: OklchColor): OklabColor {
+  const hRad = lch.h * Math.PI / 180;
+  return { L: lch.L, a: lch.C * Math.cos(hRad), b: lch.C * Math.sin(hRad) };
+}
+
+export function perceptualGradient(hex1: string, hex2: string, steps: number): string[] {
+  const lab1 = hexToOklab(hex1), lab2 = hexToOklab(hex2);
+  return Array.from({ length: steps }, (_, i) => {
+    const t = steps === 1 ? 0 : i / (steps - 1);
+    return oklabToHex({ L: lab1.L + (lab2.L - lab1.L) * t, a: lab1.a + (lab2.a - lab1.a) * t, b: lab1.b + (lab2.b - lab1.b) * t });
+  });
+}
+
+export function colorHarmony(hex: string, rule: HarmonyRule): string[] {
+  const lch = oklabToOklch(hexToOklab(hex));
+  const offsets: Record<HarmonyRule, number[]> = {
+    'complementary': [0, 180],
+    'analogous': [-30, 0, 30],
+    'triadic': [0, 120, 240],
+    'split-complementary': [0, 150, 210],
+    'tetradic': [0, 90, 180, 270],
+  };
+  return offsets[rule].map(d => oklabToHex(oklchToOklab({ L: lch.L, C: lch.C, h: ((lch.h + d) % 360 + 360) % 360 })));
+}
+
+export const SPECIES_COLORS: Record<string, { bg: string; colors: string[] }> = {
+  '1d':                  { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a3e', '#3b2d8b', '#6b4edb', '#9d7af5', '#c8abff', '#e8d8ff', '#ffffff'] },
+  '2d':                  { bg: '#0a0a0f', colors: ['#0a0a0f', '#0d2818', '#166b3a', '#22a95c', '#4ade80', '#7af5a8', '#b8ffd4', '#e8fff0'] },
+  'lsystem':             { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a0a', '#6b3a0d', '#a85c16', '#db8b22', '#f5b84a', '#ffe088', '#fff4cc'] },
+  'reaction-diffusion':  { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0a2d', '#3b0d6b', '#6b16a8', '#a822db', '#d44af5', '#f088ff', '#ffccff'] },
+  'voronoi':             { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a2d', '#0d3b6b', '#166ba8', '#22a8db', '#4ad4f5', '#88eeff', '#ccf8ff'] },
+  'wfc':                 { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d0a0a', '#6b0d1a', '#a8163b', '#db226b', '#f54a9d', '#ff88c8', '#ffccee'] },
+  'spirograph':          { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a2d0a', '#3b6b0d', '#6ba816', '#a8db22', '#d4f54a', '#eeff88', '#ffffcc'] },
+  'attractor':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a1a', '#6b2d2d', '#a84a3b', '#db6b4a', '#f59d6b', '#ffc8a0', '#ffe8d8'] },
+  'julia':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a2d2d', '#0d6b5b', '#16a88a', '#22dbb5', '#4af5d4', '#88ffe8', '#ccfff4'] },
+  'noise':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a0a', '#3b3b0d', '#6b6b16', '#a8a822', '#d4d44a', '#eeff88', '#ffffcc'] },
+  'flowfield':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a1a', '#0d3b3b', '#166b6b', '#22a8a8', '#4ad4d4', '#88eeff', '#ccffff'] },
+};
+
+export function speciesGradient(type: string, steps: number = 8): string[] {
+  const spec = SPECIES_COLORS[type];
+  if (!spec) return perceptualGradient('#0a0a0f', '#ffffff', steps);
+  const c = spec.colors;
+  return Array.from({ length: steps }, (_, i) => {
+    const pos = i / (steps - 1) * (c.length - 1);
+    const lo = Math.floor(pos), hi = Math.min(lo + 1, c.length - 1), f = pos - lo;
+    const a = hexToOklab(c[lo]), bk = hexToOklab(c[hi]);
+    return oklabToHex({ L: a.L + (bk.L - a.L) * f, a: a.a + (bk.a - a.a) * f, b: a.b + (bk.b - a.b) * f });
+  });
+}
+
+export function extractDominantColors(pieces: Array<{ genome: { type: string }; score: number }>, topN: number = 5): string[] {
+  const freq: Record<string, number> = {};
+  for (const p of pieces) {
+    const colors = SPECIES_COLORS[p.genome.type]?.colors ?? [];
+    const accent = colors[4] ?? '#7c6fe0';
+    freq[accent] = (freq[accent] ?? 0) + p.score;
+  }
+  return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, topN).map(e => e[0]);
+}
+
+
 // --- Rendering ---
 export function render(grid: number[][], palette: string[]): string {
   return grid
@@ -1195,7 +1344,7 @@ export function score(grid: number[][]): PieceMetrics {
   const height = grid.length;
   const width = grid[0]?.length ?? 0;
   const total = width * height;
-  if (total === 0) return { complexity: 0, symmetry: 0, density: 0, novelty: 0, edgeActivity: 0, structuralInterest: 0, fractalDimension: 0, informationDensity: 0 };
+  if (total === 0) return { complexity: 0, symmetry: 0, density: 0, novelty: 0, edgeActivity: 0, structuralInterest: 0, fractalDimension: 0, informationDensity: 0, spatialCoherence: 0 };
 
   // Density
   let filled = 0;
@@ -1290,7 +1439,39 @@ export function score(grid: number[][]): PieceMetrics {
   const maxEntropy = Math.log2(Math.max(Object.keys(counts).length, 2));
   const informationDensity = maxEntropy > 0 ? (entropy / maxEntropy) * density : 0;
 
-  return { complexity, symmetry, density, novelty: 0, edgeActivity, structuralInterest, fractalDimension, informationDensity };
+  // Spatial coherence (simplified Moran's I) — measures spatial autocorrelation
+  // High coherence = nearby cells tend to have similar values (structured patterns)
+  // Low coherence = neighboring cells are unrelated (random noise)
+  let coherenceSum = 0;
+  let coherencePairs = 0;
+  const maxVal = Math.max(...Object.keys(counts).map(Number), 1);
+  const meanNorm = density;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const v = grid[y][x] / maxVal;
+      if (x + 1 < width) {
+        coherenceSum += (v - meanNorm) * (grid[y][x + 1] / maxVal - meanNorm);
+        coherencePairs++;
+      }
+      if (y + 1 < height) {
+        coherenceSum += (v - meanNorm) * (grid[y + 1][x] / maxVal - meanNorm);
+        coherencePairs++;
+      }
+    }
+  }
+  let cellVariance = 0;
+  for (const row of grid) {
+    for (const cell of row) {
+      cellVariance += ((cell / maxVal) - meanNorm) ** 2;
+    }
+  }
+  cellVariance /= total;
+  const rawCoherence = cellVariance > 0 && coherencePairs > 0
+    ? (coherenceSum / coherencePairs) / cellVariance
+    : 0;
+  const spatialCoherence = Math.max(0, Math.min(rawCoherence, 1));
+
+  return { complexity, symmetry, density, novelty: 0, edgeActivity, structuralInterest, fractalDimension, informationDensity, spatialCoherence };
 }
 
 function computeBoxCountingDimension(grid: number[][], width: number, height: number): number {
@@ -1340,7 +1521,7 @@ function computeBoxCountingDimension(grid: number[][], width: number, height: nu
 // Compute novelty: how different is this piece's fingerprint from a set of others?
 export function computeNovelty(metrics: PieceMetrics, population: PieceMetrics[]): number {
   if (population.length === 0) return 1;
-  const keys: (keyof PieceMetrics)[] = ["complexity", "symmetry", "density", "edgeActivity", "structuralInterest", "fractalDimension", "informationDensity"];
+  const keys: (keyof PieceMetrics)[] = ["complexity", "symmetry", "density", "edgeActivity", "structuralInterest", "fractalDimension", "informationDensity", "spatialCoherence"];
   let totalDist = 0;
   for (const other of population) {
     let dist = 0;
@@ -1387,6 +1568,7 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
   const noveltyScore = metrics.novelty;
   const fractalScore = Math.min((metrics.fractalDimension ?? 0) / 2, 1); // normalize 0-2 → 0-1
   const infoDensityScore = metrics.informationDensity ?? 0;
+  const coherenceScore = metrics.spatialCoherence ?? 0;
 
   // Base weights — type-aware adjustments blend with epoch modifiers
   let w = getTypeWeights(genomeType);
@@ -1405,6 +1587,7 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
       novelty: w.novelty * 0.6 + ew.novelty * 0.4,
       fractal: w.fractal * 0.6 + ew.fractal * 0.4,
       infoDensity: w.infoDensity * 0.6 + ew.infoDensity * 0.4,
+      coherence: w.coherence * 0.6 + ew.coherence * 0.4,
     };
   }
 
@@ -1416,11 +1599,12 @@ export function computeScore(metrics: PieceMetrics, generation?: number, genomeT
     structureScore * w.structure +
     noveltyScore * w.novelty +
     fractalScore * w.fractal +
-    infoDensityScore * w.infoDensity
+    infoDensityScore * w.infoDensity +
+    coherenceScore * w.coherence
   );
 }
 
-type Weights = { density: number; complexity: number; symmetry: number; edge: number; structure: number; novelty: number; fractal: number; infoDensity: number };
+type Weights = { density: number; complexity: number; symmetry: number; edge: number; structure: number; novelty: number; fractal: number; infoDensity: number; balance: number };
 
 // Ideal density per type — null means full-coverage (score by state diversity)
 function getIdealDensity(genomeType?: Genome["type"]): number | null {
@@ -1462,37 +1646,37 @@ function getTypeWeights(genomeType?: Genome["type"]): Weights {
   switch (genomeType) {
     case "1d":
       // 1D automata: complexity classes (Class 3/4) are most interesting
-      return { density: 0.12, complexity: 0.25, symmetry: 0.05, edge: 0.18, structure: 0.12, novelty: 0.13, fractal: 0.08, infoDensity: 0.07 };
+      return { density: 0.11, complexity: 0.23, symmetry: 0.05, edge: 0.17, structure: 0.11, novelty: 0.13, fractal: 0.08, infoDensity: 0.07, coherence: 0.05, balance: 0.05 };
     case "lsystem":
       // L-systems: fractal dimension is very meaningful here — branching creates self-similarity
-      return { density: 0.08, complexity: 0.2, symmetry: 0.12, edge: 0.08, structure: 0.2, novelty: 0.12, fractal: 0.12, infoDensity: 0.08 };
+      return { density: 0.07, complexity: 0.18, symmetry: 0.11, edge: 0.07, structure: 0.19, novelty: 0.12, fractal: 0.12, infoDensity: 0.07, coherence: 0.07, balance: 0.05 };
     case "reaction-diffusion":
       // RD: organic textures, info density captures Turing pattern richness
-      return { density: 0.12, complexity: 0.2, symmetry: 0.05, edge: 0.2, structure: 0.12, novelty: 0.12, fractal: 0.09, infoDensity: 0.10 };
+      return { density: 0.11, complexity: 0.18, symmetry: 0.05, edge: 0.19, structure: 0.11, novelty: 0.12, fractal: 0.09, infoDensity: 0.09, coherence: 0.06, balance: 0.05 };
     case "voronoi":
       // Voronoi: edge patterns and structural variety matter most
-      return { density: 0.08, complexity: 0.17, symmetry: 0.08, edge: 0.22, structure: 0.17, novelty: 0.12, fractal: 0.08, infoDensity: 0.08 };
+      return { density: 0.07, complexity: 0.16, symmetry: 0.07, edge: 0.21, structure: 0.16, novelty: 0.12, fractal: 0.08, infoDensity: 0.08, coherence: 0.05, balance: 0.05 };
     case "wfc":
       // WFC: constraint-based structure, info density rewards complex tile patterns
-      return { density: 0.08, complexity: 0.2, symmetry: 0.12, edge: 0.17, structure: 0.12, novelty: 0.12, fractal: 0.08, infoDensity: 0.11 };
+      return { density: 0.07, complexity: 0.19, symmetry: 0.11, edge: 0.16, structure: 0.11, novelty: 0.12, fractal: 0.08, infoDensity: 0.10, coherence: 0.06, balance: 0.05 };
     case "spirograph":
       // Spirographs: fractal dimension captures curve complexity well
-      return { density: 0.08, complexity: 0.2, symmetry: 0.17, edge: 0.12, structure: 0.12, novelty: 0.12, fractal: 0.11, infoDensity: 0.08 };
+      return { density: 0.08, complexity: 0.19, symmetry: 0.16, edge: 0.12, structure: 0.12, novelty: 0.12, fractal: 0.10, infoDensity: 0.07, coherence: 0.04, balance: 0.05 };
     case "attractor":
       // Attractors: fractal dimension is core to strange attractor aesthetics
-      return { density: 0.12, complexity: 0.2, symmetry: 0.08, edge: 0.12, structure: 0.15, novelty: 0.12, fractal: 0.13, infoDensity: 0.08 };
+      return { density: 0.11, complexity: 0.19, symmetry: 0.07, edge: 0.11, structure: 0.14, novelty: 0.12, fractal: 0.13, infoDensity: 0.07, coherence: 0.06, balance: 0.05 };
     case "julia":
       // Julia sets: fractal dimension IS the defining quality
-      return { density: 0.08, complexity: 0.2, symmetry: 0.08, edge: 0.15, structure: 0.15, novelty: 0.12, fractal: 0.14, infoDensity: 0.08 };
+      return { density: 0.07, complexity: 0.19, symmetry: 0.07, edge: 0.14, structure: 0.14, novelty: 0.12, fractal: 0.14, infoDensity: 0.07, coherence: 0.06, balance: 0.05 };
     case "noise":
       // Noise: info density captures how much visual variety the warping produces
-      return { density: 0.08, complexity: 0.2, symmetry: 0.08, edge: 0.12, structure: 0.2, novelty: 0.12, fractal: 0.08, infoDensity: 0.12 };
+      return { density: 0.07, complexity: 0.18, symmetry: 0.07, edge: 0.11, structure: 0.19, novelty: 0.12, fractal: 0.08, infoDensity: 0.11, coherence: 0.07, balance: 0.05 };
     case "flowfield":
       // Flow fields: fractal from trail complexity, info density from flow variety
-      return { density: 0.12, complexity: 0.17, symmetry: 0.08, edge: 0.17, structure: 0.17, novelty: 0.12, fractal: 0.09, infoDensity: 0.08 };
+      return { density: 0.11, complexity: 0.16, symmetry: 0.07, edge: 0.16, structure: 0.16, novelty: 0.12, fractal: 0.08, infoDensity: 0.07, coherence: 0.07, balance: 0.05 };
     case "2d":
     default:
-      return { density: 0.17, complexity: 0.17, symmetry: 0.08, edge: 0.12, structure: 0.12, novelty: 0.17, fractal: 0.08, infoDensity: 0.09 };
+      return { density: 0.16, complexity: 0.16, symmetry: 0.07, edge: 0.11, structure: 0.11, novelty: 0.16, fractal: 0.08, infoDensity: 0.09, coherence: 0.06, balance: 0.05 };
   }
 }
 
@@ -1500,16 +1684,16 @@ function getEpochWeights(epoch: Epoch): Weights {
   switch (epoch) {
     case "emergence":
       // Emergence favors fractal complexity and novel forms
-      return { density: 0.12, complexity: 0.2, symmetry: 0.05, edge: 0.12, structure: 0.17, novelty: 0.17, fractal: 0.10, infoDensity: 0.07 };
+      return { density: 0.11, complexity: 0.19, symmetry: 0.05, edge: 0.11, structure: 0.16, novelty: 0.16, fractal: 0.09, infoDensity: 0.07, coherence: 0.06, balance: 0.05 };
     case "order":
       // Order favors symmetry, structure, info density (efficient patterns)
-      return { density: 0.17, complexity: 0.12, symmetry: 0.2, edge: 0.08, structure: 0.08, novelty: 0.17, fractal: 0.06, infoDensity: 0.12 };
+      return { density: 0.15, complexity: 0.11, symmetry: 0.18, edge: 0.07, structure: 0.07, novelty: 0.16, fractal: 0.06, infoDensity: 0.11, coherence: 0.09, balance: 0.05 };
     case "chaos":
       // Chaos favors fractal dimension, edge activity, complexity
-      return { density: 0.12, complexity: 0.2, symmetry: 0.05, edge: 0.2, structure: 0.08, novelty: 0.17, fractal: 0.12, infoDensity: 0.06 };
+      return { density: 0.12, complexity: 0.19, symmetry: 0.05, edge: 0.19, structure: 0.08, novelty: 0.16, fractal: 0.12, infoDensity: 0.06, coherence: 0.03, balance: 0.05 };
     case "harmony":
       // Harmony: balanced across all dimensions
-      return { density: 0.15, complexity: 0.15, symmetry: 0.08, edge: 0.12, structure: 0.12, novelty: 0.15, fractal: 0.11, infoDensity: 0.12 };
+      return { density: 0.14, complexity: 0.14, symmetry: 0.07, edge: 0.11, structure: 0.11, novelty: 0.14, fractal: 0.10, infoDensity: 0.12, coherence: 0.07, balance: 0.05 };
   }
 }
 
@@ -1522,7 +1706,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
 
   // Rare type-swap mutation (5%) — introduces fresh genome types into the population
   if (rng() < 0.05) {
-    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield"];
+    const types: Genome["type"][] = ["1d", "2d", "lsystem", "reaction-diffusion", "voronoi", "wfc", "spirograph", "attractor", "julia", "noise", "flowfield", "dla"];
     return randomGenomeOfType(
       types[Math.floor(rng() * types.length)],
       rng,
