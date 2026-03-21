@@ -4,6 +4,38 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Aesthetic Harmony Metric + Directed Mutation + Enhanced Origin Visualization
+- **New metric**: `aestheticHarmony` — a meta-metric measuring how well a piece's metrics complement each other. High harmony = structured complexity, balanced composition, and fractal edges working in concert. Prevents evolution from producing incoherent high-scorers.
+- **Directed mutation** (`src/evolve.ts`): Identifies parent's weakest metric dimension and biases mutation to improve it. 30% activation for top-half parents. Canvas tweaks for balance weakness, double-mutation for harmony/coherence weakness.
+- **Scoring integration**: Added to all 15 type weight profiles (5%), 4 epoch profiles, fitness sharing, and novelty computation.
+- **Origin.html**: Harmony curve on fitness landscape (purple dashed), harmony bar in metrics panel, scatter plot defaults to complexity×harmony with 5 clickable axis pairs, harmony tooltip on current piece.
+- **Files**: `src/automata.ts`, `src/evolve.ts`, `docs/origin.html`
+
+### 2026-03-21 — Site audit + nav integrity check
+- **What**: Audited all 70+ pages in docs/ for broken links, missing files, and nav consistency
+- **Findings**: All index.html header/footer nav links resolve correctly. sediment.html and breath.html (previously logged as missing) have been restored by parallel sessions. map.html catalog is complete.
+
+### 2026-03-21 — Flora / L-System Engine Expansion + Interactive Explorer
+- **What**: Major expansion of the L-system engine with new turtle commands, parametric fields, and production rule templates, plus a new interactive botanical art page (`docs/flora.html`)
+- **Engine expansion** (`src/automata.ts`):
+  - **New turtle commands**: `%` (cut/skip to end of current branch for pruning), `$` (heliotropic roll toward light source), `^` (depth-modulated pitch variation for organic randomness)
+  - **New parametric fields on LSystemRule**: `branchProbability` (probabilistic pruning of entire `[...]` branches, 0-0.5), `seasonalPhase` (0=spring full foliage to 1=winter bare branches, modulates `@` flower/leaf density), `heliotropism` (secondary angle attraction toward light direction), `stepWave` (sinusoidal step-length modulation for pulsing organic growth)
+  - **Branch pruning in `[`**: When `branchProbability > 0`, random chance to fast-forward past the entire bracketed branch
+  - **Seasonal modulation in `@`**: Winter phase (>0.8) probabilistically skips flowers; autumn reduces petal count proportionally
+  - **Step wave in `F`/`G`**: Applied to depth factor for breathing rhythm
+  - **15 new production rule templates**: wind-pruned branches, heliotropic trees, kelp forest, seaweed fronds, lichen mat, spreading moss, hexagonal crystal, Koch variant snowflake, Penrose L-system, Barnsley fern variants
+  - **Mutation support**: All 4 new parametric fields mutate with appropriate rates. New turtle symbols `%$^` added to mutation alphabet
+  - Converted turtle loop from `for-of` to indexed `for` loop to support `ci` fast-forwarding for `%` and branch pruning
+- **Page** (`docs/flora.html`): Full interactive L-system art explorer with:
+  - 14 preset species: Barnsley Fern, Sakura Tree, Weeping Willow, Koch Snowflake, Coral Reef, Dragon Curve, Hilbert Curve, Kelp Forest, Autumn Oak, Winter Birch, Sierpinski Triangle, Vine Trellis, Penrose quasi-crystal, Moss Carpet
+  - Editable axiom + production rules (add/remove rule rows)
+  - 12 parameter sliders: angle, iterations, seed, jitter, length scale, tropism, width decay, step wave, leaf size, petals, pruning, season
+  - 10 color schemes (Amber, Emerald, Violet, Rose, Cyan, Bone, Fire, Forest, Twilight, Ocean)
+  - Real-time canvas rendering with glow post-processing, auto-centering, depth-aware coloring, vignette overlay
+  - Randomize, Save PNG, Animate actions + keyboard shortcuts
+  - 32KB total, responsive layout
+- **How it differs from arboretum.html**: Flora focuses on the expanded engine features (pruning, seasons, step wave, new turtle commands) and a refined visual aesthetic with 10 color gradients and glow rendering. Arboretum focuses on stochastic grammar editing with per-variant weight sliders and iteration-by-iteration growth animation.
+
 ### 2026-03-21 — Particle Life Engine + Interactive Page
 - **What**: New generative art engine simulating colored particle species with distance-dependent attraction/repulsion forces from an interaction matrix. Simple rules produce emergent complexity: flocking, orbiting, chasing, clustering, and symbiosis.
 - **Engine** (`src/particle-life.ts`): `ParticleLifeRule` with species count, NxN matrix, force radius, friction, force factor, particles per species, steps, quantize. Full mutation/crossover/random generation with curated presets.
