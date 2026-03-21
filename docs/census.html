@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Census</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    #back-btn {
+      position: fixed; top: 1.2rem; left: 1.5rem; z-index: 100;
+      color: var(--text-dim); text-decoration: none; font-size: 0.8rem;
+      letter-spacing: 0.05em; transition: color 0.2s;
+    }
+    #back-btn:hover { color: var(--text); }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    header {
+      text-align: center; padding: 3rem 0 1.5rem;
+      border-bottom: 1px solid var(--border); margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: 2rem; font-weight: 300; letter-spacing: 0.3em;
+      text-transform: uppercase; color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow); margin-bottom: 0.5rem;
+    }
+
+    .subtitle { color: var(--text-dim); font-size: 0.8rem; letter-spacing: 0.08em; }
+
+    .section-title {
+      font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.15em; margin: 2rem 0 0.75rem;
+      padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+    }
+
+    .chart-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;
+      position: relative;
+    }
+
+    canvas { display: block; width: 100%; cursor: crosshair; }
+
+    /* ── Tooltip ── */
+    #tip {
+      position: fixed; background: rgba(18,18,26,0.95);
+      border: 1px solid var(--accent); border-radius: 6px;
+      padding: 0.6rem 0.9rem; font-size: 0.65rem; color: var(--text);
+      pointer-events: none; opacity: 0; transition: opacity 0.12s;
+      z-index: 200; max-width: 300px;
+      box-shadow: 0 0 16px var(--accent-glow), 0 4px 12px rgba(0,0,0,0.5);
+    }
+    #tip.on { opacity: 1; }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 0.5rem 1rem;
+      justify-content: center; margin-bottom: 1.5rem;
+    }
+
+    .leg-item {
+      display: flex; align-items: center; gap: 0.3rem;
+      font-size: 0.6rem; color: var(--text-dim); cursor: pointer; transition: opacity 0.2s;
+    }
+    .leg-item:hover { color: var(--text); }
+    .leg-item.off { opacity: 0.2; }
+    .leg-dot { width: 9px; height: 9px; border-radius: 2px; }
+
+    /* ── Summary Cards ── */
+    .cards { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .card {
+      flex: 1; min-width: 120px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.9rem; text-align: center;
+    }
+    .card-val { font-size: 1.4rem; font-weight: 600; color: var(--accent); }
+    .card-lbl {
+      font-size: 0.55rem; color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.1em; margin-top: 0.15rem;
+    }
+
+    /* ── Species Table ── */
+    .sp-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    .sp-table th, .sp-table td {
+      padding: 0.45rem 0.6rem; font-size: 0.65rem; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .sp-table th {
+      color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em;
+      font-weight: 400; cursor: pointer;
+    }
+    .sp-table th:hover { color: var(--text); }
+    .sp-table td { color: var(--text); }
+    .sp-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 0.4rem; vertical-align: middle; }
+    .bar-track { display: inline-block; width: 60px; height: 4px; background: var(--border); border-radius: 2px; vertical-align: middle; }
+    .bar-fill { display: block; height: 100%; border-radius: 2px; }
+
+    footer {
+      text-align: center; padding: 2rem 0; border-top: 1px solid var(--border);
+      margin-top: 2rem; color: var(--text-dim); font-size: 0.7rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <a href="index.html" id="back-btn">&#8592; Lattice</a>
+  <div id="tip"></div>
+
+  <div class="container">
+    <header>
+      <h1>Census</h1>
+      <p class="subtitle">population analytics across every generation of evolution</p>
+    </header>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="legend" id="legend"></div>
+
+    <!-- Streamgraph: species population over time -->
+    <div class="section-title">Population Flow</div>
+    <div class="chart-box">
+      <canvas id="cv-stream" height="280"></canvas>
+    </div>
+
+    <!-- Diversity index over time -->
+    <div class="section-title">Shannon Diversity Index</div>
+    <div class="chart-box">
+      <canvas id="cv-diversity" height="180"></canvas>
+    </div>
+
+    <!-- Species score distributions -->
+    <div class="section-title">Fitness by Species</div>
+    <div class="chart-box">
+      <canvas id="cv-box" height="220"></canvas>
+    </div>
+
+    <!-- Dominance stacked bars by epoch -->
+    <div class="section-title">Epoch Composition</div>
+    <div class="chart-box">
+      <canvas id="cv-epoch" height="200"></canvas>
+    </div>
+
+    <!-- Species leaderboard table -->
+    <div class="section-title">Species Leaderboard</div>
+    <div class="chart-box">
+      <table class="sp-table" id="sp-table">
+        <thead>
+          <tr>
+            <th data-col="name">Species</th>
+            <th data-col="pop">Avg Pop</th>
+            <th data-col="peak">Peak Pop</th>
+            <th data-col="first">First Seen</th>
+            <th data-col="gens">Gens Active</th>
+            <th data-col="share">Dominance</th>
+          </tr>
+        </thead>
+        <tbody id="sp-body"></tbody>
+      </table>
+    </div>
+
+    <footer>
+      <a href="index.html">&#8592; Gallery</a>
+      &nbsp;&bull;&nbsp;
+      <a href="pulse.html">Pulse</a>
+      &nbsp;&bull;&nbsp;
+      <a href="lineage.html">Lineage</a>
+      &nbsp;&bull;&nbsp;
+      <a href="about.html">About</a>
+    </footer>
+  </div>
+
+<script>
+(async () => {
+  /* ── Constants ── */
+  const COL = {
+    '1d':'#7c6fe0','2d':'#4ade80','lsystem':'#fbbf24',
+    'reaction-diffusion':'#ef4444','wfc':'#22d3ee','voronoi':'#e879f9',
+    'spirograph':'#ff6b35','attractor':'#a78bfa','julia':'#14b8a6',
+    'noise':'#6b7280','flowfield':'#f472b6','magnetic-pendulum':'#fcd34d'
+  };
+  const NAMES = {
+    '1d':'1D Wolfram','2d':'2D Life','lsystem':'L-System',
+    'reaction-diffusion':'React-Diff','wfc':'WFC','voronoi':'Voronoi',
+    'spirograph':'Spirograph','attractor':'Attractor','julia':'Julia',
+    'noise':'Noise','flowfield':'Flow Field','magnetic-pendulum':'Mag. Pend.'
+  };
+  const EPOCH_COL = { emergence:'#4ade80', order:'#22d3ee', chaos:'#ef4444', harmony:'#e879f9' };
+
+  /* ── Load ── */
+  let data;
+  try { data = await (await fetch('gallery.json')).json(); }
+  catch { document.getElementById('cards').innerHTML = '<p style="color:#ef4444">Failed to load data.</p>'; return; }
+
+  const hist = data.history || [];
+  const hof = data.hallOfFame || [];
+  const gensWithData = hist.filter(g => g.speciesCounts && Object.keys(g.speciesCounts).length > 0);
+  const allSp = [...new Set(gensWithData.flatMap(g => Object.keys(g.speciesCounts)))].sort();
+  const hidden = new Set();
+  const tip = document.getElementById('tip');
+
+  /* ── Helpers ── */
+  function setupC(cv) {
+    const dpr = devicePixelRatio || 1;
+    const r = cv.getBoundingClientRect();
+    cv.width = r.width * dpr; cv.height = r.height * dpr;
+    const c = cv.getContext('2d'); c.scale(dpr, dpr);
+    return { c, w: r.width, h: r.height };
+  }
+
+  function showTip(e, html) {
+    tip.innerHTML = html; tip.classList.add('on');
+    const x = e.clientX + 14, y = e.clientY - 8;
+    tip.style.left = (x + tip.offsetWidth > innerWidth ? e.clientX - tip.offsetWidth - 14 : x) + 'px';
+    tip.style.top = Math.max(4, y) + 'px';
+  }
+  function hideTip() { tip.classList.remove('on'); }
+
+  /* ── Summary Cards ── */
+  const totalPop = gensWithData.reduce((s,g) => s + Object.values(g.speciesCounts).reduce((a,b)=>a+b,0), 0);
+  const avgPop = gensWithData.length ? (totalPop / gensWithData.length).toFixed(1) : 0;
+  const shannonAvg = (() => {
+    let sum = 0;
+    gensWithData.forEach(g => {
+      const counts = Object.values(g.speciesCounts);
+      const total = counts.reduce((a,b)=>a+b,0);
+      if (!total) return;
+      counts.forEach(c => { const p = c/total; if (p > 0) sum -= p * Math.log2(p); });
+    });
+    return gensWithData.length ? (sum / gensWithData.length).toFixed(2) : 0;
+  })();
+  const peakDiv = (() => {
+    let best = 0, gen = 0;
+    gensWithData.forEach(g => {
+      const counts = Object.values(g.speciesCounts);
+      const total = counts.reduce((a,b)=>a+b,0);
+      if (!total) return;
+      let h = 0; counts.forEach(c => { const p = c/total; if (p > 0) h -= p * Math.log2(p); });
+      if (h > best) { best = h; gen = g.generation; }
+    });
+    return { val: best.toFixed(2), gen };
+  })();
+
+  document.getElementById('cards').innerHTML = [
+    { v: allSp.length, l: 'Species' },
+    { v: gensWithData.length, l: 'Gens Tracked' },
+    { v: avgPop, l: 'Avg Population' },
+    { v: shannonAvg, l: 'Avg Diversity (H)' },
+    { v: `${peakDiv.val} (Gen ${peakDiv.gen})`, l: 'Peak Diversity' },
+    { v: hof.length, l: 'Hall of Fame' }
+  ].map(s => `<div class="card"><div class="card-val">${s.v}</div><div class="card-lbl">${s.l}</div></div>`).join('');
+
+  /* ── Legend ── */
+  const legEl = document.getElementById('legend');
+  legEl.innerHTML = allSp.map(s =>
+    `<div class="leg-item" data-sp="${s}"><div class="leg-dot" style="background:${COL[s]||'#6e6e82'}"></div>${NAMES[s]||s}</div>`
+  ).join('');
+  legEl.querySelectorAll('.leg-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const sp = el.dataset.sp;
+      if (hidden.has(sp)) { hidden.delete(sp); el.classList.remove('off'); }
+      else { hidden.add(sp); el.classList.add('off'); }
+      drawAll();
+    });
+  });
+
+  /* ── Streamgraph ── */
+  const cvS = document.getElementById('cv-stream');
+
+  function drawStream() {
+    const { c, w, h } = setupC(cvS);
+    const P = { t:12, b:28, l:40, r:10 };
+    const cw = w-P.l-P.r, ch = h-P.t-P.b;
+    c.fillStyle = '#0a0a0f'; c.fillRect(0,0,w,h);
+    if (!gensWithData.length) return;
+
+    const vis = allSp.filter(s => !hidden.has(s));
+    const maxT = Math.max(1, ...gensWithData.map(g => vis.reduce((s,sp) => s + (g.speciesCounts[sp]||0), 0)));
+
+    // Epoch bands
+    let pe = null;
+    gensWithData.forEach((g, i) => {
+      if (g.epoch !== pe) {
+        let end = i; while (end < gensWithData.length-1 && gensWithData[end+1].epoch === g.epoch) end++;
+        const x1 = P.l + (i/(gensWithData.length-1))*cw;
+        const x2 = P.l + (end/(gensWithData.length-1))*cw;
+        c.fillStyle = (EPOCH_COL[g.epoch]||'#6e6e82') + '08';
+        c.fillRect(x1, P.t, x2-x1, ch);
+        pe = g.epoch;
+      }
+    });
+
+    // Stacked areas
+    for (let si = vis.length-1; si >= 0; si--) {
+      const sp = vis[si], col = COL[sp]||'#6e6e82';
+      c.beginPath();
+      for (let i = 0; i < gensWithData.length; i++) {
+        const x = P.l + (i/(gensWithData.length-1))*cw;
+        let base = 0;
+        for (let j = si+1; j < vis.length; j++) base += (gensWithData[i].speciesCounts[vis[j]]||0);
+        const top = base + (gensWithData[i].speciesCounts[sp]||0);
+        const y = P.t + ch - (top/maxT)*ch;
+        i === 0 ? c.moveTo(x,y) : c.lineTo(x,y);
+      }
+      for (let i = gensWithData.length-1; i >= 0; i--) {
+        const x = P.l + (i/(gensWithData.length-1))*cw;
+        let base = 0;
+        for (let j = si+1; j < vis.length; j++) base += (gensWithData[i].speciesCounts[vis[j]]||0);
+        c.lineTo(x, P.t + ch - (base/maxT)*ch);
+      }
+      c.closePath();
+      c.fillStyle = col + '55'; c.fill();
+      c.strokeStyle = col + '80'; c.lineWidth = 0.5; c.stroke();
+    }
+
+    // Axes
+    c.fillStyle = '#6e6e82'; c.font = '9px monospace';
+    c.textAlign = 'center';
+    const step = Math.max(1, Math.floor(gensWithData.length/8));
+    for (let i = 0; i < gensWithData.length; i += step) {
+      const x = P.l + (i/(gensWithData.length-1))*cw;
+      c.fillText(gensWithData[i].generation, x, h-6);
+    }
+    c.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const v = Math.round(maxT*i/4), y = P.t + ch - (i/4)*ch;
+      c.fillText(v, P.l-5, y+3);
+      c.strokeStyle = '#1e1e2e'; c.lineWidth = 0.5;
+      c.beginPath(); c.moveTo(P.l, y); c.lineTo(w-P.r, y); c.stroke();
+    }
+  }
+
+  cvS.addEventListener('mousemove', e => {
+    const r = cvS.getBoundingClientRect();
+    const ratio = (e.clientX - r.left - 40) / (r.width - 50);
+    const idx = Math.round(ratio * (gensWithData.length-1));
+    if (idx < 0 || idx >= gensWithData.length) { hideTip(); return; }
+    const g = gensWithData[idx], counts = g.speciesCounts||{};
+    const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+    const total = sorted.reduce((s,[,c]) => s+c, 0);
+    showTip(e, `<b style="color:var(--accent)">Gen ${g.generation}</b> <span style="color:var(--text-dim);text-transform:uppercase;font-size:0.55rem">${g.epoch}</span><br>`
+      + sorted.map(([sp,n]) => `<span style="color:${COL[sp]||'#6e6e82'}">&#9632;</span> ${NAMES[sp]||sp}: ${n} (${Math.round(n/total*100)}%)`).join('<br>'));
+  });
+  cvS.addEventListener('mouseleave', hideTip);
+
+  /* ── Shannon Diversity ── */
+  const cvD = document.getElementById('cv-diversity');
+
+  function drawDiversity() {
+    const { c, w, h } = setupC(cvD);
+    const P = { t:10, b:28, l:45, r:10 };
+    const cw = w-P.l-P.r, ch = h-P.t-P.b;
+    c.fillStyle = '#0a0a0f'; c.fillRect(0,0,w,h);
+    if (!gensWithData.length) return;
+
+    // Compute Shannon index per gen
+    const vals = gensWithData.map(g => {
+      const counts = Object.values(g.speciesCounts);
+      const total = counts.reduce((a,b) => a+b, 0);
+      if (!total) return 0;
+      let h = 0;
+      counts.forEach(n => { const p = n/total; if (p > 0) h -= p * Math.log2(p); });
+      return h;
+    });
+
+    const maxH = Math.max(1, ...vals) * 1.1;
+
+    // Epoch bands
+    let pe = null;
+    gensWithData.forEach((g, i) => {
+      if (g.epoch !== pe) {
+        let end = i; while (end < gensWithData.length-1 && gensWithData[end+1].epoch === g.epoch) end++;
+        const x1 = P.l + (i/(gensWithData.length-1))*cw;
+        const x2 = P.l + (end/(gensWithData.length-1))*cw;
+        c.fillStyle = (EPOCH_COL[g.epoch]||'#6e6e82') + '08';
+        c.fillRect(x1, P.t, x2-x1, ch);
+        pe = g.epoch;
+      }
+    });
+
+    // Fill under curve
+    c.beginPath();
+    vals.forEach((v, i) => {
+      const x = P.l + (i/(vals.length-1))*cw;
+      const y = P.t + ch - (v/maxH)*ch;
+      i === 0 ? c.moveTo(x,y) : c.lineTo(x,y);
+    });
+    c.lineTo(P.l + cw, P.t + ch); c.lineTo(P.l, P.t + ch); c.closePath();
+    c.fillStyle = '#7c6fe012'; c.fill();
+
+    // Line
+    c.beginPath();
+    vals.forEach((v, i) => {
+      const x = P.l + (i/(vals.length-1))*cw;
+      const y = P.t + ch - (v/maxH)*ch;
+      i === 0 ? c.moveTo(x,y) : c.lineTo(x,y);
+    });
+    c.strokeStyle = '#7c6fe0'; c.lineWidth = 2; c.stroke();
+
+    // Average line
+    const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const avgY = P.t + ch - (avg/maxH)*ch;
+    c.setLineDash([4,3]); c.strokeStyle = '#7c6fe060'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(P.l, avgY); c.lineTo(P.l+cw, avgY); c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = '#6e6e82'; c.font = '8px monospace'; c.textAlign = 'left';
+    c.fillText(`avg ${avg.toFixed(2)}`, P.l+cw-50, avgY-4);
+
+    // Axes
+    c.fillStyle = '#6e6e82'; c.font = '9px monospace'; c.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const v = (maxH*i/4).toFixed(1), y = P.t+ch-(i/4)*ch;
+      c.fillText(v, P.l-5, y+3);
+      c.strokeStyle = '#1e1e2e'; c.lineWidth = 0.5;
+      c.beginPath(); c.moveTo(P.l,y); c.lineTo(w-P.r,y); c.stroke();
+    }
+    c.textAlign = 'center';
+    const step = Math.max(1, Math.floor(gensWithData.length/8));
+    for (let i = 0; i < gensWithData.length; i += step) {
+      c.fillText(gensWithData[i].generation, P.l+(i/(gensWithData.length-1))*cw, h-6);
+    }
+  }
+
+  cvD.addEventListener('mousemove', e => {
+    const r = cvD.getBoundingClientRect();
+    const ratio = (e.clientX - r.left - 45) / (r.width - 55);
+    const idx = Math.round(ratio * (gensWithData.length-1));
+    if (idx < 0 || idx >= gensWithData.length) { hideTip(); return; }
+    const g = gensWithData[idx], counts = Object.values(g.speciesCounts);
+    const total = counts.reduce((a,b) => a+b, 0);
+    let h = 0; if (total) counts.forEach(n => { const p = n/total; if (p > 0) h -= p * Math.log2(p); });
+    const maxPoss = Math.log2(Object.keys(g.speciesCounts).length || 1);
+    const even = maxPoss > 0 ? (h / maxPoss * 100).toFixed(0) : 0;
+    showTip(e, `<b style="color:var(--accent)">Gen ${g.generation}</b><br>H = ${h.toFixed(3)} bits<br>Evenness: ${even}%<br>Species: ${Object.keys(g.speciesCounts).length}`);
+  });
+  cvD.addEventListener('mouseleave', hideTip);
+
+  /* ── Species Fitness Box Plot ── */
+  const cvB = document.getElementById('cv-box');
+
+  function drawBox() {
+    const { c, w, h } = setupC(cvB);
+    const P = { t:10, b:50, l:10, r:10 };
+    const cw = w-P.l-P.r, ch = h-P.t-P.b;
+    c.fillStyle = '#0a0a0f'; c.fillRect(0,0,w,h);
+
+    // Collect HoF scores per species + population history avg scores
+    const spScores = {};
+    allSp.forEach(sp => spScores[sp] = []);
+
+    // From HoF
+    hof.forEach(p => {
+      if (p.genome?.type && p.score != null) spScores[p.genome.type]?.push(p.score);
+    });
+
+    // From population data: use bestScore in gens where species was dominant
+    gensWithData.forEach(g => {
+      if (!g.speciesCounts) return;
+      const total = Object.values(g.speciesCounts).reduce((a,b)=>a+b,0);
+      for (const [sp, count] of Object.entries(g.speciesCounts)) {
+        if (count > 0) {
+          // Estimate: species contributes proportionally to avg score
+          const share = count / total;
+          spScores[sp]?.push(g.avgScore * (0.8 + share * 0.4)); // weighted estimation
+        }
+      }
+    });
+
+    const vis = allSp.filter(s => !hidden.has(s) && spScores[s].length > 0);
+    if (!vis.length) return;
+
+    const barW = Math.min(60, cw / vis.length - 4);
+    const groupW = cw / vis.length;
+
+    vis.forEach((sp, i) => {
+      const scores = spScores[sp].sort((a,b)=>a-b);
+      const n = scores.length;
+      const min = scores[0], max = scores[n-1];
+      const q1 = scores[Math.floor(n*0.25)];
+      const med = scores[Math.floor(n*0.5)];
+      const q3 = scores[Math.floor(n*0.75)];
+      const col = COL[sp]||'#6e6e82';
+      const cx = P.l + groupW*i + groupW/2;
+
+      const mapY = v => P.t + ch - (v * ch);
+
+      // Whisker
+      c.strokeStyle = col + '60'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(cx, mapY(min)); c.lineTo(cx, mapY(max)); c.stroke();
+      c.beginPath(); c.moveTo(cx-8, mapY(min)); c.lineTo(cx+8, mapY(min)); c.stroke();
+      c.beginPath(); c.moveTo(cx-8, mapY(max)); c.lineTo(cx+8, mapY(max)); c.stroke();
+
+      // Box
+      const boxTop = mapY(q3), boxBot = mapY(q1);
+      c.fillStyle = col + '30';
+      c.fillRect(cx-barW/2, boxTop, barW, boxBot-boxTop);
+      c.strokeStyle = col + '80'; c.lineWidth = 1;
+      c.strokeRect(cx-barW/2, boxTop, barW, boxBot-boxTop);
+
+      // Median
+      c.strokeStyle = col; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(cx-barW/2, mapY(med)); c.lineTo(cx+barW/2, mapY(med)); c.stroke();
+
+      // Label
+      c.fillStyle = col; c.font = '9px monospace'; c.textAlign = 'center';
+      c.save(); c.translate(cx, h-8); c.rotate(-0.4);
+      c.fillText(NAMES[sp]||sp, 0, 0); c.restore();
+    });
+
+    // Y axis
+    c.fillStyle = '#6e6e82'; c.font = '9px monospace'; c.textAlign = 'right';
+    for (let i = 0; i <= 5; i++) {
+      const v = (i*20), y = P.t + ch - (v/100)*ch;
+      c.fillText(v+'%', P.l + 30, y+3);
+      c.strokeStyle = '#1e1e2e'; c.lineWidth = 0.5;
+      c.beginPath(); c.moveTo(P.l+35, y); c.lineTo(w-P.r, y); c.stroke();
+    }
+  }
+
+  /* ── Epoch Composition ── */
+  const cvE = document.getElementById('cv-epoch');
+
+  function drawEpoch() {
+    const { c, w, h } = setupC(cvE);
+    const P = { t:10, b:40, l:40, r:10 };
+    const cw = w-P.l-P.r, ch = h-P.t-P.b;
+    c.fillStyle = '#0a0a0f'; c.fillRect(0,0,w,h);
+
+    const epochAgg = {};
+    gensWithData.forEach(g => {
+      if (!epochAgg[g.epoch]) epochAgg[g.epoch] = {};
+      for (const [sp, n] of Object.entries(g.speciesCounts||{})) {
+        epochAgg[g.epoch][sp] = (epochAgg[g.epoch][sp]||0) + n;
+      }
+    });
+
+    const epochs = Object.keys(epochAgg);
+    if (!epochs.length) return;
+
+    const barW = Math.min(100, cw / epochs.length - 10);
+    const groupW = cw / epochs.length;
+
+    epochs.forEach((ep, ei) => {
+      const counts = epochAgg[ep];
+      const vis = allSp.filter(s => !hidden.has(s) && (counts[s]||0) > 0);
+      const total = vis.reduce((s,sp) => s + (counts[sp]||0), 0);
+      if (!total) return;
+
+      const cx = P.l + groupW*ei + groupW/2;
+      let yOff = 0;
+
+      vis.forEach(sp => {
+        const pct = (counts[sp]||0) / total;
+        const barH = pct * ch;
+        const col = COL[sp]||'#6e6e82';
+        c.fillStyle = col + '70';
+        c.fillRect(cx-barW/2, P.t+yOff, barW, barH);
+        c.strokeStyle = col + '40'; c.lineWidth = 0.5;
+        c.strokeRect(cx-barW/2, P.t+yOff, barW, barH);
+
+        if (barH > 14) {
+          c.fillStyle = '#ffffffcc'; c.font = '8px monospace'; c.textAlign = 'center';
+          c.fillText(`${Math.round(pct*100)}%`, cx, P.t+yOff+barH/2+3);
+        }
+        yOff += barH;
+      });
+
+      c.fillStyle = EPOCH_COL[ep]||'#6e6e82'; c.font = '10px monospace'; c.textAlign = 'center';
+      c.fillText(ep, cx, h-14);
+
+      const eGens = gensWithData.filter(g => g.epoch === ep);
+      c.fillStyle = '#6e6e82'; c.font = '8px monospace';
+      c.fillText(`${eGens[0]?.generation}-${eGens[eGens.length-1]?.generation}`, cx, h-4);
+    });
+
+    // Y axis
+    c.fillStyle = '#6e6e82'; c.font = '9px monospace'; c.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const v = i*25, y = P.t+ch-(i/4)*ch;
+      c.fillText(v+'%', P.l-5, y+3);
+      c.strokeStyle = '#1e1e2e'; c.lineWidth = 0.5;
+      c.beginPath(); c.moveTo(P.l,y); c.lineTo(w-P.r,y); c.stroke();
+    }
+  }
+
+  /* ── Species Leaderboard ── */
+  function buildTable() {
+    const rows = allSp.map(sp => {
+      const pops = gensWithData.map(g => g.speciesCounts?.[sp]||0);
+      const totalPop = pops.reduce((a,b)=>a+b,0);
+      const avgP = pops.length ? totalPop / pops.length : 0;
+      const peak = Math.max(0, ...pops);
+      const firstIdx = pops.findIndex(p => p > 0);
+      const first = firstIdx >= 0 ? gensWithData[firstIdx].generation : '—';
+      const active = pops.filter(p => p > 0).length;
+      const grandTotal = gensWithData.reduce((s,g) => s + Object.values(g.speciesCounts||{}).reduce((a,b)=>a+b,0), 0);
+      const share = grandTotal > 0 ? totalPop / grandTotal : 0;
+      return { sp, avgP, peak, first, active, share, totalPop };
+    }).sort((a,b) => b.share - a.share);
+
+    const maxShare = Math.max(0.01, ...rows.map(r => r.share));
+
+    document.getElementById('sp-body').innerHTML = rows.map(r => `
+      <tr>
+        <td><span class="sp-dot" style="background:${COL[r.sp]||'#6e6e82'}"></span>${NAMES[r.sp]||r.sp}</td>
+        <td>${r.avgP.toFixed(1)}</td>
+        <td>${r.peak}</td>
+        <td>Gen ${r.first}</td>
+        <td>${r.active}</td>
+        <td>
+          <span class="bar-track"><span class="bar-fill" style="width:${(r.share/maxShare*100).toFixed(0)}%;background:${COL[r.sp]||'#6e6e82'}"></span></span>
+          ${(r.share*100).toFixed(1)}%
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // Table sorting
+  let sortCol = 'share', sortAsc = false;
+  document.querySelectorAll('.sp-table th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortCol === col) sortAsc = !sortAsc;
+      else { sortCol = col; sortAsc = false; }
+      buildTable();
+    });
+  });
+
+  /* ── Draw All ── */
+  function drawAll() { drawStream(); drawDiversity(); drawBox(); drawEpoch(); }
+
+  drawAll();
+  buildTable();
+
+  window.addEventListener('resize', drawAll);
+})();
+</script>
+</body>
+</html>
