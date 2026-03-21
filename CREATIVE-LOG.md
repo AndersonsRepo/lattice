@@ -4,6 +4,18 @@ Tracks what's been built in each creative cycle so work doesn't repeat.
 
 ## Completed
 
+### 2026-03-21 — Chromatic: Palette Archaeology & Evolutionary Color System
+- **What**: Built `docs/chromatic.html` — interactive palette exploration page with five sections. Enhanced `src/palette.ts` with color temperature, aesthetic scoring, grid-based extraction, naive RGB vs OKLCH gradient comparison, and theme inference. Improved rendering pipeline in `src/automata.ts` with `ensureColorTheme()` and auto-caching of gradient stops.
+- **Hall of Fame Palette Archaeology**: Extracts dominant colors from each HoF piece via k-means clustering in OKLAB space, displays alongside species defaults. Shows aesthetic quality scores and warm/cool temperature indicators per piece.
+- **Perceptual Uniformity Comparator**: Side-by-side RGB linear vs OKLCH gradient with interactive color pickers. DeltaE bar charts show perceptual step evenness — green bars = uniform, red bars = uneven. Uniformity percentage scores.
+- **Harmony Wheel**: Draggable OKLCH hue wheel with 6 harmony modes (mono, complementary, analogous, triadic, split-comp, tetradic). Shows harmony point swatches, 8-stop generated ramp, and cusp gradient (maximum chroma at each lightness level).
+- **Palette Evolution Lab**: Two parent themes (init from species defaults) with Mutate/Crossover/Random controls. OKLCH mutations: hue shift, chroma adjust, harmony mode swap, lightness range tweak. Evolution history timeline shows every generation as mini gradient ramps.
+- **Gamut Slices**: Renders sRGB gamut in OKLCH space at configurable lightness levels (3-9 slices). Shows which hue/chroma combinations are displayable vs out-of-gamut at each L value.
+- **palette.ts additions**: `colorTemperature()`, `paletteTemperature()`, `scorePaletteAesthetics()`, `extractPaletteFromGrid()`, `inferThemeFromRendered()`, `naiveRgbGradient()`, `oklchGradient()`
+- **automata.ts additions**: `ensureColorTheme()` infers species-default ColorTheme for genomes that lack one. `getColorStops()` now auto-generates and caches stops from colorTheme.
+- **Pages**: `docs/chromatic.html` (rewritten), `src/palette.ts` (enhanced), `src/automata.ts` (enhanced)
+- **How it differs from Palette Lab**: Palette Lab explores color science tools in isolation. Chromatic connects those tools to actual evolved pieces — it's archaeology, not theory. The evolution lab lets you watch mutation/crossover in real-time. The uniformity comparator teaches why OKLCH matters with immediate visual proof.
+
 ### 2026-03-21 — Spectrum: Palette Extraction & Perceptual Color Intelligence
 - **What**: New `docs/spectrum.html` — comprehensive palette exploration with six interactive sections built on the OKLCH/OKLAB engine from `src/palette.ts`
 - **Hall of Fame Palette DNA**: Fetches pieces from Supabase/gallery.json, k-means clustering in OKLAB space extracts 8 dominant colors per piece. Aesthetic quality scores, temperature gauge, Delta E step-distance chart.

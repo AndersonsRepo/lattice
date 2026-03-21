@@ -40,6 +40,10 @@ export { evolveParticleLife };
 import { TurmiteRule, evolveTurmite, mutateTurmite, crossoverTurmite, randomTurmiteRule, TURMITE_SEED_GENOMES_PARTIAL } from "./turmite.js";
 export type { TurmiteRule };
 export { evolveTurmite };
+// Import harmonograph engine
+import { HarmonographRule, evolveHarmonograph, mutateHarmonograph, crossoverHarmonograph, randomHarmonographRule, HARMONOGRAPH_SEED_GENOMES_PARTIAL } from "./harmonograph.js";
+export type { HarmonographRule };
+export { evolveHarmonograph };
 
 // Unicode palettes for rendering (light → dense)
 const PALETTE = [" ", "░", "▒", "▓", "█", "╱", "╲", "╳", "◊", "◆", "●", "○", "◐", "◑", "◒", "◓"];
@@ -166,8 +170,8 @@ export interface DLARule {
 }
 
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla" | "fractal-flame" | "physarum" | "sandpile" | "magnetic-pendulum" | "particle-life" | "turmite";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule | FlameRule | PhysarumRule | SandpileRule | MagneticPendulumRule | ParticleLifeRule | TurmiteRule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla" | "fractal-flame" | "physarum" | "sandpile" | "magnetic-pendulum" | "particle-life" | "turmite" | "harmonograph";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule | FlameRule | PhysarumRule | SandpileRule | MagneticPendulumRule | ParticleLifeRule | TurmiteRule | HarmonographRule;
   width: number;
   height: number;
   palette: string[];
@@ -1996,6 +2000,7 @@ function getSymmetryScale(genomeType?: Genome["type"]): number {
     case "sandpile": return 0.15;            // sandpile has inherent 4-fold symmetry
     case "magnetic-pendulum": return 0.2;    // basin fractals have rotational symmetry
     case "particle-life": return 0.35;      // emergent cluster symmetry
+    case "turmite": return 0.3;              // turmites can produce symmetric highways
     default: return 0.3;                  // original scale
   }
 }
@@ -2049,6 +2054,9 @@ function getTypeWeights(genomeType?: Genome["type"]): Weights {
     case "particle-life":
       // Particle life: emergent clustering, structural interest, spatial coherence
       return { density: 0.10, complexity: 0.14, symmetry: 0.06, edge: 0.12, structure: 0.18, novelty: 0.12, fractal: 0.06, infoDensity: 0.08, coherence: 0.08, balance: 0.06, rhythm: 0.03, harmony: 0.05 };
+    case "turmite":
+      // Turmite: emergent highways, structural interest from chaos-to-order transition
+      return { density: 0.08, complexity: 0.18, symmetry: 0.06, edge: 0.16, structure: 0.16, novelty: 0.12, fractal: 0.08, infoDensity: 0.06, coherence: 0.05, balance: 0.05, rhythm: 0.03 };
     case "2d":
     default:
       return { density: 0.13, complexity: 0.14, symmetry: 0.07, edge: 0.11, structure: 0.11, novelty: 0.13, fractal: 0.08, infoDensity: 0.09, coherence: 0.06, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
@@ -2482,6 +2490,10 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     mutated.rule = mutateSandpile(mutated.rule as SandpileRule, rng);
   } else if (mutated.type === "magnetic-pendulum") {
     mutateMagneticPendulum(mutated.rule as MagneticPendulumRule, rng);
+  } else if (mutated.type === "particle-life") {
+    mutated.rule = mutateParticleLife(mutated.rule as ParticleLifeRule, rng);
+  } else if (mutated.type === "turmite") {
+    mutated.rule = mutateTurmite(mutated.rule as TurmiteRule, rng);
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -2827,6 +2839,10 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
       ...(rng() < 0.3 ? { leafSize: 0.15 + rng() * 0.5 } : {}),
       ...(rng() < 0.3 ? { leafAngle: 15 + rng() * 40 } : {}),
       ...(rng() < 0.15 ? { flowerPetals: Math.floor(3 + rng() * 6) } : {}),
+      ...(rng() < 0.2 ? { branchProbability: rng() * 0.3 } : {}),
+      ...(rng() < 0.15 ? { seasonalPhase: rng() } : {}),
+      ...(rng() < 0.15 ? { heliotropism: (rng() - 0.5) * 30 } : {}),
+      ...(rng() < 0.2 ? { stepWave: rng() * 0.8 } : {}),
     };
     return {
       type: "lsystem",
@@ -3308,6 +3324,114 @@ export const SEED_GENOMES: Genome[] = [
     height: 40,
     palette: BOTANICAL_PALETTE,
     seed: 2026,
+    mutations: 0,
+    lineage: [],
+  },
+  // L-System: Gosper flowsnake curve
+  {
+    type: "lsystem",
+    rule: {
+      axiom: "X",
+      rules: { X: "XF-F+F-XF+F+XF-F+F-X" },
+      angle: 60,
+      iterations: 3,
+    },
+    width: 52,
+    height: 36,
+    palette: GEOMETRIC_PALETTE,
+    seed: 3333,
+    mutations: 0,
+    lineage: [],
+  },
+  // L-System: Lévy C curve
+  {
+    type: "lsystem",
+    rule: {
+      axiom: "F",
+      rules: { F: "F+F--F+F" },
+      angle: 45,
+      iterations: 10,
+    },
+    width: 52,
+    height: 36,
+    palette: STAR_PALETTE,
+    seed: 4444,
+    mutations: 0,
+    lineage: [],
+  },
+  // L-System: Stochastic seasonal tree with pruning
+  {
+    type: "lsystem",
+    rule: {
+      axiom: "X",
+      rules: { X: "F!F[+X@]&[-X@]F^X", F: "FF" },
+      angle: 22,
+      iterations: 5,
+      angleJitter: 6,
+      lengthScale: 0.78,
+      tropism: -0.12,
+      widthDecay: 0.72,
+      leafSize: 0.45,
+      flowerPetals: 5,
+      branchProbability: 0.15,
+      seasonalPhase: 0.2,
+      heliotropism: 8,
+      stepWave: 0.3,
+      stochastic: {
+        X: [
+          { production: "F!F[+X@]&[-X@]F^X", weight: 0.5 },
+          { production: "F[+X]F[-X@]^FX", weight: 0.3 },
+          { production: "F!F&[+X{~F}][-X{~F}]@", weight: 0.2 },
+        ],
+      },
+    },
+    width: 60,
+    height: 42,
+    palette: BOTANICAL_PALETTE,
+    seed: 5555,
+    mutations: 0,
+    lineage: [],
+  },
+  // L-System: Climbing vine with flowers
+  {
+    type: "lsystem",
+    rule: {
+      axiom: "X",
+      rules: { X: "F~[+X]F~[-X]~FX", F: "~F~F" },
+      angle: 30,
+      iterations: 5,
+      angleJitter: 8,
+      lengthScale: 0.85,
+      tropism: 0.05,
+      widthDecay: 0.80,
+      leafSize: 0.35,
+      flowerPetals: 6,
+      stepWave: 0.6,
+    },
+    width: 52,
+    height: 38,
+    palette: WAVE_PALETTE,
+    seed: 6666,
+    mutations: 0,
+    lineage: [],
+  },
+  // L-System: Rosette succulent
+  {
+    type: "lsystem",
+    rule: {
+      axiom: "X",
+      rules: { X: "F[+X]F[-X][++X][--X]", F: "F!F" },
+      angle: 36,
+      iterations: 4,
+      angleJitter: 2,
+      lengthScale: 0.75,
+      widthDecay: 0.70,
+      leafSize: 0.5,
+    },
+    width: 48,
+    height: 36,
+    palette: BOTANICAL_PALETTE,
+    seed: 7777,
     mutations: 0,
     lineage: [],
   },

@@ -1135,6 +1135,13 @@ document.getElementById('btn-landscape').addEventListener('click', () => {
   if (landscapeVisible) drawFitnessLandscape();
 });
 
+document.getElementById('btn-scatter').addEventListener('click', () => {
+  scatterVisible = !scatterVisible;
+  document.getElementById('landscape-panel').classList.toggle('show', scatterVisible);
+  document.getElementById('btn-scatter').classList.toggle('toggle-active', scatterVisible);
+  if (scatterVisible && archive.length > 0) drawMetricScatter();
+});
+
 // ── Fitness Landscape — mountain silhouette behind the art ──────────────────
 function drawFitnessLandscape() {
   const lc = document.getElementById('fitness-landscape');
@@ -1667,6 +1674,161 @@ function updateMetricsPanel() {
   } else {
     telEl.innerHTML = '';
   }
+}
+
+// ── Metric Scatter Plot — 2D projection of the fitness landscape ──────────────
+// Projects each archive piece into 2D using complexity × structuralInterest
+// with score as point size. Shows evolutionary trajectory and current position.
+function drawMetricScatter() {
+  const lc = document.getElementById('landscape-canvas');
+  const lctx = lc.getContext('2d');
+  const W = lc.width, H = lc.height;
+  lctx.clearRect(0, 0, W, H);
+
+  if (archive.length < 2) return;
+
+  const piece = archive[currentIndex];
+  const curGen = piece?.generation ?? 0;
+
+  // Use two metric axes that best separate species:
+  // X = complexity (entropy), Y = structural interest
+  // Size = score, Color = species type
+  const xKey = 'complexity';
+  const yKey = 'structuralInterest';
+  const xMax = Math.max(...archive.map(p => p.metrics?.[xKey] ?? 0), 0.01);
+  const yMax = Math.max(...archive.map(p => p.metrics?.[yKey] ?? 0), 0.01);
+
+  const pad = 20; // padding in canvas units
+  const toX = v => pad + ((v ?? 0) / xMax) * (W - pad * 2);
+  const toY = v => H - pad - ((v ?? 0) / yMax) * (H - pad * 2);
+
+  // Grid lines
+  lctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  lctx.lineWidth = 0.5;
+  for (let i = 0; i <= 4; i++) {
+    const x = pad + (i / 4) * (W - pad * 2);
+    lctx.beginPath(); lctx.moveTo(x, pad); lctx.lineTo(x, H - pad); lctx.stroke();
+    const y = pad + (i / 4) * (H - pad * 2);
+    lctx.beginPath(); lctx.moveTo(pad, y); lctx.lineTo(W - pad, y); lctx.stroke();
+  }
+
+  // Axis labels
+  lctx.fillStyle = 'rgba(255,255,255,0.15)';
+  lctx.font = '16px monospace';
+  lctx.textAlign = 'center';
+  lctx.fillText('complexity →', W / 2, H - 3);
+  lctx.save();
+  lctx.translate(10, H / 2);
+  lctx.rotate(-Math.PI / 2);
+  lctx.fillText('structure →', 0, 0);
+  lctx.restore();
+
+  // Only draw pieces up to current generation (progressive reveal)
+  const visible = archive.filter(p => p.generation <= curGen);
+
+  // Draw evolutionary trajectory line (connect sequential archive entries)
+  if (visible.length > 1) {
+    lctx.beginPath();
+    for (let i = 0; i < visible.length; i++) {
+      const x = toX(visible[i].metrics?.[xKey]);
+      const y = toY(visible[i].metrics?.[yKey]);
+      if (i === 0) lctx.moveTo(x, y);
+      else lctx.lineTo(x, y);
+    }
+    lctx.strokeStyle = 'rgba(124,111,224,0.12)';
+    lctx.lineWidth = 1;
+    lctx.stroke();
+  }
+
+  // Draw epoch-colored background regions (convex hull per epoch - simplified as bounding boxes)
+  const epochGroups = {};
+  for (const p of visible) {
+    const ep = p.epoch || 'emergence';
+    if (!epochGroups[ep]) epochGroups[ep] = [];
+    epochGroups[ep].push(p);
+  }
+  for (const [ep, pieces] of Object.entries(epochGroups)) {
+    if (pieces.length < 3) continue;
+    const xs = pieces.map(p => toX(p.metrics?.[xKey]));
+    const ys = pieces.map(p => toY(p.metrics?.[yKey]));
+    const minX = Math.min(...xs) - 8, maxX = Math.max(...xs) + 8;
+    const minY = Math.min(...ys) - 8, maxY = Math.max(...ys) + 8;
+    const color = EPOCH_COLORS[ep] || '#7c6fe0';
+    lctx.fillStyle = hexToRGBA(color, 0.04);
+    lctx.beginPath();
+    lctx.roundRect(minX, minY, maxX - minX, maxY - minY, 6);
+    lctx.fill();
+  }
+
+  // Draw all visible pieces as dots
+  for (let i = 0; i < visible.length; i++) {
+    const p = visible[i];
+    const x = toX(p.metrics?.[xKey]);
+    const y = toY(p.metrics?.[yKey]);
+    const theme = TYPE_COLORS[p.genome.type] || TYPE_COLORS['2d'];
+    const color = theme.colors[4]; // mid-brightness
+    const radius = 2 + (p.score ?? 0.5) * 4; // size = fitness
+
+    // Fade older pieces
+    const age = curGen - p.generation;
+    const maxAge = Math.max(curGen - archive[0].generation, 1);
+    const opacity = 0.15 + 0.7 * (1 - age / maxAge);
+
+    lctx.beginPath();
+    lctx.arc(x, y, radius, 0, Math.PI * 2);
+    lctx.fillStyle = hexToRGBA(color, opacity);
+    lctx.fill();
+  }
+
+  // Highlight current piece with glow
+  if (piece && piece.metrics) {
+    const x = toX(piece.metrics[xKey]);
+    const y = toY(piece.metrics[yKey]);
+    const theme = TYPE_COLORS[piece.genome.type] || TYPE_COLORS['2d'];
+    const color = theme.colors[5];
+
+    // Glow ring
+    lctx.beginPath();
+    lctx.arc(x, y, 10, 0, Math.PI * 2);
+    lctx.strokeStyle = color;
+    lctx.lineWidth = 2;
+    lctx.shadowColor = color;
+    lctx.shadowBlur = 12;
+    lctx.stroke();
+    lctx.shadowBlur = 0;
+
+    // Solid center
+    lctx.beginPath();
+    lctx.arc(x, y, 4, 0, Math.PI * 2);
+    lctx.fillStyle = '#fff';
+    lctx.fill();
+
+    // Score label
+    lctx.fillStyle = 'rgba(255,255,255,0.7)';
+    lctx.font = '18px monospace';
+    lctx.textAlign = 'left';
+    lctx.fillText((piece.score * 100).toFixed(0) + '%', x + 14, y + 5);
+  }
+
+  // Legend — small type dots in top-right
+  const legendTypes = [...new Set(visible.map(p => p.genome.type))];
+  lctx.font = '14px monospace';
+  lctx.textAlign = 'left';
+  for (let i = 0; i < Math.min(legendTypes.length, 6); i++) {
+    const t = legendTypes[i];
+    const theme = TYPE_COLORS[t] || TYPE_COLORS['2d'];
+    const ly = pad + 8 + i * 18;
+    const lx = W - pad - 60;
+    lctx.beginPath();
+    lctx.arc(lx, ly, 3, 0, Math.PI * 2);
+    lctx.fillStyle = theme.colors[4];
+    lctx.fill();
+    lctx.fillStyle = 'rgba(255,255,255,0.3)';
+    lctx.fillText(t.slice(0, 5), lx + 7, ly + 4);
+  }
+
+  // Update axis label
+  document.getElementById('lp-axes').textContent = `${xKey} × ${yKey}`;
 }
 
 // ── Start overlay ─────────────────────────────────────────────────────────────

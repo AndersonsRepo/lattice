@@ -111,6 +111,8 @@ interface GenerationRecord {
   avgCrowdingDistance?: number; // mean crowding distance in selection pool
   agePenaltyApplied?: number; // how many pieces received age penalties
   paretoFrontSize?: number; // pieces on the non-dominated front
+  avgAestheticHarmony?: number; // mean aesthetic harmony across population
+  directedMutations?: number; // offspring generated via directed mutation
 }
 
 interface Population {
@@ -610,10 +612,52 @@ async function run(): Promise<void> {
     : baseCrossoverRate;
   console.log(`  Diversity: ${(diversityIndex * 100).toFixed(1)}% | Crossover rate: ${(crossoverRate * 100).toFixed(0)}%`);
 
-  function adaptiveMutate(genome: Genome, parentScore: number): Genome {
+  // Directed mutation: identify the parent's weakest metric dimension and
+  // apply extra mutation passes, increasing the chance of improving that axis.
+  // The key insight: if a piece has great structure but weak density, an extra
+  // mutation pass with a different seed is more likely to explore that gap.
+  function directedMutate(genome: Genome, parentMetrics: PieceMetrics): Genome {
+    const metricValues: [string, number][] = [
+      ["complexity", Math.min(parentMetrics.complexity / 2, 1)],
+      ["edgeActivity", parentMetrics.edgeActivity],
+      ["structuralInterest", parentMetrics.structuralInterest],
+      ["fractalDimension", Math.min((parentMetrics.fractalDimension ?? 0) / 2, 1)],
+      ["informationDensity", parentMetrics.informationDensity ?? 0],
+      ["spatialCoherence", parentMetrics.spatialCoherence ?? 0],
+      ["compositionBalance", parentMetrics.compositionBalance ?? 0],
+      ["aestheticHarmony", parentMetrics.aestheticHarmony ?? 0],
+    ];
+    // Sort by value ascending — weakest metrics first
+    metricValues.sort((a, b) => a[1] - b[1]);
+    const weakest = metricValues[0][0];
+
+    // Apply 2-3 mutation passes with canvas/palette biased by the weak dimension
+    let m = mutateGenome(genome, rng);
+    // Directed pass: tweak canvas size (helps density/balance) or seed (helps everything)
+    if (weakest === "compositionBalance" || weakest === "complexity") {
+      // Wider canvas can improve balance and complexity
+      m.width = Math.max(24, Math.min(72, m.width + Math.floor((rng() - 0.3) * 6)));
+      m.height = Math.max(16, Math.min(40, m.height + Math.floor((rng() - 0.3) * 4)));
+    }
+    // Extra mutation pass for weak harmony (try to get metrics to complement each other)
+    if (weakest === "aestheticHarmony" || weakest === "spatialCoherence") {
+      m = mutateGenome(m, rng); // double-mutate to push further from local optimum
+    }
+    m.seed = Math.floor(rng() * 2 ** 32); // always reseed for fresh exploration
+    return m;
+  }
+
+  function adaptiveMutate(genome: Genome, parentScore: number, parentMetrics?: PieceMetrics): Genome {
     const best = pop.pieces[0]?.score ?? 0.5, worst = pop.pieces[pop.pieces.length-1]?.score ?? 0;
     const f01 = (parentScore - worst) / Math.max(best - worst, 0.01);
     const passes = (f01 > 0.7 ? 1 : f01 > 0.4 ? 2 : 3) + (isStagnant ? 1 : 0);
+
+    // 30% chance to use directed mutation for high-scoring parents
+    // (they're already good — nudge their weakest dimension instead of random drift)
+    if (parentMetrics && f01 > 0.5 && rng() < 0.3) {
+      return directedMutate(genome, parentMetrics);
+    }
+
     let m = genome;
     for (let p = 0; p < passes; p++) m = mutateGenome(m, rng);
     return m;
@@ -629,7 +673,7 @@ async function run(): Promise<void> {
     // This injects high-quality genomes back into the gene pool, mutated to explore nearby space
     if (rng() < HOF_SEEDING_RATE && pop.hallOfFame.length > 0) {
       const hofParent = pop.hallOfFame[Math.floor(rng() * pop.hallOfFame.length)];
-      childGenome = adaptiveMutate(hofParent.genome, hofParent.score);
+      childGenome = adaptiveMutate(hofParent.genome, hofParent.score, hofParent.metrics);
       childGenome.lineage = [...hofParent.genome.lineage.slice(-2), "HoF"];
       hofSeedCount++;
       console.log(`  HoF seed: ${hofParent.genome.type}@${(hofParent.score*100).toFixed(1)}% → mutated offspring`);
@@ -648,7 +692,7 @@ async function run(): Promise<void> {
       console.log(`  Crossover ${parent.genome.type}\u00d7${other.genome.type} \u2192 ${childGenome.type}`);
     } else {
       const parent = tournamentSelect(pop.pieces);
-      childGenome = adaptiveMutate(parent.genome, parent.score);
+      childGenome = adaptiveMutate(parent.genome, parent.score, parent.metrics);
     }
     const child = generatePiece(childGenome, gen, popMetrics);
     offspring.push(child);
