@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warp — Lattice</title>
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --border: #1e1e2e;
+  --text: #c8c8d4;
+  --text-dim: #6e6e82;
+  --accent: #7c6fe0;
+  --accent-glow: #7c6fe040;
+  --green: #4ade80;
+  --amber: #fbbf24;
+  --red: #ef4444;
+  --cyan: #22d3ee;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  overflow: hidden;
+  height: 100vh;
+  cursor: crosshair;
+}
+a.back {
+  position: fixed; top: 1.2rem; left: 1.5rem; z-index: 200;
+  color: var(--text-dim); text-decoration: none; font-size: 0.7rem;
+  letter-spacing: 0.1em; transition: color 0.2s;
+}
+a.back:hover { color: var(--accent); }
+
+canvas#main { display: block; width: 100vw; height: 100vh; }
+
+/* Control panel */
+.panel {
+  position: fixed; top: 1rem; right: 1rem; z-index: 100;
+  width: 280px; max-height: calc(100vh - 2rem);
+  background: rgba(18, 18, 26, 0.85);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 1rem; overflow-y: auto;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+.panel.collapsed { transform: translateX(calc(100% + 2rem)); opacity: 0; pointer-events: none; }
+.panel-toggle {
+  position: fixed; top: 1rem; right: 1rem; z-index: 101;
+  width: 36px; height: 36px; border-radius: 8px;
+  background: rgba(18, 18, 26, 0.85); border: 1px solid var(--border);
+  color: var(--text-dim); font-size: 1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s;
+}
+.panel-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.panel:not(.collapsed) ~ .panel-toggle { right: calc(280px + 1.5rem); }
+
+.panel h2 {
+  font-size: 0.65rem; font-weight: 400; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 0.8rem;
+  text-shadow: 0 0 20px var(--accent-glow);
+}
+.section { margin-bottom: 1rem; }
+.section-title {
+  font-size: 0.55rem; font-weight: 400; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--text-dim); margin-bottom: 0.5rem;
+}
+
+/* Mode buttons */
+.modes { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.8rem; }
+.mode-btn {
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  font-family: inherit; font-size: 0.6rem; letter-spacing: 0.05em;
+  padding: 0.3rem 0.6rem; border-radius: 4px; cursor: pointer;
+  transition: all 0.2s;
+}
+.mode-btn:hover { color: var(--text); border-color: var(--text-dim); }
+.mode-btn.active {
+  color: #fff; border-color: var(--accent); background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Sliders */
+.slider-row {
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;
+}
+.slider-row label {
+  font-size: 0.55rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-dim); min-width: 60px;
+}
+.slider-row input[type="range"] {
+  flex: 1; -webkit-appearance: none; appearance: none;
+  height: 3px; background: var(--border); border-radius: 2px; outline: none;
+}
+.slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); cursor: pointer;
+}
+.slider-row .val {
+  font-size: 0.55rem; color: var(--text-dim); min-width: 28px; text-align: right;
+}
+
+/* Palette buttons */
+.palettes { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.pal-btn {
+  width: 28px; height: 16px; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--border); transition: all 0.2s;
+}
+.pal-btn.active, .pal-btn:hover { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+
+/* Audio toggle */
+.audio-btn {
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  font-family: inherit; font-size: 0.6rem; letter-spacing: 0.05em;
+  padding: 0.35rem 0.7rem; border-radius: 4px; cursor: pointer;
+  transition: all 0.2s; width: 100%;
+}
+.audio-btn:hover { color: var(--text); border-color: var(--text-dim); }
+.audio-btn.active { color: var(--green); border-color: var(--green); box-shadow: 0 0 10px rgba(74,222,128,0.2); }
+
+/* Spectrum bar */
+.spectrum {
+  height: 24px; border-radius: 3px; margin-top: 0.4rem;
+  background: var(--surface); border: 1px solid var(--border);
+  overflow: hidden; position: relative;
+}
+.spectrum canvas { width: 100%; height: 100%; display: block; }
+
+/* Info bar */
+.info {
+  position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 100;
+  font-size: 0.55rem; color: var(--text-dim); letter-spacing: 0.1em;
+  text-transform: uppercase; opacity: 0.6;
+}
+
+/* Shortcuts overlay */
+.shortcuts {
+  position: fixed; inset: 0; background: rgba(10,10,15,0.92); z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.shortcuts.visible { opacity: 1; pointer-events: auto; }
+.shortcuts-inner {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 1.5rem 2rem; max-width: 360px;
+}
+.shortcuts h3 {
+  font-size: 0.7rem; font-weight: 400; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 1rem;
+}
+.shortcut-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.3rem 0; font-size: 0.6rem;
+}
+.shortcut-row span:first-child { color: var(--text-dim); }
+.shortcut-row kbd {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+  padding: 0.15rem 0.4rem; color: var(--text); font-family: inherit; font-size: 0.55rem;
+}
+
+/* Start overlay */
+.start-overlay {
+  position: fixed; inset: 0; background: rgba(10,10,15,0.93); z-index: 250;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: opacity 0.8s ease; cursor: pointer;
+}
+.start-overlay.hidden { opacity: 0; pointer-events: none; }
+.start-overlay .icon { font-size: 2.5rem; color: var(--accent); text-shadow: 0 0 30px var(--accent-glow); margin-bottom: 1rem; }
+.start-overlay .label {
+  font-size: 0.8rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--text-dim); animation: breathe 3s ease-in-out infinite;
+}
+.start-overlay .sub { font-size: 0.55rem; color: var(--text-dim); margin-top: 0.5rem; opacity: 0.5; letter-spacing: 0.1em; }
+@keyframes breathe { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+@media (max-width: 600px) {
+  .panel { width: 240px; padding: 0.8rem; }
+  .panel:not(.collapsed) ~ .panel-toggle { right: calc(240px + 1.2rem); }
+  .info { font-size: 0.45rem; }
+}
+</style>
+</head>
+<body>
+<a class="back" href="index.html">&larr; lattice</a>
+
+<canvas id="main"></canvas>
+
+<div class="panel" id="panel">
+  <h2>Warp</h2>
+
+  <div class="section">
+    <div class="section-title">Pattern</div>
+    <div class="modes" id="modes"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Parameters</div>
+    <div class="slider-row">
+      <label>Scale</label>
+      <input type="range" id="scale" min="1" max="100" value="30">
+      <span class="val" id="scaleVal">30</span>
+    </div>
+    <div class="slider-row">
+      <label>Speed</label>
+      <input type="range" id="speed" min="1" max="100" value="40">
+      <span class="val" id="speedVal">40</span>
+    </div>
+    <div class="slider-row">
+      <label>Complex</label>
+      <input type="range" id="complexity" min="1" max="100" value="50">
+      <span class="val" id="complexityVal">50</span>
+    </div>
+    <div class="slider-row">
+      <label>Layers</label>
+      <input type="range" id="layers" min="1" max="8" value="3">
+      <span class="val" id="layersVal">3</span>
+    </div>
+    <div class="slider-row">
+      <label>Bloom</label>
+      <input type="range" id="bloom" min="0" max="100" value="40">
+      <span class="val" id="bloomVal">40</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Palette</div>
+    <div class="palettes" id="palettes"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Audio Reactive</div>
+    <button class="audio-btn" id="audioBtn">Enable Microphone</button>
+    <div class="spectrum"><canvas id="spectrumCanvas"></canvas></div>
+  </div>
+</div>
+<button class="panel-toggle" id="panelToggle" title="Toggle panel (H)">&#9776;</button>
+
+<div class="info" id="info">Move mouse to explore &middot; H panel &middot; ? keys</div>
+
+<div class="shortcuts" id="shortcuts">
+  <div class="shortcuts-inner">
+    <h3>Keyboard Shortcuts</h3>
+    <div class="shortcut-row"><span>Toggle panel</span><kbd>H</kbd></div>
+    <div class="shortcut-row"><span>Next pattern</span><kbd>&rarr;</kbd></div>
+    <div class="shortcut-row"><span>Prev pattern</span><kbd>&larr;</kbd></div>
+    <div class="shortcut-row"><span>Next palette</span><kbd>C</kbd></div>
+    <div class="shortcut-row"><span>Randomize all</span><kbd>R</kbd></div>
+    <div class="shortcut-row"><span>Pause / Resume</span><kbd>Space</kbd></div>
+    <div class="shortcut-row"><span>Toggle audio</span><kbd>M</kbd></div>
+    <div class="shortcut-row"><span>Fullscreen</span><kbd>F</kbd></div>
+    <div class="shortcut-row"><span>Save PNG</span><kbd>S</kbd></div>
+    <div class="shortcut-row"><span>This help</span><kbd>?</kbd></div>
+  </div>
+</div>
+
+<div class="start-overlay" id="startOverlay">
+  <div class="icon">&#10022;</div>
+  <div class="label">Enter the Warp</div>
+  <div class="sub">click anywhere to begin</div>
+</div>
+
+<script>
+// ─── State ───
+const canvas = document.getElementById('main');
+const ctx = canvas.getContext('2d');
+let W, H, cx, cy;
+let mx = 0.5, my = 0.5; // normalized mouse
+let time = 0;
+let paused = false;
+let animId;
+
+// Audio
+let audioCtx, analyser, audioData, micStream;
+let audioActive = false;
+let bassLevel = 0, midLevel = 0, trebleLevel = 0;
+
+// ─── Palettes ───
+const PALETTES = [
+  { name: 'Void',    colors: ['#7c6fe0','#4a3fa0','#1a1040','#0a0a1f','#c8b8ff'] },
+  { name: 'Ember',   colors: ['#ef4444','#f97316','#fbbf24','#451a03','#fef3c7'] },
+  { name: 'Moss',    colors: ['#4ade80','#166534','#0a2f1a','#86efac','#22d3ee'] },
+  { name: 'Prism',   colors: ['#7c6fe0','#ef4444','#4ade80','#fbbf24','#22d3ee'] },
+  { name: 'Frost',   colors: ['#22d3ee','#0e7490','#0c1a2e','#67e8f9','#a5b4fc'] },
+  { name: 'Dusk',    colors: ['#a855f7','#ec4899','#1e1030','#f0abfc','#fbbf24'] },
+];
+let paletteIdx = 0;
+
+// ─── Pattern modes ───
+const MODES = [
+  { name: 'Moir\u00e9',     fn: renderMoire },
+  { name: 'Interference', fn: renderInterference },
+  { name: 'Spiral',       fn: renderSpiral },
+  { name: 'Lissajous',    fn: renderLissajous },
+  { name: 'Mandala',      fn: renderMandala },
+  { name: 'Ripple',       fn: renderRipple },
+];
+let modeIdx = 0;
+
+// ─── Params ───
+const P = {
+  scale: 30, speed: 40, complexity: 50, layers: 3, bloom: 40
+};
+
+// ─── Helpers ───
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return [r, g, b];
+}
+
+function lerpColor(colors, t) {
+  t = ((t % 1) + 1) % 1;
+  const idx = t * (colors.length - 1);
+  const i = Math.floor(idx);
+  const f = idx - i;
+  const a = hexToRgb(colors[Math.min(i, colors.length - 1)]);
+  const b = hexToRgb(colors[Math.min(i + 1, colors.length - 1)]);
+  return [
+    a[0] + (b[0] - a[0]) * f,
+    a[1] + (b[1] - a[1]) * f,
+    a[2] + (b[2] - a[2]) * f
+  ];
+}
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = canvas.width = window.innerWidth * dpr;
+  H = canvas.height = window.innerHeight * dpr;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  cx = W / 2; cy = H / 2;
+}
+
+// ─── Render functions ───
+// All use ImageData for per-pixel rendering at reduced resolution for performance
+
+function getImageCtx() {
+  // Render at lower res for smooth 60fps
+  const scale = Math.max(1, Math.floor(Math.min(W, H) / 400));
+  const w = Math.floor(W / scale);
+  const h = Math.floor(H / scale);
+  const img = ctx.createImageData(w, h);
+  return { img, w, h, scale };
+}
+
+function putScaled(img, w, h, scale) {
+  // Write to offscreen, then scale up
+  if (scale === 1) {
+    ctx.putImageData(img, 0, 0);
+  } else {
+    const off = new OffscreenCanvas(w, h);
+    const oc = off.getContext('2d');
+    oc.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(off, 0, 0, W, H);
+  }
+}
+
+function renderMoire() {
+  const { img, w, h, scale } = getImageCtx();
+  const d = img.data;
+  const colors = PALETTES[paletteIdx].colors;
+  const sc = P.scale * 0.02 + 0.1;
+  const spd = time * P.speed * 0.0003;
+  const cx2 = mx * w, cy2 = my * h;
+  const layers = P.layers;
+  const cpx = P.complexity * 0.01;
+  const bass = audioActive ? bassLevel : 0;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let val = 0;
+      for (let l = 0; l < layers; l++) {
+        const ox = (l * 0.3 + 0.5) * w + Math.sin(spd + l) * w * 0.2;
+        const oy = (l * 0.3 + 0.3) * h + Math.cos(spd * 0.7 + l) * h * 0.2;
+        const dx = x - ox, dy = y - oy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        val += Math.sin(dist * sc * (1 + cpx * l * 0.5) + spd * (l + 1) * 0.5 + bass * 3);
+      }
+      // Mouse influence
+      const mdx = x - cx2, mdy = y - cy2;
+      const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
+      val += Math.sin(mdist * sc * 1.5 - spd * 2) * 0.8;
+
+      val = val / (layers + 1);
+      const t = val * 0.5 + 0.5;
+      const [r, g, b] = lerpColor(colors, t);
+      const i = (y * w + x) * 4;
+      d[i] = r; d[i+1] = g; d[i+2] = b; d[i+3] = 255;
+    }
+  }
+  putScaled(img, w, h, scale);
+}
+
+function renderInterference() {
+  const { img, w, h, scale } = getImageCtx();
+  const d = img.data;
+  const colors = PALETTES[paletteIdx].colors;
+  const sc = P.scale * 0.015 + 0.05;
+  const spd = time * P.speed * 0.0002;
+  const cpx = P.complexity * 0.01;
+  const layers = P.layers;
+  const bass = audioActive ? bassLevel : 0;
+  const treb = audioActive ? trebleLevel : 0;
+
+  for (let y = 0; y < h; y++) {
+    const ny = y / h;
+    for (let x = 0; x < w; x++) {
+      const nx = x / w;
+      let val = 0;
+
+      for (let l = 0; l < layers; l++) {
+        const freq = (l + 1) * sc * (1 + cpx);
+        const phase = spd * (l + 1) * 0.7;
+        val += Math.sin(nx * freq * 40 + phase + mx * 6 + bass * 4) *
+               Math.cos(ny * freq * 40 + phase * 1.3 + my * 6 + treb * 3);
+      }
+
+      // Diamond wave from mouse
+      const mdx = Math.abs(nx - mx), mdy = Math.abs(ny - my);
+      val += Math.sin((mdx + mdy) * 30 * sc - spd * 3) * 0.5;
+
+      val = val / (layers + 0.5);
+      const t = val * 0.5 + 0.5;
+      const [r, g, b] = lerpColor(colors, t + spd * 0.1);
+      const i = (y * w + x) * 4;
+      d[i] = r; d[i+1] = g; d[i+2] = b; d[i+3] = 255;
+    }
+  }
+  putScaled(img, w, h, scale);
+}
+
+function renderSpiral() {
+  const { img, w, h, scale } = getImageCtx();
+  const d = img.data;
+  const colors = PALETTES[paletteIdx].colors;
+  const sc = P.scale * 0.1 + 1;
+  const spd = time * P.speed * 0.0004;
+  const cpx = P.complexity * 0.06 + 1;
+  const layers = P.layers;
+  const bass = audioActive ? bassLevel : 0;
+
+  const mcx = mx * w, mcy = my * h;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = x - mcx, dy = y - mcy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(dy, dx);
+      let val = 0;
+
+      for (let l = 0; l < layers; l++) {
+        const twist = cpx * (l + 1) * 0.4;
+        val += Math.sin(angle * twist + dist * sc * 0.02 - spd * (l + 1) + bass * 2);
+        val += Math.cos(dist * sc * 0.015 * (l + 1) + spd * 0.5) * 0.5;
+      }
+
+      val = val / (layers * 1.5);
+      const t = val * 0.5 + 0.5;
+      const brightness = Math.max(0, 1 - dist / (Math.max(w, h) * 0.7));
+      const [r, g, b] = lerpColor(colors, t + spd * 0.05);
+      const i = (y * w + x) * 4;
+      d[i] = r * brightness; d[i+1] = g * brightness; d[i+2] = b * brightness; d[i+3] = 255;
+    }
+  }
+  putScaled(img, w, h, scale);
+}
+
+function renderLissajous() {
+  const { img, w, h, scale } = getImageCtx();
+  const d = img.data;
+  const colors = PALETTES[paletteIdx].colors;
+  const spd = time * P.speed * 0.0003;
+  const cpx = P.complexity * 0.05 + 1;
+  const layers = P.layers;
+  const sc = P.scale * 0.03 + 0.5;
+  const bass = audioActive ? bassLevel : 0;
+  const mid = audioActive ? midLevel : 0;
+
+  // Clear to dark
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = 10; d[i+1] = 10; d[i+2] = 15; d[i+3] = 255;
+  }
+
+  // Draw Lissajous curves as additive light
+  const freqA = mx * 6 + 1;
+  const freqB = my * 6 + 1;
+  const steps = 8000 + P.complexity * 200;
+
+  for (let l = 0; l < layers; l++) {
+    const phaseOff = l * Math.PI / layers + spd * 0.3;
+    const fa = freqA + l * 0.3 + bass * 2;
+    const fb = freqB + l * 0.2 + mid;
+    const alpha = 0.15 / layers * (1 + l * 0.3);
+    const colT = l / layers;
+
+    for (let i = 0; i < steps; i++) {
+      const t = (i / steps) * Math.PI * 2 * cpx * sc;
+      const px = Math.sin(fa * t + phaseOff + spd) * 0.4 + 0.5;
+      const py = Math.sin(fb * t + phaseOff * 1.3 + spd * 0.7) * 0.4 + 0.5;
+      const ix = Math.floor(px * w);
+      const iy = Math.floor(py * h);
+      if (ix >= 0 && ix < w && iy >= 0 && iy < h) {
+        const idx = (iy * w + ix) * 4;
+        const [cr, cg, cb] = lerpColor(colors, colT + i / steps);
+        d[idx]   = Math.min(255, d[idx] + cr * alpha);
+        d[idx+1] = Math.min(255, d[idx+1] + cg * alpha);
+        d[idx+2] = Math.min(255, d[idx+2] + cb * alpha);
+      }
+    }
+  }
+  putScaled(img, w, h, scale);
+}
+
+function renderMandala() {
+  const { img, w, h, scale } = getImageCtx();
+  const d = img.data;
+  const colors = PALETTES[paletteIdx].colors;
+  const sc = P.scale * 0.02 + 0.2;
+  const spd = time * P.speed * 0.0003;
+  const cpx = Math.floor(P.complexity * 0.12) + 3; // symmetry folds
+  const layers = P.layers;
+  const bass = audioActive ? bassLevel : 0;
+
+  const mcx = w / 2, mcy = h / 2;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = (x - mcx) / mcx, dy = (y - mcy) / mcy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      let angle = Math.atan2(dy, dx);
+      // Fold into symmetry
+      angle = Math.abs(((angle / Math.PI * cpx) % 2) - 1) * Math.PI / cpx;
+
+      let val = 0;
+      const fdx = Math.cos(angle) * dist, fdy = Math.sin(angle) * dist;
+
+      for (let l = 0; l < layers; l++) {
+        const freq = sc * (l + 1) * 3;
+        val += Math.sin(fdx * freq + spd * (l + 1) + mx * 4 + bass * 3);
+        val += Math.cos(fdy * freq + spd * (l + 0.5) + my * 4);
+        val += Math.sin(dist * freq * 2 - spd * 0.8) * 0.5;
+      }
+
+      val = val / (layers * 2.5);
+      const t = val * 0.5 + 0.5;
+      const fade = Math.max(0, 1 - dist * 0.8);
+      const [r, g, b] = lerpColor(colors, t);
+      const i4 = (y * w + x) * 4;
+      d[i4] = r * fade; d[i4+1] = g * fade; d[i4+2] = b * fade; d[i4+3] = 255;
+    }
+  }
+  putScaled(img, w, h, scale);
+}
+
+function renderRipple() {
+  const { img, w, h, scale } = getImageCtx();
+  const d = img.data;
+  const colors = PALETTES[paletteIdx].colors;
+  const sc = P.scale * 0.02 + 0.3;
+  const spd = time * P.speed * 0.0005;
+  const cpx = P.complexity * 0.01;
+  const layers = P.layers;
+  const bass = audioActive ? bassLevel : 0;
+  const treb = audioActive ? trebleLevel : 0;
+
+  const sources = [
+    { x: mx * w, y: my * h, phase: 0 },
+    { x: w * 0.2, y: h * 0.3, phase: spd * 0.5 },
+    { x: w * 0.8, y: h * 0.7, phase: spd * 0.7 },
+  ];
+  // Add more sources based on layers
+  for (let l = 0; l < Math.min(layers, 5); l++) {
+    sources.push({
+      x: w * (0.3 + 0.4 * Math.sin(spd * 0.3 + l * 1.5)),
+      y: h * (0.3 + 0.4 * Math.cos(spd * 0.4 + l * 1.2)),
+      phase: spd * (l + 1) * 0.3
+    });
+  }
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let val = 0;
+      for (const src of sources) {
+        const dx = x - src.x, dy = y - src.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        val += Math.sin(dist * sc * (1 + cpx) - spd * 4 + src.phase + bass * 3);
+      }
+      // Damping
+      val = val / sources.length;
+      val *= (1 + treb * 0.5);
+      const t = val * 0.5 + 0.5;
+      const [r, g, b] = lerpColor(colors, t);
+      const i = (y * w + x) * 4;
+      d[i] = r; d[i+1] = g; d[i+2] = b; d[i+3] = 255;
+    }
+  }
+  putScaled(img, w, h, scale);
+}
+
+// ─── Bloom post-process ───
+function applyBloom() {
+  if (P.bloom < 5) return;
+  const amount = P.bloom * 0.01;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.filter = `blur(${8 + amount * 20}px)`;
+  ctx.globalAlpha = amount * 0.35;
+  ctx.drawImage(canvas, 0, 0);
+  ctx.restore();
+  // Second pass, wider blur
+  if (amount > 0.3) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.filter = `blur(${20 + amount * 30}px)`;
+    ctx.globalAlpha = amount * 0.15;
+    ctx.drawImage(canvas, 0, 0);
+    ctx.restore();
+  }
+}
+
+// ─── Audio ───
+const specCanvas = document.getElementById('spectrumCanvas');
+const specCtx = specCanvas.getContext('2d');
+
+async function toggleAudio() {
+  const btn = document.getElementById('audioBtn');
+  if (audioActive) {
+    audioActive = false;
+    btn.classList.remove('active');
+    btn.textContent = 'Enable Microphone';
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    return;
+  }
+  try {
+    if (!audioCtx) audioCtx = new AudioContext();
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    audioData = new Uint8Array(analyser.frequencyBinCount);
+    audioActive = true;
+    btn.classList.add('active');
+    btn.textContent = 'Disable Microphone';
+  } catch (e) {
+    btn.textContent = 'Mic not available';
+  }
+}
+
+function updateAudio() {
+  if (!audioActive || !analyser) {
+    bassLevel = midLevel = trebleLevel = 0;
+    return;
+  }
+  analyser.getByteFrequencyData(audioData);
+  const len = audioData.length;
+  let bass = 0, mid = 0, treb = 0;
+  const third = Math.floor(len / 3);
+  for (let i = 0; i < third; i++) bass += audioData[i];
+  for (let i = third; i < third * 2; i++) mid += audioData[i];
+  for (let i = third * 2; i < len; i++) treb += audioData[i];
+  bassLevel = bass / (third * 255);
+  midLevel = mid / (third * 255);
+  trebleLevel = treb / (third * 255);
+
+  // Draw spectrum
+  const sw = specCanvas.width = specCanvas.clientWidth * 2;
+  const sh = specCanvas.height = specCanvas.clientHeight * 2;
+  specCtx.clearRect(0, 0, sw, sh);
+  const barW = sw / len;
+  for (let i = 0; i < len; i++) {
+    const v = audioData[i] / 255;
+    const colors = PALETTES[paletteIdx].colors;
+    const [r, g, b] = lerpColor(colors, i / len);
+    specCtx.fillStyle = `rgba(${r},${g},${b},${0.4 + v * 0.6})`;
+    specCtx.fillRect(i * barW, sh * (1 - v), barW - 0.5, sh * v);
+  }
+}
+
+// ─── UI Setup ───
+function buildModes() {
+  const container = document.getElementById('modes');
+  container.innerHTML = '';
+  MODES.forEach((m, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'mode-btn' + (i === modeIdx ? ' active' : '');
+    btn.textContent = m.name;
+    btn.onclick = () => { modeIdx = i; buildModes(); };
+    container.appendChild(btn);
+  });
+}
+
+function buildPalettes() {
+  const container = document.getElementById('palettes');
+  container.innerHTML = '';
+  PALETTES.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'pal-btn' + (i === paletteIdx ? ' active' : '');
+    const grad = `linear-gradient(90deg, ${p.colors[0]}, ${p.colors[1]}, ${p.colors[2]})`;
+    btn.style.background = grad;
+    btn.title = p.name;
+    btn.onclick = () => { paletteIdx = i; buildPalettes(); };
+    container.appendChild(btn);
+  });
+}
+
+function setupSliders() {
+  ['scale', 'speed', 'complexity', 'layers', 'bloom'].forEach(name => {
+    const el = document.getElementById(name);
+    const val = document.getElementById(name + 'Val');
+    el.oninput = () => { P[name] = +el.value; val.textContent = el.value; };
+  });
+}
+
+function randomize() {
+  modeIdx = Math.floor(Math.random() * MODES.length);
+  paletteIdx = Math.floor(Math.random() * PALETTES.length);
+  const sliders = { scale: [1,100], speed: [1,100], complexity: [1,100], layers: [1,8], bloom: [0,100] };
+  for (const [k, [lo, hi]] of Object.entries(sliders)) {
+    const v = Math.floor(Math.random() * (hi - lo + 1)) + lo;
+    P[k] = v;
+    document.getElementById(k).value = v;
+    document.getElementById(k + 'Val').textContent = v;
+  }
+  buildModes();
+  buildPalettes();
+}
+
+// ─── Main loop ───
+function frame(ts) {
+  if (!paused) {
+    time = ts;
+    updateAudio();
+    MODES[modeIdx].fn();
+    applyBloom();
+  }
+  animId = requestAnimationFrame(frame);
+}
+
+// ─── Events ───
+canvas.addEventListener('mousemove', e => {
+  mx = e.clientX / window.innerWidth;
+  my = e.clientY / window.innerHeight;
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mx = t.clientX / window.innerWidth;
+  my = t.clientY / window.innerHeight;
+}, { passive: false });
+
+window.addEventListener('resize', resize);
+
+document.getElementById('audioBtn').onclick = toggleAudio;
+
+const panel = document.getElementById('panel');
+const toggle = document.getElementById('panelToggle');
+toggle.onclick = () => panel.classList.toggle('collapsed');
+
+document.addEventListener('keydown', e => {
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  switch (e.key) {
+    case 'h': case 'H': panel.classList.toggle('collapsed'); break;
+    case 'ArrowRight': modeIdx = (modeIdx + 1) % MODES.length; buildModes(); break;
+    case 'ArrowLeft': modeIdx = (modeIdx - 1 + MODES.length) % MODES.length; buildModes(); break;
+    case 'c': case 'C': paletteIdx = (paletteIdx + 1) % PALETTES.length; buildPalettes(); break;
+    case 'r': case 'R': randomize(); break;
+    case ' ': e.preventDefault(); paused = !paused; break;
+    case 'm': case 'M': toggleAudio(); break;
+    case 'f': case 'F':
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+      break;
+    case 's': case 'S': {
+      const a = document.createElement('a');
+      a.download = `warp-${MODES[modeIdx].name.toLowerCase()}-${Date.now()}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      break;
+    }
+    case '?':
+      document.getElementById('shortcuts').classList.toggle('visible');
+      break;
+  }
+});
+
+document.getElementById('shortcuts').onclick = () => {
+  document.getElementById('shortcuts').classList.remove('visible');
+};
+
+// ─── Init ───
+document.getElementById('startOverlay').onclick = () => {
+  document.getElementById('startOverlay').classList.add('hidden');
+  resize();
+  buildModes();
+  buildPalettes();
+  setupSliders();
+  animId = requestAnimationFrame(frame);
+};
+</script>
+</body>
+</html>

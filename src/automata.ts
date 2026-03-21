@@ -5,6 +5,16 @@
  * The core of the generative art system.
  */
 
+
+// Import flame engine
+import { FlameRule, FlameTransform, evolveFlame, mutateFlame, crossoverFlame, randomFlameRule, VARIATION_COUNT, VARIATION_NAMES } from "./flame.js";
+export type { FlameRule, FlameTransform };
+export { evolveFlame, VARIATION_NAMES };
+// Import DLA engine
+import { DLARule, evolveDLA, mutateDLA, crossoverDLA, randomDLARule, DLA_SEED_GENOMES } from "./dla.js";
+export type { DLARule };
+export { evolveDLA };
+
 // Unicode palettes for rendering (light → dense)
 const PALETTE = [" ", "░", "▒", "▓", "█", "╱", "╲", "╳", "◊", "◆", "●", "○", "◐", "◑", "◒", "◓"];
 const MINIMAL_PALETTE = [" ", "·", "•", "○", "●", "◆"];
@@ -130,8 +140,8 @@ export interface DLARule {
 }
 
 export interface Genome {
-  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla";
-  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule;
+  type: "1d" | "2d" | "lsystem" | "reaction-diffusion" | "voronoi" | "wfc" | "spirograph" | "attractor" | "julia" | "noise" | "flowfield" | "dla" | "fractal-flame";
+  rule: Rule1D | Rule2D | LSystemRule | ReactionDiffusionRule | VoronoiRule | WFCRule | SpirographRule | AttractorRule | JuliaRule | NoiseRule | FlowFieldRule | DLARule | FlameRule;
   width: number;
   height: number;
   palette: string[];
@@ -174,7 +184,9 @@ export interface PieceMetrics {
   structuralInterest: number;  // clustered regions vs uniform noise
   fractalDimension: number;    // box-counting fractal dimension (0-2, higher = more complex boundary)
   informationDensity: number;  // bits per cell normalized — how efficiently the visual space encodes info
+  compositionBalance: number;  // visual weight distribution across quadrants (0=lopsided, 1=balanced)
   spatialCoherence: number;    // spatial autocorrelation — nearby cells relate to each other (structure vs noise)
+  rhythmicRegularity: number;  // periodic pattern strength at multiple scales (0=aperiodic, 1=highly periodic)
 }
 
 // --- Pseudorandom number generator (deterministic from seed) ---
@@ -310,7 +322,7 @@ function countNeighbors(grid: number[][], x: number, y: number, w: number, h: nu
   return count;
 }
 
-// --- L-System (thick brush, depth-aware, auto-centered, stochastic + parametric) ---
+// --- L-System (stochastic + parametric + context-sensitive, depth-aware, auto-centered) ---
 export function evolveLSystem(genome: Genome): number[][] {
   const rule = genome.rule as LSystemRule;
   const { width, height } = genome;
@@ -319,14 +331,30 @@ export function evolveLSystem(genome: Genome): number[][] {
   const angleJitter = rule.angleJitter ?? 0;
   const lengthScale = rule.lengthScale ?? 1;
   const tropism = rule.tropism ?? 0;
+  const widthDecay = rule.widthDecay ?? 0.85;
 
-  // Generate L-system string with stochastic grammar support
+  // Generate L-system string with stochastic + context-sensitive grammar support
   let current = rule.axiom;
   for (let i = 0; i < rule.iterations; i++) {
     let next = "";
-    for (const ch of current) {
+    for (let ci = 0; ci < current.length; ci++) {
+      const ch = current[ci];
+      // 1. Context-sensitive rules: check left/right context matches
+      if (rule.contextSensitive && rule.contextSensitive[ch]) {
+        let matched = false;
+        for (const cr of rule.contextSensitive[ch]) {
+          const leftOk = !cr.left || (ci > 0 && current[ci - 1] === cr.left);
+          const rightOk = !cr.right || (ci < current.length - 1 && current[ci + 1] === cr.right);
+          if (leftOk && rightOk) {
+            next += cr.production;
+            matched = true;
+            break;
+          }
+        }
+        if (matched) continue;
+      }
+      // 2. Stochastic rules: weighted random selection
       if (rule.stochastic && rule.stochastic[ch]) {
-        // Weighted random selection from stochastic alternatives
         const alts = rule.stochastic[ch];
         const totalWeight = alts.reduce((s, a) => s + a.weight, 0);
         let r = rng() * totalWeight;
@@ -337,6 +365,7 @@ export function evolveLSystem(genome: Genome): number[][] {
         }
         next += chosen;
       } else {
+        // 3. Deterministic rules
         next += rule.rules[ch] ?? ch;
       }
     }
@@ -345,41 +374,59 @@ export function evolveLSystem(genome: Genome): number[][] {
   }
 
   // Phase 1: Trace turtle path with parametric extensions
-  const points: { x: number; y: number; depth: number }[] = [];
+  // F/G = draw forward, + = turn left, - = turn right,
+  // [ = push, ] = pop, | = 180° turn, ! = reduce width, ~ = sinusoidal step
+  const points: { x: number; y: number; depth: number; width: number }[] = [];
   let tx = 0, ty = 0;
   let tAngle = -90;
   let tDepth = 0;
-  const tStack: { x: number; y: number; angle: number; depth: number }[] = [];
+  let tWidth = 1.0;
+  const tStack: { x: number; y: number; angle: number; depth: number; width: number }[] = [];
+  let stepCount = 0;
 
   for (const ch of current) {
     switch (ch) {
       case "F":
       case "G": {
-        // Length scales down with depth for natural tapering
         const depthFactor = Math.pow(lengthScale, tDepth);
-        const step = depthFactor;
-        // Angle jitter adds organic irregularity
         const jitter = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
-        const effectiveAngle = tAngle + jitter;
-        // Tropism bends branches toward/away from gravity (positive = down)
         const tropismBend = tropism * tDepth * 2;
-        const finalAngle = effectiveAngle + tropismBend;
-        const nx = tx + step * Math.cos((finalAngle * Math.PI) / 180);
-        const ny = ty + step * Math.sin((finalAngle * Math.PI) / 180);
-        points.push({ x: nx, y: ny, depth: tDepth });
+        const finalAngle = tAngle + jitter + tropismBend;
+        const nx = tx + depthFactor * Math.cos((finalAngle * Math.PI) / 180);
+        const ny = ty + depthFactor * Math.sin((finalAngle * Math.PI) / 180);
+        points.push({ x: nx, y: ny, depth: tDepth, width: tWidth });
         tx = nx;
         ty = ny;
+        stepCount++;
+        break;
+      }
+      case "~": {
+        // Sinusoidal step: slight wave for organic tendrils
+        const depthFactor = Math.pow(lengthScale, tDepth);
+        const wave = Math.sin(stepCount * 0.8) * 0.3;
+        const jitter = angleJitter > 0 ? (rng() - 0.5) * 2 * angleJitter : 0;
+        const tropismBend = tropism * tDepth * 2;
+        const finalAngle = tAngle + jitter + wave * rule.angle + tropismBend;
+        const nx = tx + depthFactor * Math.cos((finalAngle * Math.PI) / 180);
+        const ny = ty + depthFactor * Math.sin((finalAngle * Math.PI) / 180);
+        points.push({ x: nx, y: ny, depth: tDepth, width: tWidth });
+        tx = nx;
+        ty = ny;
+        stepCount++;
         break;
       }
       case "+": tAngle += rule.angle; break;
       case "-": tAngle -= rule.angle; break;
+      case "|": tAngle += 180; break;
+      case "!": tWidth *= widthDecay; break;
       case "[":
-        tStack.push({ x: tx, y: ty, angle: tAngle, depth: tDepth });
+        tStack.push({ x: tx, y: ty, angle: tAngle, depth: tDepth, width: tWidth });
         tDepth++;
+        tWidth *= widthDecay;
         break;
       case "]": {
         const state = tStack.pop();
-        if (state) ({ x: tx, y: ty, angle: tAngle, depth: tDepth } = state);
+        if (state) ({ x: tx, y: ty, angle: tAngle, depth: tDepth, width: tWidth } = state);
         break;
       }
     }
@@ -410,7 +457,7 @@ export function evolveLSystem(genome: Genome): number[][] {
 
   const grid: number[][] = Array.from({ length: height }, () => new Array(width).fill(0));
 
-  // Helper: paint a cell with thickness based on depth
+  // Helper: paint a cell with thickness based on depth and parametric width
   const paint = (gx: number, gy: number, intensity: number, radius: number) => {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
@@ -425,11 +472,13 @@ export function evolveLSystem(genome: Genome): number[][] {
     }
   };
 
-  // Phase 3: Paint scaled points onto grid
+  // Phase 3: Paint scaled points onto grid (width-aware brush)
   for (const p of points) {
     const gx = Math.round(p.x * scale + offsetX);
     const gy = Math.round(p.y * scale + offsetY);
-    const radius = Math.max(0, 2 - Math.floor(p.depth / 2));
+    const depthRadius = Math.max(0, 2 - Math.floor(p.depth / 2));
+    const widthRadius = Math.round(p.width * 2);
+    const radius = Math.max(0, Math.min(depthRadius, widthRadius));
     const intensity = Math.max(1, maxState - p.depth);
     if (gx >= 0 && gx < width && gy >= 0 && gy < height) {
       paint(gx, gy, intensity, radius);
@@ -446,7 +495,6 @@ export function evolveLSystem(genome: Genome): number[][] {
   for (let gy = 0; gy < height; gy++) {
     for (let gx = 0; gx < width; gx++) {
       if (grid[gy][gx] > 0) {
-        // Soft glow: neighbors get +1 if they're empty or lower
         for (const [dy, dx] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]) {
           const ny = gy + dy, nx = gx + dx;
           if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
@@ -460,6 +508,8 @@ export function evolveLSystem(genome: Genome): number[][] {
 
   return bloomed;
 }
+
+// --- Reaction-Diffusion
 
 // --- Reaction-Diffusion (Gray-Scott model) ---
 export function evolveReactionDiffusion(genome: Genome): number[][] {
@@ -502,27 +552,32 @@ export function evolveReactionDiffusion(genome: Genome): number[][] {
     );
   };
 
-  // Simulate
-  const dt = 1.0;
-  for (let step = 0; step < steps; step++) {
-    const newU = Array.from({ length: height }, () => new Float64Array(width));
-    const newV = Array.from({ length: height }, () => new Float64Array(width));
+  // Pre-allocate swap buffers — eliminates 2×height allocations per step
+  let newU = Array.from({ length: height }, () => new Float64Array(width));
+  let newV = Array.from({ length: height }, () => new Float64Array(width));
 
+  // Simulate with inlined Laplacian + buffer swap
+  for (let step = 0; step < steps; step++) {
     for (let y = 0; y < height; y++) {
+      const ym = (y - 1 + height) % height;
+      const yp = (y + 1) % height;
       for (let x = 0; x < width; x++) {
         const u = U[y][x];
         const v = V[y][x];
+        const xm = (x - 1 + width) % width;
+        const xp = (x + 1) % width;
+        const lapU = U[ym][x] + U[yp][x] + U[y][xm] + U[y][xp] - 4 * u;
+        const lapV = V[ym][x] + V[yp][x] + V[y][xm] + V[y][xp] - 4 * v;
         const uvv = u * v * v;
-        const lapU = laplacian(U, x, y);
-        const lapV = laplacian(V, x, y);
 
-        newU[y][x] = Math.max(0, Math.min(1, u + dt * (Du * lapU - uvv + feed * (1 - u))));
-        newV[y][x] = Math.max(0, Math.min(1, v + dt * (Dv * lapV + uvv - (feed + kill) * v)));
+        newU[y][x] = Math.max(0, Math.min(1, u + Du * lapU - uvv + feed * (1 - u)));
+        newV[y][x] = Math.max(0, Math.min(1, v + Dv * lapV + uvv - (feed + kill) * v));
       }
     }
-
-    U = newU;
-    V = newV;
+    // Swap buffers — zero allocation
+    const tmpU = U, tmpV = V;
+    U = newU; V = newV;
+    newU = tmpU; newV = tmpV;
   }
 
   // Quantize V chemical into discrete states for rendering
@@ -1089,7 +1144,7 @@ export function evolveNoise(genome: Genome): number[][] {
 
 // --- Flow Field (particles trace noise-based vector fields) ---
 export function evolveFlowField(genome: Genome): number[][] {
-  const rule = genome.rule as FlowFieldRule;
+  const rule = genome.rule as FlowFieldRule | DLARule;
   const { width, height } = genome;
   const rng = mulberry32(genome.seed);
   const { fieldScale, particles, stepLength, steps, quantize, turbulence, curl, offsetX, offsetY, decay } = rule;
@@ -1408,11 +1463,12 @@ export function score(grid: number[][]): PieceMetrics {
     for (let x = 0; x < width; x++) {
       if (!visited[y][x] && grid[y][x] > 0) {
         regionCount++;
-        // BFS flood fill
+        // BFS flood fill — index-based to avoid O(n) shift()
         const queue: [number, number][] = [[y, x]];
+        let qi = 0;
         visited[y][x] = true;
-        while (queue.length > 0) {
-          const [cy, cx] = queue.shift()!;
+        while (qi < queue.length) {
+          const [cy, cx] = queue[qi++];
           for (const [dy, dx] of [[-1,0],[1,0],[0,-1],[0,1]]) {
             const ny = cy + dy, nx = cx + dx;
             if (ny >= 0 && ny < height && nx >= 0 && nx < width && !visited[ny][nx] && grid[ny][nx] > 0) {
@@ -1620,6 +1676,8 @@ function getIdealDensity(genomeType?: Genome["type"]): number | null {
     case "julia": return null;             // full coverage — score by state variety
     case "noise": return null;              // full coverage — score by state variety
     case "flowfield": return 0.3;           // streaming trails — moderate coverage with clear paths
+    case "dla": return 0.2;                    // sparse dendritic crystalline growth
+    case "fractal-flame": return 0.25;       // organic flame structures with density clusters
     default: return 0.4;
   }
 }
@@ -1636,6 +1694,7 @@ function getSymmetryScale(genomeType?: Genome["type"]): number {
     case "julia": return 0.2;             // Julia sets have inherent symmetry
     case "noise": return 0.4;              // noise can have emergent symmetry from warping
     case "flowfield": return 0.35;        // flow fields can have emergent swirl symmetry
+    case "dla": return 0.35;                 // DLA can have emergent radial symmetry
     default: return 0.3;                  // original scale
   }
 }
@@ -1674,6 +1733,9 @@ function getTypeWeights(genomeType?: Genome["type"]): Weights {
     case "flowfield":
       // Flow fields: fractal from trail complexity, info density from flow variety
       return { density: 0.11, complexity: 0.16, symmetry: 0.07, edge: 0.16, structure: 0.16, novelty: 0.12, fractal: 0.08, infoDensity: 0.07, coherence: 0.07, balance: 0.05 };
+    case "dla":
+      // DLA: structural interest and fractal dimension are defining
+      return { density: 0.07, complexity: 0.14, symmetry: 0.07, edge: 0.14, structure: 0.19, novelty: 0.12, fractal: 0.14, infoDensity: 0.06, balance: 0.07 };
     case "2d":
     default:
       return { density: 0.16, complexity: 0.16, symmetry: 0.07, edge: 0.11, structure: 0.11, novelty: 0.16, fractal: 0.08, infoDensity: 0.09, coherence: 0.06, balance: 0.05 };
@@ -1767,7 +1829,7 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     } else {
       const keys = Object.keys(rule.rules);
       const key = keys[Math.floor(rng() * keys.length)];
-      const chars = "F+-[]G";
+      const chars = "F+-[]G~!|";
       const pos = Math.floor(rng() * (rule.rules[key].length + 1));
       const ch = chars[Math.floor(rng() * chars.length)];
       rule.rules[key] =
@@ -1776,6 +1838,57 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     // Occasionally bump iterations
     if (rng() < 0.1) {
       rule.iterations = Math.min(rule.iterations + 1, 6);
+    }
+    // Mutate parametric extensions (20% chance each)
+    if (rng() < 0.2) {
+      rule.angleJitter = Math.max(0, Math.min(15, (rule.angleJitter ?? 0) + (rng() - 0.5) * 5));
+    }
+    if (rng() < 0.2) {
+      rule.lengthScale = Math.max(0.5, Math.min(1.0, (rule.lengthScale ?? 1) + (rng() - 0.5) * 0.15));
+    }
+    if (rng() < 0.15) {
+      rule.tropism = Math.max(-0.3, Math.min(0.3, (rule.tropism ?? 0) + (rng() - 0.5) * 0.1));
+    }
+    if (rng() < 0.15) {
+      rule.widthDecay = Math.max(0.5, Math.min(1.0, (rule.widthDecay ?? 0.85) + (rng() - 0.5) * 0.1));
+    }
+    // 10% chance to add/modify stochastic rule variant
+    if (rng() < 0.1) {
+      const keys = Object.keys(rule.rules);
+      const key = keys[Math.floor(rng() * keys.length)];
+      const chars = "F+-[]G~!|";
+      let variant = "";
+      const len = 3 + Math.floor(rng() * 8);
+      for (let c = 0; c < len; c++) variant += chars[Math.floor(rng() * chars.length)];
+      if (!rule.stochastic) rule.stochastic = {};
+      rule.stochastic[key] = [
+        { production: rule.rules[key], weight: 0.6 },
+        { production: variant, weight: 0.4 },
+      ];
+    }
+    // Mutate parametric extensions (20% chance each)
+    if (rng() < 0.2) {
+      rule.angleJitter = Math.max(0, Math.min(15, (rule.angleJitter ?? 0) + (rng() - 0.5) * 5));
+    }
+    if (rng() < 0.2) {
+      rule.lengthScale = Math.max(0.5, Math.min(1.0, (rule.lengthScale ?? 1) + (rng() - 0.5) * 0.15));
+    }
+    if (rng() < 0.15) {
+      rule.tropism = Math.max(-0.3, Math.min(0.3, (rule.tropism ?? 0) + (rng() - 0.5) * 0.1));
+    }
+    // 10% chance to add/modify stochastic rule variant
+    if (rng() < 0.1) {
+      const keys = Object.keys(rule.rules);
+      const key = keys[Math.floor(rng() * keys.length)];
+      const chars = "F+-[]G";
+      let variant = "";
+      const len = 3 + Math.floor(rng() * 8);
+      for (let c = 0; c < len; c++) variant += chars[Math.floor(rng() * chars.length)];
+      if (!rule.stochastic) rule.stochastic = {};
+      rule.stochastic[key] = [
+        { production: rule.rules[key], weight: 0.6 },
+        { production: variant, weight: 0.4 },
+      ];
     }
   } else if (mutated.type === "reaction-diffusion") {
     const rule = mutated.rule as ReactionDiffusionRule;
@@ -1999,6 +2112,30 @@ export function mutateGenome(genome: Genome, rng: () => number): Genome {
     if (rng() < 0.1) {
       rule.turbulence = Math.max(1, Math.min(4, rule.turbulence + (rng() > 0.5 ? 1 : -1)));
     }
+  } else if (mutated.type === "dla") {
+    const rule = mutated.rule as DLARule;
+    const param = rng();
+    if (param < 0.25) {
+      rule.stickiness = Math.max(0.1, Math.min(1.0, rule.stickiness + (rng() - 0.5) * 0.2));
+    } else if (param < 0.4) {
+      rule.maxParticles = Math.max(500, Math.min(8000, rule.maxParticles + Math.floor((rng() - 0.5) * 2000)));
+    } else if (param < 0.55) {
+      const shapes: DLARule["seedShape"][] = ["center", "line", "circle", "scatter"];
+      rule.seedShape = shapes[Math.floor(rng() * shapes.length)];
+    } else if (param < 0.65) {
+      rule.seeds = Math.max(1, Math.min(8, rule.seeds + (rng() > 0.5 ? 1 : -1)));
+    } else if (param < 0.75) {
+      rule.bias = rng() * Math.PI * 2;
+      rule.biasStrength = Math.max(0, Math.min(0.5, rule.biasStrength + (rng() - 0.5) * 0.15));
+    } else if (param < 0.85) {
+      rule.branchAngle = Math.max(0, Math.min(1, rule.branchAngle + (rng() - 0.5) * 0.3));
+    } else {
+      rule.quantize = 3 + Math.floor(rng() * 6);
+    }
+  }
+
+  } else if (mutated.type === "dla") {
+    mutateDLA(mutated.rule as DLARule, rng);
   }
 
   // Canvas size mutation (10%) — slight variation for organic feel
@@ -2161,6 +2298,21 @@ export function crossoverGenomes(a: Genome, b: Genome, rng: () => number): Genom
     rule.offsetX = rng() > 0.5 ? ra.offsetX : rb.offsetX;
     rule.offsetY = rng() > 0.5 ? ra.offsetY : rb.offsetY;
     rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
+  } else if (child.type === "dla") {
+    const ra = a.rule as DLARule, rb = b.rule as DLARule;
+    const rule = child.rule as DLARule;
+    const t = rng();
+    rule.stickiness = ra.stickiness * t + rb.stickiness * (1 - t);
+    rule.maxParticles = Math.round(ra.maxParticles * t + rb.maxParticles * (1 - t));
+    rule.seeds = rng() > 0.5 ? ra.seeds : rb.seeds;
+    rule.seedShape = rng() > 0.5 ? ra.seedShape : rb.seedShape;
+    rule.bias = rng() > 0.5 ? ra.bias : rb.bias;
+    rule.biasStrength = ra.biasStrength * t + rb.biasStrength * (1 - t);
+    rule.branchAngle = ra.branchAngle * t + rb.branchAngle * (1 - t);
+    rule.quantize = rng() > 0.5 ? ra.quantize : rb.quantize;
+  } else if (child.type === "dla") {
+    const ra = a.rule as DLARule, rb = b.rule as DLARule;
+    crossoverDLA(child.rule as DLARule, rb, rng);
   }
 
   return child;
@@ -2390,6 +2542,42 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
         offsetY: rng() * 100,
         decay: 0.8 + rng() * 0.2,
       },
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "dla") {
+    const shapes: DLARule["seedShape"][] = ["center", "line", "circle", "scatter"];
+    const presets = [
+      { seeds: 1, stickiness: 1.0, maxParticles: 3000, biasStrength: 0 },
+      { seeds: 3, stickiness: 0.7, maxParticles: 4000, biasStrength: 0.1 },
+      { seeds: 1, stickiness: 0.4, maxParticles: 5000, biasStrength: 0.3 },
+      { seeds: 5, stickiness: 0.8, maxParticles: 3500, biasStrength: 0 },
+      { seeds: 1, stickiness: 0.6, maxParticles: 4500, biasStrength: 0 },
+    ];
+    const preset = presets[Math.floor(rng() * presets.length)];
+    return {
+      type: "dla",
+      rule: {
+        seeds: preset.seeds,
+        seedShape: shapes[Math.floor(rng() * shapes.length)],
+        stickiness: preset.stickiness + (rng() - 0.5) * 0.1,
+        maxParticles: preset.maxParticles + Math.floor((rng() - 0.5) * 1000),
+        bias: rng() * Math.PI * 2,
+        biasStrength: preset.biasStrength + rng() * 0.05,
+        branchAngle: rng() * 0.5,
+        quantize: 4 + Math.floor(rng() * 4),
+      },
+      width: 48 + Math.floor(rng() * 16),
+      height: 28 + Math.floor(rng() * 10),
+      palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
+    };
+  }
+  if (type === "dla") {
+    return {
+      type: "dla",
+      rule: randomDLARule(rng),
       width: 48 + Math.floor(rng() * 16),
       height: 28 + Math.floor(rng() * 10),
       palette, seed, mutations: 0, lineage: [...lineage, "typeswap"],
@@ -2852,4 +3040,40 @@ export const SEED_GENOMES: Genome[] = [
     mutations: 0,
     lineage: [],
   },
+  // Diffusion-Limited Aggregation — dendritic crystal growth
+  {
+    type: "dla",
+    rule: { seeds: 1, seedShape: "center", stickiness: 1.0, particles: 3000, bias: 0, biasStrength: 0, branchDecay: 0.95, quantize: 6 },
+    width: 52,
+    height: 32,
+    palette: SHADE_PALETTE,
+    seed: 44444,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "dla",
+    rule: { seeds: 4, seedShape: "circle", stickiness: 0.7, particles: 4000, bias: 0, biasStrength: 0, branchDecay: 0.85, quantize: 7 },
+    width: 56,
+    height: 34,
+    palette: STAR_PALETTE,
+    seed: 55555,
+    mutations: 0,
+    lineage: [],
+  },
+  {
+    type: "dla",
+    rule: { seeds: 1, seedShape: "center", stickiness: 0.9, particles: 3500, bias: -1.5708, biasStrength: 0.25, branchDecay: 0.9, quantize: 5 },
+    width: 48,
+    height: 30,
+    palette: BRAILLE_PALETTE,
+    seed: 66666,
+    mutations: 0,
+    lineage: [],
+  },
 ];
+
+
+// --- Advanced Palette System (appended) ---
+// These functions are imported/mirrored in docs/chromatic.html
+
