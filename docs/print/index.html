@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice Print Shop</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    header {
+      text-align: center;
+      padding: 2.5rem 0 2rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+      margin-bottom: 0.4rem;
+    }
+
+    h1 a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .subtitle {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 1rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+    .back-link:hover { opacity: 1; }
+
+    /* Grid of thumbnails */
+    .thumb-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+
+    .thumb {
+      aspect-ratio: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      overflow: hidden;
+      position: relative;
+      transition: border-color 0.25s, box-shadow 0.25s;
+    }
+
+    .thumb:hover {
+      border-color: var(--accent);
+    }
+
+    .thumb.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .thumb canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .thumb-score {
+      position: absolute;
+      bottom: 4px;
+      right: 6px;
+      font-size: 0.6rem;
+      color: var(--green);
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    .thumb-type {
+      position: absolute;
+      top: 4px;
+      left: 6px;
+      font-size: 0.55rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    /* Detail panel */
+    .detail-panel {
+      display: none;
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .detail-panel.active {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    @media (max-width: 768px) {
+      .detail-panel.active {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .detail-preview {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: 1;
+      position: relative;
+    }
+
+    .detail-preview canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .detail-info {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .detail-title {
+      font-size: 1rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .detail-meta {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+    }
+
+    .detail-meta strong {
+      color: var(--text);
+    }
+
+    /* Print option cards */
+    .print-options {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .print-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: border-color 0.25s, box-shadow 0.25s;
+    }
+
+    .print-option:hover {
+      border-color: var(--accent);
+    }
+
+    .print-option-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .print-option-name {
+      font-size: 0.85rem;
+      color: var(--text);
+      letter-spacing: 0.05em;
+    }
+
+    .print-option-desc {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+
+    .print-option-price {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--green);
+      white-space: nowrap;
+    }
+
+    .print-option-price.free {
+      color: var(--accent);
+    }
+
+    .btn {
+      padding: 0.6rem 1.4rem;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #7c6fe0 0%, #4ade80 100%);
+      color: #fff;
+      box-shadow: 0 0 15px #7c6fe030;
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 25px #7c6fe050;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .coming-soon {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 10px;
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: var(--accent);
+      color: #fff;
+      opacity: 0.8;
+    }
+
+    /* Waitlist form */
+    .waitlist-form {
+      display: none;
+      margin-top: 1rem;
+      padding: 1rem 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .waitlist-form.visible {
+      display: block;
+    }
+
+    .waitlist-form label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+
+    .waitlist-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .waitlist-form input[type="email"] {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.75rem;
+      outline: none;
+    }
+
+    .waitlist-form input[type="email"]:focus {
+      border-color: var(--accent);
+    }
+
+    .waitlist-success {
+      color: var(--green);
+      font-size: 0.75rem;
+      margin-top: 0.5rem;
+      display: none;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 4rem 0;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    .loading { opacity: 0.5; }
+
+    footer {
+      text-align: center;
+      padding: 3rem 0 2rem;
+      border-top: 1px solid var(--border);
+      margin-top: 2rem;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+  </style>
+  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><a href="/">Lattice</a></h1>
+      <p class="subtitle">print shop &mdash; generative art for your walls</p>
+      <a href="/" class="back-link">&larr; Back to Gallery</a>
+    </header>
+
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-preview">
+        <canvas id="detail-canvas"></canvas>
+      </div>
+      <div class="detail-info">
+        <div class="detail-title" id="detail-title"></div>
+        <div class="detail-meta" id="detail-meta"></div>
+
+        <div class="print-options">
+          <div class="print-option">
+            <div class="print-option-info">
+              <span class="print-option-name">Digital Download</span>
+              <span class="print-option-desc">4K SVG &mdash; infinite resolution, print-ready</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span class="print-option-price free">Free</span>
+              <button class="btn btn-primary" id="download-btn">Download</button>
+            </div>
+          </div>
+
+          <div class="print-option">
+            <div class="print-option-info">
+              <span class="print-option-name">Canvas Print</span>
+              <span class="print-option-desc">24" x 24" gallery-wrapped canvas</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span class="print-option-price">$49</span>
+              <span class="coming-soon">Coming Soon</span>
+            </div>
+          </div>
+
+          <div class="print-option">
+            <div class="print-option-info">
+              <span class="print-option-name">Framed Print</span>
+              <span class="print-option-desc">18" x 18" matte print, black frame</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span class="print-option-price">$39</span>
+              <span class="coming-soon">Coming Soon</span>
+            </div>
+          </div>
+
+          <div class="print-option">
+            <div class="print-option-info">
+              <span class="print-option-name">Poster</span>
+              <span class="print-option-desc">36" x 36" heavyweight matte poster</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span class="print-option-price">$29</span>
+              <span class="coming-soon">Coming Soon</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <button class="btn btn-secondary" id="waitlist-toggle">Join Waitlist for Physical Prints</button>
+          <div class="waitlist-form" id="waitlist-form">
+            <label>Get notified when prints are available</label>
+            <div class="waitlist-row">
+              <input type="email" id="waitlist-email" placeholder="your@email.com">
+              <button class="btn btn-primary" id="waitlist-submit">Join</button>
+            </div>
+            <div class="waitlist-success" id="waitlist-success">You're on the list. We'll let you know.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="thumb-grid" class="thumb-grid"></div>
+
+    <div id="empty" class="empty-state" style="display:none">
+      No pieces available yet. Check back after the first evolution run.
+    </div>
+
+    <footer>
+      <p>
+        <a href="/">Gallery</a>
+        &nbsp;&bull;&nbsp;
+        <a href="/live">Live Mode</a>
+        &nbsp;&bull;&nbsp;
+        <a href="/create">Create</a>
+      </p>
+      <p style="margin-top: 0.75rem;">Each piece is generated by autonomous evolution &mdash; no two are alike.</p>
+    </footer>
+  </div>
+
+  <script>
+    // ---- Color / rendering logic (mirrors index.html) ----
+    const TYPE_COLORS = {
+      '1d':                  { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a3e', '#3b2d8b', '#6b4edb', '#9d7af5', '#c8abff', '#e8d8ff', '#ffffff'] },
+      '2d':                  { bg: '#0a0a0f', colors: ['#0a0a0f', '#0d2818', '#166b3a', '#22a95c', '#4ade80', '#7af5a8', '#b8ffd4', '#e8fff0'] },
+      'lsystem':             { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a0a', '#6b3a0d', '#a85c16', '#db8b22', '#f5b84a', '#ffe088', '#fff4cc'] },
+      'reaction-diffusion':  { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0a2d', '#3b0d6b', '#6b16a8', '#a822db', '#d44af5', '#f088ff', '#ffccff'] },
+      'voronoi':             { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a2d', '#0d3b6b', '#166ba8', '#22a8db', '#4ad4f5', '#88eeff', '#ccf8ff'] },
+      'wfc':                 { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d0a0a', '#6b0d1a', '#a8163b', '#db226b', '#f54a9d', '#ff88c8', '#ffccee'] },
+      'spirograph':          { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a2d0a', '#3b6b0d', '#6ba816', '#a8db22', '#d4f54a', '#eeff88', '#ffffcc'] },
+      'attractor':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a1a', '#6b2d2d', '#a84a3b', '#db6b4a', '#f59d6b', '#ffc8a0', '#ffe8d8'] },
+      'julia':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a2d2d', '#0d6b5b', '#16a88a', '#22dbb5', '#4af5d4', '#88ffe8', '#ccfff4'] },
+      'noise':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a0a', '#3b3b0d', '#6b6b16', '#a8a822', '#d4d44a', '#eeff88', '#ffffcc'] },
+      'flowfield':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a1a', '#0d3b3b', '#166b6b', '#22a8a8', '#4ad4d4', '#88eeff', '#ccffff'] },
+    };
+
+    function charIntensity(ch) {
+      if (ch === ' ') return 0;
+      const light = '\u00B7.:~\u2801';
+      const med1  = '\u2591\u2022\u2248\u2803\u25B3\u25BD\u2726';
+      const med2  = '\u2592\u25CB\u223F\u2807\u25C7\u2727\u2766';
+      const med3  = '\u2593\u25CF\u224B\u280F\u25C8\u2605\u273F';
+      const heavy = '\u2588\u25C6\u2307\u281F\u2B21\u2736\u2740\u2741';
+      const max   = '\u2573\u25D0\u25D1\u25D2\u25D3\u2301\u283F\u28FF\u2B22\u2739\u273A';
+      if (light.includes(ch)) return 1;
+      if (med1.includes(ch))  return 2;
+      if (med2.includes(ch))  return 3;
+      if (med3.includes(ch))  return 4;
+      if (heavy.includes(ch)) return 5;
+      if (max.includes(ch))   return 6;
+      return 3;
+    }
+
+    function renderToCanvas(canvas, rendered, genomeType) {
+      const theme = TYPE_COLORS[genomeType] || TYPE_COLORS['2d'];
+      const lines = rendered.split('\n').filter(l => l.length > 0);
+      if (lines.length === 0) return;
+
+      const rows = lines.length;
+      const cols = Math.max(...lines.map(l => [...l].length));
+
+      // Set canvas resolution
+      const displaySize = canvas.clientWidth || canvas.parentElement.clientWidth || 400;
+      const resolution = Math.min(displaySize * 2, 1024); // 2x for retina, cap at 1024
+      canvas.width = resolution;
+      canvas.height = resolution;
+
+      const ctx = canvas.getContext('2d');
+      const cellW = resolution / cols;
+      const cellH = resolution / rows;
+
+      // Fill background
+      ctx.fillStyle = theme.bg;
+      ctx.fillRect(0, 0, resolution, resolution);
+
+      // Draw cells
+      for (let y = 0; y < rows; y++) {
+        const chars = [...lines[y]];
+        for (let x = 0; x < chars.length; x++) {
+          const intensity = charIntensity(chars[x]);
+          if (intensity === 0) continue;
+          ctx.fillStyle = theme.colors[Math.min(intensity, theme.colors.length - 1)];
+          ctx.fillRect(x * cellW, y * cellH, cellW + 0.5, cellH + 0.5);
+        }
+      }
+    }
+
+    function typeLabel(type) {
+      return {
+        '1d': '1D Automaton', '2d': '2D Life-like', 'lsystem': 'L-System',
+        'reaction-diffusion': 'Reaction-Diffusion', 'voronoi': 'Voronoi',
+        'wfc': 'Wave Function Collapse', 'spirograph': 'Spirograph',
+        'attractor': 'Strange Attractor', 'julia': 'Julia Set',
+        'noise': 'Fractal Noise', 'flowfield': 'Flow Field',
+      }[type] || type;
+    }
+
+    // ---- Data fetching ----
+    const SUPABASE_URL = 'https://fwwjtlafcrzeqfuqmexs.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ3d2p0bGFmY3J6ZXFmdXFtZXhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNjAzNTAsImV4cCI6MjA4MzczNjM1MH0.caaW2yQl0o9WGfwvNRrcdPZXmYIZKgBaCpqzc-gXt5M';
+
+    let allPieces = [];
+    let selectedPiece = null;
+
+    async function fetchPieces() {
+      const headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Accept-Profile': 'lattice',
+        'Accept': 'application/json',
+      };
+      const base = SUPABASE_URL + '/rest/v1';
+
+      // Fetch hall of fame + archive (best pieces)
+      const [hofRes, archiveRes] = await Promise.all([
+        fetch(base + '/hall_of_fame?order=score.desc&limit=50&select=id,genome,score,metrics,rendered,generation', { headers }),
+        fetch(base + '/archive?order=score.desc&select=id,genome,score,metrics,rendered,generation&limit=50', { headers: { ...headers, 'Range': '0-49' } }),
+      ]);
+
+      const hof = hofRes.ok ? await hofRes.json() : [];
+      const archive = archiveRes.ok ? await archiveRes.json() : [];
+
+      // Merge, deduplicate by id, sort by score
+      const seen = new Set();
+      const merged = [];
+      for (const p of [...hof, ...archive]) {
+        if (!seen.has(p.id) && p.rendered) {
+          seen.add(p.id);
+          merged.push(p);
+        }
+      }
+      merged.sort((a, b) => b.score - a.score);
+      return merged.slice(0, 50);
+    }
+
+    function renderThumbnails(pieces) {
+      const grid = document.getElementById('thumb-grid');
+      if (pieces.length === 0) {
+        grid.style.display = 'none';
+        document.getElementById('empty').style.display = 'block';
+        return;
+      }
+
+      grid.innerHTML = '';
+      pieces.forEach((piece, i) => {
+        const div = document.createElement('div');
+        div.className = 'thumb';
+        div.dataset.index = i;
+        div.innerHTML = `
+          <canvas></canvas>
+          <span class="thumb-type">${typeLabel(piece.genome.type)}</span>
+          <span class="thumb-score">${(piece.score * 100).toFixed(0)}%</span>
+        `;
+        grid.appendChild(div);
+
+        // Render after a frame so clientWidth is available
+        requestAnimationFrame(() => {
+          const canvas = div.querySelector('canvas');
+          renderToCanvas(canvas, piece.rendered, piece.genome.type);
+        });
+
+        div.addEventListener('click', () => selectPiece(i));
+      });
+    }
+
+    function selectPiece(index) {
+      selectedPiece = allPieces[index];
+      const panel = document.getElementById('detail-panel');
+      panel.classList.add('active');
+
+      // Scroll to panel
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      // Highlight selected thumbnail
+      document.querySelectorAll('.thumb').forEach((t, i) => {
+        t.classList.toggle('selected', i === index);
+      });
+
+      // Render large preview
+      const canvas = document.getElementById('detail-canvas');
+      requestAnimationFrame(() => renderToCanvas(canvas, selectedPiece.rendered, selectedPiece.genome.type));
+
+      // Update info
+      document.getElementById('detail-title').textContent = typeLabel(selectedPiece.genome.type) + ' #' + selectedPiece.id.slice(0, 8);
+      document.getElementById('detail-meta').innerHTML = `
+        <strong>Type:</strong> ${typeLabel(selectedPiece.genome.type)}<br>
+        <strong>Generation:</strong> ${selectedPiece.generation}<br>
+        <strong>Fitness Score:</strong> ${(selectedPiece.score * 100).toFixed(1)}%<br>
+        <strong>ID:</strong> ${selectedPiece.id}<br>
+        <span style="margin-top: 0.5rem; display: inline-block; color: var(--text-dim); font-size: 0.65rem;">
+          Each piece evolves through selection pressure &mdash; only the most visually
+          interesting survive to reproduce. This piece earned its place through
+          ${selectedPiece.generation} generations of autonomous evolution.
+        </span>
+      `;
+    }
+
+    // ---- Download ----
+    document.getElementById('download-btn').addEventListener('click', () => {
+      if (!selectedPiece) return;
+      const url = '/api/render?id=' + encodeURIComponent(selectedPiece.id) + '&size=4096';
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'lattice-' + selectedPiece.id.slice(0, 8) + '.svg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+
+    // ---- Waitlist ----
+    document.getElementById('waitlist-toggle').addEventListener('click', () => {
+      document.getElementById('waitlist-form').classList.toggle('visible');
+    });
+
+    document.getElementById('waitlist-submit').addEventListener('click', () => {
+      const email = document.getElementById('waitlist-email').value.trim();
+      if (!email || !email.includes('@')) return;
+      // Store in localStorage
+      const list = JSON.parse(localStorage.getItem('lattice-waitlist') || '[]');
+      if (!list.includes(email)) {
+        list.push(email);
+        localStorage.setItem('lattice-waitlist', JSON.stringify(list));
+      }
+      document.getElementById('waitlist-success').style.display = 'block';
+      document.getElementById('waitlist-email').value = '';
+    });
+
+    // ---- Check for ?id= param to auto-select ----
+    function getQueryParam(name) {
+      return new URLSearchParams(window.location.search).get(name);
+    }
+
+    // ---- Init ----
+    async function init() {
+      try {
+        allPieces = await fetchPieces();
+        renderThumbnails(allPieces);
+
+        // Auto-select if ?id= is in URL
+        const targetId = getQueryParam('id');
+        if (targetId) {
+          const idx = allPieces.findIndex(p => p.id === targetId);
+          if (idx >= 0) {
+            setTimeout(() => selectPiece(idx), 100);
+          }
+        } else if (allPieces.length > 0) {
+          // Select the first piece by default
+          setTimeout(() => selectPiece(0), 100);
+        }
+      } catch (e) {
+        console.error('[lattice print] Failed to load pieces:', e);
+        document.getElementById('thumb-grid').style.display = 'none';
+        document.getElementById('empty').style.display = 'block';
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
