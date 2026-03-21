@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Vortex</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    /* --- HUD overlay --- */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .hud-title {
+      pointer-events: auto;
+    }
+
+    .hud-title h1 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .hud-title .back-link {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .hud-title .back-link:hover { color: var(--accent); }
+
+    .hud-stats {
+      text-align: right;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.8;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    /* --- Control panel --- */
+    .panel {
+      position: absolute;
+      right: 1.25rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 220px;
+      background: rgba(18, 18, 26, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 1rem;
+      pointer-events: auto;
+      z-index: 20;
+      max-height: 80vh;
+      overflow-y: auto;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+
+    .panel.collapsed {
+      opacity: 0;
+      transform: translateY(-50%) translateX(240px);
+      pointer-events: none;
+    }
+
+    .panel::-webkit-scrollbar { width: 3px; }
+    .panel::-webkit-scrollbar-track { background: transparent; }
+    .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .panel-section {
+      margin-bottom: 0.85rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+    .section-label {
+      font-size: 0.55rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .slider-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      min-width: 60px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .slider-val {
+      font-size: 0.55rem;
+      color: var(--green);
+      min-width: 28px;
+      text-align: right;
+    }
+
+    /* Attractor type buttons */
+    .type-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+    }
+
+    .type-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.05em;
+      padding: 0.35rem 0;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .type-btn:hover { border-color: var(--accent); color: var(--text); }
+    .type-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(124, 111, 224, 0.1); }
+
+    /* Palette buttons */
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+    }
+
+    .pal-btn {
+      height: 20px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .pal-btn:hover { border-color: var(--text-dim); }
+    .pal-btn.active { border-color: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
+
+    /* Toggle buttons */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.35rem;
+    }
+
+    .toggle-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+    }
+
+    .toggle {
+      width: 32px; height: 16px;
+      background: var(--border);
+      border-radius: 8px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle.on { background: var(--accent); }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: var(--text);
+      transition: transform 0.2s;
+    }
+
+    .toggle.on::after { transform: translateX(16px); }
+
+    /* Hint bar */
+    .hint-bar {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      pointer-events: none;
+      opacity: 0.6;
+      transition: opacity 2s;
+    }
+
+    /* Param display */
+    .param-display {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.03em;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+    .param-display .val { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <!-- HUD -->
+  <div class="hud">
+    <div class="hud-top">
+      <div class="hud-title">
+        <h1>Vortex</h1>
+        <a href="index.html" class="back-link">&larr; lattice</a>
+      </div>
+      <div class="hud-stats" id="stats">
+        <div>iterations <span class="val" id="statIter">0</span></div>
+        <div>fps <span class="val" id="statFps">0</span></div>
+        <div>points <span class="val" id="statPts">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Parameter readout -->
+  <div class="param-display" id="paramDisplay">
+    <div>a = <span class="val" id="pA">0.00</span></div>
+    <div>b = <span class="val" id="pB">0.00</span></div>
+    <div>c = <span class="val" id="pC">0.00</span></div>
+    <div>d = <span class="val" id="pD">0.00</span></div>
+  </div>
+
+  <!-- Control panel -->
+  <div class="panel" id="panel">
+    <div class="panel-section">
+      <div class="section-label">Attractor</div>
+      <div class="type-grid" id="typeGrid">
+        <button class="type-btn active" data-type="clifford">Clifford</button>
+        <button class="type-btn" data-type="dejong">De Jong</button>
+        <button class="type-btn" data-type="bedhead">Bedhead</button>
+        <button class="type-btn" data-type="fractal-dream">Fractal Dream</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Parameters</div>
+      <div class="slider-row">
+        <span class="slider-label">a</span>
+        <input type="range" id="sliderA" min="-300" max="300" value="0">
+        <span class="slider-val" id="sliderAVal">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">b</span>
+        <input type="range" id="sliderB" min="-300" max="300" value="0">
+        <span class="slider-val" id="sliderBVal">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">c</span>
+        <input type="range" id="sliderC" min="-300" max="300" value="0">
+        <span class="slider-val" id="sliderCVal">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">d</span>
+        <input type="range" id="sliderD" min="-300" max="300" value="0">
+        <span class="slider-val" id="sliderDVal">0.00</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Rendering</div>
+      <div class="slider-row">
+        <span class="slider-label">Speed</span>
+        <input type="range" id="speed" min="1" max="100" value="50">
+        <span class="slider-val" id="speedVal">50k</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Fade</span>
+        <input type="range" id="fade" min="0" max="100" value="5">
+        <span class="slider-val" id="fadeVal">5</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Point Size</span>
+        <input type="range" id="pointSize" min="1" max="30" value="5">
+        <span class="slider-val" id="pointSizeVal">0.5</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Zoom</span>
+        <input type="range" id="zoom" min="10" max="200" value="100">
+        <span class="slider-val" id="zoomVal">1.0</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Palette</div>
+      <div class="palette-grid" id="paletteGrid"></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Options</div>
+      <div class="toggle-row">
+        <span class="toggle-label">Mouse Morph</span>
+        <div class="toggle on" id="toggleMorph" data-key="morph"></div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Audio React</span>
+        <div class="toggle" id="toggleAudio" data-key="audio"></div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Trail Persist</span>
+        <div class="toggle on" id="toggleTrail" data-key="trail"></div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Glow</span>
+        <div class="toggle on" id="toggleGlow" data-key="glow"></div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">Presets</div>
+      <div class="type-grid" id="presetGrid"></div>
+    </div>
+  </div>
+
+  <div class="hint-bar" id="hint">
+    Move mouse to morph &middot; Tab to toggle panel &middot; Space to clear &middot; M for mic
+  </div>
+
+<script>
+// ============================================================
+//  VORTEX — Interactive Strange Attractor Explorer
+// ============================================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---- Palettes ----
+const PALETTES = [
+  { name: 'Nebula',    colors: ['#7c6fe0', '#9b8ff0', '#4a3fa0', '#b8aff8', '#6259b5'] },
+  { name: 'Ember',     colors: ['#ff6b35', '#ff8c5a', '#c44820', '#ffab82', '#8a2e0e'] },
+  { name: 'Verdant',   colors: ['#4ade80', '#22c55e', '#16a34a', '#86efac', '#166534'] },
+  { name: 'Frost',     colors: ['#38bdf8', '#7dd3fc', '#0284c7', '#bae6fd', '#075985'] },
+  { name: 'Plasma',    colors: ['#e879f9', '#c026d3', '#a21caf', '#f0abfc', '#86198f'] },
+  { name: 'Solar',     colors: ['#fbbf24', '#f59e0b', '#d97706', '#fde68a', '#92400e'] },
+  { name: 'Monochrome',colors: ['#c8c8d4', '#9898a8', '#68687c', '#e8e8f0', '#484858'] },
+  { name: 'Vortex',    colors: ['#7c6fe0', '#4ade80', '#fbbf24', '#38bdf8', '#e879f9'] },
+];
+
+let currentPalette = 0;
+
+// Build palette buttons
+const paletteGrid = document.getElementById('paletteGrid');
+PALETTES.forEach((pal, i) => {
+  const btn = document.createElement('div');
+  btn.className = 'pal-btn' + (i === 0 ? ' active' : '');
+  btn.style.background = `linear-gradient(135deg, ${pal.colors[0]}, ${pal.colors[2]})`;
+  btn.title = pal.name;
+  btn.addEventListener('click', () => {
+    paletteGrid.querySelectorAll('.pal-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentPalette = i;
+    clearCanvas();
+  });
+  paletteGrid.appendChild(btn);
+});
+
+// ---- Attractor types ----
+const ATTRACTORS = {
+  clifford: {
+    fn: (x, y, a, b, c, d) => ({
+      x: Math.sin(a * y) + c * Math.cos(a * x),
+      y: Math.sin(b * x) + d * Math.cos(b * y)
+    }),
+    range: { a: [-3, 3], b: [-3, 3], c: [-3, 3], d: [-3, 3] }
+  },
+  dejong: {
+    fn: (x, y, a, b, c, d) => ({
+      x: Math.sin(a * y) - Math.cos(b * x),
+      y: Math.sin(c * x) - Math.cos(d * y)
+    }),
+    range: { a: [-3, 3], b: [-3, 3], c: [-3, 3], d: [-3, 3] }
+  },
+  bedhead: {
+    fn: (x, y, a, b) => ({
+      x: Math.sin(x * y / b) + Math.cos(a * x - y),
+      y: x + Math.sin(y) / b
+    }),
+    range: { a: [-1, 1], b: [-1, 1], c: [-1, 1], d: [-1, 1] }
+  },
+  'fractal-dream': {
+    fn: (x, y, a, b, c, d) => ({
+      x: Math.sin(b * y) + c * Math.sin(b * x),
+      y: Math.sin(a * x) + d * Math.sin(a * y)
+    }),
+    range: { a: [-3, 3], b: [-3, 3], c: [-2, 2], d: [-2, 2] }
+  }
+};
+
+// ---- Presets ----
+const PRESETS = [
+  { name: 'Spiral', type: 'clifford', a: -1.4, b: 1.6, c: 1.0, d: 0.7 },
+  { name: 'Fern', type: 'clifford', a: -1.7, b: 1.3, c: -0.1, d: -1.2 },
+  { name: 'Ribbon', type: 'dejong', a: 1.641, b: 1.902, c: 0.316, d: 1.525 },
+  { name: 'Galaxy', type: 'dejong', a: -2.24, b: 0.43, c: -0.65, d: -2.43 },
+  { name: 'Bloom', type: 'fractal-dream', a: -0.966, b: 2.879, c: 0.765, d: 0.744 },
+  { name: 'Mesh', type: 'bedhead', a: -0.67, b: 0.83, c: 0, d: 0 },
+];
+
+const presetGrid = document.getElementById('presetGrid');
+PRESETS.forEach(p => {
+  const btn = document.createElement('button');
+  btn.className = 'type-btn';
+  btn.textContent = p.name;
+  btn.addEventListener('click', () => {
+    setType(p.type);
+    params.a = p.a; params.b = p.b; params.c = p.c; params.d = p.d;
+    syncSlidersFromParams();
+    clearCanvas();
+  });
+  presetGrid.appendChild(btn);
+});
+
+// ---- State ----
+let currentType = 'clifford';
+let params = { a: -1.4, b: 1.6, c: 1.0, d: 0.7 };
+let baseParams = { ...params }; // for mouse morph blending
+
+let opts = {
+  morph: true,
+  audio: false,
+  trail: true,
+  glow: true,
+};
+
+let iterPerFrame = 50000;
+let fadeAmount = 5;
+let pointSize = 0.5;
+let zoomLevel = 1.0;
+let totalIterations = 0;
+let frameCount = 0;
+let lastFpsTime = performance.now();
+let fps = 0;
+
+// Mouse state
+const mouse = { x: W / 2, y: H / 2, active: false };
+document.addEventListener('mousemove', e => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+  mouse.active = true;
+});
+document.addEventListener('mouseleave', () => { mouse.active = false; });
+
+// ---- Audio ----
+let audioCtx, analyser, micStream, freqData;
+let micLevel = 0;
+let micBands = new Float32Array(8);
+
+async function startAudio() {
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    opts.audio = true;
+    document.getElementById('toggleAudio').classList.add('on');
+  } catch (e) {
+    console.warn('Audio unavailable:', e);
+  }
+}
+
+function stopAudio() {
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (audioCtx) audioCtx.close();
+  audioCtx = null; analyser = null; micStream = null;
+  opts.audio = false;
+  micLevel = 0;
+  micBands.fill(0);
+  document.getElementById('toggleAudio').classList.remove('on');
+}
+
+function updateAudio() {
+  if (!analyser) return;
+  analyser.getByteFrequencyData(freqData);
+  let sum = 0;
+  for (let i = 0; i < freqData.length; i++) sum += freqData[i];
+  micLevel = sum / (freqData.length * 255);
+
+  const bandSize = Math.floor(freqData.length / 8);
+  for (let b = 0; b < 8; b++) {
+    let bSum = 0;
+    for (let i = b * bandSize; i < (b + 1) * bandSize; i++) bSum += freqData[i];
+    micBands[b] = bSum / (bandSize * 255);
+  }
+}
+
+// ---- Type switching ----
+function setType(type) {
+  currentType = type;
+  document.querySelectorAll('#typeGrid .type-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.type === type);
+  });
+}
+
+document.querySelectorAll('#typeGrid .type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    setType(btn.dataset.type);
+    clearCanvas();
+  });
+});
+
+// ---- Slider wiring ----
+function val(id) { return document.getElementById(id).value; }
+
+function syncSlidersFromParams() {
+  const range = ATTRACTORS[currentType].range;
+  ['a', 'b', 'c', 'd'].forEach(k => {
+    const r = range[k];
+    const norm = (params[k] - r[0]) / (r[1] - r[0]);
+    const slider = document.getElementById('slider' + k.toUpperCase());
+    slider.value = Math.round(norm * 600 - 300);
+    document.getElementById('slider' + k.toUpperCase() + 'Val').textContent = params[k].toFixed(2);
+  });
+  baseParams = { ...params };
+  updateParamDisplay();
+}
+
+function paramsFromSliders() {
+  const range = ATTRACTORS[currentType].range;
+  ['a', 'b', 'c', 'd'].forEach(k => {
+    const norm = (Number(val('slider' + k.toUpperCase())) + 300) / 600;
+    const r = range[k];
+    params[k] = r[0] + norm * (r[1] - r[0]);
+    document.getElementById('slider' + k.toUpperCase() + 'Val').textContent = params[k].toFixed(2);
+  });
+  baseParams = { ...params };
+  updateParamDisplay();
+}
+
+['sliderA', 'sliderB', 'sliderC', 'sliderD'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    paramsFromSliders();
+    clearCanvas();
+  });
+});
+
+document.getElementById('speed').addEventListener('input', () => {
+  iterPerFrame = Number(val('speed')) * 1000;
+  document.getElementById('speedVal').textContent = val('speed') + 'k';
+});
+
+document.getElementById('fade').addEventListener('input', () => {
+  fadeAmount = Number(val('fade'));
+  document.getElementById('fadeVal').textContent = val('fade');
+});
+
+document.getElementById('pointSize').addEventListener('input', () => {
+  pointSize = Number(val('pointSize')) / 10;
+  document.getElementById('pointSizeVal').textContent = pointSize.toFixed(1);
+});
+
+document.getElementById('zoom').addEventListener('input', () => {
+  zoomLevel = Number(val('zoom')) / 100;
+  document.getElementById('zoomVal').textContent = zoomLevel.toFixed(1);
+  clearCanvas();
+});
+
+// ---- Toggles ----
+document.querySelectorAll('.toggle').forEach(el => {
+  el.addEventListener('click', () => {
+    const key = el.dataset.key;
+    if (key === 'audio') {
+      if (opts.audio) stopAudio();
+      else startAudio();
+      return;
+    }
+    opts[key] = !opts[key];
+    el.classList.toggle('on', opts[key]);
+  });
+});
+
+// ---- Keyboard ----
+document.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    document.getElementById('panel').classList.toggle('collapsed');
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    clearCanvas();
+  } else if (e.key === 'm' || e.key === 'M') {
+    if (opts.audio) stopAudio();
+    else startAudio();
+  } else if (e.key === 'r' || e.key === 'R') {
+    randomize();
+  } else if (e.key === 's' || e.key === 'S') {
+    saveImage();
+  } else if (e.key === 'f' || e.key === 'F') {
+    if (!document.fullscreenElement) canvas.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+});
+
+// ---- Scroll zoom ----
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -0.05 : 0.05;
+  zoomLevel = Math.max(0.1, Math.min(2.0, zoomLevel + delta));
+  document.getElementById('zoom').value = Math.round(zoomLevel * 100);
+  document.getElementById('zoomVal').textContent = zoomLevel.toFixed(1);
+  clearCanvas();
+}, { passive: false });
+
+// ---- Helpers ----
+function clearCanvas() {
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+  totalIterations = 0;
+}
+
+function updateParamDisplay() {
+  document.getElementById('pA').textContent = params.a.toFixed(3);
+  document.getElementById('pB').textContent = params.b.toFixed(3);
+  document.getElementById('pC').textContent = params.c.toFixed(3);
+  document.getElementById('pD').textContent = params.d.toFixed(3);
+}
+
+function randomize() {
+  const range = ATTRACTORS[currentType].range;
+  ['a', 'b', 'c', 'd'].forEach(k => {
+    const r = range[k];
+    params[k] = r[0] + Math.random() * (r[1] - r[0]);
+  });
+  syncSlidersFromParams();
+  clearCanvas();
+}
+
+function saveImage() {
+  const link = document.createElement('a');
+  link.download = `vortex-${currentType}-${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+// Initialize sliders
+syncSlidersFromParams();
+document.getElementById('speedVal').textContent = '50k';
+
+// ---- Main render loop ----
+function render() {
+  requestAnimationFrame(render);
+
+  // FPS
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 1000) {
+    fps = frameCount;
+    frameCount = 0;
+    lastFpsTime = now;
+  }
+
+  // Audio update
+  if (opts.audio) updateAudio();
+
+  // Mouse morph
+  let effectiveParams = { ...baseParams };
+  if (opts.morph && mouse.active) {
+    const mx = (mouse.x / W - 0.5) * 2; // -1 to 1
+    const my = (mouse.y / H - 0.5) * 2;
+    const range = ATTRACTORS[currentType].range;
+    const morphStrength = 0.3;
+    effectiveParams.a = baseParams.a + mx * morphStrength * (range.a[1] - range.a[0]);
+    effectiveParams.b = baseParams.b + my * morphStrength * (range.b[1] - range.b[0]);
+    // Subtle morph on c and d from diagonal
+    effectiveParams.c = baseParams.c + (mx + my) * 0.5 * morphStrength * (range.c[1] - range.c[0]) * 0.3;
+    effectiveParams.d = baseParams.d + (mx - my) * 0.5 * morphStrength * (range.d[1] - range.d[0]) * 0.3;
+  }
+
+  // Audio perturbation
+  if (opts.audio && micLevel > 0.02) {
+    const range = ATTRACTORS[currentType].range;
+    effectiveParams.a += (micBands[0] - 0.3) * 0.5 * (range.a[1] - range.a[0]);
+    effectiveParams.b += (micBands[2] - 0.3) * 0.3 * (range.b[1] - range.b[0]);
+    effectiveParams.c += (micBands[4] - 0.3) * 0.2 * (range.c[1] - range.c[0]);
+    effectiveParams.d += (micBands[6] - 0.3) * 0.2 * (range.d[1] - range.d[0]);
+  }
+
+  // Update display
+  params.a = effectiveParams.a;
+  params.b = effectiveParams.b;
+  params.c = effectiveParams.c;
+  params.d = effectiveParams.d;
+  updateParamDisplay();
+
+  // Fade
+  if (!opts.trail || fadeAmount > 0) {
+    const alpha = opts.trail ? fadeAmount / 1000 : 0.15;
+    ctx.fillStyle = `rgba(10, 10, 15, ${alpha})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Compute attractor points
+  const attractor = ATTRACTORS[currentType];
+  const pal = PALETTES[currentPalette].colors;
+  const scale = Math.min(W, H) * 0.18 * zoomLevel;
+  const cx = W / 2;
+  const cy = H / 2;
+
+  let x = (Math.random() - 0.5) * 0.1;
+  let y = (Math.random() - 0.5) * 0.1;
+
+  const iters = Math.round(iterPerFrame);
+  const glowEnabled = opts.glow;
+
+  // Batch iterations
+  const imageData = ctx.getImageData(0, 0, W, H);
+  const data = imageData.data;
+
+  for (let i = 0; i < iters; i++) {
+    const next = attractor.fn(x, y, effectiveParams.a, effectiveParams.b, effectiveParams.c, effectiveParams.d);
+    x = next.x;
+    y = next.y;
+
+    // Skip initial transient
+    if (i < 100) continue;
+
+    // Check for divergence
+    if (Math.abs(x) > 1e6 || Math.abs(y) > 1e6 || isNaN(x) || isNaN(y)) {
+      x = (Math.random() - 0.5) * 0.1;
+      y = (Math.random() - 0.5) * 0.1;
+      continue;
+    }
+
+    const px = Math.round(cx + x * scale);
+    const py = Math.round(cy + y * scale);
+
+    if (px < 0 || px >= W || py < 0 || py >= H) continue;
+
+    // Color from palette based on position
+    const colorIdx = Math.abs(Math.floor((Math.atan2(y, x) / Math.PI + 1) * pal.length / 2)) % pal.length;
+    const color = pal[colorIdx];
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+
+    const idx = (py * W + px) * 4;
+    // Additive blending
+    data[idx] = Math.min(255, data[idx] + r * 0.15);
+    data[idx + 1] = Math.min(255, data[idx + 1] + g * 0.15);
+    data[idx + 2] = Math.min(255, data[idx + 2] + b * 0.15);
+    data[idx + 3] = 255;
+
+    // Glow — also light up neighbors slightly
+    if (glowEnabled && i % 4 === 0) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = px + dx, ny = py + dy;
+          if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+          const ni = (ny * W + nx) * 4;
+          data[ni] = Math.min(255, data[ni] + r * 0.03);
+          data[ni + 1] = Math.min(255, data[ni + 1] + g * 0.03);
+          data[ni + 2] = Math.min(255, data[ni + 2] + b * 0.03);
+          data[ni + 3] = 255;
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  totalIterations += iters;
+
+  // Mic ring indicator
+  if (opts.audio && micLevel > 0.02) {
+    ctx.save();
+    for (let b = 0; b < 8; b++) {
+      const a1 = (b / 8) * Math.PI * 2 - Math.PI / 2;
+      const a2 = ((b + 1) / 8) * Math.PI * 2 - Math.PI / 2;
+      const rad = 30 + micBands[b] * 50;
+      ctx.strokeStyle = `rgba(124, 111, 224, ${0.15 + micBands[b] * 0.5})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(mouse.x, mouse.y, rad, a1, a2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // HUD update
+  document.getElementById('statIter').textContent = (totalIterations / 1e6).toFixed(1) + 'M';
+  document.getElementById('statFps').textContent = fps;
+  document.getElementById('statPts').textContent = (iters / 1000).toFixed(0) + 'k/f';
+
+  // Fade hint after 5s
+  if (now > 5000) {
+    document.getElementById('hint').style.opacity = '0';
+  }
+}
+
+render();
+</script>
+</body>
+</html>
