@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Piece</title>
+
+  <!-- OG meta tags — dynamically updated by JS, defaults for crawlers -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Lattice" />
+  <meta property="og:title" content="Lattice — Generative Art Piece" id="og-title" />
+  <meta property="og:description" content="A self-evolving generative art piece from the Lattice system" id="og-description" />
+  <meta property="og:image" content="" id="og-image" />
+  <meta property="og:url" content="" id="og-url" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Lattice — Generative Art Piece" id="tw-title" />
+  <meta name="twitter:description" content="A self-evolving generative art piece from the Lattice system" id="tw-description" />
+  <meta name="twitter:image" content="" id="tw-image" />
+
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+      margin-bottom: 2rem;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    .piece-title {
+      font-size: 1.6rem;
+      font-weight: 300;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+      margin-bottom: 0.3rem;
+    }
+
+    .piece-subtitle {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      margin-bottom: 1.5rem;
+    }
+
+    .piece-badges {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+    .badge.type { border-color: var(--accent); color: var(--accent); }
+    .badge.epoch { border-color: var(--green); color: var(--green); }
+    .badge.hof { border-color: var(--amber); color: var(--amber); }
+    .badge.score { border-color: var(--green); color: var(--green); }
+
+    .art-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      overflow-x: auto;
+    }
+
+    .piece-art {
+      font-size: 10px;
+      line-height: 1.1;
+      letter-spacing: 0.05em;
+      white-space: pre;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      text-align: center;
+    }
+
+    .metrics-section {
+      margin-bottom: 2rem;
+    }
+
+    .section-label {
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.8rem;
+    }
+
+    @media (max-width: 600px) {
+      .metrics-grid { grid-template-columns: 1fr; }
+    }
+
+    .metric-bar-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .metric-label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      width: 110px;
+      flex-shrink: 0;
+      text-align: right;
+    }
+
+    .metric-track {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .metric-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.6s ease;
+    }
+
+    .metric-value {
+      font-size: 0.7rem;
+      width: 48px;
+      text-align: right;
+      color: var(--text);
+    }
+
+    .genome-section {
+      margin-bottom: 2rem;
+    }
+
+    .genome-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-size: 0.75rem;
+      line-height: 1.6;
+      overflow-x: auto;
+    }
+
+    .genome-key { color: var(--accent); }
+    .genome-val { color: var(--text); }
+    .genome-sep { color: var(--text-dim); }
+
+    .radar-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 2rem;
+    }
+
+    .radar-chart { display: block; }
+    .radar-grid { fill: none; stroke: #1e1e2e; stroke-width: 0.5; }
+    .radar-axis { stroke: #1e1e2e; stroke-width: 0.5; }
+    .radar-shape { fill-opacity: 0.15; stroke-width: 1.5; }
+    .radar-dot { r: 2; }
+    .radar-label { font-size: 5px; fill: #6e6e82; font-family: 'SF Mono', monospace; }
+
+    .actions {
+      display: flex;
+      gap: 0.8rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1.2rem;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      text-decoration: none;
+    }
+    .action-btn:hover {
+      border-color: var(--accent);
+      background: #1a1a2a;
+    }
+    .action-btn.copied {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 4rem;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    .error-state {
+      text-align: center;
+      padding: 4rem;
+      color: #ef4444;
+      font-size: 0.85rem;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 0;
+      border-top: 1px solid var(--border);
+      margin-top: 2rem;
+    }
+
+    footer a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+    }
+    footer a:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="back-link">&larr; Back to Gallery</a>
+    <div id="content">
+      <div class="loading">Loading piece...</div>
+    </div>
+    <footer>
+      <a href="/">Lattice &mdash; Self-Evolving Generative Art</a>
+    </footer>
+  </div>
+
+  <script>
+    // ---- Shared rendering utilities (mirrored from index.html) ----
+
+    const TYPE_COLORS = {
+      '1d':                  { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a3e', '#3b2d8b', '#6b4edb', '#9d7af5', '#c8abff', '#e8d8ff', '#ffffff'] },
+      '2d':                  { bg: '#0a0a0f', colors: ['#0a0a0f', '#0d2818', '#166b3a', '#22a95c', '#4ade80', '#7af5a8', '#b8ffd4', '#e8fff0'] },
+      'lsystem':             { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a0a', '#6b3a0d', '#a85c16', '#db8b22', '#f5b84a', '#ffe088', '#fff4cc'] },
+      'reaction-diffusion':  { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a0a2d', '#3b0d6b', '#6b16a8', '#a822db', '#d44af5', '#f088ff', '#ffccff'] },
+      'voronoi':             { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a2d', '#0d3b6b', '#166ba8', '#22a8db', '#4ad4f5', '#88eeff', '#ccf8ff'] },
+      'wfc':                 { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d0a0a', '#6b0d1a', '#a8163b', '#db226b', '#f54a9d', '#ff88c8', '#ffccee'] },
+      'spirograph':          { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a2d0a', '#3b6b0d', '#6ba816', '#a8db22', '#d4f54a', '#eeff88', '#ffffcc'] },
+      'attractor':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#2d1a1a', '#6b2d2d', '#a84a3b', '#db6b4a', '#f59d6b', '#ffc8a0', '#ffe8d8'] },
+      'julia':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a2d2d', '#0d6b5b', '#16a88a', '#22dbb5', '#4af5d4', '#88ffe8', '#ccfff4'] },
+      'noise':               { bg: '#0a0a0f', colors: ['#0a0a0f', '#1a1a0a', '#3b3b0d', '#6b6b16', '#a8a822', '#d4d44a', '#eeff88', '#ffffcc'] },
+      'flowfield':           { bg: '#0a0a0f', colors: ['#0a0a0f', '#0a1a1a', '#0d3b3b', '#166b6b', '#22a8a8', '#4ad4d4', '#88eeff', '#ccffff'] },
+    };
+
+    function charIntensity(ch) {
+      if (ch === ' ') return 0;
+      const light = '\u00B7.:~\u2801';
+      const med1  = '\u2591\u2022\u2248\u2803\u25B3\u25BD\u2726';
+      const med2  = '\u2592\u25CB\u223F\u2807\u25C7\u2727\u2766';
+      const med3  = '\u2593\u25CF\u224B\u280F\u25C8\u2605\u273F';
+      const heavy = '\u2588\u25C6\u2307\u281F\u2B21\u2736\u2740\u2741';
+      const max   = '\u2573\u25D0\u25D1\u25D2\u25D3\u2301\u283F\u28FF\u2B22\u2739\u273A';
+      if (light.includes(ch)) return 1;
+      if (med1.includes(ch))  return 2;
+      if (med2.includes(ch))  return 3;
+      if (med3.includes(ch))  return 4;
+      if (heavy.includes(ch)) return 5;
+      if (max.includes(ch))   return 6;
+      return 3;
+    }
+
+    function escapeChar(ch) {
+      if (ch === '<') return '&lt;';
+      if (ch === '>') return '&gt;';
+      if (ch === '&') return '&amp;';
+      if (ch === '"') return '&quot;';
+      return ch;
+    }
+
+    function colorizeArt(rendered, genomeType) {
+      const theme = TYPE_COLORS[genomeType] || TYPE_COLORS['2d'];
+      const lines = rendered.split('\n');
+      return lines.map((line, i) => {
+        let lineHtml = '';
+        for (const ch of line) {
+          const intensity = charIntensity(ch);
+          if (intensity === 0) {
+            lineHtml += ' ';
+          } else {
+            const color = theme.colors[Math.min(intensity, theme.colors.length - 1)];
+            lineHtml += `<span style="color:${color}">${escapeChar(ch)}</span>`;
+          }
+        }
+        return lineHtml;
+      }).join('\n');
+    }
+
+    function typeLabel(type) {
+      return {
+        '1d': '1D Automaton', '2d': '2D Life-like', 'lsystem': 'L-System',
+        'reaction-diffusion': 'Reaction-Diffusion', 'voronoi': 'Voronoi',
+        'wfc': 'Wave Function Collapse', 'spirograph': 'Spirograph',
+        'attractor': 'Strange Attractor', 'julia': 'Julia Set',
+        'noise': 'Fractal Noise', 'flowfield': 'Flow Field',
+      }[type] || type;
+    }
+
+    function ruleStr(genome) {
+      if (genome.type === '1d') return `Rule ${genome.rule.number}`;
+      if (genome.type === '2d') return `B${genome.rule.birth.join('')}/S${genome.rule.survive.join('')}`;
+      if (genome.type === 'lsystem') return `angle=${genome.rule.angle}\u00B0, iter=${genome.rule.iterations}`;
+      if (genome.type === 'reaction-diffusion') return `f=${genome.rule.feed.toFixed(3)} k=${genome.rule.kill.toFixed(3)}`;
+      if (genome.type === 'voronoi') return `${genome.rule.seeds}pts ${genome.rule.mode} ${genome.rule.metric}`;
+      if (genome.type === 'wfc') return `${genome.rule.tileCount}tiles ${genome.rule.symmetry}`;
+      if (genome.type === 'spirograph') return `${genome.rule.layers.length} layers, ${genome.rule.steps} steps`;
+      if (genome.type === 'attractor') return `${genome.rule.variant} a=${genome.rule.a.toFixed(1)} b=${genome.rule.b.toFixed(1)}`;
+      if (genome.type === 'julia') return `c=${genome.rule.cReal.toFixed(3)}+${genome.rule.cImag.toFixed(3)}i`;
+      if (genome.type === 'noise') return `scale=${genome.rule.scale.toFixed(2)} oct=${genome.rule.octaves} warp=${genome.rule.warp.toFixed(1)}`;
+      return '';
+    }
+
+    function getEpoch(generation) {
+      const epochs = ['emergence', 'order', 'chaos', 'harmony'];
+      return epochs[Math.floor(generation / 10) % epochs.length];
+    }
+
+    function renderRadar(metrics, genomeType, size = 160) {
+      const dims = [
+        { key: 'complexity', label: 'CX', max: 3.5 },
+        { key: 'edgeActivity', label: 'EA', max: 1 },
+        { key: 'fractalDimension', label: 'FD', max: 2 },
+        { key: 'structuralInterest', label: 'SI', max: 1 },
+        { key: 'informationDensity', label: 'ID', max: 1 },
+        { key: 'novelty', label: 'NV', max: 1 },
+        { key: 'symmetry', label: 'SY', max: 1 },
+        { key: 'density', label: 'DN', max: 1 },
+      ];
+      const cx = size / 2, cy = size / 2, r = size / 2 - 24;
+      const n = dims.length;
+      const angleStep = (2 * Math.PI) / n;
+      const startAngle = -Math.PI / 2;
+
+      function polar(i, radius) {
+        const a = startAngle + i * angleStep;
+        return [cx + radius * Math.cos(a), cy + radius * Math.sin(a)];
+      }
+
+      let svg = `<svg class="radar-chart" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
+      for (const pct of [0.33, 0.66, 1]) {
+        const pts = dims.map((_, i) => polar(i, r * pct).join(',')).join(' ');
+        svg += `<polygon class="radar-grid" points="${pts}"/>`;
+      }
+      for (let i = 0; i < n; i++) {
+        const [x, y] = polar(i, r);
+        svg += `<line class="radar-axis" x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"/>`;
+      }
+
+      const theme = TYPE_COLORS[genomeType] || TYPE_COLORS['2d'];
+      const color = theme.colors[5] || '#7c6fe0';
+      const values = dims.map(d => Math.min((metrics[d.key] || 0) / d.max, 1));
+      const dataPts = values.map((v, i) => polar(i, r * v).join(',')).join(' ');
+      svg += `<polygon class="radar-shape" points="${dataPts}" stroke="${color}" fill="${color}"/>`;
+
+      values.forEach((v, i) => {
+        const [x, y] = polar(i, r * v);
+        svg += `<circle class="radar-dot" cx="${x}" cy="${y}" r="3" fill="${color}"/>`;
+      });
+
+      dims.forEach((d, i) => {
+        const [x, y] = polar(i, r + 14);
+        const anchor = x < cx - 2 ? 'end' : x > cx + 2 ? 'start' : 'middle';
+        svg += `<text class="radar-label" x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="central" style="font-size:9px">${d.label}</text>`;
+      });
+
+      svg += '</svg>';
+      return svg;
+    }
+
+    // ---- Supabase config ----
+
+    const SUPABASE_URL = 'https://fwwjtlafcrzeqfuqmexs.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ3d2p0bGFmY3J6ZXFmdXFtZXhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNjAzNTAsImV4cCI6MjA4MzczNjM1MH0.caaW2yQl0o9WGfwvNRrcdPZXmYIZKgBaCpqzc-gXt5M';
+    const BASE_URL = 'https://lattice-self.vercel.app';
+
+    async function fetchPiece(id) {
+      const headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Accept-Profile': 'lattice',
+        'Accept': 'application/json',
+      };
+      const base = SUPABASE_URL + '/rest/v1';
+
+      // Try archive first, then hall_of_fame, then population
+      const tables = ['archive', 'hall_of_fame', 'population'];
+      for (const table of tables) {
+        const res = await fetch(`${base}/${table}?id=eq.${id}&limit=1`, { headers });
+        if (res.ok) {
+          const rows = await res.json();
+          if (rows.length > 0) {
+            return { ...rows[0], _source: table };
+          }
+        }
+      }
+      return null;
+    }
+
+    // ---- Metric definitions for bar chart display ----
+
+    const METRIC_DEFS = [
+      { key: 'structuralRichness', alt: 'structuralInterest', label: 'Structural Richness', max: 1, color: '#c084fc' },
+      { key: 'edgeActivity', label: 'Edge Activity', max: 1, color: '#4ade80' },
+      { key: 'densityBalance', alt: 'density', label: 'Density Balance', max: 1, color: '#7c6fe0' },
+      { key: 'symmetryScore', alt: 'symmetry', label: 'Symmetry', max: 1, color: '#38bdf8' },
+      { key: 'colorHarmony', label: 'Color Harmony', max: 1, color: '#fbbf24' },
+      { key: 'localVariation', label: 'Local Variation', max: 1, color: '#f472b6' },
+      { key: 'noveltyScore', alt: 'novelty', label: 'Novelty', max: 1, color: '#fb923c' },
+      { key: 'fractalDimension', label: 'Fractal Dimension', max: 2, color: '#a78bfa' },
+      { key: 'complexity', label: 'Complexity', max: 3.5, color: '#ef4444' },
+      { key: 'informationDensity', label: 'Info Density', max: 1, color: '#2dd4bf' },
+    ];
+
+    function getMetricValue(metrics, def) {
+      if (metrics[def.key] != null) return metrics[def.key];
+      if (def.alt && metrics[def.alt] != null) return metrics[def.alt];
+      return null;
+    }
+
+    // ---- Render the page ----
+
+    function renderPiecePage(piece) {
+      const m = piece.metrics || {};
+      const genome = piece.genome || {};
+      const genomeType = genome.type || '2d';
+      const epoch = piece.epoch || getEpoch(piece.generation || 0);
+      const score = piece.score || 0;
+      const gen = piece.generation || 0;
+      const isHof = piece._source === 'hall_of_fame' || piece.is_hall_of_fame;
+
+      const titleText = `${typeLabel(genomeType)} — Gen ${gen}`;
+      const descText = `Score: ${(score * 100).toFixed(1)}% | Epoch: ${epoch} | ${ruleStr(genome)}`;
+
+      // Update OG meta tags
+      const pageUrl = `${BASE_URL}/piece?id=${piece.id}`;
+      const ogImageUrl = `${BASE_URL}/api/og?id=${piece.id}`;
+      document.getElementById('og-title').setAttribute('content', `Lattice — ${titleText}`);
+      document.getElementById('og-description').setAttribute('content', descText);
+      document.getElementById('og-image').setAttribute('content', ogImageUrl);
+      document.getElementById('og-url').setAttribute('content', pageUrl);
+      document.getElementById('tw-title').setAttribute('content', `Lattice — ${titleText}`);
+      document.getElementById('tw-description').setAttribute('content', descText);
+      document.getElementById('tw-image').setAttribute('content', ogImageUrl);
+      document.title = `Lattice — ${titleText}`;
+
+      // Build colorized art
+      const art = piece.rendered || '';
+      const colorized = art ? colorizeArt(art, genomeType) : '<span style="color:var(--text-dim)">No render available</span>';
+
+      // Build metric bars (only metrics that have values)
+      const metricBars = METRIC_DEFS
+        .map(def => {
+          const val = getMetricValue(m, def);
+          if (val == null) return '';
+          const pct = Math.min((val / def.max) * 100, 100);
+          const display = def.max > 1 ? val.toFixed(2) : (val * 100).toFixed(1) + '%';
+          return `
+            <div class="metric-bar-item">
+              <span class="metric-label">${def.label}</span>
+              <div class="metric-track">
+                <div class="metric-fill" style="width:${pct}%; background:${def.color}"></div>
+              </div>
+              <span class="metric-value">${display}</span>
+            </div>`;
+        })
+        .filter(Boolean)
+        .join('');
+
+      // Build genome details
+      const genomeEntries = Object.entries(genome)
+        .filter(([k]) => k !== 'type')
+        .map(([k, v]) => {
+          const valStr = typeof v === 'object' ? JSON.stringify(v) : String(v);
+          return `<span class="genome-key">${k}</span><span class="genome-sep">: </span><span class="genome-val">${escapeChar(valStr)}</span>`;
+        })
+        .join('\n');
+
+      document.getElementById('content').innerHTML = `
+        <h1 class="piece-title">${typeLabel(genomeType)}</h1>
+        <div class="piece-subtitle">${ruleStr(genome)}</div>
+
+        <div class="piece-badges">
+          <span class="badge type">${genomeType}</span>
+          <span class="badge epoch">${epoch}</span>
+          <span class="badge score">${(score * 100).toFixed(1)}%</span>
+          <span class="badge">gen ${gen}</span>
+          ${genome.mutations != null ? `<span class="badge">${genome.mutations} mutations</span>` : ''}
+          ${isHof ? '<span class="badge hof">Hall of Fame</span>' : ''}
+        </div>
+
+        <div class="actions">
+          <button class="action-btn" id="copy-link-btn" title="Copy permalink">
+            Copy Link
+          </button>
+        </div>
+
+        <div class="art-container">
+          <pre class="piece-art">${colorized}</pre>
+        </div>
+
+        <div class="radar-container">
+          ${renderRadar(m, genomeType)}
+        </div>
+
+        <div class="metrics-section">
+          <div class="section-label">Fitness Metrics</div>
+          <div class="metrics-grid">
+            ${metricBars || '<div style="color:var(--text-dim);font-size:0.8rem">No metrics available</div>'}
+          </div>
+        </div>
+
+        <div class="genome-section">
+          <div class="section-label">Genome</div>
+          <pre class="genome-block">${genomeEntries || 'No genome data'}</pre>
+        </div>
+      `;
+
+      // Copy link handler
+      document.getElementById('copy-link-btn').addEventListener('click', function() {
+        const url = `${BASE_URL}/piece?id=${piece.id}`;
+        navigator.clipboard.writeText(url).then(() => {
+          this.classList.add('copied');
+          this.textContent = 'Copied!';
+          setTimeout(() => {
+            this.classList.remove('copied');
+            this.textContent = 'Copy Link';
+          }, 2000);
+        }).catch(() => {
+          // Fallback for older browsers
+          const ta = document.createElement('textarea');
+          ta.value = url;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          this.classList.add('copied');
+          this.textContent = 'Copied!';
+          setTimeout(() => {
+            this.classList.remove('copied');
+            this.textContent = 'Copy Link';
+          }, 2000);
+        });
+      });
+    }
+
+    // ---- Init ----
+
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+
+      if (!id) {
+        document.getElementById('content').innerHTML =
+          '<div class="error-state">No piece ID specified. <a href="/" style="color:var(--accent)">Return to gallery</a></div>';
+        return;
+      }
+
+      // Set OG image URL immediately for any crawlers that might execute minimal JS
+      document.getElementById('og-image').setAttribute('content', `${BASE_URL}/api/og?id=${id}`);
+      document.getElementById('tw-image').setAttribute('content', `${BASE_URL}/api/og?id=${id}`);
+      document.getElementById('og-url').setAttribute('content', `${BASE_URL}/piece?id=${id}`);
+
+      try {
+        const piece = await fetchPiece(id);
+        if (!piece) {
+          document.getElementById('content').innerHTML =
+            '<div class="error-state">Piece not found. It may have been replaced during evolution. <a href="/" style="color:var(--accent)">Return to gallery</a></div>';
+          return;
+        }
+        renderPiecePage(piece);
+      } catch (e) {
+        console.error('[lattice] Failed to load piece:', e);
+        document.getElementById('content').innerHTML =
+          `<div class="error-state">Failed to load piece: ${escapeChar(e.message)}. <a href="/" style="color:var(--accent)">Return to gallery</a></div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
