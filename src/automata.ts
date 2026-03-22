@@ -1993,7 +1993,7 @@ function getTypeWeights(genomeType?: Genome["type"]): Weights {
       return { density: 0.08, complexity: 0.21, symmetry: 0.05, edge: 0.17, structure: 0.11, novelty: 0.10, fractal: 0.08, infoDensity: 0.07, coherence: 0.05, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "magnetic-pendulum":
       // Magnetic pendulum: fractal basin boundaries are the defining aesthetic
-      return { density: 0.06, complexity: 0.16, symmetry: 0.08, edge: 0.15, structure: 0.14, novelty: 0.12, fractal: 0.13, infoDensity: 0.08, coherence: 0.05, balance: 0.06, rhythm: 0.02 };
+      return { density: 0.06, complexity: 0.16, symmetry: 0.08, edge: 0.15, structure: 0.14, novelty: 0.12, fractal: 0.13, infoDensity: 0.08, coherence: 0.05, balance: 0.03, rhythm: 0.02, harmony: 0.05 };
     case "lsystem":
       // L-systems: fractal dimension is very meaningful here — branching creates self-similarity
       return { density: 0.06, complexity: 0.16, symmetry: 0.11, edge: 0.07, structure: 0.19, novelty: 0.10, fractal: 0.12, infoDensity: 0.07, coherence: 0.07, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
@@ -2023,19 +2023,19 @@ function getTypeWeights(genomeType?: Genome["type"]): Weights {
       return { density: 0.08, complexity: 0.14, symmetry: 0.07, edge: 0.16, structure: 0.16, novelty: 0.10, fractal: 0.08, infoDensity: 0.07, coherence: 0.07, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "dla":
       // DLA: structural interest and fractal dimension are defining
-      return { density: 0.06, complexity: 0.12, symmetry: 0.07, edge: 0.14, structure: 0.19, novelty: 0.10, fractal: 0.14, infoDensity: 0.06, balance: 0.07, rhythm: 0.03, harmony: 0.05 };
+      return { density: 0.06, complexity: 0.12, symmetry: 0.07, edge: 0.14, structure: 0.19, novelty: 0.10, fractal: 0.14, infoDensity: 0.06, coherence: 0.05, balance: 0.04, rhythm: 0.03, harmony: 0.05 };
     case "sandpile":
       // Sandpile: fractal dimension is core, symmetry is inherent, structure matters
       return { density: 0.06, complexity: 0.14, symmetry: 0.05, edge: 0.14, structure: 0.18, novelty: 0.10, fractal: 0.15, infoDensity: 0.08, coherence: 0.05, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
     case "magnetic-pendulum":
       // Magnetic pendulum: fractal basin boundaries are the defining aesthetic
-      return { density: 0.06, complexity: 0.16, symmetry: 0.08, edge: 0.15, structure: 0.14, novelty: 0.12, fractal: 0.13, infoDensity: 0.08, coherence: 0.05, balance: 0.06, rhythm: 0.02 };
+      return { density: 0.06, complexity: 0.16, symmetry: 0.08, edge: 0.15, structure: 0.14, novelty: 0.12, fractal: 0.13, infoDensity: 0.08, coherence: 0.05, balance: 0.03, rhythm: 0.02, harmony: 0.05 };
     case "particle-life":
       // Particle life: emergent clustering, structural interest, spatial coherence
       return { density: 0.10, complexity: 0.14, symmetry: 0.06, edge: 0.12, structure: 0.18, novelty: 0.12, fractal: 0.06, infoDensity: 0.08, coherence: 0.08, balance: 0.06, rhythm: 0.03, harmony: 0.05 };
     case "turmite":
       // Turmite: emergent highways, structural interest from chaos-to-order transition
-      return { density: 0.08, complexity: 0.18, symmetry: 0.06, edge: 0.16, structure: 0.16, novelty: 0.12, fractal: 0.08, infoDensity: 0.06, coherence: 0.05, balance: 0.05, rhythm: 0.03 };
+      return { density: 0.08, complexity: 0.18, symmetry: 0.06, edge: 0.16, structure: 0.16, novelty: 0.12, fractal: 0.08, infoDensity: 0.06, coherence: 0.05, balance: 0.03, rhythm: 0.03, harmony: 0.05 };
     case "2d":
     default:
       return { density: 0.13, complexity: 0.14, symmetry: 0.07, edge: 0.11, structure: 0.11, novelty: 0.13, fractal: 0.08, infoDensity: 0.09, coherence: 0.06, balance: 0.05, rhythm: 0.03, harmony: 0.05 };
@@ -3035,7 +3035,7 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
     ];
     const preset = presets[Math.floor(rng() * presets.length)];
     // Add jitter to preset
-    const xforms = preset.map(xf => ({
+    const transforms = preset.map(xf => ({
       ...xf,
       a: xf.a + (rng() - 0.5) * 0.15,
       b: xf.b + (rng() - 0.5) * 0.15,
@@ -3047,7 +3047,7 @@ function randomGenomeOfType(type: Genome["type"], rng: () => number, lineage: st
     return {
       type: "fractal-flame",
       rule: {
-        xforms,
+        transforms,
         iterations: 100000 + Math.floor(rng() * 200000),
         symmetry: rng() < 0.4 ? 1 : 2 + Math.floor(rng() * 4),
         gamma: 3 + rng() * 1.5,
@@ -3735,7 +3735,7 @@ export const SEED_GENOMES: Genome[] = [
   {
     type: "fractal-flame",
     rule: {
-      xforms: [
+      transforms: [
         { a: 0.6, b: -0.4, c: 0.1, d: 0.4, e: 0.6, f: 0.0, variation: 3, color: 0.2, weight: 1.2 },
         { a: -0.5, b: 0.3, c: -0.1, d: -0.3, e: -0.5, f: 0.2, variation: 1, color: 0.7, weight: 0.8 },
         { a: 0.3, b: 0.5, c: 0.0, d: -0.5, e: 0.3, f: 0.0, variation: 5, color: 0.5, weight: 1.0 },
@@ -3760,7 +3760,7 @@ export const SEED_GENOMES: Genome[] = [
   {
     type: "fractal-flame",
     rule: {
-      xforms: [
+      transforms: [
         { a: 0.4, b: -0.3, c: 0.0, d: 0.3, e: 0.4, f: 0.0, variation: 11, color: 0.0, weight: 1.3 },
         { a: -0.5, b: 0.5, c: 0.0, d: -0.5, e: -0.5, f: 0.0, variation: 10, color: 0.5, weight: 1.0 },
         { a: 0.3, b: 0.0, c: 0.2, d: 0.0, e: 0.3, f: -0.2, variation: 12, color: 1.0, weight: 0.8 },
