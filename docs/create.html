@@ -635,7 +635,7 @@ class NoiseLive {
   getValues() {
     const { w, h, rule, field, time } = this;
     const { scale, octaves, persistence, lacunarity, offsetX, offsetY, warp } = rule;
-    const vals = new Float32Array(w * h);
+    if (!this._vals) this._vals = new Float32Array(w * h); const vals = this._vals;
     for (let py = 0; py < h; py++) {
       for (let px = 0; px < w; px++) {
         let nx = (px + offsetX) * scale + time * 0.3;
