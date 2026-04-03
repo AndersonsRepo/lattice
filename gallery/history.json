@@ -16453,5 +16453,154 @@
     "agePenaltyApplied": 14,
     "paretoFrontSize": 21,
     "avgAestheticHarmony": 0.5066
+  },
+  {
+    "generation": 21,
+    "bestScore": 0.8735724717882964,
+    "avgScore": 0.5575361895870772,
+    "epoch": "chaos",
+    "speciesCounts": {
+      "wfc": 3,
+      "reaction-diffusion": 1,
+      "voronoi": 1,
+      "1d": 1,
+      "flowfield": 1,
+      "noise": 1,
+      "particle-life": 1,
+      "2d": 1,
+      "lsystem": 1,
+      "attractor": 1,
+      "julia": 1,
+      "spirograph": 1
+    },
+    "hallOfFameSize": 20,
+    "timestamp": "2026-04-03T22:57:41.382Z",
+    "bestPiece": {
+      "id": "gen21-mnji7upe",
+      "genome": {
+        "rule": {
+          "weights": [
+            1,
+            0.8,
+            1.2548792301126723,
+            0.8,
+            1,
+            1.1,
+            0.6351669922255957
+          ],
+          "symmetry": "horizontal",
+          "adjacency": [
+            [
+              0,
+              1,
+              6
+            ],
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              3,
+              4
+            ],
+            [
+              3,
+              4
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              5,
+              0
+            ],
+            [
+              2,
+              4
+            ]
+          ],
+          "tileCount": 7
+        },
+        "seed": 692765105,
+        "type": "wfc",
+        "width": 48,
+        "height": 32,
+        "lineage": [
+          "e730c75",
+          "147b5e5b",
+          "2052f21f",
+          "a421d399",
+          "×",
+          "2cde19f4",
+          "8f945707"
+        ],
+        "palette": [
+          " ",
+          ".",
+          ":",
+          "❦",
+          "✿",
+          "❀",
+          "❁"
+        ],
+        "mutations": 6
+      },
+      "score": 0.8735724717882964,
+      "metrics": {
+        "complexity": 2.437142174483427,
+        "symmetry": 0.6119791666666666,
+        "density": 0.7890625,
+        "novelty": 0.8974862485293799,
+        "edgeActivity": 0.8602941176470589,
+        "structuralInterest": 0.9765625,
+        "fractalDimension": 1.9977398981943744,
+        "informationDensity": 0.68500690167236,
+        "spatialCoherence": 0.6695109896719034,
+        "compositionBalance": 0.9712643678160919,
+        "rhythmicRegularity": 0.14715277777777777,
+        "aestheticHarmony": 0.7135264510436211
+      }
+    },
+    "extinctionEvent": false,
+    "eliteSurvivors": 2,
+    "crossoverRate": 0.3,
+    "diversityIndex": 0.8979591836734694,
+    "speciesMomentum": {
+      "wfc": 0.308,
+      "reaction-diffusion": 0.1975,
+      "voronoi": 0.1658,
+      "1d": 0.0978,
+      "flowfield": 0.0163,
+      "noise": 0.014,
+      "particle-life": -0.0349,
+      "2d": -0.0877,
+      "lsystem": -0.2286,
+      "attractor": -0.2906,
+      "julia": -0.3118,
+      "spirograph": -0.3181
+    },
+    "nicheBonus": {
+      "1d": 0.08,
+      "2d": 0.08,
+      "lsystem": 0.08,
+      "reaction-diffusion": 0,
+      "voronoi": 0.08,
+      "wfc": 0,
+      "spirograph": 0.08,
+      "attractor": 0.08,
+      "julia": 0.08,
+      "noise": 0.08,
+      "flowfield": 0.08,
+      "particle-life": 0.08
+    },
+    "maxLineageDepth": 11,
+    "stagnationStreak": 0,
+    "hofSeedCount": 1,
+    "avgCrowdingDistance": 0.8761,
+    "agePenaltyApplied": 14,
+    "paretoFrontSize": 20,
+    "avgAestheticHarmony": 0.507
   }
 ]
