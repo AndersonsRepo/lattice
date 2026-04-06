@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Biome — Lattice</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    canvas#world {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    #vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center,
+        transparent 40%,
+        rgba(10,10,15,0.35) 70%,
+        rgba(10,10,15,0.75) 100%);
+      z-index: 2;
+    }
+
+    /* Start overlay — required for AudioContext */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.96);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 1.2s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .start-title {
+      font-size: 0.6rem;
+      letter-spacing: 0.5em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 1.5rem;
+    }
+
+    .start-glyph {
+      font-size: 3rem;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+      margin-bottom: 1rem;
+      animation: breathe 3s ease-in-out infinite;
+    }
+
+    .start-hint {
+      font-size: 0.55rem;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      opacity: 0.6;
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.95); }
+    }
+
+    /* HUD */
+    #hud-top {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      padding: 1.25rem 1.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(to bottom, rgba(10,10,15,0.7) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 10;
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+    #hud-top.visible { opacity: 1; }
+
+    .hud-title {
+      font-size: 0.6rem;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .hud-title span { color: var(--accent); }
+
+    .hud-stats {
+      font-size: 0.55rem;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      text-align: right;
+      line-height: 1.6;
+    }
+    .hud-stats .val { color: var(--green); }
+
+    /* Bottom controls */
+    #controls {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      z-index: 10;
+      opacity: 0;
+      transition: opacity 1s ease;
+      pointer-events: none;
+    }
+    #controls.visible { opacity: 1; pointer-events: auto; }
+
+    .ctrl-btn {
+      background: rgba(18, 18, 26, 0.7);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.55rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: all 0.3s ease;
+    }
+    .ctrl-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .ctrl-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .volume-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 80px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    /* Tooltip on hover */
+    #tooltip {
+      position: fixed;
+      display: none;
+      background: rgba(18, 18, 26, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.55rem;
+      letter-spacing: 0.1em;
+      color: var(--text);
+      z-index: 20;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+      max-width: 200px;
+      line-height: 1.5;
+    }
+    #tooltip .tt-type {
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-size: 0.5rem;
+    }
+    #tooltip .tt-score { color: var(--green); }
+    #tooltip .tt-gen { color: var(--amber); }
+    #tooltip .tt-dim { color: var(--text-dim); }
+
+    /* Back link */
+    .back-link {
+      position: fixed;
+      top: 1.25rem;
+      left: 1.5rem;
+      font-size: 0.55rem;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      text-decoration: none;
+      z-index: 15;
+      opacity: 0;
+      transition: opacity 1s ease, color 0.3s;
+      pointer-events: none;
+    }
+    .back-link.visible { opacity: 1; pointer-events: auto; }
+    .back-link:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div class="start-overlay" id="startOverlay">
+  <div class="start-title">lattice</div>
+  <div class="start-glyph">&#x1F331;</div>
+  <div class="start-hint">click to enter the biome</div>
+</div>
+
+<canvas id="world"></canvas>
+<div id="vignette"></div>
+
+<a href="index.html" class="back-link" id="backLink">&larr; lattice</a>
+
+<div id="hud-top">
+  <div>
+    <div class="hud-title"><span>biome</span> &mdash; sonic ecosystem</div>
+  </div>
+  <div class="hud-stats" id="hudStats">
+    <div>voices: <span class="val" id="statVoices">0</span></div>
+    <div>species: <span class="val" id="statSpecies">0</span></div>
+  </div>
+</div>
+
+<div id="controls">
+  <button class="ctrl-btn active" id="btnToggle">&#10074;&#10074; pause</button>
+  <button class="ctrl-btn" id="btnScale" title="Cycle musical scale">pentatonic</button>
+  <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50">
+  <button class="ctrl-btn" id="btnIsolate">solo: all</button>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// BIOME — Sonic Ecosystem
+//
+// Each piece in the lattice population becomes a living voice.
+// Species type → timbre, metrics → harmonic shape,
+// fitness → prominence. The population breathes as one organism.
+// ═══════════════════════════════════════════════════════════════
+
+var SPECIES_COLORS = {
+  '1d':                  { h: 263, s: 70, l: 65, hex: '#9b8ce8' },
+  '2d':                  { h: 142, s: 60, l: 55, hex: '#4ade80' },
+  'lsystem':             { h:  48, s: 75, l: 60, hex: '#d4b84a' },
+  'reaction-diffusion':  { h: 300, s: 60, l: 65, hex: '#d68fd6' },
+  'voronoi':             { h: 185, s: 60, l: 60, hex: '#5cc8c8' },
+  'wfc':                 { h: 330, s: 55, l: 60, hex: '#d67a9e' },
+  'spirograph':          { h:  80, s: 60, l: 55, hex: '#8abe4a' },
+  'attractor':           { h:  25, s: 70, l: 55, hex: '#d68840' },
+  'julia':               { h: 170, s: 55, l: 55, hex: '#4ab8a8' },
+  'noise':               { h:  55, s: 65, l: 55, hex: '#beb040' },
+  'flowfield':           { h: 195, s: 60, l: 58, hex: '#4aaecc' }
+};
+
+// Musical scales (MIDI note offsets from root)
+var SCALES = {
+  pentatonic: [0, 2, 4, 7, 9],
+  dorian:     [0, 2, 3, 5, 7, 9, 10],
+  phrygian:   [0, 1, 3, 5, 7, 8, 10],
+  lydian:     [0, 2, 4, 6, 7, 9, 11],
+  hirajoshi:  [0, 2, 3, 7, 8],
+  wholetone:  [0, 2, 4, 6, 8, 10]
+};
+var SCALE_NAMES = Object.keys(SCALES);
+var currentScaleIdx = 0;
+
+// Species → oscillator type + harmonic recipe
+var SPECIES_TIMBRES = {
+  '1d':                  { wave: 'square',   attack: 0.01, decay: 0.3,  sustain: 0.0, release: 0.4  },
+  '2d':                  { wave: 'square',   attack: 0.05, decay: 0.5,  sustain: 0.2, release: 0.8  },
+  'lsystem':             { wave: 'triangle', attack: 0.002,decay: 0.15, sustain: 0.0, release: 0.3  },
+  'reaction-diffusion':  { wave: 'sawtooth', attack: 0.3,  decay: 1.0,  sustain: 0.4, release: 1.5  },
+  'voronoi':             { wave: 'sine',     attack: 0.01, decay: 0.8,  sustain: 0.0, release: 1.0  },
+  'wfc':                 { wave: 'square',   attack: 0.005,decay: 0.2,  sustain: 0.0, release: 0.5  },
+  'spirograph':          { wave: 'sine',     attack: 0.1,  decay: 0.6,  sustain: 0.3, release: 0.8  },
+  'attractor':           { wave: 'sawtooth', attack: 0.02, decay: 0.4,  sustain: 0.1, release: 0.6  },
+  'julia':               { wave: 'sine',     attack: 0.5,  decay: 1.5,  sustain: 0.5, release: 2.0  },
+  'noise':               { wave: 'sawtooth', attack: 0.8,  decay: 2.0,  sustain: 0.6, release: 2.5  },
+  'flowfield':           { wave: 'triangle', attack: 0.2,  decay: 1.0,  sustain: 0.3, release: 1.2  }
+};
+
+var canvas, ctx, W, H;
+var audioCtx, masterGain, reverbNode, analyser, freqData;
+var pieces = [];
+var voices = [];  // per-piece sonic/visual state
+var playing = true;
+var soloType = null;
+var hoveredVoice = null;
+var mouse = { x: -1, y: -1 };
+
+// ─── Audio Setup ─────────────────────────────────────────────
+
+function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  // Master gain
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.25;
+
+  // Convolver reverb (algorithmic impulse)
+  reverbNode = createReverb(2.5, 0.4);
+  var reverbGain = audioCtx.createGain();
+  reverbGain.gain.value = 0.3;
+
+  // Dry/wet routing
+  var dryGain = audioCtx.createGain();
+  dryGain.gain.value = 0.7;
+
+  // Analyser for viz
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+
+  masterGain.connect(dryGain);
+  masterGain.connect(reverbNode);
+  reverbNode.connect(reverbGain);
+  dryGain.connect(analyser);
+  reverbGain.connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
+
+function createReverb(duration, decay) {
+  var sampleRate = audioCtx.sampleRate;
+  var length = sampleRate * duration;
+  var impulse = audioCtx.createBuffer(2, length, sampleRate);
+  for (var ch = 0; ch < 2; ch++) {
+    var data = impulse.getChannelData(ch);
+    for (var i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+    }
+  }
+  var convolver = audioCtx.createConvolver();
+  convolver.buffer = impulse;
+  return convolver;
+}
+
+// Convert MIDI note to frequency
+function midiToFreq(note) {
+  return 440 * Math.pow(2, (note - 69) / 12);
+}
+
+// Quantize a value to nearest scale degree
+function quantizeToScale(value01, octaveLow, octaveHigh) {
+  var scale = SCALES[SCALE_NAMES[currentScaleIdx]];
+  var octaveRange = octaveHigh - octaveLow;
+  var totalNotes = scale.length * octaveRange;
+  var noteIdx = Math.floor(value01 * totalNotes);
+  noteIdx = Math.max(0, Math.min(totalNotes - 1, noteIdx));
+  var octave = octaveLow + Math.floor(noteIdx / scale.length);
+  var degree = noteIdx % scale.length;
+  return octave * 12 + scale[degree];
+}
+
+// ─── Voice Triggering ────────────────────────────────────────
+
+function triggerVoice(voice) {
+  if (!audioCtx || audioCtx.state !== 'running') return;
+  if (soloType && voice.type !== soloType) return;
+
+  var timbre = SPECIES_TIMBRES[voice.type] || SPECIES_TIMBRES['2d'];
+  var now = audioCtx.currentTime;
+
+  // Pitch from complexity + generation
+  var pitchVal = (voice.metrics.complexity || 1) / 3.5;
+  pitchVal = Math.min(1, Math.max(0, pitchVal));
+  var midiNote = quantizeToScale(pitchVal, 3, 6);
+  var freq = midiToFreq(midiNote);
+
+  // Create oscillator
+  var osc = audioCtx.createOscillator();
+  osc.type = timbre.wave;
+  osc.frequency.value = freq;
+
+  // Detune based on symmetry (more symmetric = less detune)
+  var sym = voice.metrics.symmetry || 0;
+  osc.detune.value = (1 - sym) * 15 - 7.5;
+
+  // Filter based on edge activity
+  var filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  var edge = voice.metrics.edgeActivity || 0.5;
+  filter.frequency.value = 300 + edge * 3500;
+  filter.Q.value = 1 + (voice.metrics.fractalDimension || 1) * 2;
+
+  // Envelope
+  var env = audioCtx.createGain();
+  env.gain.value = 0;
+  var vol = voice.score * 0.15;
+
+  env.gain.setValueAtTime(0, now);
+  env.gain.linearRampToValueAtTime(vol, now + timbre.attack);
+  env.gain.linearRampToValueAtTime(vol * timbre.sustain, now + timbre.attack + timbre.decay);
+  env.gain.linearRampToValueAtTime(0, now + timbre.attack + timbre.decay + timbre.release);
+
+  // Panning based on spatial position
+  var panner = audioCtx.createStereoPanner();
+  panner.pan.value = (voice.x / W) * 2 - 1;
+
+  osc.connect(filter);
+  filter.connect(env);
+  env.connect(panner);
+  panner.connect(masterGain);
+
+  osc.start(now);
+  osc.stop(now + timbre.attack + timbre.decay + timbre.release + 0.1);
+
+  // Track active state for visual feedback
+  voice.activeUntil = performance.now() + (timbre.attack + timbre.decay + timbre.release) * 1000;
+  voice.brightness = 1.0;
+}
+
+// ─── Ambient Drone Layer ─────────────────────────────────────
+
+var droneOscs = [];
+var droneGain;
+
+function startDrone() {
+  if (!audioCtx) return;
+  droneGain = audioCtx.createGain();
+  droneGain.gain.value = 0;
+  droneGain.gain.linearRampToValueAtTime(0.04, audioCtx.currentTime + 3);
+  droneGain.connect(masterGain);
+
+  // Root drone + fifth
+  var roots = [36, 43]; // C2, G2
+  roots.forEach(function(note) {
+    var osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = midiToFreq(note);
+    var g = audioCtx.createGain();
+    g.gain.value = 0.5;
+    osc.connect(g);
+    g.connect(droneGain);
+    osc.start();
+    droneOscs.push(osc);
+  });
+
+  // Sub-bass pulse
+  var lfo = audioCtx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 0.08; // Very slow
+  var lfoGain = audioCtx.createGain();
+  lfoGain.gain.value = 0.015;
+  lfo.connect(lfoGain);
+  lfoGain.connect(droneGain.gain);
+  lfo.start();
+  droneOscs.push(lfo);
+}
+
+function stopDrone() {
+  droneOscs.forEach(function(o) { try { o.stop(); } catch(e) {} });
+  droneOscs = [];
+}
+
+// ─── Population Loading ──────────────────────────────────────
+
+function loadPopulation() {
+  return fetch('gallery.json')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      pieces = Array.isArray(data) ? data : (data.pieces || data.population || []);
+      initVoices();
+    })
+    .catch(function() {
+      // Fallback: generate phantom voices for demo
+      pieces = generatePhantomPieces(16);
+      initVoices();
+    });
+}
+
+function generatePhantomPieces(n) {
+  var types = Object.keys(SPECIES_COLORS);
+  var out = [];
+  for (var i = 0; i < n; i++) {
+    out.push({
+      id: 'phantom-' + i,
+      genome: { type: types[i % types.length] },
+      score: 0.4 + Math.random() * 0.4,
+      generation: Math.floor(Math.random() * 100),
+      metrics: {
+        complexity: 0.5 + Math.random() * 2.5,
+        symmetry: Math.random(),
+        density: 0.2 + Math.random() * 0.6,
+        edgeActivity: Math.random(),
+        fractalDimension: 0.5 + Math.random() * 1.5,
+        structuralInterest: Math.random(),
+        informationDensity: Math.random()
+      }
+    });
+  }
+  return out;
+}
+
+function initVoices() {
+  voices = pieces.map(function(p, i) {
+    var type = p.genome ? p.genome.type : '2d';
+    var col = SPECIES_COLORS[type] || SPECIES_COLORS['2d'];
+    var score = p.score || 0.5;
+    var m = p.metrics || {};
+
+    // Position: distribute in a loose cluster with species grouping
+    var angle = (i / pieces.length) * Math.PI * 2 + (col.h / 360) * Math.PI;
+    var radius = 0.15 + (1 - score) * 0.3;
+    var jitter = 0.05;
+
+    return {
+      id: p.id || 'v' + i,
+      type: type,
+      score: score,
+      generation: p.generation || 0,
+      metrics: {
+        complexity: m.complexity || 1,
+        symmetry: m.symmetry || 0.5,
+        density: m.density || 0.4,
+        edgeActivity: m.edgeActivity || 0.5,
+        fractalDimension: m.fractalDimension || 1,
+        structuralInterest: m.structuralInterest || 0.5,
+        informationDensity: m.informationDensity || 0.5
+      },
+      // Normalized position (0-1)
+      nx: 0.5 + Math.cos(angle) * radius + (Math.random() - 0.5) * jitter,
+      ny: 0.5 + Math.sin(angle) * radius + (Math.random() - 0.5) * jitter,
+      // Pixel position (set in resize)
+      x: 0, y: 0,
+      // Visual state
+      baseRadius: 4 + score * 16,
+      brightness: 0,
+      activeUntil: 0,
+      phase: Math.random() * Math.PI * 2,
+      // Trigger timing
+      interval: 2000 + (1 - (m.density || 0.4)) * 8000 + Math.random() * 2000,
+      lastTrigger: performance.now() - Math.random() * 5000,
+      color: col
+    };
+  });
+
+  updatePositions();
+  updateHUD();
+}
+
+function updatePositions() {
+  voices.forEach(function(v) {
+    v.x = v.nx * W;
+    v.y = v.ny * H;
+  });
+}
+
+function updateHUD() {
+  var types = {};
+  voices.forEach(function(v) { types[v.type] = true; });
+  document.getElementById('statVoices').textContent = voices.length;
+  document.getElementById('statSpecies').textContent = Object.keys(types).length;
+}
+
+// ─── Canvas Setup ────────────────────────────────────────────
+
+function initCanvas() {
+  canvas = document.getElementById('world');
+  ctx = canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize', resize);
+}
+
+function resize() {
+  var dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  updatePositions();
+}
+
+// ─── Rendering ───────────────────────────────────────────────
+
+function render(time) {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background glow from analyser
+  if (analyser) {
+    analyser.getByteFrequencyData(freqData);
+    var avg = 0;
+    for (var i = 0; i < freqData.length; i++) avg += freqData[i];
+    avg /= freqData.length;
+    var glowAlpha = avg / 255 * 0.15;
+    ctx.fillStyle = 'rgba(124, 111, 224, ' + glowAlpha + ')';
+    ctx.beginPath();
+    ctx.arc(W / 2, H / 2, 300 + avg, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Connection lines between nearby voices of same type
+  ctx.lineWidth = 0.5;
+  for (var i = 0; i < voices.length; i++) {
+    var a = voices[i];
+    if (soloType && a.type !== soloType) continue;
+    for (var j = i + 1; j < voices.length; j++) {
+      var b = voices[j];
+      if (a.type !== b.type) continue;
+      if (soloType && b.type !== soloType) continue;
+      var dx = a.x - b.x;
+      var dy = a.y - b.y;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 180) {
+        var alpha = (1 - dist / 180) * 0.15;
+        var act = Math.max(a.brightness, b.brightness);
+        alpha += act * 0.2;
+        ctx.strokeStyle = 'hsla(' + a.color.h + ',' + a.color.s + '%,' + a.color.l + '%,' + alpha + ')';
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Draw voices
+  for (var i = 0; i < voices.length; i++) {
+    var v = voices[i];
+    var dimmed = soloType && v.type !== soloType;
+
+    // Breathing animation
+    v.phase += 0.015 + v.score * 0.01;
+    var breathe = Math.sin(v.phase) * 0.15 + 1;
+
+    // Decay brightness
+    if (time > v.activeUntil) {
+      v.brightness *= 0.96;
+    }
+
+    var r = v.baseRadius * breathe;
+    var alpha = dimmed ? 0.08 : (0.2 + v.brightness * 0.8);
+    var col = v.color;
+
+    // Outer glow
+    if (!dimmed) {
+      var grad = ctx.createRadialGradient(v.x, v.y, r * 0.3, v.x, v.y, r * 3);
+      grad.addColorStop(0, 'hsla(' + col.h + ',' + col.s + '%,' + col.l + '%,' + (alpha * 0.3) + ')');
+      grad.addColorStop(1, 'hsla(' + col.h + ',' + col.s + '%,' + col.l + '%, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, r * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Core
+    ctx.fillStyle = 'hsla(' + col.h + ',' + col.s + '%,' + (col.l + v.brightness * 20) + '%,' + alpha + ')';
+    ctx.beginPath();
+    ctx.arc(v.x, v.y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bright center when active
+    if (v.brightness > 0.1 && !dimmed) {
+      ctx.fillStyle = 'hsla(' + col.h + ',' + (col.s - 20) + '%,' + (col.l + 30) + '%,' + (v.brightness * 0.6) + ')';
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, r * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Hovered highlight
+    if (v === hoveredVoice) {
+      ctx.strokeStyle = 'hsla(' + col.h + ',' + col.s + '%,' + col.l + '%, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, r + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+}
+
+// ─── Scheduling ──────────────────────────────────────────────
+
+function scheduleVoices(time) {
+  if (!playing) return;
+
+  for (var i = 0; i < voices.length; i++) {
+    var v = voices[i];
+    if (time - v.lastTrigger >= v.interval) {
+      v.lastTrigger = time;
+      // Stagger slightly to avoid simultaneous triggers
+      var delay = Math.random() * 200;
+      setTimeout(function(voice) { triggerVoice(voice); }, delay, v);
+    }
+  }
+}
+
+// ─── Gentle Drift ────────────────────────────────────────────
+
+function drift(time) {
+  var t = time * 0.0001;
+  for (var i = 0; i < voices.length; i++) {
+    var v = voices[i];
+    // Very gentle orbital drift
+    var driftX = Math.sin(t + v.phase) * 0.0003;
+    var driftY = Math.cos(t + v.phase * 1.3) * 0.0003;
+    v.nx = Math.max(0.05, Math.min(0.95, v.nx + driftX));
+    v.ny = Math.max(0.05, Math.min(0.95, v.ny + driftY));
+    v.x = v.nx * W;
+    v.y = v.ny * H;
+  }
+}
+
+// ─── Hover Detection ─────────────────────────────────────────
+
+function updateHover() {
+  hoveredVoice = null;
+  if (mouse.x < 0) return;
+
+  var closest = null;
+  var closestDist = Infinity;
+  for (var i = 0; i < voices.length; i++) {
+    var v = voices[i];
+    if (soloType && v.type !== soloType) continue;
+    var dx = v.x - mouse.x;
+    var dy = v.y - mouse.y;
+    var d = Math.sqrt(dx * dx + dy * dy);
+    if (d < v.baseRadius + 10 && d < closestDist) {
+      closest = v;
+      closestDist = d;
+    }
+  }
+
+  hoveredVoice = closest;
+  var tooltip = document.getElementById('tooltip');
+
+  if (closest) {
+    tooltip.style.display = 'block';
+    tooltip.style.left = (mouse.x + 15) + 'px';
+    tooltip.style.top = (mouse.y - 10) + 'px';
+    tooltip.innerHTML =
+      '<div class="tt-type">' + closest.type + '</div>' +
+      '<div>score: <span class="tt-score">' + (closest.score * 100).toFixed(1) + '%</span></div>' +
+      '<div>gen: <span class="tt-gen">' + closest.generation + '</span></div>' +
+      '<div class="tt-dim">complexity: ' + closest.metrics.complexity.toFixed(2) + '</div>' +
+      '<div class="tt-dim">symmetry: ' + (closest.metrics.symmetry * 100).toFixed(0) + '%</div>' +
+      '<div class="tt-dim">density: ' + (closest.metrics.density * 100).toFixed(0) + '%</div>';
+    canvas.style.cursor = 'pointer';
+  } else {
+    tooltip.style.display = 'none';
+    canvas.style.cursor = 'default';
+  }
+}
+
+// ─── Main Loop ───────────────────────────────────────────────
+
+function animate(time) {
+  requestAnimationFrame(animate);
+  scheduleVoices(time);
+  drift(time);
+  updateHover();
+  render(time);
+}
+
+// ─── Controls ────────────────────────────────────────────────
+
+function setupControls() {
+  var btnToggle = document.getElementById('btnToggle');
+  var btnScale = document.getElementById('btnScale');
+  var btnIsolate = document.getElementById('btnIsolate');
+  var volumeSlider = document.getElementById('volumeSlider');
+
+  btnToggle.addEventListener('click', function() {
+    playing = !playing;
+    btnToggle.innerHTML = playing ? '&#10074;&#10074; pause' : '&#9654; play';
+    btnToggle.classList.toggle('active', playing);
+    if (playing && audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  });
+
+  btnScale.addEventListener('click', function() {
+    currentScaleIdx = (currentScaleIdx + 1) % SCALE_NAMES.length;
+    btnScale.textContent = SCALE_NAMES[currentScaleIdx];
+  });
+
+  var allTypes = Object.keys(SPECIES_COLORS);
+  var soloIdx = -1;
+  btnIsolate.addEventListener('click', function() {
+    soloIdx++;
+    if (soloIdx >= allTypes.length) soloIdx = -1;
+    if (soloIdx === -1) {
+      soloType = null;
+      btnIsolate.textContent = 'solo: all';
+      btnIsolate.classList.remove('active');
+    } else {
+      soloType = allTypes[soloIdx];
+      btnIsolate.textContent = 'solo: ' + soloType;
+      btnIsolate.classList.add('active');
+    }
+  });
+
+  volumeSlider.addEventListener('input', function() {
+    if (masterGain) {
+      masterGain.gain.value = (volumeSlider.value / 100) * 0.5;
+    }
+  });
+
+  // Mouse tracking
+  canvas.addEventListener('mousemove', function(e) {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  });
+  canvas.addEventListener('mouseleave', function() {
+    mouse.x = -1; mouse.y = -1;
+  });
+
+  // Click to trigger voice manually
+  canvas.addEventListener('click', function() {
+    if (hoveredVoice) {
+      triggerVoice(hoveredVoice);
+    }
+  });
+
+  // Keyboard
+  document.addEventListener('keydown', function(e) {
+    if (e.code === 'Space') { e.preventDefault(); btnToggle.click(); }
+    if (e.code === 'KeyS') { btnScale.click(); }
+    if (e.code === 'KeyI') { btnIsolate.click(); }
+  });
+}
+
+// ─── Boot ────────────────────────────────────────────────────
+
+initCanvas();
+
+document.getElementById('startOverlay').addEventListener('click', function() {
+  document.getElementById('startOverlay').classList.add('hidden');
+  document.getElementById('hud-top').classList.add('visible');
+  document.getElementById('controls').classList.add('visible');
+  document.getElementById('backLink').classList.add('visible');
+
+  initAudio();
+  startDrone();
+  setupControls();
+
+  loadPopulation().then(function() {
+    requestAnimationFrame(animate);
+  });
+});
+</script>
+
+</body>
+</html>

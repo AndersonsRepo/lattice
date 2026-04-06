@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dendrite — Neural Network Growth</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --accent: #7c6fe0;
+      --green: #4ade80;
+      --cyan: #22d3ee;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--bg); overflow: hidden; font-family: 'SF Mono', 'Fira Code', monospace; }
+    canvas { display: block; }
+
+    #start-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: var(--bg); cursor: pointer;
+    }
+    #start-overlay h1 {
+      font-size: 2.5rem; font-weight: 300; letter-spacing: 0.3em;
+      text-transform: uppercase; color: var(--accent);
+      text-shadow: 0 0 40px #7c6fe040;
+    }
+    #start-overlay p { color: #6e6e82; font-size: 0.8rem; margin-top: 1rem; letter-spacing: 0.1em; }
+    #start-overlay .hint { color: #3e3e52; font-size: 0.7rem; margin-top: 2rem; }
+
+    .hud {
+      position: fixed; top: 1rem; left: 1rem; z-index: 10;
+      color: #6e6e82; font-size: 0.65rem; letter-spacing: 0.08em;
+      pointer-events: none;
+    }
+    .hud span { color: var(--green); }
+
+    .controls {
+      position: fixed; bottom: 1rem; right: 1rem; z-index: 10;
+      display: flex; gap: 0.5rem;
+    }
+    .controls button {
+      background: #12121a80; border: 1px solid #1e1e2e; color: #6e6e82;
+      font-family: inherit; font-size: 0.65rem; letter-spacing: 0.08em;
+      padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer;
+      backdrop-filter: blur(8px); transition: all 0.2s;
+    }
+    .controls button:hover { color: #c8c8d4; border-color: var(--accent); }
+    .controls button.active { color: var(--accent); border-color: var(--accent); }
+
+    .back-link {
+      position: fixed; top: 1rem; right: 1rem; z-index: 10;
+      color: #6e6e82; text-decoration: none; font-size: 0.7rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 0.4rem 0.8rem; border: 1px solid #1e1e2e;
+      border-radius: 6px; background: #12121a80; backdrop-filter: blur(8px);
+      transition: all 0.2s;
+    }
+    .back-link:hover { color: var(--accent); border-color: var(--accent); }
+
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 5;
+      background: radial-gradient(ellipse at center, transparent 50%, #0a0a0f 100%);
+    }
+  </style>
+</head>
+<body>
+  <div id="start-overlay">
+    <h1>Dendrite</h1>
+    <p>organic neural network growth</p>
+    <div class="hint">click to seed &middot; watch networks form</div>
+  </div>
+
+  <canvas id="c"></canvas>
+  <div class="vignette"></div>
+
+  <div class="hud">
+    <div>nodes <span id="hud-nodes">0</span> &middot; branches <span id="hud-branches">0</span> &middot; synapses <span id="hud-synapses">0</span></div>
+    <div>seeds <span id="hud-seeds">0</span> &middot; fps <span id="hud-fps">0</span></div>
+  </div>
+
+  <div class="controls">
+    <button id="btn-clear" title="Clear (C)">Clear</button>
+    <button id="btn-burst" title="Burst (B)">Burst</button>
+    <button id="btn-glow" class="active" title="Glow (G)">Glow</button>
+    <button id="btn-pause" title="Pause (Space)">Pause</button>
+  </div>
+
+  <a href="index.html" class="back-link">&larr; Gallery</a>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // --- State ---
+    const seeds = [];
+    const tips = [];        // growing branch tips
+    const segments = [];    // drawn segments
+    const synapses = [];    // connection points
+    const nodes = [];       // branch split/end points
+    let paused = false;
+    let glowEnabled = true;
+    let started = false;
+    let frameCount = 0;
+    let lastFpsTime = performance.now();
+    let fps = 0;
+
+    // --- Palette per seed ---
+    const PALETTES = [
+      { core: '#7c6fe0', glow: '#7c6fe030', mid: '#9d7af5' },  // purple
+      { core: '#4ade80', glow: '#4ade8030', mid: '#7af5a8' },  // green
+      { core: '#22d3ee', glow: '#22d3ee30', mid: '#67e8f9' },  // cyan
+      { core: '#e879f9', glow: '#e879f930', mid: '#f0abfc' },  // magenta
+      { core: '#fbbf24', glow: '#fbbf2430', mid: '#fcd34d' },  // amber
+      { core: '#f87171', glow: '#f8717130', mid: '#fca5a5' },  // red
+      { core: '#a78bfa', glow: '#a78bfa30', mid: '#c4b5fd' },  // lavender
+      { core: '#4ad4f5', glow: '#4ad4f530', mid: '#88eeff' },  // teal
+    ];
+
+    function createSeed(x, y) {
+      const palette = PALETTES[seeds.length % PALETTES.length];
+      const seed = { x, y, palette, id: seeds.length };
+      seeds.push(seed);
+
+      // Spawn initial tips in random directions
+      const count = 3 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i / count) + (Math.random() - 0.5) * 0.5;
+        tips.push({
+          x, y, angle,
+          speed: 0.6 + Math.random() * 0.8,
+          life: 200 + Math.floor(Math.random() * 300),
+          maxLife: 500,
+          seedId: seed.id,
+          palette,
+          width: 2 + Math.random(),
+          splitChance: 0.008,
+          turnRate: 0.03 + Math.random() * 0.02,
+          depth: 0,
+        });
+      }
+      nodes.push({ x, y, palette, radius: 3 });
+    }
+
+    // --- Spatial grid for synapse detection ---
+    const CELL_SIZE = 30;
+    const grid = new Map();
+
+    function gridKey(x, y) {
+      return `${Math.floor(x / CELL_SIZE)},${Math.floor(y / CELL_SIZE)}`;
+    }
+
+    function addToGrid(seg) {
+      const key = gridKey(seg.x2, seg.y2);
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(seg);
+    }
+
+    function findNearby(x, y, seedId, radius) {
+      const r = Math.ceil(radius / CELL_SIZE);
+      const cx = Math.floor(x / CELL_SIZE);
+      const cy = Math.floor(y / CELL_SIZE);
+      const results = [];
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          const cell = grid.get(`${cx + dx},${cy + dy}`);
+          if (!cell) continue;
+          for (const seg of cell) {
+            if (seg.seedId === seedId) continue;
+            const d = Math.hypot(seg.x2 - x, seg.y2 - y);
+            if (d < radius) results.push({ seg, dist: d });
+          }
+        }
+      }
+      return results;
+    }
+
+    // --- Noise for organic curvature ---
+    // Simple 2D value noise
+    const PERM = new Uint8Array(512);
+    for (let i = 0; i < 256; i++) PERM[i] = i;
+    for (let i = 255; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [PERM[i], PERM[j]] = [PERM[j], PERM[i]];
+    }
+    for (let i = 0; i < 256; i++) PERM[i + 256] = PERM[i];
+
+    function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    function lerp(a, b, t) { return a + t * (b - a); }
+    function grad(hash, x, y) {
+      const h = hash & 3;
+      return ((h & 1) ? -x : x) + ((h & 2) ? -y : y);
+    }
+    function noise2d(x, y) {
+      const xi = Math.floor(x) & 255, yi = Math.floor(y) & 255;
+      const xf = x - Math.floor(x), yf = y - Math.floor(y);
+      const u = fade(xf), v = fade(yf);
+      const aa = PERM[PERM[xi] + yi], ab = PERM[PERM[xi] + yi + 1];
+      const ba = PERM[PERM[xi + 1] + yi], bb = PERM[PERM[xi + 1] + yi + 1];
+      return lerp(
+        lerp(grad(aa, xf, yf), grad(ba, xf - 1, yf), u),
+        lerp(grad(ab, xf, yf - 1), grad(bb, xf - 1, yf - 1), u),
+        v
+      );
+    }
+
+    // --- Growth step ---
+    function growStep() {
+      const newTips = [];
+
+      for (let i = tips.length - 1; i >= 0; i--) {
+        const tip = tips[i];
+        if (tip.life <= 0) {
+          nodes.push({ x: tip.x, y: tip.y, palette: tip.palette, radius: 1.5 });
+          tips.splice(i, 1);
+          continue;
+        }
+
+        // Noise-driven curvature
+        const n = noise2d(tip.x * 0.005, tip.y * 0.005);
+        tip.angle += n * tip.turnRate;
+
+        // Slight tropism toward center (prevents edges)
+        const toCenterX = W / 2 - tip.x;
+        const toCenterY = H / 2 - tip.y;
+        const centerAngle = Math.atan2(toCenterY, toCenterX);
+        const angleDiff = centerAngle - tip.angle;
+        tip.angle += Math.sin(angleDiff) * 0.002;
+
+        const dx = Math.cos(tip.angle) * tip.speed;
+        const dy = Math.sin(tip.angle) * tip.speed;
+        const nx = tip.x + dx;
+        const ny = tip.y + dy;
+
+        // Out of bounds - kill
+        if (nx < -20 || nx > W + 20 || ny < -20 || ny > H + 20) {
+          tips.splice(i, 1);
+          continue;
+        }
+
+        const seg = {
+          x1: tip.x, y1: tip.y, x2: nx, y2: ny,
+          seedId: tip.seedId, palette: tip.palette,
+          width: tip.width * (0.98 + 0.02 * (tip.life / tip.maxLife)),
+          alpha: Math.min(1, tip.life / 50),
+        };
+        segments.push(seg);
+        addToGrid(seg);
+
+        // Check for synapses with other seeds' branches
+        const nearby = findNearby(nx, ny, tip.seedId, 25);
+        for (const { seg: other, dist } of nearby) {
+          // Don't create too many synapses in same area
+          const tooClose = synapses.some(s =>
+            Math.hypot(s.x - nx, s.y - ny) < 40
+          );
+          if (!tooClose) {
+            synapses.push({
+              x: (nx + other.x2) / 2,
+              y: (ny + other.y2) / 2,
+              palette1: tip.palette,
+              palette2: other.palette,
+              birth: frameCount,
+              radius: 3 + Math.random() * 2,
+            });
+          }
+        }
+
+        tip.x = nx;
+        tip.y = ny;
+        tip.life--;
+
+        // Branching
+        if (tip.depth < 4 && Math.random() < tip.splitChance && tip.life > 30) {
+          const branchAngle = tip.angle + (Math.random() > 0.5 ? 1 : -1) * (0.3 + Math.random() * 0.5);
+          newTips.push({
+            x: nx, y: ny,
+            angle: branchAngle,
+            speed: tip.speed * (0.7 + Math.random() * 0.2),
+            life: Math.floor(tip.life * (0.4 + Math.random() * 0.3)),
+            maxLife: tip.maxLife,
+            seedId: tip.seedId,
+            palette: tip.palette,
+            width: tip.width * 0.7,
+            splitChance: tip.splitChance * 0.8,
+            turnRate: tip.turnRate * 1.2,
+            depth: tip.depth + 1,
+          });
+          nodes.push({ x: nx, y: ny, palette: tip.palette, radius: 2 });
+        }
+      }
+
+      tips.push(...newTips);
+    }
+
+    // --- Render ---
+    function render() {
+      // Fade trail
+      ctx.fillStyle = 'rgba(10, 10, 15, 0.04)';
+      ctx.fillRect(0, 0, W, H);
+
+      // Segments
+      for (const seg of segments) {
+        ctx.beginPath();
+        ctx.moveTo(seg.x1, seg.y1);
+        ctx.lineTo(seg.x2, seg.y2);
+        ctx.strokeStyle = seg.palette.core;
+        ctx.lineWidth = seg.width;
+        ctx.globalAlpha = seg.alpha * 0.7;
+        ctx.stroke();
+
+        if (glowEnabled) {
+          ctx.strokeStyle = seg.palette.glow;
+          ctx.lineWidth = seg.width + 4;
+          ctx.globalAlpha = seg.alpha * 0.3;
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      // Active tips - bright dots
+      for (const tip of tips) {
+        ctx.beginPath();
+        ctx.arc(tip.x, tip.y, tip.width + 1, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.8;
+        ctx.fill();
+
+        if (glowEnabled) {
+          ctx.beginPath();
+          ctx.arc(tip.x, tip.y, tip.width + 6, 0, Math.PI * 2);
+          ctx.fillStyle = tip.palette.glow;
+          ctx.globalAlpha = 0.5;
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      // Nodes (branch points)
+      for (const node of nodes) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fillStyle = node.palette.mid;
+        ctx.globalAlpha = 0.5;
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Synapses - pulsing connection points
+      for (const syn of synapses) {
+        const age = frameCount - syn.birth;
+        const pulse = 0.6 + 0.4 * Math.sin(age * 0.05);
+        const r = syn.radius * pulse;
+
+        // White core
+        ctx.beginPath();
+        ctx.arc(syn.x, syn.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.9 * pulse;
+        ctx.fill();
+
+        // Colored glow rings
+        if (glowEnabled) {
+          ctx.beginPath();
+          ctx.arc(syn.x, syn.y, r + 8, 0, Math.PI * 2);
+          ctx.fillStyle = syn.palette1.glow;
+          ctx.globalAlpha = 0.3 * pulse;
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(syn.x, syn.y, r + 12, 0, Math.PI * 2);
+          ctx.fillStyle = syn.palette2.glow;
+          ctx.globalAlpha = 0.2 * pulse;
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      // Seed centers
+      for (const seed of seeds) {
+        const pulse = 0.7 + 0.3 * Math.sin(frameCount * 0.03 + seed.id);
+        ctx.beginPath();
+        ctx.arc(seed.x, seed.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = seed.palette.core;
+        ctx.globalAlpha = pulse;
+        ctx.fill();
+
+        if (glowEnabled) {
+          ctx.beginPath();
+          ctx.arc(seed.x, seed.y, 15, 0, Math.PI * 2);
+          ctx.fillStyle = seed.palette.glow;
+          ctx.globalAlpha = 0.4 * pulse;
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // --- HUD ---
+    const hudNodes = document.getElementById('hud-nodes');
+    const hudBranches = document.getElementById('hud-branches');
+    const hudSynapses = document.getElementById('hud-synapses');
+    const hudSeeds = document.getElementById('hud-seeds');
+    const hudFps = document.getElementById('hud-fps');
+
+    function updateHud() {
+      hudNodes.textContent = nodes.length;
+      hudBranches.textContent = segments.length;
+      hudSynapses.textContent = synapses.length;
+      hudSeeds.textContent = seeds.length;
+      hudFps.textContent = fps;
+    }
+
+    // --- Main loop ---
+    function frame() {
+      if (!paused) {
+        // Grow multiple steps per frame for visible progress
+        const steps = tips.length < 100 ? 3 : 2;
+        for (let i = 0; i < steps; i++) growStep();
+        frameCount++;
+      }
+
+      render();
+
+      if (frameCount % 15 === 0) updateHud();
+
+      // FPS
+      const now = performance.now();
+      if (now - lastFpsTime > 1000) {
+        fps = Math.round(frameCount / ((now - lastFpsTime) / 1000));
+        frameCount = 0;
+        lastFpsTime = now;
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    // --- Auto-seed for ambiance ---
+    function autoSeed() {
+      if (paused || tips.length > 200) return;
+      if (seeds.length < 2 || (seeds.length < 8 && tips.length < 20 && Math.random() < 0.02)) {
+        const margin = 100;
+        createSeed(
+          margin + Math.random() * (W - margin * 2),
+          margin + Math.random() * (H - margin * 2)
+        );
+      }
+    }
+    setInterval(autoSeed, 2000);
+
+    // --- Interaction ---
+    canvas.addEventListener('click', (e) => {
+      if (!started) return;
+      createSeed(e.clientX, e.clientY);
+    });
+
+    // Start overlay
+    document.getElementById('start-overlay').addEventListener('click', () => {
+      document.getElementById('start-overlay').style.display = 'none';
+      started = true;
+      // Initial seeds
+      createSeed(W * 0.35 + Math.random() * 40, H * 0.45 + Math.random() * 40);
+      createSeed(W * 0.65 + Math.random() * 40, H * 0.55 + Math.random() * 40);
+      frame();
+    });
+
+    // Controls
+    function clearAll() {
+      seeds.length = 0; tips.length = 0; segments.length = 0;
+      synapses.length = 0; nodes.length = 0; grid.clear();
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    function burst() {
+      const count = 3 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < count; i++) {
+        createSeed(
+          100 + Math.random() * (W - 200),
+          100 + Math.random() * (H - 200)
+        );
+      }
+    }
+
+    document.getElementById('btn-clear').addEventListener('click', clearAll);
+    document.getElementById('btn-burst').addEventListener('click', burst);
+    document.getElementById('btn-glow').addEventListener('click', function() {
+      glowEnabled = !glowEnabled;
+      this.classList.toggle('active', glowEnabled);
+    });
+    document.getElementById('btn-pause').addEventListener('click', function() {
+      paused = !paused;
+      this.textContent = paused ? 'Play' : 'Pause';
+      this.classList.toggle('active', paused);
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', (e) => {
+      if (!started) return;
+      switch (e.key.toLowerCase()) {
+        case 'c': clearAll(); break;
+        case 'b': burst(); break;
+        case 'g':
+          glowEnabled = !glowEnabled;
+          document.getElementById('btn-glow').classList.toggle('active', glowEnabled);
+          break;
+        case ' ':
+          e.preventDefault();
+          paused = !paused;
+          const btn = document.getElementById('btn-pause');
+          btn.textContent = paused ? 'Play' : 'Pause';
+          btn.classList.toggle('active', paused);
+          break;
+      }
+    });
+  </script>
+</body>
+</html>

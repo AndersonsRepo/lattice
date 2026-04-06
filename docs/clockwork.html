@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Clockwork</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .bg-glow {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 800px; height: 800px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.15;
+      pointer-events: none;
+      transition: opacity 3s ease, background 3s ease;
+      z-index: 0;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.94);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 3rem;
+      color: var(--accent);
+      margin-bottom: 1.5rem;
+      text-shadow: 0 0 40px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-text {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-sub {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      margin-top: 1.5rem;
+      opacity: 0.45;
+      max-width: 400px;
+      text-align: center;
+      line-height: 1.8;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    .back-link {
+      position: fixed;
+      top: 1.2rem; left: 1.2rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      z-index: 20;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    /* Main layout */
+    .main {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
+    }
+
+    /* Top bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      padding: 0.65rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .top-bar h1 {
+      font-size: 1rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+    .top-bar .sub {
+      color: var(--text-dim);
+      font-size: 0.5rem;
+      letter-spacing: 0.08em;
+    }
+    .algo-badge {
+      padding: 0.2rem 0.6rem;
+      border-radius: 8px;
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      transition: all 0.4s ease;
+    }
+
+    /* Canvas area */
+    .canvas-area {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #gridCanvas { image-rendering: pixelated; }
+    #waveCanvas {
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 100%; height: 72px;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .step-indicator {
+      position: absolute;
+      top: 1rem; right: 1.5rem;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      text-align: right;
+    }
+    .step-indicator .step-num {
+      color: var(--green);
+      font-size: 1.2rem;
+      font-weight: 300;
+    }
+    .info-line {
+      position: absolute;
+      bottom: 5rem; left: 1.5rem;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    .info-line.visible { opacity: 1; }
+    .info-line .val { color: var(--green); }
+
+    /* Controls bar */
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      padding: 0.55rem 1.5rem;
+      border-top: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .ctrl-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.06em;
+      padding: 0.3rem 0.7rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .ctrl-btn.play-btn { font-size: 0.85rem; padding: 0.25rem 0.65rem; }
+    .vol-slider {
+      -webkit-appearance: none; appearance: none;
+      width: 70px; height: 2px;
+      background: var(--border); border-radius: 1px; outline: none;
+    }
+    .vol-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--accent); cursor: pointer;
+    }
+    .speed-label {
+      font-size: 0.55rem; color: var(--text-dim);
+      cursor: pointer; letter-spacing: 0.06em; user-select: none;
+    }
+    .speed-label:hover { color: var(--accent); }
+    .nav-btn {
+      background: none; border: none;
+      color: var(--text-dim); font-size: 0.85rem;
+      cursor: pointer; padding: 0.2rem; transition: color 0.2s;
+    }
+    .nav-btn:hover { color: var(--accent); }
+    .piece-label {
+      font-size: 0.5rem; color: var(--text-dim);
+      letter-spacing: 0.06em; min-width: 45px; text-align: center;
+    }
+
+    .help-hint {
+      position: fixed;
+      bottom: 3.5rem; right: 1.2rem;
+      font-size: 0.45rem;
+      color: var(--text-dim);
+      opacity: 0.35;
+      z-index: 10;
+      letter-spacing: 0.04em;
+      text-align: right;
+      line-height: 1.9;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow" id="bgGlow"></div>
+  <a href="index.html" class="back-link">&larr; LATTICE</a>
+
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">&#9881;</div>
+    <div class="start-text">Clockwork</div>
+    <div class="start-sub">
+      hear algorithms think &mdash; step by step<br><br>
+      cellular automata become rhythmic sequences<br>
+      life simulations pulse with birth and death<br>
+      L-systems grow into branching melodies<br>
+      reaction-diffusion morphs continuous drones
+    </div>
+  </div>
+
+  <div class="main" id="mainContent" style="opacity:0; transition: opacity 0.8s ease;">
+    <div class="top-bar">
+      <h1>Clockwork</h1>
+      <span class="sub">live computation &rarr; sound</span>
+      <span class="algo-badge" id="algoBadge">&mdash;</span>
+    </div>
+    <div class="canvas-area">
+      <canvas id="gridCanvas"></canvas>
+      <canvas id="waveCanvas"></canvas>
+      <div class="step-indicator">
+        <div>step</div>
+        <div class="step-num" id="stepNum">0</div>
+      </div>
+      <div class="info-line" id="infoLine"></div>
+    </div>
+    <div class="controls">
+      <button class="nav-btn" id="prevBtn">&#9664;</button>
+      <span class="piece-label" id="pieceLabel">&mdash;</span>
+      <button class="nav-btn" id="nextBtn">&#9654;</button>
+      <button class="ctrl-btn play-btn" id="playBtn">&#9654;</button>
+      <span class="speed-label" id="speedLabel">1&times;</span>
+      <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="55">
+      <button class="ctrl-btn" id="restartBtn">restart</button>
+    </div>
+  </div>
+
+  <div class="help-hint">
+    space &mdash; play / pause &nbsp;
+    &larr; &rarr; &mdash; prev / next &nbsp;
+    r &mdash; restart &nbsp;
+    &uarr; &darr; &mdash; volume
+  </div>
+
+<script>
+  // ── Constants ──
+  const SPECIES_COLORS = {
+    '1d': '#a78bfa', '2d': '#4ade80', 'lsystem': '#fbbf24',
+    'reaction-diffusion': '#f472b6', 'voronoi': '#38bdf8',
+    'wfc': '#ef4444', 'spirograph': '#fb923c', 'attractor': '#e879f9',
+    'julia': '#2dd4bf', 'noise': '#94a3b8', 'flowfield': '#22d3ee',
+    'magnetic-pendulum': '#f87171'
+  };
+  const PENTA = [0, 2, 4, 7, 9];
+  const MINOR = [0, 2, 3, 5, 7, 8, 10];
+  function midi2f(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+  // Seeded PRNG (Mulberry32)
+  function rng32(a) {
+    return () => {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // ── Audio Engine ──
+  class ClockAudio {
+    constructor() {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.3;
+      this.comp = this.ctx.createDynamicsCompressor();
+      this.comp.threshold.value = -16; this.comp.ratio.value = 6;
+      this.comp.attack.value = 0.004; this.comp.release.value = 0.12;
+      // Reverb
+      this.reverb = this.ctx.createConvolver();
+      this.reverb.buffer = this._ir(2.8, 2.6);
+      this.reverbGain = this.ctx.createGain();
+      this.reverbGain.gain.value = 0.35;
+      // Routing
+      this.master.connect(this.comp);
+      this.comp.connect(this.ctx.destination);
+      this.master.connect(this.reverb);
+      this.reverb.connect(this.reverbGain);
+      this.reverbGain.connect(this.ctx.destination);
+      // Analyser
+      this.analyser = this.ctx.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.analyser.smoothingTimeConstant = 0.8;
+      this.master.connect(this.analyser);
+      this.drones = [];
+    }
+    _ir(dur, decay) {
+      const r = this.ctx.sampleRate, n = r * dur;
+      const b = this.ctx.createBuffer(2, n, r);
+      for (let c = 0; c < 2; c++) {
+        const d = b.getChannelData(c);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay);
+      }
+      return b;
+    }
+    setVol(v) { this.master.gain.setTargetAtTime(v * 0.55, this.ctx.currentTime, 0.08); }
+    freq() { const d = new Uint8Array(this.analyser.frequencyBinCount); this.analyser.getByteFrequencyData(d); return d; }
+
+    tone(freq, dur, type, vol, pan) {
+      const t = this.ctx.currentTime;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain(), p = this.ctx.createStereoPanner();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      p.pan.value = Math.max(-1, Math.min(1, pan || 0));
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(vol || 0.1, t + 0.008);
+      g.gain.setValueAtTime(vol || 0.1, t + dur * 0.55);
+      g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+      o.connect(g); g.connect(p); p.connect(this.master);
+      o.start(t); o.stop(t + dur + 0.02);
+    }
+    click(freq, vol) {
+      const t = this.ctx.currentTime;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(freq, t);
+      o.frequency.exponentialRampToValueAtTime(freq * 0.4, t + 0.09);
+      g.gain.setValueAtTime(vol || 0.08, t);
+      g.gain.exponentialRampToValueAtTime(0.0005, t + 0.11);
+      o.connect(g); g.connect(this.master); o.start(t); o.stop(t + 0.13);
+    }
+    bell(freq, vol) {
+      const t = this.ctx.currentTime;
+      [1, 2.4, 5.3].forEach((p, i) => {
+        const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+        o.type = 'sine'; o.frequency.value = freq * p;
+        const v = (vol || 0.06) / (i + 1);
+        g.gain.setValueAtTime(v, t);
+        g.gain.exponentialRampToValueAtTime(0.0005, t + 0.9 / (i + 1));
+        o.connect(g); g.connect(this.master); o.start(t); o.stop(t + 1.1);
+      });
+    }
+    startDrone(freq, type, vol) {
+      const t = this.ctx.currentTime;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      const f = this.ctx.createBiquadFilter();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      f.type = 'lowpass'; f.frequency.value = 700; f.Q.value = 1.5;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol || 0.06, t + 0.6);
+      o.connect(f); f.connect(g); g.connect(this.master); o.start(t);
+      const v = { o, g, f };
+      this.drones.push(v);
+      return v;
+    }
+    modDrone(v, freq, cutoff, vol) {
+      if (!v) return;
+      const t = this.ctx.currentTime;
+      v.o.frequency.setTargetAtTime(freq, t, 0.25);
+      v.f.frequency.setTargetAtTime(cutoff, t, 0.25);
+      v.g.gain.setTargetAtTime(vol, t, 0.25);
+    }
+    killDrones() {
+      const t = this.ctx.currentTime;
+      this.drones.forEach(v => {
+        v.g.gain.setTargetAtTime(0, t, 0.25);
+        setTimeout(() => { try { v.o.stop(); } catch(e) {} }, 800);
+      });
+      this.drones = [];
+    }
+  }
+
+  // ── Algorithm Runners ──
+  // Each provides step() returning a result, done(), grid, width, height
+
+  class Run1D {
+    constructor(g) {
+      this.rule = typeof g.rule === 'number' ? g.rule : (g.rule?.number ?? 110);
+      this.width = g.width || 53;
+      this.height = g.height || 31;
+      this.states = g.rule?.states || 2;
+      const rand = rng32(g.seed || 42);
+      const first = new Array(this.width).fill(0);
+      first[this.width >> 1] = this.states - 1;
+      for (let i = 0; i < this.width; i++) if (rand() < 0.05) first[i] = Math.floor(rand() * this.states);
+      this.grid = [first.slice()];
+      this.cur = first; this.row = 0;
+    }
+    step() {
+      if (this.row >= this.height - 1) return null;
+      const w = this.width, n = new Array(w);
+      for (let i = 0; i < w; i++) {
+        const l = this.cur[(i - 1 + w) % w], c = this.cur[i], r = this.cur[(i + 1) % w];
+        if (this.states <= 2) { n[i] = (this.rule >> ((l << 2) | (c << 1) | r)) & 1; }
+        else { const s = l + c + r; n[i] = (this.rule >> (s % 8)) & 1 ? Math.min(c + 1, this.states - 1) : Math.max(c - 1, 0); }
+      }
+      this.cur = n; this.grid.push(n.slice()); this.row++;
+      return { row: this.row, cells: n };
+    }
+    done() { return this.row >= this.height - 1; }
+  }
+
+  class Run2D {
+    constructor(g) {
+      const r = g.rule || {};
+      this.birth = new Set(r.birth || [3]);
+      this.survive = new Set(r.survive || [2, 3]);
+      this.width = g.width || 53; this.height = g.height || 31;
+      this.max = 60; this.step_ = 0;
+      const rand = rng32(g.seed || 42);
+      this.grid = [];
+      for (let y = 0; y < this.height; y++) {
+        const row = [];
+        for (let x = 0; x < this.width; x++) row.push(rand() < 0.35 ? 1 : 0);
+        this.grid.push(row);
+      }
+    }
+    step() {
+      if (this.step_ >= this.max) return null;
+      const w = this.width, h = this.height, next = [], births = [], deaths = [];
+      for (let y = 0; y < h; y++) {
+        next.push([]);
+        for (let x = 0; x < w; x++) {
+          let nb = 0;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            if (this.grid[(y + dy + h) % h][(x + dx + w) % w] > 0) nb++;
+          }
+          const alive = this.grid[y][x] > 0;
+          const ns = alive ? (this.survive.has(nb) ? 1 : 0) : (this.birth.has(nb) ? 1 : 0);
+          next[y].push(ns);
+          if (!alive && ns) births.push({ x, y });
+          if (alive && !ns) deaths.push({ x, y });
+        }
+      }
+      this.grid = next; this.step_++;
+      return { step: this.step_, births, deaths, grid: next };
+    }
+    done() { return this.step_ >= this.max; }
+  }
+
+  class RunLS {
+    constructor(g) {
+      const r = g.rule || {};
+      this.angle = r.angle || 60;
+      let str = r.axiom || 'F';
+      const rules = r.rules || { F: 'F+F-F-F+F' };
+      const iters = Math.min(r.iterations || 4, 5);
+      for (let i = 0; i < iters; i++) {
+        let n = '';
+        for (const ch of str) n += rules[ch] || ch;
+        str = n; if (str.length > 3500) { str = str.substring(0, 3500); break; }
+      }
+      this.str = str; this.pos = 0;
+      this.chunk = Math.max(1, Math.floor(str.length / 70));
+      this.width = g.width || 53; this.height = g.height || 31;
+      this.grid = Array.from({ length: this.height }, () => new Array(this.width).fill(0));
+      this.tx = this.width / 2; this.ty = this.height / 2;
+      this.ta = -90; this.stack = []; this.step_ = 0;
+    }
+    step() {
+      if (this.pos >= this.str.length) return null;
+      const end = Math.min(this.pos + this.chunk, this.str.length);
+      const seg = this.str.substring(this.pos, end);
+      this.pos = end; this.step_++;
+      const evts = [];
+      for (const ch of seg) {
+        if (ch === 'F' || ch === 'G') {
+          const rad = this.ta * Math.PI / 180;
+          this.tx += Math.cos(rad) * 0.8;
+          this.ty += Math.sin(rad) * 0.8;
+          const gx = ((Math.round(this.tx) % this.width) + this.width) % this.width;
+          const gy = ((Math.round(this.ty) % this.height) + this.height) % this.height;
+          this.grid[gy][gx] = Math.min((this.grid[gy][gx] || 0) + 1, 3);
+          evts.push({ t: 'F', x: gx, y: gy });
+        } else if (ch === '+') { this.ta += this.angle; evts.push({ t: '+' }); }
+        else if (ch === '-') { this.ta -= this.angle; evts.push({ t: '-' }); }
+        else if (ch === '[') { this.stack.push({ x: this.tx, y: this.ty, a: this.ta }); evts.push({ t: '[' }); }
+        else if (ch === ']') { const s = this.stack.pop(); if (s) { this.tx = s.x; this.ty = s.y; this.ta = s.a; } evts.push({ t: ']' }); }
+      }
+      return { step: this.step_, evts, grid: this.grid };
+    }
+    done() { return this.pos >= this.str.length; }
+  }
+
+  class RunRD {
+    constructor(g) {
+      const r = g.rule || {};
+      this.feed = r.feed || 0.055; this.kill = r.kill || 0.062;
+      this.Du = r.Du || 1.0; this.Dv = r.Dv || 0.5;
+      this.width = Math.min(g.width || 40, 40);
+      this.height = Math.min(g.height || 24, 24);
+      this.max = 80; this.step_ = 0;
+      const rand = rng32(g.seed || 42);
+      this.U = Array.from({ length: this.height }, () => new Float32Array(this.width).fill(1));
+      this.V = Array.from({ length: this.height }, () => new Float32Array(this.width).fill(0));
+      const spots = 3 + Math.floor(rand() * 5);
+      for (let s = 0; s < spots; s++) {
+        const cx = Math.floor(rand() * this.width), cy = Math.floor(rand() * this.height);
+        const rad = 2 + Math.floor(rand() * 3);
+        for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+          if (dx * dx + dy * dy <= rad * rad) {
+            const x = (cx + dx + this.width) % this.width, y = (cy + dy + this.height) % this.height;
+            this.U[y][x] = 0.5; this.V[y][x] = 0.25;
+          }
+        }
+      }
+      this.grid = Array.from({ length: this.height }, () => new Array(this.width).fill(0));
+    }
+    step() {
+      if (this.step_ >= this.max) return null;
+      for (let sub = 0; sub < 5; sub++) {
+        const nU = Array.from({ length: this.height }, () => new Float32Array(this.width));
+        const nV = Array.from({ length: this.height }, () => new Float32Array(this.width));
+        for (let y = 0; y < this.height; y++) for (let x = 0; x < this.width; x++) {
+          const u = this.U[y][x], v = this.V[y][x];
+          let lu = -u * 4, lv = -v * 4;
+          for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            lu += this.U[(y + dy + this.height) % this.height][(x + dx + this.width) % this.width];
+            lv += this.V[(y + dy + this.height) % this.height][(x + dx + this.width) % this.width];
+          }
+          const uvv = u * v * v;
+          nU[y][x] = Math.max(0, Math.min(1, u + (this.Du * lu - uvv + this.feed * (1 - u)) * 0.8));
+          nV[y][x] = Math.max(0, Math.min(1, v + (this.Dv * lv + uvv - (this.feed + this.kill) * v) * 0.8));
+        }
+        this.U = nU; this.V = nV;
+      }
+      this.step_++;
+      let aU = 0, aV = 0;
+      for (let y = 0; y < this.height; y++) for (let x = 0; x < this.width; x++) {
+        this.grid[y][x] = Math.floor(this.V[y][x] * 3.99);
+        aU += this.U[y][x]; aV += this.V[y][x];
+      }
+      const n = this.width * this.height;
+      return { step: this.step_, grid: this.grid, aU: aU / n, aV: aV / n };
+    }
+    done() { return this.step_ >= this.max; }
+  }
+
+  // Generic fallback: reveal the rendered piece cell by cell
+  class RunReveal {
+    constructor(piece) {
+      const g = piece.genome;
+      this.width = g.width || 53; this.height = g.height || 31;
+      this.type = g.type;
+      const rand = rng32(g.seed || 42);
+      const lines = (piece.rendered || '').split('\n');
+      this.src = [];
+      for (let y = 0; y < this.height; y++) {
+        const row = [], line = lines[y] || '';
+        for (let x = 0; x < this.width; x++) {
+          const ch = line[x] || ' ';
+          row.push(ch === ' ' ? 0 : ch === '.' ? 1 : ch === ':' ? 2 : 3);
+        }
+        this.src.push(row);
+      }
+      this.grid = Array.from({ length: this.height }, () => new Array(this.width).fill(0));
+      this.max = 40; this.step_ = 0;
+      this.perStep = Math.ceil((this.width * this.height) / this.max);
+      // Shuffled order
+      this.order = [];
+      for (let y = 0; y < this.height; y++) for (let x = 0; x < this.width; x++) this.order.push({ x, y });
+      for (let i = this.order.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [this.order[i], this.order[j]] = [this.order[j], this.order[i]];
+      }
+      this.idx = 0;
+    }
+    step() {
+      if (this.step_ >= this.max) return null;
+      const revealed = [];
+      for (let i = 0; i < this.perStep && this.idx < this.order.length; i++, this.idx++) {
+        const { x, y } = this.order[this.idx];
+        this.grid[y][x] = this.src[y][x];
+        if (this.src[y][x] > 0) revealed.push({ x, y, v: this.src[y][x] });
+      }
+      this.step_++;
+      return { step: this.step_, revealed, grid: this.grid };
+    }
+    done() { return this.step_ >= this.max; }
+  }
+
+  // ── Sonification ──
+  function son1D(au, res, g) {
+    if (!res) return;
+    const c = res.cells, w = c.length;
+    const active = [];
+    for (let i = 0; i < w; i++) if (c[i] > 0) active.push(i);
+    const max = 8;
+    const pick = active.length <= max ? active :
+      active.filter((_, i) => i % Math.ceil(active.length / max) === 0).slice(0, max);
+    pick.forEach(i => {
+      const oct = Math.floor((i / w) * 3);
+      const deg = PENTA[i % PENTA.length];
+      au.click(midi2f(48 + oct * 12 + deg), 0.04 + (c[i] / 3) * 0.05);
+    });
+    const density = active.length / w;
+    if (density > 0.25) au.tone(midi2f(36), 0.18, 'sine', density * 0.04);
+  }
+
+  function son2D(au, res) {
+    if (!res) return;
+    const w = res.grid[0]?.length || 53, h = res.grid.length || 31;
+    res.births.slice(0, 6).forEach(({ x, y }) => {
+      const deg = PENTA[x % PENTA.length], oct = Math.floor((1 - y / h) * 3);
+      au.tone(midi2f(60 + oct * 12 + deg), 0.22, 'triangle', 0.08, (x / w) * 2 - 1);
+    });
+    res.deaths.slice(0, 4).forEach(({ x, y }) => {
+      const deg = MINOR[x % MINOR.length], oct = Math.floor((1 - y / h) * 2);
+      au.tone(midi2f(48 + oct * 12 + deg), 0.35, 'sine', 0.03, (x / w) * 2 - 1);
+    });
+    if (res.births.length > 10) au.tone(midi2f(36), 0.12, 'sine', 0.025);
+  }
+
+  function sonLS(au, res) {
+    if (!res) return;
+    let pitch = 60;
+    res.evts.forEach(e => {
+      if (e.t === 'F') {
+        const deg = PENTA[Math.abs(pitch) % PENTA.length];
+        const m = 48 + (Math.floor(pitch / 5) % 4) * 12 + deg;
+        const pan = e.x !== undefined ? (e.x / 53) * 2 - 1 : 0;
+        au.tone(midi2f(Math.max(36, Math.min(96, m))), 0.1, 'triangle', 0.05, pan);
+        pitch++;
+      } else if (e.t === '+') { pitch += 2; }
+      else if (e.t === '-') { pitch -= 2; }
+      else if (e.t === '[') { au.bell(midi2f(72 + (pitch % 12)), 0.035); }
+      else if (e.t === ']') { au.tone(midi2f(48), 0.07, 'sine', 0.025); }
+    });
+  }
+
+  let rdVoices = [];
+  function sonRD(au, res) {
+    if (!res) return;
+    if (res.step === 1) {
+      rdVoices = [
+        au.startDrone(midi2f(36), 'sine', 0.05),
+        au.startDrone(midi2f(48), 'triangle', 0.035),
+        au.startDrone(midi2f(60), 'sine', 0.025),
+      ];
+    }
+    const v = res.aV, u = res.aU;
+    if (rdVoices.length >= 3) {
+      const cut = 200 + v * 3000;
+      au.modDrone(rdVoices[0], midi2f(36 + v * 8), cut, 0.035 + v * 0.05);
+      au.modDrone(rdVoices[1], midi2f(48 + v * 4), cut * 0.7, 0.025 + v * 0.035);
+      au.modDrone(rdVoices[2], midi2f(60 + u * 4), 400 + u * 1200, 0.02 + u * 0.025);
+    }
+    if (res.step % 4 === 0) {
+      const g = res.grid, h = g.length, w = g[0].length;
+      let mv = 0, mx = 0, my = 0;
+      for (let y = 0; y < h; y += 3) for (let x = 0; x < w; x += 3) {
+        if (g[y][x] > mv) { mv = g[y][x]; mx = x; my = y; }
+      }
+      if (mv > 1) {
+        const m = 60 + PENTA[mx % PENTA.length] + Math.floor((1 - my / h) * 24);
+        au.tone(midi2f(Math.min(m, 96)), 0.45, 'sine', 0.035, (mx / w) * 2 - 1);
+      }
+    }
+  }
+
+  function sonReveal(au, res, g) {
+    if (!res) return;
+    const r = res.revealed || [], w = g.width || 53, h = g.height || 31;
+    const max = 6;
+    const pick = r.length <= max ? r : r.filter((_, i) => i % Math.ceil(r.length / max) === 0).slice(0, max);
+    const types = ['sine', 'triangle', 'square'];
+    pick.forEach(({ x, y, v }) => {
+      const deg = PENTA[x % PENTA.length], oct = Math.floor((1 - y / h) * 3);
+      au.tone(midi2f(48 + oct * 12 + deg), 0.18, types[v % types.length], 0.04 + v * 0.015, (x / w) * 2 - 1);
+    });
+  }
+
+  // ── Renderers ──
+  function hexRGB(hex) {
+    return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+  }
+
+  function renderGrid(canvas, grid, w, h, color, highlight) {
+    const area = canvas.parentElement.getBoundingClientRect();
+    const cs = Math.min(Math.floor(area.width / w), Math.floor(area.height / h), 16);
+    canvas.width = w * cs; canvas.height = h * cs;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const [cr, cg, cb] = hexRGB(color);
+    for (let y = 0; y < h && y < grid.length; y++) {
+      for (let x = 0; x < w && x < (grid[y]?.length || 0); x++) {
+        const v = grid[y][x];
+        if (v > 0) {
+          const a = 0.25 + Math.min(v / 3, 1) * 0.75;
+          ctx.fillStyle = `rgba(${cr},${cg},${cb},${a})`;
+          ctx.fillRect(x * cs, y * cs, cs - 1, cs - 1);
+        }
+      }
+    }
+    if (highlight !== undefined && highlight >= 0 && highlight < h) {
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},0.07)`;
+      ctx.fillRect(0, highlight * cs, w * cs, cs);
+      ctx.strokeStyle = `rgba(${cr},${cg},${cb},0.35)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, highlight * cs); ctx.lineTo(w * cs, highlight * cs); ctx.stroke();
+    }
+  }
+
+  function renderWave(canvas, data, color) {
+    const w = canvas.parentElement.getBoundingClientRect().width;
+    canvas.width = w; canvas.height = 72;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, w, 72);
+    if (!data || !data.length) return;
+    const [cr, cg, cb] = hexRGB(color);
+    ctx.beginPath(); ctx.moveTo(0, 72);
+    for (let i = 0; i < data.length; i++) ctx.lineTo((i / data.length) * w, 72 - (data[i] / 255) * 55);
+    ctx.lineTo(w, 72); ctx.closePath();
+    const g = ctx.createLinearGradient(0, 0, 0, 72);
+    g.addColorStop(0, `rgba(${cr},${cg},${cb},0.25)`); g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g; ctx.fill();
+  }
+
+  // ── Main Controller ──
+  let audio = null, pieces = [], idx = 0, runner = null;
+  let playing = false, timer = null;
+  const speeds = [0.5, 1, 1.5, 2, 4];
+  let spIdx = 1, speed = 1;
+
+  async function loadPieces() {
+    try {
+      const d = await (await fetch('gallery.json')).json();
+      pieces = (d.hallOfFame || []).filter(p => p.rendered || p.genome);
+      if (!pieces.length) pieces = [{ id: 'seed', genome: { type: '1d', rule: 110, width: 53, height: 31, seed: 42, palette: [] }, rendered: '', score: 0 }];
+    } catch(e) {
+      pieces = [{ id: 'seed', genome: { type: '1d', rule: 110, width: 53, height: 31, seed: 42, palette: [] }, rendered: '', score: 0 }];
+    }
+  }
+
+  function makeRunner(p) {
+    const t = p.genome.type;
+    if (t === '1d') return new Run1D(p.genome);
+    if (t === '2d') return new Run2D(p.genome);
+    if (t === 'lsystem') return new RunLS(p.genome);
+    if (t === 'reaction-diffusion') return new RunRD(p.genome);
+    return new RunReveal(p);
+  }
+  function getSon(t) {
+    if (t === '1d') return son1D;
+    if (t === '2d') return son2D;
+    if (t === 'lsystem') return sonLS;
+    if (t === 'reaction-diffusion') return sonRD;
+    return sonReveal;
+  }
+
+  function selectPiece(i) {
+    stop();
+    idx = ((i % pieces.length) + pieces.length) % pieces.length;
+    const p = pieces[idx], t = p.genome.type;
+    const c = SPECIES_COLORS[t] || '#7c6fe0';
+    document.getElementById('algoBadge').textContent = t;
+    document.getElementById('algoBadge').style.borderColor = c;
+    document.getElementById('algoBadge').style.color = c;
+    document.getElementById('pieceLabel').textContent = `${idx + 1} / ${pieces.length}`;
+    document.getElementById('stepNum').textContent = '0';
+    document.getElementById('bgGlow').style.background = `radial-gradient(circle, ${c}20 0%, transparent 70%)`;
+
+    // Info line
+    const info = document.getElementById('infoLine');
+    const sc = p.score ? (p.score * 100).toFixed(1) + '%' : '';
+    let detail = '';
+    if (typeof p.genome.rule === 'number') detail = `rule ${p.genome.rule}`;
+    else if (p.genome.rule?.axiom) detail = `axiom: ${p.genome.rule.axiom}`;
+    else if (p.genome.rule?.birth) detail = `B${[...(p.genome.rule.birth||[])].join('')}/S${[...(p.genome.rule.survive||[])].join('')}`;
+    else if (p.genome.rule?.feed) detail = `feed ${p.genome.rule.feed.toFixed(3)} kill ${p.genome.rule.kill.toFixed(3)}`;
+    info.innerHTML = `${t} <span class="val">${sc}</span>${detail ? ' &mdash; ' + detail : ''}`;
+    info.classList.add('visible');
+
+    if (audio) { audio.killDrones(); rdVoices = []; }
+    runner = makeRunner(p);
+    const w = runner.width, h = runner.height;
+    renderGrid(document.getElementById('gridCanvas'), runner.grid, w, h, c);
+  }
+
+  function doStep() {
+    if (!runner || runner.done()) {
+      if (playing) setTimeout(() => { if (playing) { selectPiece(idx + 1); play(); } }, 1200);
+      return;
+    }
+    const p = pieces[idx], t = p.genome.type, c = SPECIES_COLORS[t] || '#7c6fe0';
+    const res = runner.step();
+    if (!res) return;
+    document.getElementById('stepNum').textContent = res.step || res.row || 0;
+    const hl = t === '1d' ? (res.row ?? -1) : undefined;
+    renderGrid(document.getElementById('gridCanvas'), runner.grid, runner.width, runner.height, c, hl);
+    getSon(t)(audio, res, p.genome);
+    renderWave(document.getElementById('waveCanvas'), audio.freq(), c);
+  }
+
+  function play() {
+    if (playing) return;
+    playing = true;
+    document.getElementById('playBtn').innerHTML = '&#10074;&#10074;';
+    sched();
+  }
+  function pause() {
+    playing = false;
+    document.getElementById('playBtn').innerHTML = '&#9654;';
+    clearTimeout(timer);
+  }
+  function stop() {
+    pause();
+    if (audio) { audio.killDrones(); rdVoices = []; }
+  }
+  function toggle() { playing ? pause() : play(); }
+
+  function sched() {
+    if (!playing) return;
+    const base = runner instanceof Run1D ? 170 : runner instanceof Run2D ? 320 :
+      runner instanceof RunLS ? 110 : runner instanceof RunRD ? 230 : 190;
+    timer = setTimeout(() => {
+      doStep();
+      if (playing && runner && !runner.done()) sched();
+      else if (playing && runner && runner.done()) {
+        setTimeout(() => { if (playing) { selectPiece(idx + 1); play(); } }, 1200);
+      }
+    }, base / speed);
+  }
+
+  function restart() { const was = playing; selectPiece(idx); if (was) play(); }
+  function cycleSpd() {
+    spIdx = (spIdx + 1) % speeds.length; speed = speeds[spIdx];
+    document.getElementById('speedLabel').textContent = speed + '\u00d7';
+  }
+
+  // Continuous waveform animation
+  function animWave() {
+    requestAnimationFrame(animWave);
+    if (audio && playing) {
+      const c = SPECIES_COLORS[pieces[idx]?.genome.type] || '#7c6fe0';
+      renderWave(document.getElementById('waveCanvas'), audio.freq(), c);
+    }
+  }
+
+  // ── Init ──
+  async function init() {
+    await loadPieces();
+    document.getElementById('startOverlay').addEventListener('click', () => {
+      document.getElementById('startOverlay').classList.add('hidden');
+      document.getElementById('mainContent').style.opacity = '1';
+      audio = new ClockAudio();
+      selectPiece(0);
+      animWave();
+    });
+    document.getElementById('playBtn').addEventListener('click', toggle);
+    document.getElementById('prevBtn').addEventListener('click', () => selectPiece(idx - 1));
+    document.getElementById('nextBtn').addEventListener('click', () => selectPiece(idx + 1));
+    document.getElementById('restartBtn').addEventListener('click', restart);
+    document.getElementById('speedLabel').addEventListener('click', cycleSpd);
+    document.getElementById('volSlider').addEventListener('input', e => {
+      if (audio) audio.setVol(parseFloat(e.target.value) / 100);
+    });
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space') { e.preventDefault(); toggle(); }
+      if (e.code === 'ArrowLeft') selectPiece(idx - 1);
+      if (e.code === 'ArrowRight') selectPiece(idx + 1);
+      if (e.code === 'KeyR') restart();
+      if (e.code === 'ArrowUp') {
+        e.preventDefault();
+        const s = document.getElementById('volSlider');
+        s.value = Math.min(100, +s.value + 10); s.dispatchEvent(new Event('input'));
+      }
+      if (e.code === 'ArrowDown') {
+        e.preventDefault();
+        const s = document.getElementById('volSlider');
+        s.value = Math.max(0, +s.value - 10); s.dispatchEvent(new Event('input'));
+      }
+    });
+  }
+  init();
+</script>
+</body>
+</html>

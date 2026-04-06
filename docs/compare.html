@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Compare</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #ef4444;
+      --cyan: #22d3ee;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    #back-btn {
+      position: fixed;
+      top: 1.25rem;
+      left: 1.5rem;
+      font-family: inherit;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      text-decoration: none;
+      text-transform: uppercase;
+      z-index: 100;
+      transition: color 0.2s;
+    }
+    #back-btn:hover { color: var(--text); }
+
+    .hero {
+      text-align: center;
+      padding: 3rem 1.5rem 1.5rem;
+    }
+    .hero h1 {
+      font-size: 1.8rem;
+      font-weight: 300;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+    }
+    .hero p {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      margin-top: 0.5rem;
+      letter-spacing: 0.08em;
+    }
+
+    .compare-container {
+      display: flex;
+      gap: 1px;
+      max-width: 1400px;
+      margin: 1rem auto;
+      padding: 0 1rem;
+      min-height: 70vh;
+    }
+
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(124, 111, 224, 0.03);
+    }
+
+    .panel-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .piece-selector {
+      position: relative;
+    }
+
+    .piece-selector select {
+      appearance: none;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 2rem 0.4rem 0.75rem;
+      font-family: inherit;
+      font-size: 0.7rem;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      max-width: 200px;
+    }
+    .piece-selector select:hover { border-color: var(--accent); }
+    .piece-selector::after {
+      content: '\25BC';
+      position: absolute;
+      right: 0.6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+
+    .piece-canvas-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      min-height: 300px;
+      position: relative;
+    }
+
+    .piece-canvas-wrap canvas {
+      max-width: 100%;
+      max-height: 100%;
+      image-rendering: pixelated;
+    }
+
+    .empty-state {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      text-align: center;
+      letter-spacing: 0.1em;
+    }
+    .empty-state span {
+      display: block;
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      opacity: 0.3;
+    }
+
+    .metrics-bar {
+      padding: 0.75rem 1rem;
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+    }
+
+    .metric {
+      text-align: center;
+    }
+    .metric-value {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .metric-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 0.15rem;
+    }
+
+    .piece-info {
+      padding: 0.5rem 1rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .type-badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border: 1px solid;
+    }
+
+    /* Center divider with radar chart */
+    .divider {
+      width: 280px;
+      min-width: 280px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem 0;
+    }
+
+    .radar-wrap {
+      position: relative;
+      width: 260px;
+      height: 260px;
+    }
+
+    .radar-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .diff-summary {
+      margin-top: 1rem;
+      text-align: center;
+    }
+    .diff-summary .winner {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+    }
+    .diff-summary .detail {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      margin-top: 0.25rem;
+    }
+
+    .shuffle-btn {
+      margin-top: 1rem;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .shuffle-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .keyboard-hint {
+      position: fixed;
+      bottom: 1rem;
+      right: 1.5rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      opacity: 0.5;
+    }
+    .keyboard-hint kbd {
+      display: inline-block;
+      padding: 0.1rem 0.35rem;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      margin: 0 0.1rem;
+      background: var(--surface);
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 60%, rgba(10, 10, 15, 0.6) 100%);
+      z-index: 50;
+    }
+
+    @media (max-width: 900px) {
+      .compare-container {
+        flex-direction: column;
+      }
+      .divider {
+        width: 100%;
+        min-width: unset;
+        flex-direction: row;
+        gap: 1rem;
+        padding: 1rem;
+      }
+      .radar-wrap {
+        width: 180px;
+        height: 180px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" id="back-btn">&larr; Lattice</a>
+  <div class="vignette"></div>
+
+  <div class="hero">
+    <h1>&#8644; Compare</h1>
+    <p>Side-by-side — see how different genomes produce different worlds</p>
+  </div>
+
+  <div class="compare-container">
+    <!-- Left panel -->
+    <div class="panel" id="panel-left">
+      <div class="panel-header">
+        <span class="panel-label">Piece A</span>
+        <div class="piece-selector">
+          <select id="select-left"></select>
+        </div>
+      </div>
+      <div class="piece-canvas-wrap" id="canvas-wrap-left">
+        <div class="empty-state"><span>&#9671;</span>Select a piece</div>
+      </div>
+      <div class="piece-info" id="info-left" style="display:none">
+        <span id="type-left"></span>
+        <span id="gen-left"></span>
+        <span id="score-left"></span>
+      </div>
+      <div class="metrics-bar" id="metrics-left" style="display:none"></div>
+    </div>
+
+    <!-- Center radar -->
+    <div class="divider">
+      <div class="radar-label">Metric Overlay</div>
+      <div class="radar-wrap">
+        <canvas id="radar" width="260" height="260"></canvas>
+      </div>
+      <div class="diff-summary" id="diff-summary"></div>
+      <button class="shuffle-btn" id="shuffle-btn">&#9861; Random Pair</button>
+    </div>
+
+    <!-- Right panel -->
+    <div class="panel" id="panel-right">
+      <div class="panel-header">
+        <span class="panel-label">Piece B</span>
+        <div class="piece-selector">
+          <select id="select-right"></select>
+        </div>
+      </div>
+      <div class="piece-canvas-wrap" id="canvas-wrap-right">
+        <div class="empty-state"><span>&#9671;</span>Select a piece</div>
+      </div>
+      <div class="piece-info" id="info-right" style="display:none">
+        <span id="type-right"></span>
+        <span id="gen-right"></span>
+        <span id="score-right"></span>
+      </div>
+      <div class="metrics-bar" id="metrics-right" style="display:none"></div>
+    </div>
+  </div>
+
+  <div class="keyboard-hint">
+    <kbd>R</kbd> random pair &nbsp; <kbd>&larr;</kbd><kbd>&rarr;</kbd> cycle pieces
+  </div>
+
+  <script>
+    const TYPE_COLORS = {
+      '1d':                  { accent: '#9d7af5', colors: ['#0a0a0f','#1a1a3e','#3b2d8b','#6b4edb','#9d7af5','#c8abff','#e8d8ff','#ffffff'] },
+      '2d':                  { accent: '#4ade80', colors: ['#0a0a0f','#0d2818','#166b3a','#22a95c','#4ade80','#7af5a8','#b8ffd4','#e8fff0'] },
+      'lsystem':             { accent: '#f5b84a', colors: ['#0a0a0f','#2d1a0a','#6b3a0d','#a85c16','#db8b22','#f5b84a','#ffe088','#fff4cc'] },
+      'reaction-diffusion':  { accent: '#d44af5', colors: ['#0a0a0f','#1a0a2d','#3b0d6b','#6b16a8','#a822db','#d44af5','#f088ff','#ffccff'] },
+      'voronoi':             { accent: '#4ad4f5', colors: ['#0a0a0f','#0a1a2d','#0d3b6b','#166ba8','#22a8db','#4ad4f5','#88eeff','#ccf8ff'] },
+      'wfc':                 { accent: '#f54a9d', colors: ['#0a0a0f','#2d0a0a','#6b0d1a','#a8163b','#db226b','#f54a9d','#ff88c8','#ffccee'] },
+      'spirograph':          { accent: '#d4f54a', colors: ['#0a0a0f','#1a2d0a','#3b6b0d','#6ba816','#a8db22','#d4f54a','#eeff88','#ffffcc'] },
+      'attractor':           { accent: '#f59d6b', colors: ['#0a0a0f','#2d1a1a','#6b2d2d','#a84a3b','#db6b4a','#f59d6b','#ffc8a0','#ffe8d8'] },
+      'julia':               { accent: '#4af5d4', colors: ['#0a0a0f','#0a2d2d','#0d6b5b','#16a88a','#22dbb5','#4af5d4','#88ffe8','#ccfff4'] },
+      'noise':               { accent: '#d4d44a', colors: ['#0a0a0f','#1a1a0a','#3b3b0d','#6b6b16','#a8a822','#d4d44a','#eeff88','#ffffcc'] },
+      'flowfield':           { accent: '#4ad4d4', colors: ['#0a0a0f','#0a1a1a','#0d3b3b','#166b6b','#22a8a8','#4ad4d4','#88eeff','#ccffff'] },
+    };
+
+    const CHAR_INTENSITY = {};
+    ' .'.split('').forEach(c => CHAR_INTENSITY[c] = 0);
+    '·:'.split('').forEach(c => CHAR_INTENSITY[c] = 1);
+    '-~='.split('').forEach(c => CHAR_INTENSITY[c] = 2);
+    '+*%'.split('').forEach(c => CHAR_INTENSITY[c] = 3);
+    '#@&'.split('').forEach(c => CHAR_INTENSITY[c] = 4);
+    '█▓▒░'.split('').forEach(c => CHAR_INTENSITY[c] = 5);
+    '◆◇○●'.split('').forEach(c => CHAR_INTENSITY[c] = 6);
+    '✦✧❋✿❀❁❂❃❦☘♠♣♥♦'.split('').forEach(c => CHAR_INTENSITY[c] = 7);
+
+    const METRIC_LABELS = ['complexity','symmetry','density','edgeActivity','structuralInterest','informationDensity','fractalDimension','novelty'];
+    const METRIC_SHORT = ['CX','SY','DN','EA','SI','ID','FD','NV'];
+    const DISPLAY_METRICS = ['complexity','symmetry','density','edgeActivity'];
+
+    let archive = [];
+    let leftPiece = null, rightPiece = null;
+
+    function charToIntensity(ch) {
+      if (ch in CHAR_INTENSITY) return CHAR_INTENSITY[ch];
+      const code = ch.charCodeAt(0);
+      if (code > 127) return 6;
+      return 3;
+    }
+
+    function renderPiece(piece, canvasWrapId) {
+      const wrap = document.getElementById(canvasWrapId);
+      wrap.innerHTML = '';
+      const lines = piece.rendered.split('\n').filter(l => l.length > 0);
+      if (!lines.length) return;
+
+      const rows = lines.length;
+      const cols = Math.max(...lines.map(l => [...l].length));
+      const cellSize = Math.max(3, Math.min(12, Math.floor(Math.min(
+        (wrap.clientWidth - 20) / cols,
+        (wrap.clientHeight - 20) / rows
+      ))));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = cols * cellSize;
+      canvas.height = rows * cellSize;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const tc = TYPE_COLORS[piece.genome.type] || TYPE_COLORS['2d'];
+
+      for (let r = 0; r < rows; r++) {
+        const chars = [...(lines[r] || '')];
+        for (let c = 0; c < cols; c++) {
+          const ch = chars[c] || ' ';
+          const intensity = charToIntensity(ch);
+          if (intensity === 0) continue;
+          const colorIdx = Math.min(intensity, tc.colors.length - 1);
+          ctx.fillStyle = tc.colors[colorIdx];
+          ctx.fillRect(c * cellSize, r * cellSize, cellSize - 1, cellSize - 1);
+        }
+      }
+
+      wrap.appendChild(canvas);
+    }
+
+    function normalizeMetric(key, value) {
+      if (key === 'complexity') return Math.min(value / 4, 1);
+      if (key === 'fractalDimension') return value / 2;
+      return Math.min(value, 1);
+    }
+
+    function updateMetrics(piece, side) {
+      const bar = document.getElementById('metrics-' + side);
+      const info = document.getElementById('info-' + side);
+      if (!piece) { bar.style.display = 'none'; info.style.display = 'none'; return; }
+
+      bar.style.display = 'grid';
+      info.style.display = 'flex';
+
+      const tc = TYPE_COLORS[piece.genome.type] || TYPE_COLORS['2d'];
+      document.getElementById('type-' + side).innerHTML =
+        '<span class="type-badge" style="border-color:' + tc.accent + ';color:' + tc.accent + '">' + piece.genome.type + '</span>';
+      document.getElementById('gen-' + side).textContent = 'Gen ' + piece.generation;
+      document.getElementById('score-' + side).textContent = (piece.score * 100).toFixed(1) + '%';
+
+      bar.innerHTML = DISPLAY_METRICS.map(key => {
+        const val = piece.metrics[key] || 0;
+        const norm = normalizeMetric(key, val);
+        const pct = (norm * 100).toFixed(0);
+        return '<div class="metric"><div class="metric-value" style="color:' + tc.accent + '">' + pct + '%</div><div class="metric-label">' + key.replace(/([A-Z])/g, ' $1').trim() + '</div></div>';
+      }).join('');
+    }
+
+    function drawRadar() {
+      const canvas = document.getElementById('radar');
+      const ctx = canvas.getContext('2d');
+      const cx = 130, cy = 130, radius = 100;
+      ctx.clearRect(0, 0, 260, 260);
+
+      const n = METRIC_LABELS.length;
+      const angleStep = (Math.PI * 2) / n;
+
+      // Grid rings
+      for (let ring = 0.25; ring <= 1; ring += 0.25) {
+        ctx.beginPath();
+        for (let i = 0; i <= n; i++) {
+          const angle = i * angleStep - Math.PI / 2;
+          const x = cx + Math.cos(angle) * radius * ring;
+          const y = cy + Math.sin(angle) * radius * ring;
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = 'rgba(30, 30, 46, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Axis lines and labels
+      for (let i = 0; i < n; i++) {
+        const angle = i * angleStep - Math.PI / 2;
+        const ex = cx + Math.cos(angle) * radius;
+        const ey = cy + Math.sin(angle) * radius;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(ex, ey);
+        ctx.strokeStyle = 'rgba(30, 30, 46, 0.4)';
+        ctx.stroke();
+
+        const lx = cx + Math.cos(angle) * (radius + 16);
+        const ly = cy + Math.sin(angle) * (radius + 16);
+        ctx.fillStyle = '#6e6e82';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(METRIC_SHORT[i], lx, ly);
+      }
+
+      function drawShape(piece, color, alpha) {
+        if (!piece) return;
+        ctx.beginPath();
+        for (let i = 0; i <= n; i++) {
+          const idx = i % n;
+          const angle = idx * angleStep - Math.PI / 2;
+          const val = normalizeMetric(METRIC_LABELS[idx], piece.metrics[METRIC_LABELS[idx]] || 0);
+          const x = cx + Math.cos(angle) * radius * val;
+          const y = cy + Math.sin(angle) * radius * val;
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.fillStyle = color.replace(')', ',' + alpha + ')').replace('rgb', 'rgba');
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Dots
+        for (let i = 0; i < n; i++) {
+          const angle = i * angleStep - Math.PI / 2;
+          const val = normalizeMetric(METRIC_LABELS[i], piece.metrics[METRIC_LABELS[i]] || 0);
+          const x = cx + Math.cos(angle) * radius * val;
+          const y = cy + Math.sin(angle) * radius * val;
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
+      }
+
+      const leftColor = leftPiece ? (TYPE_COLORS[leftPiece.genome.type]?.accent || '#7c6fe0') : '#7c6fe0';
+      const rightColor = rightPiece ? (TYPE_COLORS[rightPiece.genome.type]?.accent || '#4ade80') : '#4ade80';
+
+      // Convert hex to rgb for alpha
+      function hexToRgb(hex) {
+        const r = parseInt(hex.slice(1,3), 16);
+        const g = parseInt(hex.slice(3,5), 16);
+        const b = parseInt(hex.slice(5,7), 16);
+        return 'rgb(' + r + ',' + g + ',' + b + ')';
+      }
+
+      if (leftPiece) {
+        const rgb = hexToRgb(leftColor);
+        drawShape(leftPiece, rgb, 0.15);
+      }
+      if (rightPiece) {
+        const rgb = hexToRgb(rightColor);
+        drawShape(rightPiece, rgb, 0.15);
+      }
+    }
+
+    function updateDiffSummary() {
+      const el = document.getElementById('diff-summary');
+      if (!leftPiece || !rightPiece) {
+        el.innerHTML = '<div class="detail">Select two pieces to compare</div>';
+        return;
+      }
+
+      const diff = leftPiece.score - rightPiece.score;
+      const absDiff = Math.abs(diff * 100).toFixed(1);
+      const leftWins = METRIC_LABELS.filter(k => {
+        const lv = normalizeMetric(k, leftPiece.metrics[k] || 0);
+        const rv = normalizeMetric(k, rightPiece.metrics[k] || 0);
+        return lv > rv;
+      }).length;
+      const rightWins = METRIC_LABELS.length - leftWins;
+
+      let winner = '';
+      if (Math.abs(diff) < 0.005) {
+        winner = '<span style="color:var(--amber)">Near identical fitness</span>';
+      } else if (diff > 0) {
+        winner = '<span style="color:' + (TYPE_COLORS[leftPiece.genome.type]?.accent || '#7c6fe0') + '">A leads by ' + absDiff + '%</span>';
+      } else {
+        winner = '<span style="color:' + (TYPE_COLORS[rightPiece.genome.type]?.accent || '#4ade80') + '">B leads by ' + absDiff + '%</span>';
+      }
+
+      el.innerHTML = '<div class="winner">' + winner + '</div><div class="detail">Metrics: A wins ' + leftWins + ' / B wins ' + rightWins + '</div>';
+    }
+
+    function selectPiece(side, index) {
+      const piece = archive[index];
+      if (!piece) return;
+
+      if (side === 'left') {
+        leftPiece = piece;
+        renderPiece(piece, 'canvas-wrap-left');
+        updateMetrics(piece, 'left');
+        document.getElementById('select-left').value = index;
+      } else {
+        rightPiece = piece;
+        renderPiece(piece, 'canvas-wrap-right');
+        updateMetrics(piece, 'right');
+        document.getElementById('select-right').value = index;
+      }
+
+      drawRadar();
+      updateDiffSummary();
+    }
+
+    function randomPair() {
+      if (archive.length < 2) return;
+      let a = Math.floor(Math.random() * archive.length);
+      let b = Math.floor(Math.random() * archive.length);
+      while (b === a) b = Math.floor(Math.random() * archive.length);
+      selectPiece('left', a);
+      selectPiece('right', b);
+    }
+
+    function populateSelectors() {
+      const leftSel = document.getElementById('select-left');
+      const rightSel = document.getElementById('select-right');
+
+      const optHtml = '<option value="">— select —</option>' +
+        archive.map((p, i) => {
+          const label = p.genome.type + ' · gen ' + p.generation + ' · ' + (p.score * 100).toFixed(1) + '%';
+          return '<option value="' + i + '">' + label + '</option>';
+        }).join('');
+
+      leftSel.innerHTML = optHtml;
+      rightSel.innerHTML = optHtml;
+
+      leftSel.addEventListener('change', e => {
+        if (e.target.value !== '') selectPiece('left', parseInt(e.target.value));
+      });
+      rightSel.addEventListener('change', e => {
+        if (e.target.value !== '') selectPiece('right', parseInt(e.target.value));
+      });
+    }
+
+    async function init() {
+      try {
+        const res = await fetch('gallery.json');
+        const data = await res.json();
+        archive = (data.archive || []).sort((a, b) => a.generation - b.generation);
+
+        if (!archive.length) {
+          document.querySelector('.compare-container').innerHTML =
+            '<div class="empty-state" style="padding:4rem"><span>&#9671;</span>No pieces in archive yet</div>';
+          return;
+        }
+
+        populateSelectors();
+        drawRadar();
+        updateDiffSummary();
+
+        // Auto-select an interesting pair: highest score vs most novel
+        const bestIdx = archive.reduce((bi, p, i) => p.score > archive[bi].score ? i : bi, 0);
+        const novelIdx = archive.reduce((bi, p, i) => (p.metrics.novelty || 0) > (archive[bi].metrics.novelty || 0) ? i : bi, 0);
+        if (bestIdx !== novelIdx) {
+          selectPiece('left', bestIdx);
+          selectPiece('right', novelIdx);
+        } else {
+          randomPair();
+        }
+      } catch (err) {
+        console.error('Failed to load gallery data:', err);
+      }
+    }
+
+    document.getElementById('shuffle-btn').addEventListener('click', randomPair);
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'r' || e.key === 'R') {
+        randomPair();
+      } else if (e.key === 'ArrowLeft') {
+        const sel = document.getElementById('select-left');
+        const cur = parseInt(sel.value) || 0;
+        selectPiece('left', (cur - 1 + archive.length) % archive.length);
+      } else if (e.key === 'ArrowRight') {
+        const sel = document.getElementById('select-right');
+        const cur = parseInt(sel.value) || 0;
+        selectPiece('right', (cur + 1) % archive.length);
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

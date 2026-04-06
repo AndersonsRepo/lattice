@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Epoch</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --emergence: #7c6fe0;
+      --order: #4ade80;
+      --chaos: #ef4444;
+      --harmony: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    #back-btn {
+      position: fixed;
+      top: 1.5rem;
+      left: 1.5rem;
+      z-index: 100;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      transition: color 0.3s;
+    }
+    #back-btn:hover { color: var(--accent); }
+
+    /* ---- Hero ---- */
+    .hero {
+      position: relative;
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      overflow: hidden;
+    }
+    .hero canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.12;
+    }
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--text);
+      position: relative;
+      z-index: 1;
+    }
+    .hero .sub {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+      letter-spacing: 0.12em;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ---- Epoch timeline ribbon ---- */
+    .ribbon {
+      display: flex;
+      height: 6px;
+      width: 100%;
+    }
+    .ribbon-seg { flex: 1; transition: flex 0.4s; }
+    .ribbon-seg:hover { flex: 2; }
+    .ribbon-seg.emergence { background: var(--emergence); }
+    .ribbon-seg.order { background: var(--order); }
+    .ribbon-seg.chaos { background: var(--chaos); }
+    .ribbon-seg.harmony { background: var(--harmony); }
+
+    /* ---- Epoch nav tabs ---- */
+    .epoch-nav {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      padding: 2rem 1rem;
+      flex-wrap: wrap;
+    }
+    .epoch-tab {
+      padding: 0.8rem 2rem;
+      font-family: inherit;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+    }
+    .epoch-tab:first-child { border-radius: 8px 0 0 8px; }
+    .epoch-tab:last-child { border-radius: 0 8px 8px 0; }
+    .epoch-tab.active {
+      color: #fff;
+      border-color: transparent;
+    }
+    .epoch-tab.active[data-epoch="emergence"] {
+      background: var(--emergence);
+      box-shadow: 0 0 20px #7c6fe040;
+    }
+    .epoch-tab.active[data-epoch="order"] {
+      background: var(--order);
+      color: #0a0a0f;
+      box-shadow: 0 0 20px #4ade8040;
+    }
+    .epoch-tab.active[data-epoch="chaos"] {
+      background: var(--chaos);
+      box-shadow: 0 0 20px #ef444440;
+    }
+    .epoch-tab.active[data-epoch="harmony"] {
+      background: var(--harmony);
+      color: #0a0a0f;
+      box-shadow: 0 0 20px #fbbf2440;
+    }
+    .epoch-tab:hover:not(.active) {
+      color: var(--text);
+      border-color: var(--text-dim);
+    }
+
+    /* ---- Epoch detail section ---- */
+    .epoch-detail {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 1.5rem 4rem;
+      display: none;
+    }
+    .epoch-detail.active { display: block; }
+
+    .epoch-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+    .epoch-name {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+    .epoch-desc {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      line-height: 1.8;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* ---- Stats grid ---- */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 3rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .stat-label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+    }
+
+    /* ---- Fitness criteria ---- */
+    .criteria-section {
+      margin-bottom: 3rem;
+    }
+    .criteria-title {
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 1.25rem;
+      text-align: center;
+    }
+    .criteria-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .criterion {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .criterion-name {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+    .criterion-bar {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+    }
+    .criterion-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 1s ease;
+      width: 0;
+    }
+    .criterion-desc {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    /* ---- Piece showcase ---- */
+    .showcase-title {
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 1.25rem;
+      text-align: center;
+    }
+    .showcase-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .showcase-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .showcase-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .showcase-art {
+      padding: 1rem;
+      background: var(--bg);
+      font-size: 0.5rem;
+      line-height: 1.1;
+      white-space: pre;
+      overflow: hidden;
+      max-height: 180px;
+      position: relative;
+    }
+    .showcase-art::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background: linear-gradient(transparent, var(--bg));
+    }
+    .showcase-meta {
+      padding: 0.75rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+    .showcase-type {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .showcase-score {
+      font-size: 0.75rem;
+    }
+    .showcase-gen {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+
+    /* ---- Fitness chart ---- */
+    .chart-section {
+      margin-bottom: 3rem;
+    }
+    .chart-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      position: relative;
+    }
+    .chart-container canvas {
+      width: 100%;
+      height: 200px;
+      display: block;
+    }
+
+    /* ---- Species distribution ---- */
+    .species-section { margin-bottom: 3rem; }
+    .species-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .species-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .species-name {
+      font-size: 0.7rem;
+      width: 140px;
+      text-align: right;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+    .species-bar-track {
+      flex: 1;
+      height: 18px;
+      background: var(--surface);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .species-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 1.2s ease;
+      width: 0;
+      display: flex;
+      align-items: center;
+      padding-left: 6px;
+    }
+    .species-bar-label {
+      font-size: 0.6rem;
+      color: #0a0a0f;
+      font-weight: 600;
+    }
+
+    /* ---- Epoch transition ---- */
+    .transition-section {
+      text-align: center;
+      padding: 2rem 0;
+      margin-bottom: 2rem;
+    }
+    .transition-arrow {
+      display: inline-block;
+      font-size: 1.5rem;
+      color: var(--text-dim);
+      animation: bob 2s ease-in-out infinite;
+    }
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(6px); }
+    }
+    .transition-text {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      margin-top: 0.5rem;
+    }
+
+    /* ---- Footer ---- */
+    footer {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      border-top: 1px solid var(--border);
+    }
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    footer a:hover { text-decoration: underline; }
+
+    /* TYPE COLORS */
+    .type-wfc { color: #f472b6; }
+    .type-2d { color: #4ade80; }
+    .type-reaction-diffusion { color: #a78bfa; }
+    .type-1d { color: #fbbf24; }
+    .type-lsystem { color: #22d3ee; }
+    .type-voronoi { color: #38bdf8; }
+    .type-julia { color: #c084fc; }
+    .type-attractor { color: #fb923c; }
+    .type-spirograph { color: #e879f9; }
+    .type-noise { color: #94a3b8; }
+    .type-flow { color: #34d399; }
+
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 2rem; }
+      .epoch-tab { padding: 0.6rem 1rem; font-size: 0.65rem; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .showcase-grid { grid-template-columns: 1fr; }
+      .species-name { width: 80px; font-size: 0.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" id="back-btn">&larr; Gallery</a>
+
+  <div class="hero">
+    <canvas id="hero-canvas"></canvas>
+    <h1>Epoch</h1>
+    <p class="sub">the four seasons of evolutionary pressure</p>
+  </div>
+
+  <div class="ribbon" id="ribbon"></div>
+
+  <div class="epoch-nav" id="epoch-nav">
+    <button class="epoch-tab active" data-epoch="emergence">Emergence</button>
+    <button class="epoch-tab" data-epoch="order">Order</button>
+    <button class="epoch-tab" data-epoch="chaos">Chaos</button>
+    <button class="epoch-tab" data-epoch="harmony">Harmony</button>
+  </div>
+
+  <div class="epoch-detail active" id="detail-emergence">
+    <div class="epoch-header">
+      <h2 class="epoch-name" style="color: var(--emergence);">Emergence</h2>
+      <p class="epoch-desc">
+        The system favors complexity and novelty. Pieces score higher when they push entropy upward
+        and introduce structures not yet seen. This is the epoch of experimentation &mdash; the fitness
+        landscape rewards the strange, the dense, the surprising. Many species are born here.
+      </p>
+    </div>
+    <div class="stats-grid" id="stats-emergence"></div>
+    <div class="criteria-section">
+      <p class="criteria-title">Fitness Pressure</p>
+      <div class="criteria-grid" id="criteria-emergence"></div>
+    </div>
+    <div class="chart-section">
+      <p class="showcase-title">Fitness Trajectory</p>
+      <div class="chart-container"><canvas id="chart-emergence"></canvas></div>
+    </div>
+    <div class="species-section">
+      <p class="showcase-title">Species Distribution</p>
+      <div class="species-bars" id="species-emergence"></div>
+    </div>
+    <p class="showcase-title">Exemplar Pieces</p>
+    <div class="showcase-grid" id="showcase-emergence"></div>
+  </div>
+
+  <div class="epoch-detail" id="detail-order">
+    <div class="epoch-header">
+      <h2 class="epoch-name" style="color: var(--order);">Order</h2>
+      <p class="epoch-desc">
+        Symmetry and structural regularity are rewarded. The system prunes wild experiments and
+        selects for pieces with geometric balance, repeating motifs, and clean internal logic.
+        This is the epoch of crystallization &mdash; where chaos settles into form.
+      </p>
+    </div>
+    <div class="stats-grid" id="stats-order"></div>
+    <div class="criteria-section">
+      <p class="criteria-title">Fitness Pressure</p>
+      <div class="criteria-grid" id="criteria-order"></div>
+    </div>
+    <div class="chart-section">
+      <p class="showcase-title">Fitness Trajectory</p>
+      <div class="chart-container"><canvas id="chart-order"></canvas></div>
+    </div>
+    <div class="species-section">
+      <p class="showcase-title">Species Distribution</p>
+      <div class="species-bars" id="species-order"></div>
+    </div>
+    <p class="showcase-title">Exemplar Pieces</p>
+    <div class="showcase-grid" id="showcase-order"></div>
+  </div>
+
+  <div class="epoch-detail" id="detail-chaos">
+    <div class="epoch-header">
+      <h2 class="epoch-name" style="color: var(--chaos);">Chaos</h2>
+      <p class="epoch-desc">
+        Edge activity and entropy dominate the fitness function. The system rewards turbulence &mdash;
+        pieces with active boundaries, fractal detail, and restless energy score highest. This is
+        the epoch of creative destruction, where stability is penalized and volatility is virtue.
+      </p>
+    </div>
+    <div class="stats-grid" id="stats-chaos"></div>
+    <div class="criteria-section">
+      <p class="criteria-title">Fitness Pressure</p>
+      <div class="criteria-grid" id="criteria-chaos"></div>
+    </div>
+    <div class="chart-section">
+      <p class="showcase-title">Fitness Trajectory</p>
+      <div class="chart-container"><canvas id="chart-chaos"></canvas></div>
+    </div>
+    <div class="species-section">
+      <p class="showcase-title">Species Distribution</p>
+      <div class="species-bars" id="species-chaos"></div>
+    </div>
+    <p class="showcase-title">Exemplar Pieces</p>
+    <div class="showcase-grid" id="showcase-chaos"></div>
+  </div>
+
+  <div class="epoch-detail" id="detail-harmony">
+    <div class="epoch-header">
+      <h2 class="epoch-name" style="color: var(--harmony);">Harmony</h2>
+      <p class="epoch-desc">
+        Balance across all metrics is valued above any single extreme. Pieces must be complex but
+        not chaotic, structured but not rigid, dense but not overwhelming. This is the epoch of
+        maturity &mdash; the system selects for organisms that are good at everything, not great at one thing.
+      </p>
+    </div>
+    <div class="stats-grid" id="stats-harmony"></div>
+    <div class="criteria-section">
+      <p class="criteria-title">Fitness Pressure</p>
+      <div class="criteria-grid" id="criteria-harmony"></div>
+    </div>
+    <div class="chart-section">
+      <p class="showcase-title">Fitness Trajectory</p>
+      <div class="chart-container"><canvas id="chart-harmony"></canvas></div>
+    </div>
+    <div class="species-section">
+      <p class="showcase-title">Species Distribution</p>
+      <div class="species-bars" id="species-harmony"></div>
+    </div>
+    <p class="showcase-title">Exemplar Pieces</p>
+    <div class="showcase-grid" id="showcase-harmony"></div>
+  </div>
+
+  <footer>
+    <a href="index.html">&larr; Gallery</a> &bull;
+    <a href="pulse.html">Pulse</a> &bull;
+    <a href="origin.html">Origin</a> &bull;
+    <a href="about.html">About</a>
+  </footer>
+
+  <script>
+    /* ---- Hero background: animated epoch color bands ---- */
+    (function() {
+      const c = document.getElementById('hero-canvas');
+      const ctx = c.getContext('2d');
+      const COLORS = {
+        emergence: [124, 111, 224],
+        order: [74, 222, 128],
+        chaos: [239, 68, 68],
+        harmony: [251, 191, 36]
+      };
+      const NAMES = ['emergence', 'order', 'chaos', 'harmony'];
+      let t = 0;
+
+      function resize() {
+        c.width = c.parentElement.offsetWidth;
+        c.height = c.parentElement.offsetHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      function draw() {
+        t += 0.003;
+        const w = c.width, h = c.height;
+        const cols = 80;
+        const colW = w / cols;
+        for (let i = 0; i < cols; i++) {
+          const phase = (i / cols + t) % 1;
+          const idx = Math.floor(phase * 4);
+          const frac = (phase * 4) % 1;
+          const from = COLORS[NAMES[idx]];
+          const to = COLORS[NAMES[(idx + 1) % 4]];
+          const r = Math.round(from[0] + (to[0] - from[0]) * frac);
+          const g = Math.round(from[1] + (to[1] - from[1]) * frac);
+          const b = Math.round(from[2] + (to[2] - from[2]) * frac);
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+          ctx.fillRect(i * colW, 0, colW + 1, h);
+        }
+        requestAnimationFrame(draw);
+      }
+      draw();
+    })();
+
+    /* ---- Data ---- */
+    const EPOCH_META = {
+      emergence: {
+        color: '#7c6fe0',
+        criteria: [
+          { name: 'Complexity', weight: 0.85, desc: 'High entropy, information-rich output' },
+          { name: 'Novelty', weight: 0.90, desc: 'Distance from all previously seen pieces' },
+          { name: 'Density', weight: 0.60, desc: 'Ratio of filled to empty space' },
+          { name: 'Edge Activity', weight: 0.50, desc: 'Transitions at region boundaries' },
+          { name: 'Symmetry', weight: 0.30, desc: 'Mirror/rotational balance (less valued)' },
+          { name: 'Structural Interest', weight: 0.70, desc: 'Macro-level pattern formation' },
+        ]
+      },
+      order: {
+        color: '#4ade80',
+        criteria: [
+          { name: 'Symmetry', weight: 0.90, desc: 'Strong geometric balance and repetition' },
+          { name: 'Structural Interest', weight: 0.85, desc: 'Organized macro-level patterns' },
+          { name: 'Density', weight: 0.70, desc: 'Moderate fill with clear negative space' },
+          { name: 'Complexity', weight: 0.55, desc: 'Information content (moderated)' },
+          { name: 'Edge Activity', weight: 0.40, desc: 'Clean, defined boundaries preferred' },
+          { name: 'Novelty', weight: 0.35, desc: 'Originality less valued than regularity' },
+        ]
+      },
+      chaos: {
+        color: '#ef4444',
+        criteria: [
+          { name: 'Edge Activity', weight: 0.95, desc: 'Maximum boundary turbulence' },
+          { name: 'Complexity', weight: 0.85, desc: 'Deep entropy, fractal detail' },
+          { name: 'Fractal Dimension', weight: 0.80, desc: 'Self-similar structure at multiple scales' },
+          { name: 'Novelty', weight: 0.70, desc: 'Surprising, unseen configurations' },
+          { name: 'Density', weight: 0.50, desc: 'Dense fields of activity' },
+          { name: 'Symmetry', weight: 0.20, desc: 'Actively penalized — asymmetry is virtue' },
+        ]
+      },
+      harmony: {
+        color: '#fbbf24',
+        criteria: [
+          { name: 'Balance', weight: 0.90, desc: 'No single metric dominates — all must score well' },
+          { name: 'Structural Interest', weight: 0.80, desc: 'Clear patterns without rigidity' },
+          { name: 'Density', weight: 0.75, desc: 'Optimal fill near 40% sweet spot' },
+          { name: 'Symmetry', weight: 0.70, desc: 'Moderate balance, not forced' },
+          { name: 'Complexity', weight: 0.65, desc: 'Rich but not overwhelming' },
+          { name: 'Edge Activity', weight: 0.60, desc: 'Active but controlled boundaries' },
+        ]
+      }
+    };
+
+    const TYPE_COLORS = {
+      'wfc': '#f472b6', '2d': '#4ade80', 'reaction-diffusion': '#a78bfa',
+      '1d': '#fbbf24', 'lsystem': '#22d3ee', 'voronoi': '#38bdf8',
+      'julia': '#c084fc', 'attractor': '#fb923c', 'spirograph': '#e879f9',
+      'noise': '#94a3b8', 'flow': '#34d399'
+    };
+
+    const TYPE_LABELS = {
+      'wfc': 'Wave Function Collapse', '2d': '2D Life-like', 'reaction-diffusion': 'Reaction-Diffusion',
+      '1d': '1D Automaton', 'lsystem': 'L-System', 'voronoi': 'Voronoi',
+      'julia': 'Julia Set', 'attractor': 'Strange Attractor', 'spirograph': 'Spirograph',
+      'noise': 'Fractal Noise', 'flow': 'Flow Field'
+    };
+
+    let DATA = null;
+
+    async function init() {
+      const resp = await fetch('gallery.json');
+      DATA = await resp.json();
+      buildRibbon();
+      for (const ep of ['emergence', 'order', 'chaos', 'harmony']) {
+        buildEpochSection(ep);
+      }
+      // Animate criteria bars on visible section
+      animateBars('emergence');
+    }
+
+    function buildRibbon() {
+      const ribbon = document.getElementById('ribbon');
+      const gens = DATA.history;
+      for (const h of gens) {
+        const seg = document.createElement('div');
+        seg.className = `ribbon-seg ${h.epoch}`;
+        seg.title = `Gen ${h.generation}: ${h.epoch}`;
+        ribbon.appendChild(seg);
+      }
+    }
+
+    function getEpochGens(epoch) {
+      return DATA.history.filter(h => h.epoch === epoch);
+    }
+
+    function buildEpochSection(epoch) {
+      const gens = getEpochGens(epoch);
+      const meta = EPOCH_META[epoch];
+      const color = meta.color;
+
+      // Stats
+      const bestScore = Math.max(...gens.map(g => g.bestScore));
+      const avgScore = gens.reduce((s, g) => s + g.avgScore, 0) / gens.length;
+      const genNums = gens.map(g => g.generation);
+      const totalSpecimens = gens.reduce((s, g) => {
+        return s + Object.values(g.speciesCounts || {}).reduce((a, b) => a + b, 0);
+      }, 0);
+      const uniqueSpecies = new Set();
+      gens.forEach(g => Object.keys(g.speciesCounts || {}).forEach(k => uniqueSpecies.add(k)));
+
+      const statsEl = document.getElementById(`stats-${epoch}`);
+      statsEl.innerHTML = `
+        <div class="stat-card">
+          <div class="stat-value" style="color: ${color}">${gens.length}</div>
+          <div class="stat-label">Generations</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color: ${color}">${bestScore.toFixed(1)}%</div>
+          <div class="stat-label">Peak Fitness</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color: ${color}">${(avgScore * 100).toFixed(1)}%</div>
+          <div class="stat-label">Avg Fitness</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color: ${color}">${uniqueSpecies.size}</div>
+          <div class="stat-label">Species Active</div>
+        </div>
+      `;
+
+      // Criteria
+      const criteriaEl = document.getElementById(`criteria-${epoch}`);
+      criteriaEl.innerHTML = meta.criteria.map(c => `
+        <div class="criterion">
+          <div class="criterion-name" style="color: ${color}">${c.name}</div>
+          <div class="criterion-bar">
+            <div class="criterion-fill" data-width="${c.weight * 100}" style="background: ${color};"></div>
+          </div>
+          <div class="criterion-desc">${c.desc}</div>
+        </div>
+      `).join('');
+
+      // Fitness chart
+      drawChart(epoch, gens, color);
+
+      // Species distribution
+      const speciesCounts = {};
+      gens.forEach(g => {
+        for (const [sp, cnt] of Object.entries(g.speciesCounts || {})) {
+          speciesCounts[sp] = (speciesCounts[sp] || 0) + cnt;
+        }
+      });
+      const sorted = Object.entries(speciesCounts).sort((a, b) => b[1] - a[1]);
+      const maxCount = sorted.length ? sorted[0][1] : 1;
+      const speciesEl = document.getElementById(`species-${epoch}`);
+      speciesEl.innerHTML = sorted.map(([sp, cnt]) => `
+        <div class="species-row">
+          <span class="species-name">${TYPE_LABELS[sp] || sp}</span>
+          <div class="species-bar-track">
+            <div class="species-bar-fill" data-width="${(cnt / maxCount) * 100}"
+                 style="background: ${TYPE_COLORS[sp] || '#666'};">
+              <span class="species-bar-label">${cnt}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      // Showcase pieces: find archive pieces from this epoch's generations
+      const epochGenSet = new Set(genNums);
+      const epochPieces = DATA.archive.filter(p => {
+        const gen = p.generation;
+        // Find which epoch this generation belongs to
+        const histEntry = DATA.history.find(h => h.generation === gen);
+        return histEntry && histEntry.epoch === epoch;
+      }).sort((a, b) => b.score - a.score).slice(0, 6);
+
+      // Fall back to hallOfFame if no archive matches
+      const piecesToShow = epochPieces.length > 0 ? epochPieces :
+        (DATA.hallOfFame || []).filter(p => {
+          const histEntry = DATA.history.find(h => h.generation === p.generation);
+          return histEntry && histEntry.epoch === epoch;
+        }).sort((a, b) => b.score - a.score).slice(0, 6);
+
+      const showcaseEl = document.getElementById(`showcase-${epoch}`);
+      if (piecesToShow.length === 0) {
+        showcaseEl.innerHTML = `<p style="color: var(--text-dim); text-align: center; grid-column: 1/-1; font-size: 0.8rem;">
+          No archived pieces from ${epoch} generations yet &mdash; the hall of fame is still growing.
+        </p>`;
+      } else {
+        showcaseEl.innerHTML = piecesToShow.map(p => {
+          const art = p.rendered || '';
+          const type = p.genome?.type || 'unknown';
+          const typeColor = TYPE_COLORS[type] || '#666';
+          return `
+            <div class="showcase-card">
+              <div class="showcase-art" style="color: ${typeColor}80">${escHtml(art)}</div>
+              <div class="showcase-meta">
+                <span class="showcase-type" style="color: ${typeColor}">${TYPE_LABELS[type] || type}</span>
+                <span class="showcase-score" style="color: ${color}">${(p.score * 100).toFixed(1)}%</span>
+                <span class="showcase-gen">Gen ${p.generation}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function drawChart(epoch, gens, color) {
+      const canvas = document.getElementById(`chart-${epoch}`);
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = (rect.width - 48) * dpr;
+      canvas.height = 200 * dpr;
+      canvas.style.width = (rect.width - 48) + 'px';
+      canvas.style.height = '200px';
+      ctx.scale(dpr, dpr);
+
+      const w = rect.width - 48;
+      const h = 200;
+      const pad = { top: 20, right: 20, bottom: 30, left: 50 };
+      const plotW = w - pad.left - pad.right;
+      const plotH = h - pad.top - pad.bottom;
+
+      // All generations for context (dimmed)
+      const allGens = DATA.history;
+      const minScore = 0.5;
+      const maxScore = Math.max(...allGens.map(g => g.bestScore)) * 1.05;
+
+      // Grid
+      ctx.strokeStyle = '#1e1e2e';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i <= 4; i++) {
+        const y = pad.top + (plotH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + plotW, y);
+        ctx.stroke();
+        const val = maxScore - (maxScore - minScore) * (i / 4);
+        ctx.fillStyle = '#6e6e82';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText((val * 100).toFixed(0) + '%', pad.left - 8, y + 3);
+      }
+
+      // Draw all-gen best line (very dim)
+      ctx.strokeStyle = '#1e1e2e80';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      allGens.forEach((g, i) => {
+        const x = pad.left + (i / (allGens.length - 1)) * plotW;
+        const y = pad.top + (1 - (g.bestScore - minScore) / (maxScore - minScore)) * plotH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Highlight this epoch's generations
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+
+      // Find contiguous runs of this epoch
+      let inEpoch = false;
+      for (let i = 0; i < allGens.length; i++) {
+        const g = allGens[i];
+        const x = pad.left + (i / (allGens.length - 1)) * plotW;
+        const y = pad.top + (1 - (g.bestScore - minScore) / (maxScore - minScore)) * plotH;
+        if (g.epoch === epoch) {
+          if (!inEpoch) { ctx.beginPath(); ctx.moveTo(x, y); inEpoch = true; }
+          else ctx.lineTo(x, y);
+        } else if (inEpoch) {
+          ctx.stroke();
+          inEpoch = false;
+        }
+      }
+      if (inEpoch) ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Epoch band indicators at bottom
+      const bandH = 4;
+      const bandY = h - 12;
+      allGens.forEach((g, i) => {
+        const x = pad.left + (i / (allGens.length - 1)) * plotW;
+        const epColor = EPOCH_META[g.epoch]?.color || '#333';
+        ctx.fillStyle = g.epoch === epoch ? epColor : epColor + '30';
+        ctx.fillRect(x - 1, bandY, plotW / allGens.length + 1, bandH);
+      });
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function animateBars(epoch) {
+      setTimeout(() => {
+        const section = document.getElementById(`detail-${epoch}`);
+        section.querySelectorAll('[data-width]').forEach(el => {
+          el.style.width = el.dataset.width + '%';
+        });
+      }, 100);
+    }
+
+    /* ---- Tab switching ---- */
+    document.getElementById('epoch-nav').addEventListener('click', e => {
+      const tab = e.target.closest('.epoch-tab');
+      if (!tab) return;
+      const epoch = tab.dataset.epoch;
+
+      document.querySelectorAll('.epoch-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      document.querySelectorAll('.epoch-detail').forEach(d => d.classList.remove('active'));
+      const detail = document.getElementById(`detail-${epoch}`);
+      detail.classList.add('active');
+
+      // Reset and animate bars
+      detail.querySelectorAll('[data-width]').forEach(el => { el.style.width = '0'; });
+      animateBars(epoch);
+    });
+
+    /* ---- Keyboard nav ---- */
+    document.addEventListener('keydown', e => {
+      const tabs = ['emergence', 'order', 'chaos', 'harmony'];
+      if (e.key >= '1' && e.key <= '4') {
+        const idx = parseInt(e.key) - 1;
+        document.querySelector(`.epoch-tab[data-epoch="${tabs[idx]}"]`).click();
+      }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        const current = tabs.indexOf(document.querySelector('.epoch-tab.active').dataset.epoch);
+        const next = e.key === 'ArrowRight' ? (current + 1) % 4 : (current + 3) % 4;
+        document.querySelector(`.epoch-tab[data-epoch="${tabs[next]}"]`).click();
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

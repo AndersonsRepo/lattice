@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Soundscape</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas#viz {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      z-index: 0;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.94);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 3rem;
+      color: var(--accent);
+      margin-bottom: 1.2rem;
+      text-shadow: 0 0 40px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-text {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .start-sub {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      margin-top: 0.8rem;
+      opacity: 0.5;
+      max-width: 420px;
+      text-align: center;
+      line-height: 1.7;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* Back button */
+    .back {
+      position: fixed;
+      top: 1.2rem; left: 1.2rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      z-index: 50;
+      transition: color 0.3s;
+    }
+    .back:hover { color: var(--accent); }
+
+    /* HUD overlay */
+    .hud {
+      position: fixed;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .hud-top {
+      top: 1rem; right: 1.2rem;
+      text-align: right;
+    }
+    .hud-top .gen-label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .hud-top .gen-num {
+      font-size: 2rem;
+      font-weight: 200;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      line-height: 1;
+    }
+    .hud-top .epoch-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-top: 0.3rem;
+      transition: color 1s ease;
+    }
+    .hud-top .fitness-line {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      margin-top: 0.2rem;
+    }
+    .hud-top .fitness-line span {
+      color: var(--green);
+    }
+
+    /* Species voices */
+    .hud-left {
+      top: 50%;
+      left: 1.2rem;
+      transform: translateY(-50%);
+    }
+    .species-voice {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 0.4rem;
+      opacity: 0.3;
+      transition: opacity 0.8s ease;
+    }
+    .species-voice.active { opacity: 1; }
+    .species-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      transition: background 0.5s, box-shadow 0.5s;
+    }
+    .species-name {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+    .species-voice.active .species-name { color: var(--text); }
+    .species-bar {
+      width: 40px; height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .species-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.5s ease;
+      width: 0%;
+    }
+
+    /* Timeline scrubber */
+    .timeline {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 20;
+      padding: 1rem 2rem 1.5rem;
+      background: linear-gradient(transparent, rgba(10,10,15,0.9) 40%);
+      pointer-events: none;
+    }
+    .timeline-inner {
+      pointer-events: auto;
+    }
+    .timeline-epochs {
+      height: 4px;
+      display: flex;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+    }
+    .timeline-epochs .epoch-segment {
+      height: 100%;
+      transition: opacity 0.3s;
+    }
+    .timeline input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    .timeline input[type="range"]::-webkit-slider-runnable-track {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+    }
+    .timeline input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-top: -5.5px;
+      box-shadow: 0 0 12px var(--accent-glow);
+      transition: transform 0.2s;
+    }
+    .timeline input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.3);
+    }
+    .timeline-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.5rem;
+      color: var(--text-dim);
+      margin-top: 0.3rem;
+    }
+    .timeline-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-top: 0.4rem;
+    }
+    .timeline-controls button {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 4px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: all 0.3s;
+    }
+    .timeline-controls button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .timeline-controls button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(124, 111, 224, 0.1);
+    }
+    .speed-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+    }
+
+    /* Simulation preview */
+    .sim-preview {
+      position: fixed;
+      bottom: 6.5rem;
+      right: 1.2rem;
+      z-index: 15;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      opacity: 0.7;
+      transition: opacity 0.5s;
+    }
+    .sim-preview:hover { opacity: 1; }
+    .sim-label {
+      position: absolute;
+      bottom: 2px; left: 4px;
+      font-size: 0.45rem;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+<div class="start-overlay" id="startOverlay">
+  <div class="start-icon">&#x1f50a;</div>
+  <div class="start-text">Enter the Soundscape</div>
+  <div class="start-sub">
+    Hear evolution think. Cellular automata become granular textures,
+    L-systems grow into melodies, fitness curves shape harmonic drones.
+    Scrub through generations of sonic evolution.
+  </div>
+</div>
+
+<a href="./" class="back">&larr; lattice</a>
+
+<canvas id="viz"></canvas>
+
+<!-- HUD: generation info -->
+<div class="hud hud-top" id="hudTop">
+  <div class="gen-label">generation</div>
+  <div class="gen-num" id="genNum">1</div>
+  <div class="epoch-label" id="epochLabel">emergence</div>
+  <div class="fitness-line">best <span id="fitBest">0.000</span></div>
+  <div class="fitness-line">avg <span id="fitAvg">0.000</span></div>
+</div>
+
+<!-- HUD: species voices -->
+<div class="hud hud-left" id="speciesPanel"></div>
+
+<!-- Simulation preview -->
+<div class="sim-preview">
+  <canvas id="simCanvas" width="80" height="80"></canvas>
+  <div class="sim-label" id="simLabel">1d automaton</div>
+</div>
+
+<!-- Timeline -->
+<div class="timeline">
+  <div class="timeline-inner">
+    <div class="timeline-epochs" id="epochBar"></div>
+    <input type="range" id="genSlider" min="0" max="147" value="0">
+    <div class="timeline-labels">
+      <span>Gen 1</span>
+      <span id="currentGenLabel">Gen 1</span>
+      <span id="maxGenLabel">Gen 148</span>
+    </div>
+    <div class="timeline-controls">
+      <button id="btnPlay">&#9654; play</button>
+      <button id="btnAutomate">&#8634; auto</button>
+      <span class="speed-label" id="speedLabel">1 gen/s</span>
+      <button id="btnSlower">&#8722;</button>
+      <button id="btnFaster">+</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Data ──────────────────────────────────────────────────────
+let galleryData = null;
+let history = [];
+let currentIdx = 0;
+
+// ─── Audio Context ────────────────────────────────────────────
+let audioCtx = null;
+let masterGain = null;
+let compressor = null;
+
+// ─── Species colors & frequencies ─────────────────────────────
+const SPECIES_CONFIG = {
+  '1d':                  { color: '#ff6b6b', baseFreq: 110,    wave: 'sawtooth', label: '1D Automaton' },
+  '2d':                  { color: '#4ade80', baseFreq: 146.83, wave: 'square',   label: '2D Life' },
+  'lsystem':             { color: '#7c6fe0', baseFreq: 196,    wave: 'triangle', label: 'L-System' },
+  'reaction-diffusion':  { color: '#38bdf8', baseFreq: 261.63, wave: 'sine',     label: 'React-Diff' },
+  'voronoi':             { color: '#fbbf24', baseFreq: 329.63, wave: 'triangle', label: 'Voronoi' },
+  'wfc':                 { color: '#f472b6', baseFreq: 392,    wave: 'square',   label: 'WFC' },
+  'spirograph':          { color: '#a78bfa', baseFreq: 440,    wave: 'sine',     label: 'Spirograph' },
+  'attractor':           { color: '#fb923c', baseFreq: 523.25, wave: 'sawtooth', label: 'Attractor' },
+  'julia':               { color: '#2dd4bf', baseFreq: 587.33, wave: 'sine',     label: 'Julia' },
+  'noise':               { color: '#94a3b8', baseFreq: 659.25, wave: 'triangle', label: 'Noise' },
+  'flowfield':           { color: '#e879f9', baseFreq: 783.99, wave: 'sine',     label: 'Flow Field' },
+  'magnetic-pendulum':   { color: '#f87171', baseFreq: 880,    wave: 'triangle', label: 'Pendulum' },
+  'fractal-flame':       { color: '#facc15', baseFreq: 987.77, wave: 'sawtooth', label: 'Fractal Flame' },
+};
+
+// Epoch moods — musical modes mapped to evolution phases
+const EPOCH_MOODS = {
+  emergence: { color: '#4ade80', intervals: [0, 2, 4, 7, 9],         name: 'Pentatonic', filterQ: 2, reverbWet: 0.4 },
+  order:     { color: '#7c6fe0', intervals: [0, 2, 4, 5, 7, 9, 11],  name: 'Ionian',     filterQ: 8, reverbWet: 0.3 },
+  chaos:     { color: '#ff6b6b', intervals: [0, 1, 4, 5, 7, 8, 10],  name: 'Phrygian',   filterQ: 1, reverbWet: 0.6 },
+  harmony:   { color: '#fbbf24', intervals: [0, 2, 3, 5, 7, 9, 10],  name: 'Dorian',     filterQ: 5, reverbWet: 0.5 },
+};
+
+// ─── Voice pool ───────────────────────────────────────────────
+const voices = {};
+let droneOsc = null;
+let droneGain = null;
+
+// ─── Simulation state (mini CA for granular feed) ─────────────
+let simGrid = [];
+const SIM_W = 80, SIM_H = 80;
+let simRule = 110;
+let simRow = 0;
+let simType = '1d';
+let simCtx2d = null;
+
+// ─── Visualization ───────────────────────────────────────────
+let vizCanvas, vizCtx;
+let particles = [];
+const MAX_PARTICLES = 600;
+let analyserNode = null;
+let analyserData = null;
+
+// ─── Playback state ──────────────────────────────────────────
+let playing = false;
+let autoMode = false;
+let playSpeed = 1;
+let lastAdvance = 0;
+
+// ─── Init ─────────────────────────────────────────────────────
+async function init() {
+  try {
+    const resp = await fetch('gallery.json');
+    galleryData = await resp.json();
+    history = galleryData.history || [];
+  } catch(e) {
+    history = [];
+  }
+
+  vizCanvas = document.getElementById('viz');
+  vizCtx = vizCanvas.getContext('2d');
+  resizeViz();
+  window.addEventListener('resize', resizeViz);
+
+  simCtx2d = document.getElementById('simCanvas').getContext('2d');
+  initSim();
+  buildSpeciesPanel();
+  buildEpochBar();
+
+  const slider = document.getElementById('genSlider');
+  if (history.length > 0) {
+    slider.max = history.length - 1;
+    document.getElementById('maxGenLabel').textContent = 'Gen ' + history.length;
+  }
+  slider.addEventListener('input', function() {
+    currentIdx = parseInt(slider.value);
+    onGenerationChange();
+  });
+
+  document.getElementById('btnPlay').addEventListener('click', togglePlay);
+  document.getElementById('btnAutomate').addEventListener('click', toggleAuto);
+  document.getElementById('btnSlower').addEventListener('click', function() {
+    playSpeed = Math.max(0.25, playSpeed / 2);
+    updateSpeedLabel();
+  });
+  document.getElementById('btnFaster').addEventListener('click', function() {
+    playSpeed = Math.min(8, playSpeed * 2);
+    updateSpeedLabel();
+  });
+
+  document.getElementById('startOverlay').addEventListener('click', start);
+
+  document.addEventListener('keydown', function(e) {
+    if (e.code === 'Space') { e.preventDefault(); if (audioCtx) togglePlay(); else start(); }
+    if (e.code === 'ArrowRight') advanceGen(1);
+    if (e.code === 'ArrowLeft') advanceGen(-1);
+  });
+
+  onGenerationChange();
+  requestAnimationFrame(animate);
+}
+
+function resizeViz() {
+  vizCanvas.width = window.innerWidth;
+  vizCanvas.height = window.innerHeight;
+  particles = [];
+}
+
+// ─── Audio Setup ──────────────────────────────────────────────
+function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  compressor = audioCtx.createDynamicsCompressor();
+  compressor.threshold.value = -24;
+  compressor.knee.value = 12;
+  compressor.ratio.value = 4;
+
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.35;
+
+  analyserNode = audioCtx.createAnalyser();
+  analyserNode.fftSize = 256;
+  analyserData = new Uint8Array(analyserNode.frequencyBinCount);
+
+  // Reverb: 4-tap feedback delay network
+  var reverbGain = audioCtx.createGain();
+  reverbGain.gain.value = 0.25;
+
+  var preDelay = audioCtx.createDelay(0.5);
+  preDelay.delayTime.value = 0.02;
+
+  var delays = [0.1, 0.17, 0.23, 0.31];
+  var fbAmts = [0.5, 0.48, 0.45, 0.42];
+  var lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 3000;
+
+  for (var i = 0; i < delays.length; i++) {
+    var d = audioCtx.createDelay(1);
+    d.delayTime.value = delays[i];
+    var fb = audioCtx.createGain();
+    fb.gain.value = fbAmts[i];
+    preDelay.connect(d);
+    d.connect(fb);
+    fb.connect(lp);
+    lp.connect(d); // feedback loop
+    d.connect(reverbGain);
+  }
+
+  // Signal chain: compressor → master + reverb → analyser → output
+  compressor.connect(masterGain);
+  compressor.connect(preDelay);
+  reverbGain.connect(masterGain);
+  masterGain.connect(analyserNode);
+  analyserNode.connect(audioCtx.destination);
+
+  // Sub-bass drone — the heartbeat of evolution
+  droneOsc = audioCtx.createOscillator();
+  droneOsc.type = 'sine';
+  droneOsc.frequency.value = 55;
+  droneGain = audioCtx.createGain();
+  droneGain.gain.value = 0;
+
+  var droneLfo = audioCtx.createOscillator();
+  droneLfo.type = 'sine';
+  droneLfo.frequency.value = 0.08;
+  var lfoGain = audioCtx.createGain();
+  lfoGain.gain.value = 8;
+  droneLfo.connect(lfoGain);
+  lfoGain.connect(droneOsc.frequency);
+
+  droneOsc.connect(droneGain);
+  droneGain.connect(compressor);
+  droneOsc.start();
+  droneLfo.start();
+
+  droneGain.gain.setTargetAtTime(0.12, audioCtx.currentTime, 2);
+
+  // Species oscillator voices (all silent initially)
+  Object.keys(SPECIES_CONFIG).forEach(function(species) {
+    var cfg = SPECIES_CONFIG[species];
+    var osc = audioCtx.createOscillator();
+    osc.type = cfg.wave;
+    osc.frequency.value = cfg.baseFreq;
+
+    var filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 800;
+    filter.Q.value = 2;
+
+    var gain = audioCtx.createGain();
+    gain.gain.value = 0;
+
+    var vibrato = audioCtx.createOscillator();
+    vibrato.type = 'sine';
+    vibrato.frequency.value = 3 + Math.random() * 2;
+    var vibAmt = audioCtx.createGain();
+    vibAmt.gain.value = 2;
+    vibrato.connect(vibAmt);
+    vibAmt.connect(osc.frequency);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(compressor);
+
+    osc.start();
+    vibrato.start();
+
+    voices[species] = { osc: osc, gain: gain, filter: filter };
+  });
+}
+
+// ─── Generation Change Handler ───────────────────────────────
+function onGenerationChange() {
+  var gen = history[currentIdx] || {
+    generation: 1, bestScore: 0, avgScore: 0,
+    epoch: 'emergence', speciesCounts: {}, hallOfFameSize: 0
+  };
+
+  document.getElementById('genNum').textContent = gen.generation;
+  document.getElementById('currentGenLabel').textContent = 'Gen ' + gen.generation;
+  document.getElementById('genSlider').value = currentIdx;
+
+  var epochEl = document.getElementById('epochLabel');
+  var mood = EPOCH_MOODS[gen.epoch] || EPOCH_MOODS.emergence;
+  epochEl.textContent = gen.epoch + ' \u2014 ' + mood.name;
+  epochEl.style.color = mood.color;
+
+  document.getElementById('fitBest').textContent = gen.bestScore.toFixed(3);
+  document.getElementById('fitAvg').textContent = gen.avgScore.toFixed(3);
+
+  updateSpeciesPanel(gen.speciesCounts || {});
+
+  if (audioCtx) updateAudio(gen);
+
+  // Switch sim engine to dominant species
+  var counts = gen.speciesCounts || {};
+  var dominant = '1d';
+  var maxCount = 0;
+  Object.keys(counts).forEach(function(sp) {
+    if (counts[sp] > maxCount) { maxCount = counts[sp]; dominant = sp; }
+  });
+  if (dominant !== simType) {
+    simType = dominant;
+    document.getElementById('simLabel').textContent =
+      (SPECIES_CONFIG[simType] || {}).label || simType;
+    initSim();
+  }
+}
+
+function updateAudio(gen) {
+  var now = audioCtx.currentTime;
+  var mood = EPOCH_MOODS[gen.epoch] || EPOCH_MOODS.emergence;
+  var counts = gen.speciesCounts || {};
+
+  var totalPop = 0;
+  Object.keys(counts).forEach(function(k) { totalPop += counts[k]; });
+  if (totalPop === 0) totalPop = 1;
+
+  // Drone: pitch follows fitness
+  var droneFreq = 40 + gen.bestScore * 30;
+  droneOsc.frequency.setTargetAtTime(droneFreq, now, 0.5);
+  droneGain.gain.setTargetAtTime(0.06 + gen.bestScore * 0.1, now, 1);
+
+  // Update each species voice
+  Object.keys(voices).forEach(function(species) {
+    var voice = voices[species];
+    var cfg = SPECIES_CONFIG[species];
+    var pop = counts[species] || 0;
+    var frac = pop / totalPop;
+
+    if (pop > 0) {
+      var vol = 0.02 + frac * 0.08;
+      voice.gain.gain.setTargetAtTime(vol, now, 0.8);
+
+      var intervals = mood.intervals;
+      var interval = intervals[Math.floor(frac * intervals.length) % intervals.length];
+      var freq = cfg.baseFreq * Math.pow(2, interval / 12);
+      voice.osc.frequency.setTargetAtTime(freq, now, 0.3);
+
+      var filterFreq = 400 + gen.bestScore * 2000 + frac * 1000;
+      voice.filter.frequency.setTargetAtTime(filterFreq, now, 0.5);
+      voice.filter.Q.setTargetAtTime(mood.filterQ, now, 1);
+    } else {
+      voice.gain.gain.setTargetAtTime(0, now, 0.5);
+    }
+  });
+}
+
+// ─── Granular Synthesis (from live simulation) ───────────────
+function emitSimGrains() {
+  if (!audioCtx || !simGrid.length) return;
+  var gen = history[currentIdx];
+  if (!gen) return;
+  var mood = EPOCH_MOODS[gen.epoch] || EPOCH_MOODS.emergence;
+  var intervals = mood.intervals;
+  var grainsPerFrame = 2 + Math.floor(Math.random() * 3);
+
+  for (var i = 0; i < grainsPerFrame; i++) {
+    var x = Math.floor(Math.random() * SIM_W);
+    var y = Math.floor(Math.random() * SIM_H);
+    var cell = simGrid[y * SIM_W + x] || 0;
+    if (cell === 0) continue;
+
+    // Pitch from cell position + epoch scale
+    var baseNote = 48 + intervals[(x + y) % intervals.length];
+    var freq = 440 * Math.pow(2, (baseNote - 69) / 12);
+    var vol = 0.008 + (cell / 5) * 0.02;
+    var pan = (x / SIM_W) * 2 - 1;
+    var dur = 0.05 + Math.random() * 0.15;
+
+    fireGrain(freq, dur, pan, vol);
+  }
+}
+
+function fireGrain(freq, duration, pan, vol) {
+  if (!audioCtx) return;
+  var now = audioCtx.currentTime;
+
+  var osc = audioCtx.createOscillator();
+  osc.type = Math.random() < 0.7 ? 'sine' : 'triangle';
+  osc.frequency.value = freq;
+  osc.detune.value = (Math.random() - 0.5) * 20;
+
+  var env = audioCtx.createGain();
+  env.gain.value = 0;
+
+  var panner = audioCtx.createStereoPanner();
+  panner.pan.value = pan;
+
+  osc.connect(env);
+  env.connect(panner);
+  panner.connect(compressor);
+
+  var attack = duration * 0.1;
+  var release = duration * 0.7;
+  env.gain.setValueAtTime(0, now);
+  env.gain.linearRampToValueAtTime(vol, now + attack);
+  env.gain.setValueAtTime(vol, now + duration - release);
+  env.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+  osc.start(now);
+  osc.stop(now + duration + 0.01);
+}
+
+// ─── L-System Melody ─────────────────────────────────────────
+var lsystemMelodyTimer = 0;
+var LSYSTEM_MELODY_INTERVAL = 3000;
+
+function playLSystemMelody() {
+  if (!audioCtx) return;
+  var gen = history[currentIdx];
+  if (!gen) return;
+  var mood = EPOCH_MOODS[gen.epoch] || EPOCH_MOODS.emergence;
+  var intervals = mood.intervals;
+
+  // L-system expansion: seed → apply production rules → note sequence
+  var notes = [0];
+  for (var step = 0; step < 2; step++) {
+    var next = [];
+    for (var n = 0; n < notes.length; n++) {
+      var idx = intervals.indexOf(notes[n]);
+      if (idx >= 0 && idx < intervals.length - 1) {
+        next.push(intervals[idx]);
+        next.push(intervals[idx + 1]);
+      } else {
+        next.push(intervals[0]);
+      }
+    }
+    notes = next.slice(0, 8);
+  }
+
+  var now = audioCtx.currentTime;
+  var noteLen = 0.2;
+  var gap = 0.15;
+
+  for (var i = 0; i < notes.length; i++) {
+    var midi = 60 + notes[i];
+    var freq = 440 * Math.pow(2, (midi - 69) / 12);
+    var t = now + i * (noteLen + gap);
+
+    var osc = audioCtx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+
+    var env = audioCtx.createGain();
+    env.gain.value = 0;
+
+    var pan = audioCtx.createStereoPanner();
+    pan.pan.value = (i / notes.length) * 1.4 - 0.7;
+
+    osc.connect(env);
+    env.connect(pan);
+    pan.connect(compressor);
+
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(0.035, t + 0.02);
+    env.gain.exponentialRampToValueAtTime(0.001, t + noteLen);
+
+    osc.start(t);
+    osc.stop(t + noteLen + 0.01);
+  }
+}
+
+// ─── Fitness Chime ───────────────────────────────────────────
+function playFitnessChime(gen) {
+  if (!audioCtx || !gen) return;
+  var now = audioCtx.currentTime;
+  var fitness = gen.bestScore;
+
+  var baseFreq = 400 + fitness * 600;
+  var ratios = fitness > 0.75 ? [1, 1.25, 1.5] :
+               fitness > 0.6  ? [1, 1.2, 1.5]  :
+                                [1, 1.189, 1.498];
+
+  for (var r = 0; r < ratios.length; r++) {
+    var osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = baseFreq * ratios[r];
+
+    var env = audioCtx.createGain();
+    env.gain.value = 0;
+
+    osc.connect(env);
+    env.connect(compressor);
+
+    env.gain.setValueAtTime(0, now);
+    env.gain.linearRampToValueAtTime(0.025, now + 0.05);
+    env.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+
+    osc.start(now);
+    osc.stop(now + 1.6);
+  }
+}
+
+// ─── Simulation Engines ──────────────────────────────────────
+function initSim() {
+  simGrid = new Array(SIM_W * SIM_H).fill(0);
+  simRow = 0;
+
+  if (simType === '1d') {
+    simGrid[Math.floor(SIM_W / 2)] = 1;
+    simRule = [30, 90, 110, 150, 182][Math.floor(Math.random() * 5)];
+  } else if (simType === '2d' || simType === 'wfc') {
+    for (var i = 0; i < SIM_W * SIM_H; i++) {
+      simGrid[i] = Math.random() < 0.3 ? 1 : 0;
+    }
+  } else if (simType === 'reaction-diffusion') {
+    for (var i = 0; i < SIM_W * SIM_H; i++) simGrid[i] = 0;
+    for (var k = 0; k < 5; k++) {
+      var cx = Math.floor(Math.random() * SIM_W);
+      var cy = Math.floor(Math.random() * SIM_H);
+      for (var dy = -3; dy <= 3; dy++)
+        for (var dx = -3; dx <= 3; dx++) {
+          var nx = (cx + dx + SIM_W) % SIM_W;
+          var ny = (cy + dy + SIM_H) % SIM_H;
+          simGrid[ny * SIM_W + nx] = 1;
+        }
+    }
+  } else {
+    for (var i = 0; i < SIM_W * SIM_H; i++) {
+      simGrid[i] = Math.random() < 0.15 ? Math.floor(Math.random() * 3) + 1 : 0;
+    }
+  }
+}
+
+function stepSim() {
+  if (simType === '1d') step1D();
+  else if (simType === '2d' || simType === 'wfc') step2D();
+  else stepGeneric();
+}
+
+function step1D() {
+  if (simRow >= SIM_H - 1) {
+    for (var y = 0; y < SIM_H - 1; y++)
+      for (var x = 0; x < SIM_W; x++)
+        simGrid[y * SIM_W + x] = simGrid[(y + 1) * SIM_W + x];
+    simRow = SIM_H - 2;
+  }
+  var prevRow = simRow;
+  var nextRow = simRow + 1;
+  for (var x = 0; x < SIM_W; x++) {
+    var l = simGrid[prevRow * SIM_W + ((x - 1 + SIM_W) % SIM_W)] ? 1 : 0;
+    var c = simGrid[prevRow * SIM_W + x] ? 1 : 0;
+    var r = simGrid[prevRow * SIM_W + ((x + 1) % SIM_W)] ? 1 : 0;
+    var idx = (l << 2) | (c << 1) | r;
+    simGrid[nextRow * SIM_W + x] = (simRule >> idx) & 1;
+  }
+  simRow = nextRow;
+}
+
+function step2D() {
+  var next = new Array(SIM_W * SIM_H);
+  for (var y = 0; y < SIM_H; y++) {
+    for (var x = 0; x < SIM_W; x++) {
+      var neighbors = 0;
+      for (var dy = -1; dy <= 1; dy++)
+        for (var dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          var nx = (x + dx + SIM_W) % SIM_W;
+          var ny = (y + dy + SIM_H) % SIM_H;
+          if (simGrid[ny * SIM_W + nx] > 0) neighbors++;
+        }
+      var alive = simGrid[y * SIM_W + x] > 0;
+      if (alive) next[y * SIM_W + x] = (neighbors === 2 || neighbors === 3) ? 1 : 0;
+      else next[y * SIM_W + x] = (neighbors === 3) ? 1 : 0;
+    }
+  }
+  simGrid = next;
+}
+
+function stepGeneric() {
+  for (var i = 0; i < SIM_W * SIM_H; i++) {
+    if (simGrid[i] > 0) simGrid[i] = Math.max(0, simGrid[i] - 0.1);
+    if (Math.random() < 0.002) simGrid[i] = Math.floor(Math.random() * 4) + 1;
+  }
+  for (var k = 0; k < 10; k++) {
+    var x = Math.floor(Math.random() * SIM_W);
+    var y = Math.floor(Math.random() * SIM_H);
+    if (simGrid[y * SIM_W + x] > 0) {
+      var dx = Math.floor(Math.random() * 3) - 1;
+      var dy = Math.floor(Math.random() * 3) - 1;
+      var nx = (x + dx + SIM_W) % SIM_W;
+      var ny = (y + dy + SIM_H) % SIM_H;
+      simGrid[ny * SIM_W + nx] = simGrid[y * SIM_W + x];
+    }
+  }
+}
+
+function renderSim() {
+  var img = simCtx2d.createImageData(SIM_W, SIM_H);
+  var gen = history[currentIdx];
+  var epoch = gen ? gen.epoch : 'emergence';
+  var mc = EPOCH_MOODS[epoch].color;
+
+  var r0 = parseInt(mc.slice(1, 3), 16);
+  var g0 = parseInt(mc.slice(3, 5), 16);
+  var b0 = parseInt(mc.slice(5, 7), 16);
+
+  for (var i = 0; i < SIM_W * SIM_H; i++) {
+    var v = Math.min(1, simGrid[i]);
+    var idx = i * 4;
+    img.data[idx]     = Math.floor(r0 * v * 0.6);
+    img.data[idx + 1] = Math.floor(g0 * v * 0.6);
+    img.data[idx + 2] = Math.floor(b0 * v * 0.6);
+    img.data[idx + 3] = 255;
+  }
+  simCtx2d.putImageData(img, 0, 0);
+}
+
+// ─── Particle Visualization ──────────────────────────────────
+function initParticles() {
+  particles = [];
+  for (var i = 0; i < MAX_PARTICLES; i++) {
+    particles.push({
+      x: Math.random() * vizCanvas.width,
+      y: Math.random() * vizCanvas.height,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: (Math.random() - 0.5) * 0.5,
+      size: 1 + Math.random() * 2,
+      alpha: 0.1 + Math.random() * 0.3,
+    });
+  }
+}
+
+function renderViz(time) {
+  var w = vizCanvas.width;
+  var h = vizCanvas.height;
+
+  vizCtx.fillStyle = 'rgba(10, 10, 15, 0.08)';
+  vizCtx.fillRect(0, 0, w, h);
+
+  var freqAvg = 0;
+  var bassAvg = 0;
+  if (analyserNode) {
+    analyserNode.getByteFrequencyData(analyserData);
+    for (var i = 0; i < analyserData.length; i++) freqAvg += analyserData[i];
+    freqAvg /= analyserData.length;
+    for (var i = 0; i < 8; i++) bassAvg += analyserData[i];
+    bassAvg /= 8;
+  }
+
+  var gen = history[currentIdx];
+  var epoch = gen ? gen.epoch : 'emergence';
+  var mood = EPOCH_MOODS[epoch];
+
+  if (particles.length === 0) initParticles();
+
+  var audioForce = freqAvg / 255;
+  var bassForce = bassAvg / 255;
+
+  for (var p = 0; p < particles.length; p++) {
+    var pt = particles[p];
+
+    var angle = Math.sin(pt.x * 0.003 + time * 0.0002) *
+                Math.cos(pt.y * 0.003) * Math.PI * 2;
+    pt.vx += Math.cos(angle) * 0.02 * (1 + audioForce * 2);
+    pt.vy += Math.sin(angle) * 0.02 * (1 + audioForce * 2);
+
+    pt.vx *= 0.98;
+    pt.vy *= 0.98;
+
+    pt.x += pt.vx;
+    pt.y += pt.vy;
+
+    if (pt.x < 0) pt.x += w;
+    if (pt.x > w) pt.x -= w;
+    if (pt.y < 0) pt.y += h;
+    if (pt.y > h) pt.y -= h;
+
+    var size = pt.size * (1 + bassForce * 2);
+    var alpha = pt.alpha * (0.5 + audioForce * 0.5);
+
+    vizCtx.beginPath();
+    vizCtx.arc(pt.x, pt.y, size, 0, Math.PI * 2);
+    vizCtx.fillStyle = hexToRgba(mood.color, alpha);
+    vizCtx.fill();
+  }
+
+  // Sparse particle connections
+  vizCtx.strokeStyle = hexToRgba(mood.color, 0.03 + audioForce * 0.05);
+  vizCtx.lineWidth = 0.5;
+  for (var i = 0; i < particles.length; i += 4) {
+    for (var j = i + 1; j < Math.min(i + 8, particles.length); j += 2) {
+      var dx = particles[i].x - particles[j].x;
+      var dy = particles[i].y - particles[j].y;
+      if (dx * dx + dy * dy < 8000) {
+        vizCtx.beginPath();
+        vizCtx.moveTo(particles[i].x, particles[i].y);
+        vizCtx.lineTo(particles[j].x, particles[j].y);
+        vizCtx.stroke();
+      }
+    }
+  }
+
+  // Center glow
+  var glowSize = 200 + bassForce * 300;
+  var grad = vizCtx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, glowSize);
+  grad.addColorStop(0, hexToRgba(mood.color, 0.04 + bassForce * 0.06));
+  grad.addColorStop(1, 'transparent');
+  vizCtx.fillStyle = grad;
+  vizCtx.fillRect(0, 0, w, h);
+
+  // Vignette
+  var vignette = vizCtx.createRadialGradient(w / 2, h / 2, w * 0.3, w / 2, h / 2, w * 0.7);
+  vignette.addColorStop(0, 'transparent');
+  vignette.addColorStop(1, 'rgba(10, 10, 15, 0.5)');
+  vizCtx.fillStyle = vignette;
+  vizCtx.fillRect(0, 0, w, h);
+}
+
+function hexToRgba(hex, alpha) {
+  var r = parseInt(hex.slice(1, 3), 16);
+  var g = parseInt(hex.slice(3, 5), 16);
+  var b = parseInt(hex.slice(5, 7), 16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
+// ─── UI Builders ─────────────────────────────────────────────
+function buildSpeciesPanel() {
+  var panel = document.getElementById('speciesPanel');
+  panel.innerHTML = '';
+  Object.keys(SPECIES_CONFIG).forEach(function(species) {
+    var cfg = SPECIES_CONFIG[species];
+    var div = document.createElement('div');
+    div.className = 'species-voice';
+    div.id = 'sv-' + species;
+    div.innerHTML =
+      '<div class="species-dot" style="background:' + cfg.color + '"></div>' +
+      '<span class="species-name">' + cfg.label + '</span>' +
+      '<div class="species-bar"><div class="species-bar-fill" style="background:' + cfg.color + '"></div></div>';
+    panel.appendChild(div);
+  });
+}
+
+function updateSpeciesPanel(counts) {
+  var totalPop = 0;
+  Object.keys(counts).forEach(function(k) { totalPop += counts[k]; });
+  if (totalPop === 0) totalPop = 1;
+
+  Object.keys(SPECIES_CONFIG).forEach(function(species) {
+    var cfg = SPECIES_CONFIG[species];
+    var el = document.getElementById('sv-' + species);
+    if (!el) return;
+    var pop = counts[species] || 0;
+    var frac = pop / totalPop;
+    if (pop > 0) el.classList.add('active');
+    else el.classList.remove('active');
+    el.querySelector('.species-bar-fill').style.width = (frac * 100) + '%';
+    el.querySelector('.species-dot').style.boxShadow =
+      pop > 0 ? '0 0 6px ' + cfg.color : 'none';
+  });
+}
+
+function buildEpochBar() {
+  var bar = document.getElementById('epochBar');
+  if (history.length === 0) return;
+
+  var segments = [];
+  var currentEpoch = history[0].epoch;
+  var start = 0;
+
+  for (var i = 1; i < history.length; i++) {
+    if (history[i].epoch !== currentEpoch) {
+      segments.push({ epoch: currentEpoch, start: start, end: i });
+      currentEpoch = history[i].epoch;
+      start = i;
+    }
+  }
+  segments.push({ epoch: currentEpoch, start: start, end: history.length });
+
+  bar.innerHTML = '';
+  for (var s = 0; s < segments.length; s++) {
+    var seg = segments[s];
+    var width = ((seg.end - seg.start) / history.length) * 100;
+    var div = document.createElement('div');
+    div.className = 'epoch-segment';
+    div.style.width = width + '%';
+    div.style.background = (EPOCH_MOODS[seg.epoch] || EPOCH_MOODS.emergence).color;
+    div.style.opacity = '0.5';
+    bar.appendChild(div);
+  }
+}
+
+// ─── Playback Controls ──────────────────────────────────────
+function togglePlay() {
+  playing = !playing;
+  document.getElementById('btnPlay').textContent = playing ? '\u23F8 pause' : '\u25B6 play';
+  document.getElementById('btnPlay').classList.toggle('active', playing);
+  lastAdvance = performance.now();
+}
+
+function toggleAuto() {
+  autoMode = !autoMode;
+  document.getElementById('btnAutomate').classList.toggle('active', autoMode);
+  if (autoMode && !playing) togglePlay();
+}
+
+function advanceGen(delta) {
+  currentIdx = Math.max(0, Math.min(history.length - 1, currentIdx + delta));
+  onGenerationChange();
+}
+
+function updateSpeedLabel() {
+  document.getElementById('speedLabel').textContent = playSpeed + ' gen/s';
+}
+
+function start() {
+  document.getElementById('startOverlay').classList.add('hidden');
+  initAudio();
+  onGenerationChange();
+}
+
+// ─── Main Loop ───────────────────────────────────────────────
+var frameCount = 0;
+
+function animate(time) {
+  requestAnimationFrame(animate);
+  frameCount++;
+
+  if (playing && history.length > 0) {
+    var elapsed = time - lastAdvance;
+    var interval = 1000 / playSpeed;
+    if (elapsed >= interval) {
+      lastAdvance = time;
+      if (currentIdx < history.length - 1) {
+        currentIdx++;
+        onGenerationChange();
+        playFitnessChime(history[currentIdx]);
+      } else if (autoMode) {
+        currentIdx = 0;
+        onGenerationChange();
+      } else {
+        playing = false;
+        document.getElementById('btnPlay').textContent = '\u25B6 play';
+        document.getElementById('btnPlay').classList.remove('active');
+      }
+    }
+  }
+
+  // Step simulation
+  for (var i = 0; i < 4; i++) stepSim();
+
+  if (frameCount % 2 === 0) renderSim();
+  if (audioCtx && frameCount % 3 === 0) emitSimGrains();
+
+  lsystemMelodyTimer += 16.67;
+  if (lsystemMelodyTimer >= LSYSTEM_MELODY_INTERVAL) {
+    lsystemMelodyTimer = 0;
+    if (audioCtx) playLSystemMelody();
+  }
+
+  renderViz(time);
+}
+
+// ─── Boot ────────────────────────────────────────────────────
+init();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signal — Lattice</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #back-btn {
+      position: fixed;
+      top: 1.25rem;
+      left: 1.5rem;
+      font-family: inherit;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      text-decoration: none;
+      text-transform: uppercase;
+      z-index: 200;
+      transition: color 0.2s;
+    }
+    #back-btn:hover { color: var(--text); }
+
+    canvas { display: block; width: 100%; height: 100%; }
+
+    /* Start overlay */
+    #start-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 10, 15, 0.94);
+      z-index: 300;
+      transition: opacity 0.6s ease;
+    }
+    #start-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    #start-overlay h1 {
+      font-size: 2.2rem;
+      font-weight: 200;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+      margin-bottom: 0.6rem;
+    }
+    #start-overlay p {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      letter-spacing: 0.06em;
+      margin-bottom: 2rem;
+      max-width: 400px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .start-btn {
+      padding: 0.7rem 2rem;
+      border-radius: 24px;
+      border: none;
+      font-family: inherit;
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #fff;
+      background: linear-gradient(135deg, #7c6fe0 0%, #f472b6 100%);
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.3s;
+      box-shadow: 0 0 20px #7c6fe030;
+    }
+    .start-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 0 30px #7c6fe060;
+    }
+
+    /* Piece strip */
+    #piece-strip {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      padding: 0.75rem 1rem;
+      background: linear-gradient(transparent, rgba(10, 10, 15, 0.9));
+      z-index: 100;
+      flex-wrap: wrap;
+    }
+    .strip-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+      opacity: 0.5;
+    }
+    .strip-dot:hover { opacity: 1; transform: scale(1.3); }
+    .strip-dot.active { opacity: 1; transform: scale(1.4); border-color: #fff; box-shadow: 0 0 8px currentColor; }
+
+    /* Info panel */
+    #info-panel {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      background: rgba(18, 18, 26, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      z-index: 100;
+      min-width: 160px;
+      backdrop-filter: blur(10px);
+    }
+    #info-panel .type-badge {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+    }
+    #info-panel .score-display {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--green);
+    }
+    #info-panel .gen-display {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      margin-top: 0.2rem;
+    }
+
+    /* Controls */
+    #controls {
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.5rem;
+      z-index: 100;
+    }
+    .ctrl-btn {
+      padding: 0.35rem 0.8rem;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.8);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      backdrop-filter: blur(10px);
+    }
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--text); }
+    .ctrl-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(124, 111, 224, 0.1); }
+
+    /* Metric labels */
+    .metric-label {
+      position: absolute;
+      font-size: 0.55rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+  </style>
+</head>
+<body>
+
+<a id="back-btn" href="index.html">&larr; Lattice</a>
+
+<canvas id="signal-canvas"></canvas>
+
+<div id="start-overlay">
+  <h1>Signal</h1>
+  <p>Every organism has a fingerprint — eight fitness metrics rendered as oscillating waveforms. Watch complexity pulse, symmetry resonate, and density breathe.</p>
+  <button class="start-btn" id="start-btn">Begin</button>
+</div>
+
+<div id="controls" style="display:none;">
+  <button class="ctrl-btn active" data-mode="waves">Waves</button>
+  <button class="ctrl-btn" data-mode="lissajous">Lissajous</button>
+  <button class="ctrl-btn" data-mode="radar">Radar</button>
+</div>
+
+<div id="info-panel" style="display:none;">
+  <div class="type-badge" id="type-badge">—</div>
+  <div class="score-display" id="score-display">—</div>
+  <div class="gen-display" id="gen-display">—</div>
+</div>
+
+<div id="piece-strip" style="display:none;"></div>
+
+<script>
+const TYPE_COLORS = {
+  '1d': '#c8abff', '2d': '#4ade80', 'lsystem': '#f5b84a',
+  'reaction-diffusion': '#d44af5', 'voronoi': '#4ad4f5',
+  'wfc': '#f54a9d', 'spirograph': '#d4f54a', 'attractor': '#f59d6b',
+  'julia': '#4af5d4', 'noise': '#d4d44a', 'flowfield': '#4ad4d4'
+};
+
+const METRIC_NAMES = [
+  'complexity', 'symmetry', 'density', 'novelty',
+  'edgeActivity', 'structuralInterest', 'fractalDimension', 'informationDensity'
+];
+
+const METRIC_LABELS = [
+  'Complexity', 'Symmetry', 'Density', 'Novelty',
+  'Edge Activity', 'Structure', 'Fractal Dim', 'Info Density'
+];
+
+const WAVE_COLORS = [
+  '#7c6fe0', '#4ade80', '#f472b6', '#fbbf24',
+  '#4ad4f5', '#c8abff', '#ef4444', '#22d3ee'
+];
+
+let canvas, ctx;
+let pieces = [];
+let currentIndex = 0;
+let mode = 'waves';
+let time = 0;
+let animId;
+let transitioning = false;
+let transitionStart = 0;
+let prevMetrics = null;
+let currentMetrics = null;
+
+function init() {
+  canvas = document.getElementById('signal-canvas');
+  ctx = canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize', resize);
+
+  document.getElementById('start-btn').addEventListener('click', start);
+
+  document.querySelectorAll('.ctrl-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      mode = btn.dataset.mode;
+    });
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') selectPiece((currentIndex + 1) % pieces.length);
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') selectPiece((currentIndex - 1 + pieces.length) % pieces.length);
+    else if (e.key === '1') setMode('waves');
+    else if (e.key === '2') setMode('lissajous');
+    else if (e.key === '3') setMode('radar');
+    else if (e.key === ' ') { e.preventDefault(); autoAdvance = !autoAdvance; }
+  });
+}
+
+let autoAdvance = true;
+let lastAdvance = 0;
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.ctrl-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === m);
+  });
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+async function start() {
+  document.getElementById('start-overlay').classList.add('hidden');
+  try {
+    const res = await fetch('gallery.json');
+    const data = await res.json();
+    pieces = [...(data.hallOfFame || []), ...(data.pieces || [])].filter(p => p.metrics);
+    if (pieces.length === 0) return;
+
+    buildStrip();
+    document.getElementById('controls').style.display = 'flex';
+    document.getElementById('info-panel').style.display = 'block';
+    document.getElementById('piece-strip').style.display = 'flex';
+
+    selectPiece(0);
+    lastAdvance = performance.now();
+    animate();
+  } catch (e) {
+    console.error('Failed to load gallery data:', e);
+  }
+}
+
+function buildStrip() {
+  const strip = document.getElementById('piece-strip');
+  strip.innerHTML = '';
+  pieces.forEach((p, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'strip-dot';
+    dot.style.color = TYPE_COLORS[p.genome?.type] || '#7c6fe0';
+    dot.style.background = TYPE_COLORS[p.genome?.type] || '#7c6fe0';
+    dot.title = `${p.genome?.type || '?'} — ${(p.score * 100).toFixed(1)}%`;
+    dot.addEventListener('click', () => { selectPiece(i); autoAdvance = false; });
+    strip.appendChild(dot);
+  });
+}
+
+function selectPiece(index) {
+  currentIndex = index;
+  const piece = pieces[index];
+
+  // Transition
+  prevMetrics = currentMetrics;
+  currentMetrics = normalizeMetrics(piece.metrics);
+  if (prevMetrics) {
+    transitioning = true;
+    transitionStart = performance.now();
+  }
+
+  // Update info
+  const typeColor = TYPE_COLORS[piece.genome?.type] || '#7c6fe0';
+  document.getElementById('type-badge').textContent = piece.genome?.type || '?';
+  document.getElementById('type-badge').style.color = typeColor;
+  document.getElementById('score-display').textContent = (piece.score * 100).toFixed(1) + '%';
+  document.getElementById('gen-display').textContent = `gen ${piece.generation || '?'} · ${piece.id?.slice(0, 8) || ''}`;
+
+  // Update strip
+  document.querySelectorAll('.strip-dot').forEach((d, i) => d.classList.toggle('active', i === index));
+
+  lastAdvance = performance.now();
+}
+
+function normalizeMetrics(m) {
+  return METRIC_NAMES.map(name => {
+    let v = m[name] || 0;
+    // Normalize fractalDimension from 0-2 range to 0-1
+    if (name === 'fractalDimension') v = v / 2;
+    // Complexity (entropy) typically 0-3, normalize to 0-1
+    if (name === 'complexity') v = Math.min(v / 3, 1);
+    return Math.max(0, Math.min(1, v));
+  });
+}
+
+function getMetrics() {
+  if (!currentMetrics) return new Array(8).fill(0);
+  if (!transitioning || !prevMetrics) return currentMetrics;
+
+  const elapsed = (performance.now() - transitionStart) / 800; // 800ms transition
+  if (elapsed >= 1) {
+    transitioning = false;
+    return currentMetrics;
+  }
+  const t = easeInOut(elapsed);
+  return currentMetrics.map((v, i) => prevMetrics[i] + (v - prevMetrics[i]) * t);
+}
+
+function easeInOut(t) {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+function animate(ts) {
+  animId = requestAnimationFrame(animate);
+  time = (ts || 0) / 1000;
+
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  // Auto-advance every 6 seconds
+  if (autoAdvance && pieces.length > 1 && ts - lastAdvance > 6000) {
+    selectPiece((currentIndex + 1) % pieces.length);
+  }
+
+  // Clear
+  ctx.fillStyle = 'rgba(10, 10, 15, 0.15)';
+  ctx.fillRect(0, 0, w, h);
+
+  const metrics = getMetrics();
+  const piece = pieces[currentIndex];
+  const typeColor = TYPE_COLORS[piece?.genome?.type] || '#7c6fe0';
+
+  if (mode === 'waves') drawWaves(w, h, metrics, typeColor);
+  else if (mode === 'lissajous') drawLissajous(w, h, metrics, typeColor);
+  else if (mode === 'radar') drawRadar(w, h, metrics, typeColor);
+
+  // Vignette
+  const vg = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.7);
+  vg.addColorStop(0, 'transparent');
+  vg.addColorStop(1, 'rgba(10, 10, 15, 0.6)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, w, h);
+}
+
+// ── WAVES MODE ──
+function drawWaves(w, h, metrics, typeColor) {
+  const rowH = h / 8;
+  const pad = 20;
+
+  for (let i = 0; i < 8; i++) {
+    const value = metrics[i];
+    const y0 = rowH * i + rowH / 2;
+    const amplitude = value * rowH * 0.35;
+    const frequency = 1.5 + value * 4;
+    const phase = time * (1.2 + i * 0.3) + i * Math.PI * 0.25;
+    const color = WAVE_COLORS[i];
+
+    // Glow
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8 + value * 12;
+
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5 + value;
+    ctx.globalAlpha = 0.6 + value * 0.4;
+
+    for (let x = pad; x < w - pad; x++) {
+      const t = (x - pad) / (w - 2 * pad);
+      // Compound wave: primary sine + harmonic
+      const y = y0
+        + Math.sin(t * Math.PI * 2 * frequency + phase) * amplitude
+        + Math.sin(t * Math.PI * 2 * frequency * 2.5 + phase * 1.3) * amplitude * 0.2
+        + Math.sin(t * Math.PI * 2 * 0.5 + time * 0.3) * amplitude * 0.15;
+      if (x === pad) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Zero line
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.08;
+    ctx.lineWidth = 0.5;
+    ctx.shadowBlur = 0;
+    ctx.moveTo(pad, y0);
+    ctx.lineTo(w - pad, y0);
+    ctx.stroke();
+
+    // Label
+    ctx.globalAlpha = 0.4 + value * 0.3;
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = color;
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(METRIC_LABELS[i], pad + 4, y0 - rowH * 0.3);
+
+    // Value
+    ctx.textAlign = 'right';
+    ctx.fillText((value * 100).toFixed(0) + '%', w - pad - 4, y0 - rowH * 0.3);
+
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }
+
+  // Scan line
+  const scanX = pad + ((time * 60) % (w - 2 * pad));
+  ctx.beginPath();
+  ctx.strokeStyle = typeColor;
+  ctx.globalAlpha = 0.15;
+  ctx.lineWidth = 1;
+  ctx.moveTo(scanX, 0);
+  ctx.lineTo(scanX, h);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// ── LISSAJOUS MODE ──
+function drawLissajous(w, h, metrics, typeColor) {
+  const cx = w / 2;
+  const cy = h / 2;
+  const radius = Math.min(w, h) * 0.35;
+
+  // Draw 4 Lissajous figures from metric pairs
+  const pairs = [[0, 1], [2, 3], [4, 5], [6, 7]];
+  const pairColors = [WAVE_COLORS[0], WAVE_COLORS[2], WAVE_COLORS[4], WAVE_COLORS[6]];
+
+  pairs.forEach(([a, b], pi) => {
+    const va = metrics[a];
+    const vb = metrics[b];
+    const freqA = 1 + va * 3;
+    const freqB = 1 + vb * 3;
+    const phaseOffset = time * 0.5 + pi * Math.PI / 2;
+    const size = radius * (0.3 + (va + vb) * 0.35);
+
+    ctx.beginPath();
+    ctx.strokeStyle = pairColors[pi];
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.5 + (va + vb) * 0.25;
+    ctx.shadowColor = pairColors[pi];
+    ctx.shadowBlur = 6 + (va + vb) * 8;
+
+    const steps = 600;
+    for (let s = 0; s < steps; s++) {
+      const t = (s / steps) * Math.PI * 2 * 4;
+      const x = cx + Math.sin(freqA * t + phaseOffset) * size;
+      const y = cy + Math.sin(freqB * t + phaseOffset + Math.PI * va) * size;
+      if (s === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Label the pair
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = pairColors[pi];
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    const labelAngle = (pi / 4) * Math.PI * 2 - Math.PI / 2;
+    const labelR = radius + 30;
+    ctx.fillText(
+      `${METRIC_LABELS[a]} × ${METRIC_LABELS[b]}`,
+      cx + Math.cos(labelAngle) * labelR,
+      cy + Math.sin(labelAngle) * labelR
+    );
+  });
+
+  // Center dot
+  ctx.beginPath();
+  ctx.fillStyle = typeColor;
+  ctx.globalAlpha = 0.6;
+  ctx.shadowColor = typeColor;
+  ctx.shadowBlur = 15;
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
+// ── RADAR MODE ──
+function drawRadar(w, h, metrics, typeColor) {
+  const cx = w / 2;
+  const cy = h / 2;
+  const maxR = Math.min(w, h) * 0.32;
+  const n = 8;
+
+  // Pulsing radius
+  const pulse = 1 + Math.sin(time * 1.5) * 0.02;
+
+  // Grid rings
+  for (let ring = 1; ring <= 4; ring++) {
+    const r = (ring / 4) * maxR;
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(30, 30, 46, 0.6)';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= n; i++) {
+      const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Axis lines
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(30, 30, 46, 0.4)';
+    ctx.lineWidth = 0.5;
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(angle) * maxR, cy + Math.sin(angle) * maxR);
+    ctx.stroke();
+  }
+
+  // Filled area with animated wave distortion
+  ctx.beginPath();
+  const fillPoints = [];
+  for (let i = 0; i <= n; i++) {
+    const idx = i % n;
+    const angle = (idx / n) * Math.PI * 2 - Math.PI / 2;
+    const v = metrics[idx];
+    const wave = Math.sin(time * 2 + idx * 0.8) * 0.03;
+    const r = (v + wave) * maxR * pulse;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    fillPoints.push([x, y]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+
+  // Fill gradient
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+  grad.addColorStop(0, hexAlpha(typeColor, 0.15));
+  grad.addColorStop(1, hexAlpha(typeColor, 0.03));
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Outline with glow
+  ctx.strokeStyle = typeColor;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = typeColor;
+  ctx.shadowBlur = 12;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Vertex dots and labels
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const v = metrics[i];
+    const wave = Math.sin(time * 2 + i * 0.8) * 0.03;
+    const r = (v + wave) * maxR * pulse;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+
+    // Dot
+    ctx.beginPath();
+    ctx.fillStyle = WAVE_COLORS[i];
+    ctx.shadowColor = WAVE_COLORS[i];
+    ctx.shadowBlur = 8;
+    ctx.arc(x, y, 3 + v * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Label
+    const labelR = maxR + 24;
+    const lx = cx + Math.cos(angle) * labelR;
+    const ly = cy + Math.sin(angle) * labelR;
+    ctx.fillStyle = WAVE_COLORS[i];
+    ctx.globalAlpha = 0.6;
+    ctx.font = '10px monospace';
+    ctx.textAlign = angle > Math.PI / 2 && angle < Math.PI * 1.5 ? 'right' :
+                    Math.abs(angle + Math.PI / 2) < 0.1 ? 'center' :
+                    Math.abs(angle - Math.PI / 2) < 0.1 ? 'center' : 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${METRIC_LABELS[i]} ${(v * 100).toFixed(0)}%`, lx, ly);
+    ctx.globalAlpha = 1;
+  }
+
+  // Heartbeat trail — trace the radar outline as a waveform below
+  const trailY = cy + maxR + 60;
+  const trailW = maxR * 2;
+  const trailLeft = cx - maxR;
+  ctx.beginPath();
+  ctx.strokeStyle = typeColor;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.5;
+  ctx.shadowColor = typeColor;
+  ctx.shadowBlur = 6;
+  for (let x = 0; x < trailW; x++) {
+    const t = x / trailW;
+    const metricIdx = Math.floor(t * n) % n;
+    const nextIdx = (metricIdx + 1) % n;
+    const localT = (t * n) % 1;
+    const val = metrics[metricIdx] * (1 - localT) + metrics[nextIdx] * localT;
+    const waveY = trailY - val * 40 + Math.sin(time * 3 + x * 0.05) * 3;
+    if (x === 0) ctx.moveTo(trailLeft + x, waveY);
+    else ctx.lineTo(trailLeft + x, waveY);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+
+function hexAlpha(hex, alpha) {
+  const a = Math.round(alpha * 255).toString(16).padStart(2, '0');
+  return hex + a;
+}
+
+init();
+</script>
+</body>
+</html>

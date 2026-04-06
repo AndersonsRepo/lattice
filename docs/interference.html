@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Interference</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Vignette */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(10,10,15,0.7) 100%);
+      z-index: 1;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 15, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 4rem;
+      color: var(--accent);
+      text-shadow: 0 0 60px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-title {
+      font-size: 1.8rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      color: var(--accent);
+      margin-top: 1rem;
+      text-transform: uppercase;
+    }
+    .start-sub {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      margin-top: 0.8rem;
+      letter-spacing: 0.1em;
+    }
+    .start-hint {
+      color: var(--text-dim);
+      font-size: 0.65rem;
+      margin-top: 2rem;
+      letter-spacing: 0.08em;
+      opacity: 0.6;
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 1; }
+    }
+
+    /* Control panel */
+    .panel {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      width: 280px;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      z-index: 10;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+    }
+    .panel.collapsed {
+      transform: translateX(calc(100% + 2rem));
+      opacity: 0;
+      pointer-events: none;
+    }
+    .panel-title {
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.8rem;
+    }
+    .panel-section {
+      margin-bottom: 0.8rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-section:last-child { border-bottom: none; }
+    .panel-label {
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.3rem;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
+    }
+    .slider-row label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      width: 80px;
+      flex-shrink: 0;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      height: 3px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+    .slider-row .val {
+      font-size: 0.55rem;
+      color: var(--green);
+      width: 32px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* Source pills */
+    .source-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.5rem;
+      margin-bottom: 0.3rem;
+      border-radius: 6px;
+      background: rgba(124, 111, 224, 0.08);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .source-pill.active { border-color: var(--accent); }
+    .source-pill .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .source-pill .info {
+      font-size: 0.6rem;
+      color: var(--text);
+      flex: 1;
+    }
+    .source-pill .remove {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 0 2px;
+    }
+    .source-pill .remove:hover { color: #ef4444; }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.4rem;
+    }
+    .btn {
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* Toggle pill */
+    .toggle-btn {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 11;
+      transition: opacity 0.3s;
+    }
+    .toggle-btn.hidden { opacity: 0; pointer-events: none; }
+
+    /* Back nav */
+    .back-link {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      z-index: 10;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    /* Preset bar */
+    .preset-bar {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.5rem;
+      z-index: 10;
+    }
+    .preset-btn {
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.7);
+      backdrop-filter: blur(8px);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .preset-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* FPS counter */
+    .fps {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      z-index: 10;
+      letter-spacing: 0.05em;
+    }
+
+    /* Scrollbar */
+    .panel::-webkit-scrollbar { width: 4px; }
+    .panel::-webkit-scrollbar-track { background: transparent; }
+    .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Mobile */
+    @media (max-width: 600px) {
+      .panel { width: calc(100vw - 2rem); right: 1rem; left: 1rem; }
+      .preset-bar { flex-wrap: wrap; width: calc(100vw - 2rem); justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="vignette"></div>
+
+  <!-- Start overlay -->
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">◎</div>
+    <div class="start-title">Interference</div>
+    <div class="start-sub">overlapping waves create patterns that don't exist in either source</div>
+    <div class="start-hint">click anywhere to begin — drag to move sources</div>
+  </div>
+
+  <!-- Back link -->
+  <a href="index.html" class="back-link">← lattice</a>
+
+  <!-- Toggle panel button -->
+  <div class="toggle-btn hidden" id="toggleBtn" title="Toggle panel (Tab)">☰</div>
+
+  <!-- Control panel -->
+  <div class="panel" id="panel">
+    <div class="panel-title">Wave Sources</div>
+
+    <div class="panel-section" id="sourceList"></div>
+
+    <div class="panel-section">
+      <div class="btn-row">
+        <button class="btn" id="addRings">+ Rings</button>
+        <button class="btn" id="addLines">+ Lines</button>
+        <button class="btn" id="addSpiral">+ Spiral</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Blend Mode</div>
+      <div class="btn-row" id="blendBtns">
+        <button class="btn active" data-blend="add">Add</button>
+        <button class="btn" data-blend="multiply">Multiply</button>
+        <button class="btn" data-blend="xor">XOR</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Global</div>
+      <div class="slider-row">
+        <label>Warp</label>
+        <input type="range" id="warp" min="0" max="100" value="0">
+        <span class="val" id="warpVal">0.00</span>
+      </div>
+      <div class="slider-row">
+        <label>Warp Freq</label>
+        <input type="range" id="warpFreq" min="50" max="400" value="150">
+        <span class="val" id="warpFreqVal">1.50</span>
+      </div>
+      <div class="slider-row">
+        <label>Animate</label>
+        <input type="range" id="speed" min="0" max="100" value="30">
+        <span class="val" id="speedVal">0.30</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Color</div>
+      <div class="btn-row" id="paletteBtns">
+        <button class="btn active" data-palette="purple">Purple</button>
+        <button class="btn" data-palette="green">Green</button>
+        <button class="btn" data-palette="fire">Fire</button>
+        <button class="btn" data-palette="ice">Ice</button>
+        <button class="btn" data-palette="mono">Mono</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="btn-row">
+        <button class="btn" id="randomize">Randomize (R)</button>
+        <button class="btn" id="invert">Invert (I)</button>
+        <button class="btn" id="exportPng">PNG (S)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Presets -->
+  <div class="preset-bar" id="presetBar">
+    <button class="preset-btn active" data-preset="classic">Classic Moiré</button>
+    <button class="preset-btn" data-preset="grating">Line Grating</button>
+    <button class="preset-btn" data-preset="spiral">Triple Spiral</button>
+    <button class="preset-btn" data-preset="digital">Digital XOR</button>
+    <button class="preset-btn" data-preset="hypnotic">Hypnotic</button>
+  </div>
+
+  <div class="fps" id="fps"></div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const startOverlay = document.getElementById('startOverlay');
+    const panel = document.getElementById('panel');
+    const toggleBtn = document.getElementById('toggleBtn');
+    const sourceListEl = document.getElementById('sourceList');
+
+    // --- Color palettes ---
+    const PALETTES = {
+      purple: ['#0a0a0f', '#1a1040', '#3b2080', '#7c6fe0', '#b8b0ff', '#e8e4ff'],
+      green:  ['#0a0f0a', '#0a2010', '#105030', '#2a9060', '#4ade80', '#b0ffd0'],
+      fire:   ['#0a0a0f', '#301008', '#802010', '#d04020', '#ff8040', '#ffe0a0'],
+      ice:    ['#0a0a12', '#0a1830', '#104060', '#2080b0', '#4ad4f5', '#c0f0ff'],
+      mono:   ['#0a0a0f', '#1a1a22', '#2e2e3a', '#505068', '#8888a0', '#c8c8d4'],
+    };
+
+    let currentPalette = 'purple';
+    let inverted = false;
+
+    // --- State ---
+    const SOURCE_COLORS = ['#7c6fe0', '#4ade80', '#fbbf24', '#ef4444', '#4ad4f5', '#f472b6'];
+
+    let sources = [];
+    let blend = 'add';
+    let warp = 0;
+    let warpFreq = 1.5;
+    let animSpeed = 0.3;
+    let animTime = 0;
+    let selectedSource = 0;
+    let panelVisible = true;
+    let dragging = null; // index of source being dragged
+    let running = false;
+
+    // --- Presets ---
+    const PRESETS = {
+      classic: {
+        sources: [
+          { type: 'rings', x: 0.45, y: 0.5, frequency: 18, phase: 0, angle: 0, amplitude: 1.0 },
+          { type: 'rings', x: 0.55, y: 0.5, frequency: 18, phase: 0, angle: 0, amplitude: 1.0 },
+        ],
+        blend: 'add', warp: 0, warpFreq: 1.5,
+      },
+      grating: {
+        sources: [
+          { type: 'lines', x: 0.5, y: 0.5, frequency: 15, phase: 0, angle: 0, amplitude: 1.0 },
+          { type: 'lines', x: 0.5, y: 0.5, frequency: 16, phase: 0, angle: 0.12, amplitude: 1.0 },
+        ],
+        blend: 'multiply', warp: 0, warpFreq: 1.5,
+      },
+      spiral: {
+        sources: [
+          { type: 'spiral', x: 0.5, y: 0.5, frequency: 12, phase: 0, angle: 0, amplitude: 1.0 },
+          { type: 'spiral', x: 0.4, y: 0.4, frequency: 14, phase: 1.2, angle: 0.5, amplitude: 0.8 },
+          { type: 'rings', x: 0.6, y: 0.5, frequency: 10, phase: 0, angle: 0, amplitude: 0.7 },
+        ],
+        blend: 'add', warp: 0.3, warpFreq: 2,
+      },
+      digital: {
+        sources: [
+          { type: 'lines', x: 0.5, y: 0.5, frequency: 20, phase: 0, angle: 0, amplitude: 1.0 },
+          { type: 'lines', x: 0.5, y: 0.5, frequency: 20, phase: 0, angle: Math.PI / 2, amplitude: 1.0 },
+          { type: 'rings', x: 0.5, y: 0.5, frequency: 8, phase: 0, angle: 0, amplitude: 0.6 },
+        ],
+        blend: 'xor', warp: 0.15, warpFreq: 1.5,
+      },
+      hypnotic: {
+        sources: [
+          { type: 'rings', x: 0.5, y: 0.5, frequency: 25, phase: 0, angle: 0, amplitude: 1.0 },
+          { type: 'spiral', x: 0.5, y: 0.5, frequency: 20, phase: 0, angle: 0, amplitude: 0.8 },
+          { type: 'lines', x: 0.5, y: 0.5, frequency: 12, phase: 0, angle: 0.3, amplitude: 0.6 },
+          { type: 'rings', x: 0.3, y: 0.7, frequency: 15, phase: 1.0, angle: 0, amplitude: 0.5 },
+        ],
+        blend: 'add', warp: 0.4, warpFreq: 2.5,
+      },
+    };
+
+    function loadPreset(name) {
+      const p = PRESETS[name];
+      if (!p) return;
+      sources = JSON.parse(JSON.stringify(p.sources));
+      blend = p.blend;
+      warp = p.warp;
+      warpFreq = p.warpFreq;
+      selectedSource = 0;
+
+      // Update UI
+      document.getElementById('warp').value = warp * 100;
+      document.getElementById('warpVal').textContent = warp.toFixed(2);
+      document.getElementById('warpFreq').value = warpFreq * 100;
+      document.getElementById('warpFreqVal').textContent = warpFreq.toFixed(2);
+      updateBlendUI();
+      updatePresetUI(name);
+      buildSourceList();
+    }
+
+    // --- Resize ---
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      ctx.scale(dpr, dpr);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- Wave computation ---
+    function computeWave(src, nx, ny, time) {
+      const dx = nx - src.x;
+      const dy = ny - src.y;
+      const freq = src.frequency * Math.PI * 2;
+      const ph = src.phase + time;
+
+      switch (src.type) {
+        case 'rings': {
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          return Math.cos(dist * freq + ph);
+        }
+        case 'lines': {
+          const projected = dx * Math.cos(src.angle) + dy * Math.sin(src.angle);
+          return Math.cos(projected * freq + ph);
+        }
+        case 'spiral': {
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx);
+          return Math.cos(dist * freq * 0.5 + angle * 3 + ph);
+        }
+      }
+      return 0;
+    }
+
+    // --- Render ---
+    // Use ImageData for performance
+    let imgData = null;
+
+    function renderFrame(time) {
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const pw = Math.floor(W * dpr);
+      const ph = Math.floor(H * dpr);
+
+      if (!imgData || imgData.width !== pw || imgData.height !== ph) {
+        imgData = ctx.createImageData(pw, ph);
+      }
+
+      const data = imgData.data;
+      const palette = PALETTES[currentPalette];
+      const numColors = palette.length;
+
+      // Parse palette into RGB
+      const colors = palette.map(hex => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return [r, g, b];
+      });
+
+      // For performance, sample at reduced resolution and upscale
+      const scale = dpr > 1.5 ? 2 : 1;
+      const sw = Math.floor(pw / scale);
+      const sh = Math.floor(ph / scale);
+
+      // Compute interference values
+      const buffer = new Float32Array(sw * sh);
+      let min = Infinity, max = -Infinity;
+
+      for (let sy = 0; sy < sh; sy++) {
+        for (let sx = 0; sx < sw; sx++) {
+          const nx = sx / sw;
+          const ny = sy / sh;
+
+          // Simple warp
+          let wnx = nx, wny = ny;
+          if (warp > 0) {
+            wnx += Math.sin(ny * warpFreq * Math.PI * 4 + time * 0.3) * warp * 0.08;
+            wny += Math.cos(nx * warpFreq * Math.PI * 4 + time * 0.2) * warp * 0.08;
+          }
+
+          let value = blend === 'multiply' ? 1 : 0;
+
+          for (const src of sources) {
+            const wave = computeWave(src, wnx, wny, time);
+            switch (blend) {
+              case 'add':
+                value += wave * src.amplitude;
+                break;
+              case 'multiply':
+                value *= 0.5 + wave * src.amplitude * 0.5;
+                break;
+              case 'xor':
+                value += (wave > 0 ? 1 : 0) * src.amplitude;
+                break;
+            }
+          }
+
+          buffer[sy * sw + sx] = value;
+          if (value < min) min = value;
+          if (value > max) max = value;
+        }
+      }
+
+      const range = max - min || 1;
+
+      // Write pixels
+      for (let py = 0; py < ph; py++) {
+        for (let px = 0; px < pw; px++) {
+          const sy = Math.floor(py / scale);
+          const sx = Math.floor(px / scale);
+          let normalized = (buffer[sy * sw + sx] - min) / range;
+          if (inverted) normalized = 1 - normalized;
+
+          // Smooth color interpolation
+          const t = normalized * (numColors - 1);
+          const ci = Math.min(Math.floor(t), numColors - 2);
+          const f = t - ci;
+          const c0 = colors[ci];
+          const c1 = colors[ci + 1];
+
+          const idx = (py * pw + px) * 4;
+          data[idx]     = c0[0] + (c1[0] - c0[0]) * f;
+          data[idx + 1] = c0[1] + (c1[1] - c0[1]) * f;
+          data[idx + 2] = c0[2] + (c1[2] - c0[2]) * f;
+          data[idx + 3] = 255;
+        }
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+
+      // Draw source indicators
+      ctx.save();
+      for (let i = 0; i < sources.length; i++) {
+        const src = sources[i];
+        const sx = src.x * W;
+        const sy = src.y * H;
+        const color = SOURCE_COLORS[i % SOURCE_COLORS.length];
+
+        ctx.beginPath();
+        ctx.arc(sx, sy, i === selectedSource ? 8 : 5, 0, Math.PI * 2);
+        ctx.fillStyle = color + '60';
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Direction indicator for lines
+        if (src.type === 'lines') {
+          const len = 15;
+          ctx.beginPath();
+          ctx.moveTo(sx - Math.cos(src.angle) * len, sy - Math.sin(src.angle) * len);
+          ctx.lineTo(sx + Math.cos(src.angle) * len, sy + Math.sin(src.angle) * len);
+          ctx.strokeStyle = color + '80';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    // --- Animation loop ---
+    let lastTime = 0;
+    let frameCount = 0;
+    let fpsTimer = 0;
+
+    function animate(ts) {
+      if (!running) return;
+      const dt = (ts - lastTime) / 1000;
+      lastTime = ts;
+      animTime += dt * animSpeed;
+
+      renderFrame(animTime);
+
+      // FPS
+      frameCount++;
+      fpsTimer += dt;
+      if (fpsTimer >= 1) {
+        document.getElementById('fps').textContent = Math.round(frameCount / fpsTimer) + ' fps';
+        frameCount = 0;
+        fpsTimer = 0;
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    // --- UI ---
+    function buildSourceList() {
+      sourceListEl.innerHTML = '';
+      sources.forEach((src, i) => {
+        const pill = document.createElement('div');
+        pill.className = 'source-pill' + (i === selectedSource ? ' active' : '');
+        pill.innerHTML = `
+          <div class="dot" style="background:${SOURCE_COLORS[i % SOURCE_COLORS.length]}"></div>
+          <div class="info">${src.type} f=${src.frequency.toFixed(1)}</div>
+          <div class="remove" data-idx="${i}">×</div>
+        `;
+        pill.addEventListener('click', (e) => {
+          if (e.target.classList.contains('remove')) {
+            if (sources.length > 1) {
+              sources.splice(i, 1);
+              if (selectedSource >= sources.length) selectedSource = sources.length - 1;
+              buildSourceList();
+              buildSourceEditor();
+            }
+            return;
+          }
+          selectedSource = i;
+          buildSourceList();
+          buildSourceEditor();
+        });
+        sourceListEl.appendChild(pill);
+      });
+
+      // Source editor below the list
+      buildSourceEditor();
+    }
+
+    function buildSourceEditor() {
+      let editor = document.getElementById('sourceEditor');
+      if (!editor) {
+        editor = document.createElement('div');
+        editor.id = 'sourceEditor';
+        editor.className = 'panel-section';
+        sourceListEl.parentNode.insertBefore(editor, sourceListEl.nextSibling);
+      }
+
+      const src = sources[selectedSource];
+      if (!src) { editor.innerHTML = ''; return; }
+
+      editor.innerHTML = `
+        <div class="panel-label">Source ${selectedSource + 1} — ${src.type}</div>
+        <div class="btn-row" style="margin-bottom:0.5rem">
+          <button class="btn ${src.type === 'rings' ? 'active' : ''}" data-stype="rings">Rings</button>
+          <button class="btn ${src.type === 'lines' ? 'active' : ''}" data-stype="lines">Lines</button>
+          <button class="btn ${src.type === 'spiral' ? 'active' : ''}" data-stype="spiral">Spiral</button>
+        </div>
+        <div class="slider-row">
+          <label>Frequency</label>
+          <input type="range" id="srcFreq" min="200" max="4000" value="${src.frequency * 100}">
+          <span class="val" id="srcFreqVal">${src.frequency.toFixed(1)}</span>
+        </div>
+        <div class="slider-row">
+          <label>Phase</label>
+          <input type="range" id="srcPhase" min="0" max="628" value="${Math.round(src.phase * 100)}">
+          <span class="val" id="srcPhaseVal">${src.phase.toFixed(2)}</span>
+        </div>
+        <div class="slider-row">
+          <label>Angle</label>
+          <input type="range" id="srcAngle" min="0" max="628" value="${Math.round(src.angle * 100)}">
+          <span class="val" id="srcAngleVal">${(src.angle * 180 / Math.PI).toFixed(0)}°</span>
+        </div>
+        <div class="slider-row">
+          <label>Amplitude</label>
+          <input type="range" id="srcAmp" min="30" max="150" value="${src.amplitude * 100}">
+          <span class="val" id="srcAmpVal">${src.amplitude.toFixed(2)}</span>
+        </div>
+      `;
+
+      // Type buttons
+      editor.querySelectorAll('[data-stype]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          sources[selectedSource].type = btn.dataset.stype;
+          buildSourceList();
+        });
+      });
+
+      // Sliders
+      const freq = editor.querySelector('#srcFreq');
+      const phase = editor.querySelector('#srcPhase');
+      const angle = editor.querySelector('#srcAngle');
+      const amp = editor.querySelector('#srcAmp');
+
+      freq?.addEventListener('input', () => {
+        src.frequency = parseInt(freq.value) / 100;
+        editor.querySelector('#srcFreqVal').textContent = src.frequency.toFixed(1);
+        buildSourceList(); // Update pill text
+      });
+      phase?.addEventListener('input', () => {
+        src.phase = parseInt(phase.value) / 100;
+        editor.querySelector('#srcPhaseVal').textContent = src.phase.toFixed(2);
+      });
+      angle?.addEventListener('input', () => {
+        src.angle = parseInt(angle.value) / 100;
+        editor.querySelector('#srcAngleVal').textContent = (src.angle * 180 / Math.PI).toFixed(0) + '°';
+      });
+      amp?.addEventListener('input', () => {
+        src.amplitude = parseInt(amp.value) / 100;
+        editor.querySelector('#srcAmpVal').textContent = src.amplitude.toFixed(2);
+      });
+    }
+
+    function updateBlendUI() {
+      document.querySelectorAll('#blendBtns .btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.blend === blend);
+      });
+    }
+
+    function updatePresetUI(name) {
+      document.querySelectorAll('.preset-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.preset === name);
+      });
+    }
+
+    function addSource(type) {
+      if (sources.length >= 6) return;
+      sources.push({
+        type,
+        x: 0.3 + Math.random() * 0.4,
+        y: 0.3 + Math.random() * 0.4,
+        frequency: 8 + Math.random() * 16,
+        phase: Math.random() * Math.PI * 2,
+        angle: Math.random() * Math.PI * 2,
+        amplitude: 0.5 + Math.random() * 0.5,
+      });
+      selectedSource = sources.length - 1;
+      buildSourceList();
+      updatePresetUI('');
+    }
+
+    function randomize() {
+      const numSources = 2 + Math.floor(Math.random() * 3);
+      const types = ['rings', 'lines', 'spiral'];
+      const blends = ['add', 'multiply', 'xor'];
+      sources = [];
+      for (let i = 0; i < numSources; i++) {
+        sources.push({
+          type: types[Math.floor(Math.random() * types.length)],
+          x: 0.2 + Math.random() * 0.6,
+          y: 0.2 + Math.random() * 0.6,
+          frequency: 4 + Math.random() * 28,
+          phase: Math.random() * Math.PI * 2,
+          angle: Math.random() * Math.PI * 2,
+          amplitude: 0.4 + Math.random() * 0.8,
+        });
+      }
+      blend = blends[Math.floor(Math.random() * blends.length)];
+      warp = Math.random() * 0.6;
+      warpFreq = 0.8 + Math.random() * 2.5;
+      selectedSource = 0;
+
+      document.getElementById('warp').value = warp * 100;
+      document.getElementById('warpVal').textContent = warp.toFixed(2);
+      document.getElementById('warpFreq').value = warpFreq * 100;
+      document.getElementById('warpFreqVal').textContent = warpFreq.toFixed(2);
+      updateBlendUI();
+      updatePresetUI('');
+      buildSourceList();
+    }
+
+    function exportPng() {
+      const link = document.createElement('a');
+      link.download = 'lattice-interference-' + Date.now() + '.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // --- Event listeners ---
+
+    // Start
+    startOverlay.addEventListener('click', () => {
+      startOverlay.classList.add('hidden');
+      running = true;
+      lastTime = performance.now();
+      loadPreset('classic');
+      requestAnimationFrame(animate);
+    });
+
+    // Panel toggle
+    toggleBtn.addEventListener('click', () => {
+      panelVisible = !panelVisible;
+      panel.classList.toggle('collapsed', !panelVisible);
+      toggleBtn.classList.toggle('hidden', panelVisible);
+    });
+
+    // Add sources
+    document.getElementById('addRings').addEventListener('click', () => addSource('rings'));
+    document.getElementById('addLines').addEventListener('click', () => addSource('lines'));
+    document.getElementById('addSpiral').addEventListener('click', () => addSource('spiral'));
+
+    // Blend buttons
+    document.querySelectorAll('#blendBtns .btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        blend = btn.dataset.blend;
+        updateBlendUI();
+        updatePresetUI('');
+      });
+    });
+
+    // Palette buttons
+    document.querySelectorAll('#paletteBtns .btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentPalette = btn.dataset.palette;
+        document.querySelectorAll('#paletteBtns .btn').forEach(b =>
+          b.classList.toggle('active', b.dataset.palette === currentPalette));
+      });
+    });
+
+    // Preset buttons
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => loadPreset(btn.dataset.preset));
+    });
+
+    // Global sliders
+    document.getElementById('warp').addEventListener('input', (e) => {
+      warp = parseInt(e.target.value) / 100;
+      document.getElementById('warpVal').textContent = warp.toFixed(2);
+      updatePresetUI('');
+    });
+    document.getElementById('warpFreq').addEventListener('input', (e) => {
+      warpFreq = parseInt(e.target.value) / 100;
+      document.getElementById('warpFreqVal').textContent = warpFreq.toFixed(2);
+      updatePresetUI('');
+    });
+    document.getElementById('speed').addEventListener('input', (e) => {
+      animSpeed = parseInt(e.target.value) / 100;
+      document.getElementById('speedVal').textContent = animSpeed.toFixed(2);
+    });
+
+    // Action buttons
+    document.getElementById('randomize').addEventListener('click', randomize);
+    document.getElementById('invert').addEventListener('click', () => { inverted = !inverted; });
+    document.getElementById('exportPng').addEventListener('click', exportPng);
+
+    // Drag sources
+    canvas.addEventListener('mousedown', (e) => {
+      if (!running) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) / rect.width;
+      const my = (e.clientY - rect.top) / rect.height;
+
+      // Find closest source
+      let closest = -1, closestDist = 0.03;
+      for (let i = 0; i < sources.length; i++) {
+        const dx = sources[i].x - mx;
+        const dy = sources[i].y - my;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = i;
+        }
+      }
+      if (closest >= 0) {
+        dragging = closest;
+        selectedSource = closest;
+        buildSourceList();
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (dragging === null) return;
+      const rect = canvas.getBoundingClientRect();
+      sources[dragging].x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      sources[dragging].y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+      updatePresetUI('');
+    });
+
+    canvas.addEventListener('mouseup', () => { dragging = null; });
+    canvas.addEventListener('mouseleave', () => { dragging = null; });
+
+    // Touch support
+    canvas.addEventListener('touchstart', (e) => {
+      if (!running) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const mx = (touch.clientX - rect.left) / rect.width;
+      const my = (touch.clientY - rect.top) / rect.height;
+
+      let closest = -1, closestDist = 0.05;
+      for (let i = 0; i < sources.length; i++) {
+        const dx = sources[i].x - mx;
+        const dy = sources[i].y - my;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = i;
+        }
+      }
+      if (closest >= 0) {
+        dragging = closest;
+        selectedSource = closest;
+        buildSourceList();
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (dragging === null) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      sources[dragging].x = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+      sources[dragging].y = Math.max(0, Math.min(1, (touch.clientY - rect.top) / rect.height));
+      updatePresetUI('');
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', () => { dragging = null; });
+
+    // Keyboard
+    document.addEventListener('keydown', (e) => {
+      if (!running) return;
+      switch (e.key) {
+        case 'Tab':
+          e.preventDefault();
+          panelVisible = !panelVisible;
+          panel.classList.toggle('collapsed', !panelVisible);
+          toggleBtn.classList.toggle('hidden', panelVisible);
+          break;
+        case 'r': case 'R': randomize(); break;
+        case 'i': case 'I': inverted = !inverted; break;
+        case 's': case 'S': exportPng(); break;
+        case ' ':
+          e.preventDefault();
+          animSpeed = animSpeed > 0 ? 0 : 0.3;
+          document.getElementById('speed').value = animSpeed * 100;
+          document.getElementById('speedVal').textContent = animSpeed.toFixed(2);
+          break;
+        case '1': loadPreset('classic'); break;
+        case '2': loadPreset('grating'); break;
+        case '3': loadPreset('spiral'); break;
+        case '4': loadPreset('digital'); break;
+        case '5': loadPreset('hypnotic'); break;
+      }
+    });
+  </script>
+</body>
+</html>

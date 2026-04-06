@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flame — Fractal Flame Explorer</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --flame-orange: #ff6b35;
+      --flame-red: #ef4444;
+      --flame-gold: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #050508;
+    }
+
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    .canvas-info {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+
+    .canvas-info .iter-count { color: var(--flame-gold); }
+    .canvas-info .fps { color: var(--green); }
+
+    /* Vignette overlay */
+    .canvas-area::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(5,5,8,0.7) 100%);
+    }
+
+    .sidebar {
+      width: 340px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .sidebar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .sidebar-header h1 {
+      font-size: 1.3rem;
+      font-weight: 300;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, var(--flame-orange), var(--flame-gold));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .back-link {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.7rem;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    .section-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      margin-bottom: 0.4rem;
+    }
+
+    /* Variation selector */
+    .variation-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+    }
+
+    .variation-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.55rem;
+      padding: 4px 2px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      text-align: center;
+      line-height: 1.2;
+    }
+    .variation-btn:hover { border-color: var(--accent); color: var(--text); }
+    .variation-btn.active {
+      border-color: var(--flame-orange);
+      color: var(--flame-orange);
+      background: rgba(255, 107, 53, 0.1);
+      box-shadow: 0 0 8px rgba(255, 107, 53, 0.2);
+    }
+
+    /* Transform cards */
+    .transform-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem;
+      position: relative;
+    }
+
+    .transform-card .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.4rem;
+    }
+
+    .transform-card .card-label {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .transform-card .remove-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 0 4px;
+      font-family: inherit;
+    }
+    .transform-card .remove-btn:hover { color: var(--flame-red); }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 3px;
+    }
+
+    .slider-row label {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      width: 16px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      height: 3px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--flame-orange);
+      cursor: pointer;
+    }
+
+    .slider-row .val {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      width: 32px;
+      text-align: left;
+      flex-shrink: 0;
+    }
+
+    /* Preset grid */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+    }
+
+    .preset-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.6rem;
+      padding: 6px 4px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+    .preset-btn:hover {
+      border-color: var(--flame-gold);
+      color: var(--flame-gold);
+    }
+
+    /* Actions */
+    .action-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.7rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover { border-color: var(--accent); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--flame-orange), var(--flame-gold));
+      color: #0a0a0f;
+      border-color: transparent;
+      font-weight: 600;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+
+    /* Controls section */
+    .controls-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .symmetry-btns {
+      display: flex;
+      gap: 4px;
+    }
+
+    .sym-btn {
+      flex: 1;
+      padding: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sym-btn:hover { border-color: var(--accent); color: var(--text); }
+    .sym-btn.active {
+      border-color: var(--flame-orange);
+      color: var(--flame-orange);
+      background: rgba(255, 107, 53, 0.1);
+    }
+
+    .shortcuts {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+      border-top: 1px solid var(--border);
+      padding-top: 0.6rem;
+    }
+    .shortcuts kbd {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 0.55rem;
+      color: var(--flame-orange);
+    }
+
+    /* Color scheme selector */
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+    }
+
+    .color-btn {
+      height: 24px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .color-btn:hover { border-color: var(--text); transform: scale(1.05); }
+    .color-btn.active { border-color: var(--flame-orange); box-shadow: 0 0 8px rgba(255, 107, 53, 0.3); }
+
+    .progress-bar {
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--flame-orange), var(--flame-gold));
+      transition: width 0.3s;
+      width: 0%;
+    }
+
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      .sidebar { width: 100%; height: 50vh; border-left: none; border-top: 1px solid var(--border); }
+      .canvas-area { height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas-area">
+    <canvas id="canvas"></canvas>
+    <div class="canvas-info">
+      <span class="iter-count" id="info-iters">0 iterations</span>
+      &nbsp;&middot;&nbsp;
+      <span class="fps" id="info-fps">0 fps</span>
+      &nbsp;&middot;&nbsp;
+      <span id="info-density">0% density</span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Flame</h1>
+      <a href="index.html" class="back-link">&larr; back</a>
+    </div>
+
+    <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+
+    <div class="controls-section">
+      <div class="section-label">Presets</div>
+      <div class="preset-grid" id="presets"></div>
+    </div>
+
+    <div class="controls-section">
+      <div class="section-label">Symmetry</div>
+      <div class="symmetry-btns" id="symmetry-btns"></div>
+    </div>
+
+    <div class="controls-section">
+      <div class="section-label">Color Palette</div>
+      <div class="color-grid" id="color-grid"></div>
+    </div>
+
+    <div class="controls-section">
+      <div class="section-label">Global</div>
+      <div class="slider-row">
+        <label>&#947;</label>
+        <input type="range" id="gamma" min="0.5" max="5" step="0.1" value="2.2">
+        <span class="val" id="gamma-val">2.2</span>
+      </div>
+      <div class="slider-row">
+        <label>Z</label>
+        <input type="range" id="zoom" min="0.3" max="4" step="0.05" value="1.5">
+        <span class="val" id="zoom-val">1.5</span>
+      </div>
+      <div class="slider-row">
+        <label>&#8734;</label>
+        <input type="range" id="quality" min="50000" max="2000000" step="50000" value="500000">
+        <span class="val" id="quality-val">500K</span>
+      </div>
+    </div>
+
+    <div class="controls-section">
+      <div class="section-label">Transforms <button class="btn" id="btn-add-xform" style="padding:2px 8px;font-size:0.55rem;">+ Add</button></div>
+      <div id="transform-list"></div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn btn-primary" id="btn-randomize">Randomize</button>
+      <button class="btn" id="btn-mutate">Mutate</button>
+    </div>
+    <div class="action-row">
+      <button class="btn" id="btn-download">Download PNG</button>
+    </div>
+
+    <div class="shortcuts">
+      <kbd>R</kbd> Randomize
+      <kbd>M</kbd> Mutate
+      <kbd>S</kbd> Save PNG
+      <kbd>1</kbd>-<kbd>6</kbd> Symmetry
+      <kbd>Space</kbd> Re-render
+    </div>
+  </div>
+
+  <script>
+    // --- PRNG ---
+    function mulberry32(seed) {
+      let s = seed | 0;
+      return () => {
+        s = (s + 0x6d2b79f5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    // --- Variation Functions ---
+    const variations = [
+      { name: 'Linear',    fn: (x, y) => [x, y] },
+      { name: 'Sinusoidal', fn: (x, y) => [Math.sin(x), Math.sin(y)] },
+      { name: 'Spherical', fn: (x, y) => { const r2 = x*x + y*y + 1e-10; return [x/r2, y/r2]; } },
+      { name: 'Swirl',     fn: (x, y) => { const r2 = x*x+y*y; return [x*Math.sin(r2)-y*Math.cos(r2), x*Math.cos(r2)+y*Math.sin(r2)]; } },
+      { name: 'Horseshoe', fn: (x, y) => { const r = Math.sqrt(x*x+y*y)+1e-10; return [(x-y)*(x+y)/r, 2*x*y/r]; } },
+      { name: 'Polar',     fn: (x, y) => [Math.atan2(y,x)/Math.PI, Math.sqrt(x*x+y*y)-1] },
+      { name: 'Handkerchief', fn: (x, y) => { const t = Math.atan2(y,x), r = Math.sqrt(x*x+y*y); return [r*Math.sin(t+r), r*Math.cos(t-r)]; } },
+      { name: 'Heart',     fn: (x, y) => { const t = Math.atan2(y,x), r = Math.sqrt(x*x+y*y); return [r*Math.sin(t*r), -r*Math.cos(t*r)]; } },
+      { name: 'Disc',      fn: (x, y) => { const t = Math.atan2(y,x)/Math.PI, r = Math.sqrt(x*x+y*y); return [t*Math.sin(Math.PI*r), t*Math.cos(Math.PI*r)]; } },
+      { name: 'Spiral',    fn: (x, y) => { const t = Math.atan2(y,x), r = Math.sqrt(x*x+y*y)+1e-10; return [(Math.cos(t)+Math.sin(r))/r, (Math.sin(t)-Math.cos(r))/r]; } },
+    ];
+
+    // --- Color Palettes ---
+    const palettes = [
+      { name: 'Inferno',   colors: [[0,0,0],[0.5,0,0.3],[1,0.2,0],[1,0.6,0],[1,1,0.5]] },
+      { name: 'Aurora',    colors: [[0,0,0.1],[0.1,0,0.4],[0.3,0.1,0.7],[0.2,0.7,0.5],[0.5,1,0.7]] },
+      { name: 'Ember',     colors: [[0.05,0,0],[0.4,0,0],[0.8,0.15,0],[1,0.5,0.1],[1,0.9,0.6]] },
+      { name: 'Void',      colors: [[0,0,0],[0.15,0.05,0.25],[0.3,0.1,0.5],[0.5,0.2,0.8],[0.8,0.5,1]] },
+      { name: 'Ocean',     colors: [[0,0.02,0.05],[0,0.1,0.3],[0,0.3,0.5],[0.1,0.6,0.7],[0.5,0.9,1]] },
+      { name: 'Verdant',   colors: [[0,0.02,0],[0,0.15,0.05],[0.05,0.4,0.1],[0.2,0.7,0.15],[0.5,1,0.5]] },
+      { name: 'Crimson',   colors: [[0.05,0,0],[0.3,0,0.05],[0.6,0.05,0.1],[0.9,0.2,0.15],[1,0.6,0.5]] },
+      { name: 'Spectrum',  colors: [[0.1,0,0.2],[0.2,0,0.6],[0,0.4,0.8],[0.2,0.8,0.4],[1,0.9,0.2]] },
+    ];
+
+    // --- Presets ---
+    const presets = [
+      { name: 'Sierpinski', transforms: [
+        { a: 0.5, b: 0, c: -0.5, d: 0, e: 0.5, f: -0.5, variation: 0, weight: 1, color: 0 },
+        { a: 0.5, b: 0, c: 0.5, d: 0, e: 0.5, f: -0.5, variation: 1, weight: 1, color: 0.5 },
+        { a: 0.5, b: 0, c: 0, d: 0, e: 0.5, f: 0.5, variation: 0, weight: 1, color: 1 },
+      ], symmetry: 1, gamma: 2.0, zoom: 1.5 },
+      { name: 'Vortex', transforms: [
+        { a: 0.8, b: 0.2, c: 0, d: -0.2, e: 0.8, f: 0, variation: 3, weight: 1, color: 0.2 },
+        { a: -0.5, b: 0.5, c: 0.1, d: 0.5, e: 0.5, f: -0.1, variation: 1, weight: 0.8, color: 0.7 },
+        { a: 0.3, b: -0.3, c: -0.2, d: 0.3, e: 0.3, f: 0.2, variation: 2, weight: 0.6, color: 0.9 },
+      ], symmetry: 1, gamma: 2.5, zoom: 1.2 },
+      { name: 'Flower', transforms: [
+        { a: 0.6, b: 0.3, c: 0, d: -0.3, e: 0.6, f: 0, variation: 6, weight: 1, color: 0.3 },
+        { a: -0.4, b: 0.5, c: 0, d: -0.5, e: -0.4, f: 0, variation: 7, weight: 0.7, color: 0.8 },
+      ], symmetry: 4, gamma: 2.0, zoom: 1.8 },
+      { name: 'Galaxy', transforms: [
+        { a: 0.7, b: 0.4, c: 0, d: -0.4, e: 0.7, f: 0, variation: 9, weight: 1, color: 0.1 },
+        { a: 0.3, b: -0.6, c: 0, d: 0.6, e: 0.3, f: 0, variation: 5, weight: 0.8, color: 0.6 },
+        { a: -0.2, b: 0.2, c: 0.1, d: -0.2, e: -0.2, f: 0.1, variation: 4, weight: 0.5, color: 1 },
+      ], symmetry: 2, gamma: 2.2, zoom: 1.4 },
+      { name: 'Tendrils', transforms: [
+        { a: 0.5, b: 0.3, c: 0, d: -0.3, e: 0.5, f: 0, variation: 8, weight: 1, color: 0.4 },
+        { a: 0.7, b: -0.2, c: 0.1, d: 0.2, e: 0.7, f: -0.1, variation: 1, weight: 1.2, color: 0.7 },
+        { a: -0.3, b: 0.4, c: 0, d: -0.4, e: -0.3, f: 0, variation: 3, weight: 0.5, color: 0.9 },
+      ], symmetry: 3, gamma: 2.0, zoom: 1.6 },
+      { name: 'Phoenix', transforms: [
+        { a: 0.7, b: 0.1, c: 0, d: -0.1, e: 0.7, f: 0, variation: 7, weight: 1, color: 0.15 },
+        { a: -0.6, b: 0.3, c: 0, d: -0.3, e: -0.6, f: 0, variation: 6, weight: 0.9, color: 0.55 },
+        { a: 0.4, b: -0.4, c: 0, d: 0.4, e: 0.4, f: 0, variation: 9, weight: 0.7, color: 0.85 },
+        { a: 0.2, b: 0.6, c: 0, d: -0.6, e: 0.2, f: 0, variation: 2, weight: 0.5, color: 1 },
+      ], symmetry: 1, gamma: 2.8, zoom: 1.3 },
+      { name: 'Nautilus', transforms: [
+        { a: 0.85, b: 0.15, c: 0, d: -0.15, e: 0.85, f: 0, variation: 9, weight: 1, color: 0.1 },
+        { a: 0.3, b: 0, c: 0.5, d: 0, e: 0.3, f: 0, variation: 1, weight: 0.6, color: 0.5 },
+        { a: -0.3, b: 0.3, c: 0, d: -0.3, e: -0.3, f: 0.3, variation: 5, weight: 0.4, color: 0.9 },
+      ], symmetry: 1, gamma: 3.0, zoom: 1.0 },
+      { name: 'Crown', transforms: [
+        { a: 0.5, b: 0.3, c: 0, d: -0.3, e: 0.5, f: 0, variation: 4, weight: 1, color: 0.2 },
+        { a: -0.5, b: 0.3, c: 0, d: -0.3, e: -0.5, f: 0, variation: 4, weight: 1, color: 0.8 },
+      ], symmetry: 5, gamma: 2.0, zoom: 2.0 },
+      { name: 'Nebula', transforms: [
+        { a: 0.6, b: 0.4, c: 0, d: -0.4, e: 0.6, f: 0, variation: 2, weight: 1, color: 0.1 },
+        { a: 0.4, b: -0.5, c: 0.1, d: 0.5, e: 0.4, f: -0.1, variation: 3, weight: 0.9, color: 0.4 },
+        { a: -0.3, b: 0.2, c: 0, d: -0.2, e: -0.3, f: 0, variation: 8, weight: 0.6, color: 0.7 },
+        { a: 0.15, b: -0.15, c: 0, d: 0.15, e: 0.15, f: 0, variation: 1, weight: 0.4, color: 1 },
+      ], symmetry: 1, gamma: 3.5, zoom: 1.1 },
+    ];
+
+    // --- State ---
+    let state = {
+      transforms: JSON.parse(JSON.stringify(presets[0].transforms)),
+      symmetry: 1,
+      gamma: 2.2,
+      zoom: 1.5,
+      quality: 500000,
+      paletteIdx: 0,
+    };
+
+    // --- Canvas setup ---
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+
+    function resize() {
+      const area = canvas.parentElement;
+      W = Math.min(area.clientWidth, 1200);
+      H = Math.min(area.clientHeight, 1200);
+      // Keep square-ish aspect for best flame rendering
+      const size = Math.min(W, H);
+      canvas.width = size;
+      canvas.height = size;
+      canvas.style.width = size + 'px';
+      canvas.style.height = size + 'px';
+    }
+
+    // --- Rendering Engine ---
+    let hist = null;
+    let colorHist = null;
+    let rendering = false;
+    let currentIters = 0;
+    let totalTarget = 0;
+    let animFrame = null;
+
+    function renderFlame() {
+      if (rendering) {
+        cancelAnimationFrame(animFrame);
+        rendering = false;
+      }
+
+      const size = canvas.width;
+      hist = new Float64Array(size * size);
+      colorHist = new Float64Array(size * size);
+      currentIters = 0;
+      totalTarget = state.quality;
+      rendering = true;
+
+      const transforms = state.transforms;
+      const symmetry = state.symmetry;
+      const zoom = state.zoom;
+
+      // Build cumulative weight table
+      let totalWeight = 0;
+      const cumWeights = [];
+      for (const t of transforms) {
+        totalWeight += t.weight;
+        cumWeights.push(totalWeight);
+      }
+
+      const rng = mulberry32(Date.now() & 0xFFFFFF);
+
+      const pickTransform = () => {
+        const r = rng() * totalWeight;
+        for (let i = 0; i < cumWeights.length; i++) {
+          if (r <= cumWeights[i]) return i;
+        }
+        return transforms.length - 1;
+      };
+
+      let px = rng() * 2 - 1;
+      let py = rng() * 2 - 1;
+      let pc = rng();
+
+      // Warm up
+      for (let i = 0; i < 20; i++) {
+        const ti = pickTransform();
+        const t = transforms[ti];
+        const nx = t.a * px + t.b * py + t.c;
+        const ny = t.d * px + t.e * py + t.f;
+        const v = variations[t.variation % variations.length].fn;
+        [px, py] = v(nx, ny);
+        pc = (pc + t.color) / 2;
+      }
+
+      const CHUNK = 25000;
+      let lastFrameTime = performance.now();
+      let fps = 0;
+
+      function chunk() {
+        if (!rendering) return;
+        const itersThisChunk = Math.min(CHUNK, totalTarget - currentIters);
+
+        for (let i = 0; i < itersThisChunk; i++) {
+          const ti = pickTransform();
+          const t = transforms[ti];
+          const ax = t.a * px + t.b * py + t.c;
+          const ay = t.d * px + t.e * py + t.f;
+          const v = variations[t.variation % variations.length].fn;
+          [px, py] = v(ax, ay);
+          pc = (pc + t.color) / 2;
+
+          // Plot point
+          const plotPoint = (x, y, c) => {
+            const gx = ((x / zoom + 1) * 0.5 * size) | 0;
+            const gy = ((y / zoom + 1) * 0.5 * size) | 0;
+            if (gx >= 0 && gx < size && gy >= 0 && gy < size) {
+              const idx = gy * size + gx;
+              hist[idx] += 1;
+              colorHist[idx] += c;
+            }
+          };
+
+          plotPoint(px, py, pc);
+
+          if (symmetry > 1) {
+            const step = (2 * Math.PI) / symmetry;
+            for (let s = 1; s < symmetry; s++) {
+              const angle = step * s;
+              const cos = Math.cos(angle), sin = Math.sin(angle);
+              plotPoint(px * cos - py * sin, px * sin + py * cos, pc);
+            }
+          }
+
+          // Escape detection
+          if (!isFinite(px) || !isFinite(py) || Math.abs(px) > 1e6 || Math.abs(py) > 1e6) {
+            px = rng() * 2 - 1;
+            py = rng() * 2 - 1;
+            pc = rng();
+          }
+        }
+
+        currentIters += itersThisChunk;
+
+        // Draw current state
+        drawHistogram();
+
+        // Update stats
+        const now = performance.now();
+        fps = Math.round(1000 / (now - lastFrameTime));
+        lastFrameTime = now;
+        const filled = hist.reduce((a, v) => a + (v > 0 ? 1 : 0), 0);
+        const density = (filled / (size * size) * 100).toFixed(1);
+        document.getElementById('info-iters').textContent = formatNumber(currentIters) + ' iterations';
+        document.getElementById('info-fps').textContent = fps + ' fps';
+        document.getElementById('info-density').textContent = density + '% density';
+        document.getElementById('progress').style.width = (currentIters / totalTarget * 100) + '%';
+
+        if (currentIters < totalTarget) {
+          animFrame = requestAnimationFrame(chunk);
+        } else {
+          rendering = false;
+          document.getElementById('progress').style.width = '100%';
+        }
+      }
+
+      animFrame = requestAnimationFrame(chunk);
+    }
+
+    function drawHistogram() {
+      const size = canvas.width;
+      const gamma = state.gamma;
+      const pal = palettes[state.paletteIdx].colors;
+      const img = ctx.createImageData(size, size);
+      const data = img.data;
+
+      // Find max density
+      let maxDensity = 0;
+      for (let i = 0; i < hist.length; i++) {
+        if (hist[i] > maxDensity) maxDensity = hist[i];
+      }
+      const logMax = Math.log(maxDensity + 1);
+      if (logMax === 0) { ctx.putImageData(img, 0, 0); return; }
+
+      for (let i = 0; i < hist.length; i++) {
+        if (hist[i] > 0) {
+          const logDensity = Math.log(hist[i] + 1) / logMax;
+          const brightness = Math.pow(logDensity, 1 / gamma);
+          const colorIdx = hist[i] > 0 ? colorHist[i] / hist[i] : 0;
+
+          // Sample palette
+          const t = Math.max(0, Math.min(1, colorIdx)) * (pal.length - 1);
+          const lo = Math.floor(t);
+          const hi = Math.min(lo + 1, pal.length - 1);
+          const f = t - lo;
+          const r = (pal[lo][0] * (1 - f) + pal[hi][0] * f) * brightness;
+          const g = (pal[lo][1] * (1 - f) + pal[hi][1] * f) * brightness;
+          const b = (pal[lo][2] * (1 - f) + pal[hi][2] * f) * brightness;
+
+          const pi = i * 4;
+          data[pi]     = Math.min(255, r * 255) | 0;
+          data[pi + 1] = Math.min(255, g * 255) | 0;
+          data[pi + 2] = Math.min(255, b * 255) | 0;
+          data[pi + 3] = 255;
+        }
+      }
+
+      ctx.putImageData(img, 0, 0);
+    }
+
+    function formatNumber(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(0) + 'K';
+      return n.toString();
+    }
+
+    // --- UI: Presets ---
+    const presetsEl = document.getElementById('presets');
+    presets.forEach((p, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'preset-btn';
+      btn.textContent = p.name;
+      btn.onclick = () => loadPreset(i);
+      presetsEl.appendChild(btn);
+    });
+
+    function loadPreset(i) {
+      const p = presets[i];
+      state.transforms = JSON.parse(JSON.stringify(p.transforms));
+      state.symmetry = p.symmetry;
+      state.gamma = p.gamma;
+      state.zoom = p.zoom;
+      syncUI();
+      renderFlame();
+    }
+
+    // --- UI: Symmetry ---
+    const symEl = document.getElementById('symmetry-btns');
+    for (let s = 1; s <= 6; s++) {
+      const btn = document.createElement('button');
+      btn.className = 'sym-btn' + (s === 1 ? ' active' : '');
+      btn.textContent = s === 1 ? 'None' : s + '-fold';
+      btn.dataset.sym = s;
+      btn.onclick = () => {
+        state.symmetry = s;
+        symEl.querySelectorAll('.sym-btn').forEach(b => b.classList.toggle('active', +b.dataset.sym === s));
+        renderFlame();
+      };
+      symEl.appendChild(btn);
+    }
+
+    // --- UI: Color Palettes ---
+    const colorGrid = document.getElementById('color-grid');
+    palettes.forEach((p, i) => {
+      const btn = document.createElement('div');
+      btn.className = 'color-btn' + (i === 0 ? ' active' : '');
+      btn.title = p.name;
+      const colors = p.colors;
+      const stops = colors.map((c, j) => {
+        const pct = (j / (colors.length - 1)) * 100;
+        return `rgb(${c[0]*255|0},${c[1]*255|0},${c[2]*255|0}) ${pct}%`;
+      }).join(', ');
+      btn.style.background = `linear-gradient(135deg, ${stops})`;
+      btn.onclick = () => {
+        state.paletteIdx = i;
+        colorGrid.querySelectorAll('.color-btn').forEach(b => b.classList.toggle('active', b === btn));
+        if (hist) drawHistogram(); // Redraw without re-computing
+      };
+      colorGrid.appendChild(btn);
+    });
+
+    // --- UI: Global sliders ---
+    const gammaSlider = document.getElementById('gamma');
+    const zoomSlider = document.getElementById('zoom');
+    const qualitySlider = document.getElementById('quality');
+
+    gammaSlider.oninput = () => {
+      state.gamma = +gammaSlider.value;
+      document.getElementById('gamma-val').textContent = state.gamma.toFixed(1);
+      if (hist) drawHistogram();
+    };
+
+    zoomSlider.oninput = () => {
+      state.zoom = +zoomSlider.value;
+      document.getElementById('zoom-val').textContent = state.zoom.toFixed(2);
+      renderFlame();
+    };
+
+    qualitySlider.oninput = () => {
+      state.quality = +qualitySlider.value;
+      document.getElementById('quality-val').textContent = formatNumber(state.quality);
+    };
+
+    // --- UI: Transform list ---
+    function buildTransformUI() {
+      const list = document.getElementById('transform-list');
+      list.innerHTML = '';
+
+      state.transforms.forEach((t, idx) => {
+        const card = document.createElement('div');
+        card.className = 'transform-card';
+
+        const varName = variations[t.variation % variations.length].name;
+        const colorHue = Math.round(t.color * 360);
+
+        card.innerHTML = `
+          <div class="card-header">
+            <span class="card-label" style="color: hsl(${colorHue}, 70%, 65%);">T${idx + 1}: ${varName}</span>
+            ${state.transforms.length > 2 ? '<button class="remove-btn" data-idx="' + idx + '">&times;</button>' : ''}
+          </div>
+          <div class="slider-row">
+            <label>V</label>
+            <select class="var-select" data-idx="${idx}" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:0.6rem;padding:2px;">
+              ${variations.map((v, vi) => `<option value="${vi}" ${vi === t.variation ? 'selected' : ''}>${v.name}</option>`).join('')}
+            </select>
+          </div>
+          ${makeSlider('a', idx, t.a, -2, 2, 0.05)}
+          ${makeSlider('b', idx, t.b, -2, 2, 0.05)}
+          ${makeSlider('c', idx, t.c, -1, 1, 0.05)}
+          ${makeSlider('d', idx, t.d, -2, 2, 0.05)}
+          ${makeSlider('e', idx, t.e, -2, 2, 0.05)}
+          ${makeSlider('f', idx, t.f, -1, 1, 0.05)}
+          ${makeSlider('w', idx, t.weight, 0.1, 2, 0.05)}
+          <div class="slider-row">
+            <label>C</label>
+            <input type="range" class="xform-slider" data-idx="${idx}" data-key="color" min="0" max="1" step="0.02" value="${t.color}">
+            <span class="val">${t.color.toFixed(2)}</span>
+          </div>
+        `;
+
+        list.appendChild(card);
+      });
+
+      // Event delegation
+      list.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.onclick = () => {
+          state.transforms.splice(+btn.dataset.idx, 1);
+          buildTransformUI();
+          renderFlame();
+        };
+      });
+
+      list.querySelectorAll('.var-select').forEach(sel => {
+        sel.onchange = () => {
+          state.transforms[+sel.dataset.idx].variation = +sel.value;
+          buildTransformUI();
+          renderFlame();
+        };
+      });
+
+      list.querySelectorAll('.xform-slider').forEach(slider => {
+        slider.oninput = () => {
+          const idx = +slider.dataset.idx;
+          const key = slider.dataset.key;
+          state.transforms[idx][key] = +slider.value;
+          slider.nextElementSibling.textContent = (+slider.value).toFixed(2);
+          renderFlame();
+        };
+      });
+    }
+
+    function makeSlider(key, idx, value, min, max, step) {
+      return `<div class="slider-row">
+        <label>${key}</label>
+        <input type="range" class="xform-slider" data-idx="${idx}" data-key="${key === 'w' ? 'weight' : key}" min="${min}" max="${max}" step="${step}" value="${value}">
+        <span class="val">${value.toFixed(2)}</span>
+      </div>`;
+    }
+
+    // --- Add transform ---
+    document.getElementById('btn-add-xform').onclick = () => {
+      if (state.transforms.length >= 5) return;
+      const rng = mulberry32(Date.now());
+      state.transforms.push({
+        a: (rng() - 0.5) * 1.2,
+        b: (rng() - 0.5) * 1.2,
+        c: (rng() - 0.5) * 0.4,
+        d: (rng() - 0.5) * 1.2,
+        e: (rng() - 0.5) * 1.2,
+        f: (rng() - 0.5) * 0.4,
+        variation: Math.floor(rng() * variations.length),
+        weight: 0.5 + rng() * 0.5,
+        color: rng(),
+      });
+      buildTransformUI();
+      renderFlame();
+    };
+
+    // --- Randomize ---
+    document.getElementById('btn-randomize').onclick = randomize;
+    function randomize() {
+      const rng = mulberry32(Date.now());
+      const count = 2 + Math.floor(rng() * 3); // 2-4 transforms
+      state.transforms = [];
+      for (let i = 0; i < count; i++) {
+        state.transforms.push({
+          a: (rng() - 0.5) * 1.6,
+          b: (rng() - 0.5) * 1.6,
+          c: (rng() - 0.5) * 0.5,
+          d: (rng() - 0.5) * 1.6,
+          e: (rng() - 0.5) * 1.6,
+          f: (rng() - 0.5) * 0.5,
+          variation: Math.floor(rng() * variations.length),
+          weight: 0.3 + rng() * 1.2,
+          color: i / (count - 1 || 1),
+        });
+      }
+      state.symmetry = rng() < 0.4 ? 1 : 1 + Math.floor(rng() * 5);
+      state.gamma = 1.5 + rng() * 2;
+      state.zoom = 0.8 + rng() * 1.5;
+      syncUI();
+      renderFlame();
+    }
+
+    // --- Mutate ---
+    document.getElementById('btn-mutate').onclick = mutate;
+    function mutate() {
+      const rng = mulberry32(Date.now());
+      const param = rng();
+
+      if (param < 0.4) {
+        // Perturb affine coefficients
+        const ti = Math.floor(rng() * state.transforms.length);
+        const t = state.transforms[ti];
+        const keys = ['a', 'b', 'c', 'd', 'e', 'f'];
+        const k = keys[Math.floor(rng() * 6)];
+        t[k] = Math.max(-2, Math.min(2, t[k] + (rng() - 0.5) * 0.3));
+      } else if (param < 0.55) {
+        // Change variation
+        const ti = Math.floor(rng() * state.transforms.length);
+        state.transforms[ti].variation = Math.floor(rng() * variations.length);
+      } else if (param < 0.7) {
+        // Adjust weight
+        const ti = Math.floor(rng() * state.transforms.length);
+        state.transforms[ti].weight = Math.max(0.1, state.transforms[ti].weight + (rng() - 0.5) * 0.4);
+      } else if (param < 0.82) {
+        // Gamma tweak
+        state.gamma = Math.max(0.5, Math.min(5, state.gamma + (rng() - 0.5) * 0.5));
+      } else if (param < 0.9) {
+        // Zoom tweak
+        state.zoom = Math.max(0.3, Math.min(4, state.zoom + (rng() - 0.5) * 0.4));
+      } else {
+        // Symmetry change
+        state.symmetry = 1 + Math.floor(rng() * 6);
+      }
+
+      syncUI();
+      renderFlame();
+    }
+
+    // --- Download ---
+    document.getElementById('btn-download').onclick = () => {
+      // Render at 2x for download
+      const link = document.createElement('a');
+      link.download = 'lattice-flame-' + Date.now() + '.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+
+    // --- Sync UI to state ---
+    function syncUI() {
+      gammaSlider.value = state.gamma;
+      document.getElementById('gamma-val').textContent = state.gamma.toFixed(1);
+      zoomSlider.value = state.zoom;
+      document.getElementById('zoom-val').textContent = state.zoom.toFixed(2);
+      qualitySlider.value = state.quality;
+      document.getElementById('quality-val').textContent = formatNumber(state.quality);
+
+      // Symmetry buttons
+      symEl.querySelectorAll('.sym-btn').forEach(b => b.classList.toggle('active', +b.dataset.sym === state.symmetry));
+
+      buildTransformUI();
+    }
+
+    // --- Keyboard shortcuts ---
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      switch (e.key.toLowerCase()) {
+        case 'r': randomize(); break;
+        case 'm': mutate(); break;
+        case 's': document.getElementById('btn-download').click(); e.preventDefault(); break;
+        case ' ': renderFlame(); e.preventDefault(); break;
+        case '1': case '2': case '3': case '4': case '5': case '6':
+          state.symmetry = +e.key;
+          symEl.querySelectorAll('.sym-btn').forEach(b => b.classList.toggle('active', +b.dataset.sym === state.symmetry));
+          renderFlame();
+          break;
+      }
+    });
+
+    // --- Init ---
+    window.addEventListener('resize', () => { resize(); renderFlame(); });
+    resize();
+    syncUI();
+    renderFlame();
+  </script>
+</body>
+</html>

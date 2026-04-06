@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cymatics — Lattice</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --cyan: #22d3ee;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center,
+        transparent 40%,
+        rgba(10,10,15,0.35) 70%,
+        rgba(10,10,15,0.75) 100%);
+      z-index: 2;
+    }
+
+    /* ── HUD ── */
+    #hud-top {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      padding: 1.25rem 1.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(to bottom, rgba(10,10,15,0.7) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-left {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .hud-title {
+      font-size: 0.65rem;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .hud-title span { color: var(--accent); }
+
+    .hud-mode {
+      font-size: 0.55rem;
+      letter-spacing: 0.12em;
+      color: var(--cyan);
+      opacity: 0.8;
+    }
+
+    .hud-right {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      pointer-events: auto;
+    }
+
+    .hud-btn {
+      background: rgba(124, 111, 224, 0.15);
+      border: 1px solid rgba(124, 111, 224, 0.3);
+      color: var(--accent);
+      font-family: inherit;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      padding: 0.4rem 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .hud-btn:hover {
+      background: rgba(124, 111, 224, 0.3);
+      border-color: var(--accent);
+    }
+
+    .hud-btn.active {
+      background: rgba(124, 111, 224, 0.4);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* ── Bottom Controls ── */
+    #controls {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      padding: 1rem 1.75rem 1.5rem;
+      background: linear-gradient(to top, rgba(10,10,15,0.85) 0%, transparent 100%);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .control-label {
+      font-size: 0.5rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .control-value {
+      font-size: 0.55rem;
+      color: var(--cyan);
+      min-width: 2.5em;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--border);
+      height: 3px;
+      border-radius: 2px;
+      outline: none;
+      width: 100px;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* ── Mode badges ── */
+    .mode-grid {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .mode-chip {
+      font-size: 0.5rem;
+      padding: 0.2rem 0.5rem;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.05em;
+    }
+
+    .mode-chip:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .mode-chip.active {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: rgba(34, 211, 238, 0.1);
+    }
+
+    /* ── Start overlay ── */
+    #start-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: opacity 0.6s;
+    }
+
+    #start-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .start-title {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 30px var(--accent-glow);
+      margin-bottom: 1rem;
+    }
+
+    .start-sub {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      margin-bottom: 2rem;
+      max-width: 36em;
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    .start-cta {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    /* ── Back link ── */
+    .back-link {
+      position: fixed;
+      top: 1.25rem;
+      left: 1.75rem;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-decoration: none;
+      z-index: 15;
+      transition: color 0.2s;
+    }
+
+    .back-link:hover { color: var(--accent); }
+
+    /* ── Info tooltip ── */
+    #info-panel {
+      position: fixed;
+      top: 50%;
+      right: 1.75rem;
+      transform: translateY(-50%);
+      background: rgba(18, 18, 26, 0.9);
+      border: 1px solid var(--border);
+      padding: 1rem;
+      z-index: 10;
+      max-width: 220px;
+      font-size: 0.55rem;
+      line-height: 1.7;
+      color: var(--text-dim);
+      display: none;
+      backdrop-filter: blur(8px);
+    }
+
+    #info-panel h3 {
+      color: var(--cyan);
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      font-weight: 400;
+    }
+
+    #info-panel.visible { display: block; }
+
+    @media (max-width: 640px) {
+      #controls { padding: 0.75rem 1rem 1rem; }
+      input[type="range"] { width: 70px; }
+      #info-panel { display: none !important; }
+      .hud-right { gap: 0.4rem; }
+      .hud-btn { padding: 0.3rem 0.5rem; font-size: 0.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div id="start-overlay">
+    <div class="start-title">Cymatics</div>
+    <div class="start-sub">
+      Chladni figures — the geometry of vibration. A metal plate excited at resonant frequencies
+      reveals its nodal lines as sand gathers where the surface stands still. What you see is the
+      hidden architecture of sound made visible.<br><br>
+      Superpose multiple vibrational modes. Change the plate shape. Watch standing waves
+      interfere and create patterns that have fascinated scientists since the 18th century.
+    </div>
+    <div class="start-cta">click to begin</div>
+  </div>
+
+  <a href="index.html" class="back-link">&larr; lattice</a>
+  <canvas id="canvas"></canvas>
+  <div id="vignette"></div>
+
+  <div id="hud-top">
+    <div class="hud-left">
+      <div class="hud-title"><span>lattice</span> &mdash; cymatics</div>
+      <div class="hud-mode" id="hud-mode-label">rect plate &middot; 2 modes</div>
+    </div>
+    <div class="hud-right">
+      <button class="hud-btn" id="btn-randomize" title="Randomize (R)">Random</button>
+      <button class="hud-btn" id="btn-animate" title="Animate (A)">Animate</button>
+      <button class="hud-btn" id="btn-info" title="Info (I)">Info</button>
+      <button class="hud-btn" id="btn-shape" title="Shape (S)">Circle</button>
+    </div>
+  </div>
+
+  <div id="info-panel">
+    <h3>Chladni Figures</h3>
+    Ernst Chladni (1756-1827) discovered that bowing a metal plate sprinkled with sand
+    reveals its vibrational modes. Sand collects on the nodal lines &mdash; where the plate
+    doesn't move.<br><br>
+    The pattern depends on the plate shape and which mode numbers (m, n) are excited.
+    Higher modes create finer, more intricate patterns. Superposing multiple modes creates
+    interference patterns of extraordinary complexity.<br><br>
+    <span style="color: var(--accent);">Rectangular plate:</span>
+    z = sin(m&pi;x/L) &times; sin(n&pi;y/W)<br>
+    <span style="color: var(--accent);">Circular plate:</span>
+    z = J<sub>m</sub>(k<sub>mn</sub>r) &times; cos(m&theta;)<br><br>
+    <span style="color: var(--text-dim);">Keys: R randomize, A animate, S shape, I info, 1-6 presets</span>
+  </div>
+
+  <div id="controls">
+    <div class="control-row">
+      <div class="control-group">
+        <div class="control-label">Mode Pairs</div>
+        <div class="mode-grid" id="mode-pairs"></div>
+      </div>
+    </div>
+    <div class="control-row">
+      <div class="control-group">
+        <div class="control-label">Damping</div>
+        <div class="slider-row">
+          <input type="range" id="sl-damping" min="0" max="100" value="20">
+          <span class="control-value" id="val-damping">0.20</span>
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="control-label">Sharpness</div>
+        <div class="slider-row">
+          <input type="range" id="sl-sharpness" min="1" max="100" value="50">
+          <span class="control-value" id="val-sharpness">2.0</span>
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="control-label">Color Shift</div>
+        <div class="slider-row">
+          <input type="range" id="sl-hue" min="0" max="360" value="260">
+          <span class="control-value" id="val-hue">260</span>
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="control-label">Superpose</div>
+        <div class="slider-row">
+          <input type="range" id="sl-modes" min="1" max="6" value="2">
+          <span class="control-value" id="val-modes">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="control-row">
+      <div class="control-group">
+        <div class="control-label">Presets</div>
+        <div class="mode-grid" id="presets">
+          <div class="mode-chip" data-preset="0">Star</div>
+          <div class="mode-chip" data-preset="1">Cross</div>
+          <div class="mode-chip" data-preset="2">Diamond</div>
+          <div class="mode-chip" data-preset="3">Ripple</div>
+          <div class="mode-chip" data-preset="4">Cathedral</div>
+          <div class="mode-chip" data-preset="5">Chaos</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // ── State ──
+    let plateShape = 'rect';
+    let animating = false;
+    let animPhase = 0;
+    let animRAF = null;
+    let baseHue = 260;
+    let sharpness = 2.0;
+    let globalDamping = 0.2;
+
+    // Mode pairs: each is {mx, my, amp, phase}
+    let modes = [
+      { mx: 3, my: 2, amp: 1.0, phase: 0 },
+      { mx: 5, my: 4, amp: 0.7, phase: Math.PI / 4 },
+    ];
+
+    const PRESETS = [
+      // Star: high-symmetry modes
+      { shape: 'circle', modes: [
+        { mx: 5, my: 3, amp: 1.0, phase: 0 },
+        { mx: 3, my: 5, amp: 0.8, phase: Math.PI / 3 },
+        { mx: 7, my: 2, amp: 0.5, phase: Math.PI / 6 },
+      ]},
+      // Cross: aligned modes
+      { shape: 'rect', modes: [
+        { mx: 2, my: 6, amp: 1.0, phase: 0 },
+        { mx: 6, my: 2, amp: 1.0, phase: 0 },
+      ]},
+      // Diamond: diagonal emphasis
+      { shape: 'rect', modes: [
+        { mx: 4, my: 4, amp: 1.0, phase: 0 },
+        { mx: 8, my: 8, amp: 0.5, phase: Math.PI / 2 },
+      ]},
+      // Ripple: concentric circles
+      { shape: 'circle', modes: [
+        { mx: 0, my: 3, amp: 1.0, phase: 0 },
+        { mx: 0, my: 7, amp: 0.6, phase: Math.PI / 4 },
+        { mx: 0, my: 11, amp: 0.3, phase: Math.PI / 2 },
+      ]},
+      // Cathedral: complex rect
+      { shape: 'rect', modes: [
+        { mx: 3, my: 5, amp: 1.0, phase: 0 },
+        { mx: 7, my: 3, amp: 0.8, phase: Math.PI / 6 },
+        { mx: 5, my: 7, amp: 0.6, phase: Math.PI / 3 },
+        { mx: 11, my: 9, amp: 0.4, phase: Math.PI / 2 },
+      ]},
+      // Chaos: many high modes
+      { shape: 'rect', modes: [
+        { mx: 7, my: 11, amp: 1.0, phase: 0 },
+        { mx: 11, my: 7, amp: 0.9, phase: 0.5 },
+        { mx: 9, my: 5, amp: 0.7, phase: 1.2 },
+        { mx: 5, my: 9, amp: 0.6, phase: 2.1 },
+        { mx: 12, my: 3, amp: 0.4, phase: 0.8 },
+        { mx: 3, my: 12, amp: 0.4, phase: 1.5 },
+      ]},
+    ];
+
+    // ── Bessel J_n approximation (for circular plates) ──
+    // Using series expansion — sufficient for our visualization purposes
+    function besselJ(n, x) {
+      if (Math.abs(x) < 1e-10) return n === 0 ? 1 : 0;
+      let sum = 0;
+      for (let k = 0; k < 25; k++) {
+        const sign = (k % 2 === 0) ? 1 : -1;
+        const num = Math.pow(x / 2, 2 * k + n);
+        let denom = 1;
+        for (let i = 1; i <= k; i++) denom *= i;
+        for (let i = 1; i <= k + n; i++) denom *= i;
+        sum += sign * num / denom;
+        if (Math.abs(num / denom) < 1e-12) break;
+      }
+      return sum;
+    }
+
+    // Zeros of Bessel functions (precomputed for modes 0-12)
+    // k_mn = nth zero of J_m
+    const BESSEL_ZEROS = [
+      [2.4048, 5.5201, 8.6537, 11.7915], // J_0
+      [3.8317, 7.0156, 10.1735, 13.3237], // J_1
+      [5.1356, 8.4172, 11.6198, 14.7960], // J_2
+      [6.3802, 9.7610, 13.0152, 16.2235], // J_3
+      [7.5883, 11.0647, 14.3725, 17.6160], // J_4
+      [8.7715, 12.3386, 15.7002, 18.9801], // J_5
+      [9.9361, 13.5893, 17.0038, 20.3208], // J_6
+      [11.0864, 14.8213, 18.2876, 21.6415], // J_7
+      [12.2251, 16.0378, 19.5545, 22.9452], // J_8
+      [13.3543, 17.2412, 20.8071, 24.2339], // J_9
+      [14.4755, 18.4335, 22.0470, 25.5095], // J_10
+      [15.5898, 19.6160, 23.2768, 26.7733], // J_11
+      [16.6983, 20.7899, 24.4979, 28.0267], // J_12
+    ];
+
+    function getBesselZero(m, n) {
+      m = Math.min(m, 12);
+      n = Math.min(n, 3);
+      return BESSEL_ZEROS[m] ? BESSEL_ZEROS[m][n] || (m + 2 * n + 0.75) * Math.PI / 2 : (m + 2 * n + 0.75) * Math.PI / 2;
+    }
+
+    // ── Compute Chladni pattern ──
+    function computeField(w, h, time) {
+      const field = new Float64Array(w * h);
+      const cx = w / 2, cy = h / 2;
+      const radius = Math.min(cx, cy);
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          let val = 0;
+
+          if (plateShape === 'rect') {
+            // Rectangular plate: sum of sin(mx*pi*x/L) * sin(my*pi*y/W)
+            for (let i = 0; i < modes.length; i++) {
+              const m = modes[i];
+              const sx = Math.sin(m.mx * Math.PI * x / w);
+              const sy = Math.sin(m.my * Math.PI * y / h);
+              val += m.amp * sx * sy * Math.cos(m.phase + time * (i + 1) * 0.3);
+            }
+          } else {
+            // Circular plate: sum of J_m(k_mn * r) * cos(m * theta)
+            const dx = (x - cx) / radius;
+            const dy = (y - cy) / radius;
+            const r = Math.sqrt(dx * dx + dy * dy);
+            const theta = Math.atan2(dy, dx);
+
+            if (r > 1.0) {
+              field[y * w + x] = 0;
+              continue;
+            }
+
+            for (let i = 0; i < modes.length; i++) {
+              const m = modes[i];
+              const mOrder = Math.min(m.mx, 12);
+              const nOrder = Math.min(Math.max(m.my - 1, 0), 3);
+              const k = getBesselZero(mOrder, nOrder);
+              const jVal = besselJ(mOrder, k * r);
+              const angular = Math.cos(mOrder * theta + m.phase + time * (i + 1) * 0.3);
+              val += m.amp * jVal * angular;
+            }
+          }
+
+          // Apply damping — sharpen nodal lines
+          const dampedVal = val * Math.exp(-globalDamping * Math.abs(val));
+          field[y * w + x] = dampedVal;
+        }
+      }
+
+      return field;
+    }
+
+    // ── Render ──
+    function render(time) {
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.floor(canvas.width / dpr);
+      const h = Math.floor(canvas.height / dpr);
+
+      // Compute at lower resolution for performance
+      const scale = 2;
+      const fw = Math.floor(w / scale);
+      const fh = Math.floor(h / scale);
+
+      const field = computeField(fw, fh, time);
+
+      // Find min/max for normalization
+      let fmin = Infinity, fmax = -Infinity;
+      for (let i = 0; i < field.length; i++) {
+        if (field[i] < fmin) fmin = field[i];
+        if (field[i] > fmax) fmax = field[i];
+      }
+      const range = Math.max(fmax - fmin, 0.001);
+
+      const imgData = ctx.createImageData(fw, fh);
+      const data = imgData.data;
+
+      for (let y = 0; y < fh; y++) {
+        for (let x = 0; x < fw; x++) {
+          const idx = (y * fw + x) * 4;
+          let v = (field[y * fw + x] - fmin) / range; // 0-1
+
+          // Apply sharpness — pow to emphasize nodal lines
+          const nodal = 1 - Math.pow(Math.abs(v - 0.5) * 2, sharpness);
+
+          // Circular plate mask
+          if (plateShape === 'circle') {
+            const cx = fw / 2, cy = fh / 2;
+            const radius = Math.min(cx, cy);
+            const dx = x - cx, dy = y - cy;
+            const r = Math.sqrt(dx * dx + dy * dy);
+            if (r > radius) {
+              data[idx] = 10;
+              data[idx + 1] = 10;
+              data[idx + 2] = 15;
+              data[idx + 3] = 255;
+              continue;
+            }
+            // Soft edge
+            if (r > radius - 3) {
+              const edgeFade = (radius - r) / 3;
+              const bg = [10, 10, 15];
+              const c = hslToRgb(baseHue, v, nodal);
+              data[idx] = Math.round(c[0] * edgeFade + bg[0] * (1 - edgeFade));
+              data[idx + 1] = Math.round(c[1] * edgeFade + bg[1] * (1 - edgeFade));
+              data[idx + 2] = Math.round(c[2] * edgeFade + bg[2] * (1 - edgeFade));
+              data[idx + 3] = 255;
+              continue;
+            }
+          }
+
+          // Color: nodal lines are bright, anti-nodal regions are dark
+          // Near-zero crossings (nodal lines) get accent color
+          const c = hslToRgb(baseHue, v, nodal);
+          data[idx] = c[0];
+          data[idx + 1] = c[1];
+          data[idx + 2] = c[2];
+          data[idx + 3] = 255;
+        }
+      }
+
+      // Draw scaled up
+      const offCanvas = new OffscreenCanvas(fw, fh);
+      const offCtx = offCanvas.getContext('2d');
+      offCtx.putImageData(imgData, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(offCanvas, 0, 0, canvas.width, canvas.height);
+    }
+
+    function hslToRgb(hue, value, nodal) {
+      // value: 0-1 position in field, nodal: 0-1 how close to nodal line
+
+      // Nodal lines: bright accent/cyan
+      // Anti-nodal peaks: warm glow
+      // Anti-nodal troughs: deep dark
+
+      // Background darkness
+      const bgR = 10, bgG = 10, bgB = 15;
+
+      if (nodal > 0.85) {
+        // Strong nodal line — bright accent
+        const t = (nodal - 0.85) / 0.15;
+        const intensity = 0.6 + t * 0.4;
+        const h = hue / 360;
+        const rgb = hsl2rgb(h, 0.7, intensity * 0.6);
+        return [
+          Math.round(rgb[0] * 255),
+          Math.round(rgb[1] * 255),
+          Math.round(rgb[2] * 255)
+        ];
+      }
+
+      if (nodal > 0.5) {
+        // Near nodal — dimmer version of accent
+        const t = (nodal - 0.5) / 0.35;
+        const h = (hue + 30) / 360;
+        const rgb = hsl2rgb(h, 0.5, t * 0.25);
+        return [
+          Math.round(rgb[0] * 255),
+          Math.round(rgb[1] * 255),
+          Math.round(rgb[2] * 255)
+        ];
+      }
+
+      // Anti-nodal regions — peaks and troughs
+      // Use value to distinguish: peaks warm, troughs cool
+      if (value > 0.6) {
+        // Peak: warm amber glow
+        const t = (value - 0.6) / 0.4 * (1 - nodal);
+        const h = (hue + 60) / 360; // shifted warm
+        const rgb = hsl2rgb(h, 0.4, t * 0.12);
+        return [
+          Math.round(rgb[0] * 255),
+          Math.round(rgb[1] * 255),
+          Math.round(rgb[2] * 255)
+        ];
+      }
+
+      if (value < 0.4) {
+        // Trough: cool deep
+        const t = (0.4 - value) / 0.4 * (1 - nodal);
+        const h = (hue - 60 + 360) / 360; // shifted cool
+        const rgb = hsl2rgb(h % 1, 0.3, t * 0.08);
+        return [
+          Math.round(rgb[0] * 255),
+          Math.round(rgb[1] * 255),
+          Math.round(rgb[2] * 255)
+        ];
+      }
+
+      // Near zero, not quite nodal — very dark
+      return [bgR, bgG, bgB];
+    }
+
+    function hsl2rgb(h, s, l) {
+      let r, g, b;
+      if (s === 0) {
+        r = g = b = l;
+      } else {
+        const hue2rgb = (p, q, t) => {
+          if (t < 0) t += 1;
+          if (t > 1) t -= 1;
+          if (t < 1/6) return p + (q - p) * 6 * t;
+          if (t < 1/2) return q;
+          if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+          return p;
+        };
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1/3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1/3);
+      }
+      return [r, g, b];
+    }
+
+    // ── Resize ──
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      ctx.scale(dpr, dpr);
+      if (!animating) render(0);
+    }
+
+    // ── Mode pair UI ──
+    function buildModeUI() {
+      const container = document.getElementById('mode-pairs');
+      container.innerHTML = '';
+      modes.forEach((m, i) => {
+        const chip = document.createElement('div');
+        chip.className = 'mode-chip active';
+        chip.textContent = `(${m.mx}, ${m.my})`;
+        chip.title = `Mode ${i + 1}: click to cycle mx, right-click to cycle my`;
+        chip.addEventListener('click', () => {
+          m.mx = (m.mx % 12) + 1;
+          chip.textContent = `(${m.mx}, ${m.my})`;
+          if (!animating) render(0);
+        });
+        chip.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          m.my = (m.my % 12) + 1;
+          chip.textContent = `(${m.mx}, ${m.my})`;
+          if (!animating) render(0);
+        });
+        container.appendChild(chip);
+      });
+      updateLabel();
+    }
+
+    function updateLabel() {
+      const label = document.getElementById('hud-mode-label');
+      label.textContent = `${plateShape} plate \u00b7 ${modes.length} mode${modes.length > 1 ? 's' : ''}`;
+    }
+
+    // ── Animation loop ──
+    function animate(ts) {
+      if (!animating) return;
+      animPhase = ts * 0.001;
+      render(animPhase);
+      animRAF = requestAnimationFrame(animate);
+    }
+
+    function toggleAnimate() {
+      animating = !animating;
+      document.getElementById('btn-animate').classList.toggle('active', animating);
+      if (animating) {
+        animRAF = requestAnimationFrame(animate);
+      } else {
+        if (animRAF) cancelAnimationFrame(animRAF);
+        render(animPhase);
+      }
+    }
+
+    // ── Randomize ──
+    function randomize() {
+      const count = 1 + Math.floor(Math.random() * 5);
+      modes = [];
+      for (let i = 0; i < count; i++) {
+        modes.push({
+          mx: 1 + Math.floor(Math.random() * 11),
+          my: 1 + Math.floor(Math.random() * 11),
+          amp: 0.3 + Math.random() * 0.7,
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+      document.getElementById('sl-modes').value = count;
+      document.getElementById('val-modes').textContent = count;
+      buildModeUI();
+      if (!animating) render(animPhase);
+    }
+
+    // ── Presets ──
+    function applyPreset(idx) {
+      const p = PRESETS[idx];
+      plateShape = p.shape;
+      modes = p.modes.map(m => ({ ...m }));
+      document.getElementById('btn-shape').textContent = plateShape === 'rect' ? 'Circle' : 'Rect';
+      document.getElementById('sl-modes').value = modes.length;
+      document.getElementById('val-modes').textContent = modes.length;
+      buildModeUI();
+      // Highlight active preset
+      document.querySelectorAll('#presets .mode-chip').forEach((el, i) => {
+        el.classList.toggle('active', i === idx);
+      });
+      if (!animating) render(animPhase);
+    }
+
+    // ── Init ──
+    function init() {
+      resize();
+      window.addEventListener('resize', resize);
+
+      // Start overlay
+      document.getElementById('start-overlay').addEventListener('click', () => {
+        document.getElementById('start-overlay').classList.add('hidden');
+        render(0);
+      });
+
+      // Buttons
+      document.getElementById('btn-randomize').addEventListener('click', randomize);
+      document.getElementById('btn-animate').addEventListener('click', toggleAnimate);
+      document.getElementById('btn-info').addEventListener('click', () => {
+        document.getElementById('info-panel').classList.toggle('visible');
+      });
+      document.getElementById('btn-shape').addEventListener('click', () => {
+        plateShape = plateShape === 'rect' ? 'circle' : 'rect';
+        document.getElementById('btn-shape').textContent = plateShape === 'rect' ? 'Circle' : 'Rect';
+        updateLabel();
+        if (!animating) render(animPhase);
+      });
+
+      // Sliders
+      const slDamping = document.getElementById('sl-damping');
+      slDamping.addEventListener('input', () => {
+        globalDamping = slDamping.value / 100;
+        document.getElementById('val-damping').textContent = globalDamping.toFixed(2);
+        if (!animating) render(animPhase);
+      });
+
+      const slSharpness = document.getElementById('sl-sharpness');
+      slSharpness.addEventListener('input', () => {
+        sharpness = 0.5 + (slSharpness.value / 100) * 4.5;
+        document.getElementById('val-sharpness').textContent = sharpness.toFixed(1);
+        if (!animating) render(animPhase);
+      });
+
+      const slHue = document.getElementById('sl-hue');
+      slHue.addEventListener('input', () => {
+        baseHue = parseInt(slHue.value);
+        document.getElementById('val-hue').textContent = baseHue;
+        if (!animating) render(animPhase);
+      });
+
+      const slModes = document.getElementById('sl-modes');
+      slModes.addEventListener('input', () => {
+        const count = parseInt(slModes.value);
+        document.getElementById('val-modes').textContent = count;
+        while (modes.length < count) {
+          modes.push({
+            mx: 1 + Math.floor(Math.random() * 11),
+            my: 1 + Math.floor(Math.random() * 11),
+            amp: 0.3 + Math.random() * 0.7,
+            phase: Math.random() * Math.PI * 2,
+          });
+        }
+        while (modes.length > count) modes.pop();
+        buildModeUI();
+        if (!animating) render(animPhase);
+      });
+
+      // Presets
+      document.querySelectorAll('#presets .mode-chip').forEach(el => {
+        el.addEventListener('click', () => applyPreset(parseInt(el.dataset.preset)));
+      });
+
+      // Keyboard
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'r' || e.key === 'R') randomize();
+        else if (e.key === 'a' || e.key === 'A') toggleAnimate();
+        else if (e.key === 's' || e.key === 'S') document.getElementById('btn-shape').click();
+        else if (e.key === 'i' || e.key === 'I') document.getElementById('btn-info').click();
+        else if (e.key >= '1' && e.key <= '6') applyPreset(parseInt(e.key) - 1);
+      });
+
+      buildModeUI();
+    }
+
+    init();
+  </script>
+</body>
+</html>

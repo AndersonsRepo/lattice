@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Growth</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --botanical: #22c55e;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* Canvas area */
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas { display: block; }
+    .canvas-info {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+    .canvas-info .preset-name { color: var(--botanical); text-transform: uppercase; letter-spacing: 0.12em; }
+    .canvas-info .grammar-info { color: var(--text-dim); font-size: 0.55rem; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 340px;
+      min-width: 340px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 1.25rem 1.25rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header h1 {
+      font-size: 1rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--botanical);
+      margin-bottom: 0.25rem;
+    }
+    .sidebar-header .back-link {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      letter-spacing: 0.05em;
+    }
+    .sidebar-header .back-link:hover { color: var(--accent); }
+
+    /* Category tabs */
+    .category-tabs {
+      display: flex;
+      padding: 0.5rem 1.25rem;
+      gap: 0.25rem;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .cat-tab {
+      padding: 0.25rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.5rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .cat-tab:hover { border-color: var(--botanical); color: var(--text); }
+    .cat-tab.active { background: var(--botanical); border-color: var(--botanical); color: #fff; }
+
+    /* Preset grid */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.25rem;
+      padding: 0.5rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .preset-btn {
+      padding: 0.3rem 0.25rem;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.5rem;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .preset-btn:hover { border-color: var(--botanical); color: var(--text); }
+    .preset-btn.active { background: var(--botanical); border-color: var(--botanical); color: #fff; }
+
+    /* Controls */
+    .controls {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem 1.25rem;
+    }
+    .controls::-webkit-scrollbar { width: 4px; }
+    .controls::-webkit-scrollbar-track { background: transparent; }
+    .controls::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .section-label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.4rem;
+      margin-top: 0.6rem;
+    }
+
+    .control-group { margin-bottom: 0.5rem; }
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      margin-bottom: 0.2rem;
+    }
+    .control-label .val { color: var(--botanical); font-variant-numeric: tabular-nums; }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--botanical);
+      cursor: pointer;
+      border: 2px solid var(--surface);
+    }
+
+    /* Grammar editor */
+    .grammar-section {
+      padding: 0.5rem 0;
+      border-top: 1px solid var(--border);
+      margin-top: 0.5rem;
+    }
+    .rule-row {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      margin-bottom: 0.25rem;
+    }
+    .rule-symbol {
+      font-size: 0.7rem;
+      color: var(--botanical);
+      width: 1rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .rule-arrow { color: var(--text-dim); font-size: 0.55rem; flex-shrink: 0; }
+    .rule-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.6rem;
+      padding: 0.25rem 0.4rem;
+      outline: none;
+    }
+    .rule-input:focus { border-color: var(--botanical); }
+    .axiom-row { margin-bottom: 0.5rem; }
+    .axiom-label { font-size: 0.55rem; color: var(--text-dim); margin-bottom: 0.15rem; }
+
+    /* Actions */
+    .actions {
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+    .action-btn {
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.6rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.03em;
+    }
+    .action-btn:hover { border-color: var(--botanical); color: var(--botanical); }
+    .action-btn.primary { background: var(--botanical); border-color: var(--botanical); color: #fff; }
+    .action-btn.primary:hover { background: #16a34a; }
+
+    /* Color theme chips */
+    .theme-row {
+      display: flex;
+      gap: 0.25rem;
+      flex-wrap: wrap;
+      margin-top: 0.3rem;
+    }
+    .theme-chip {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .theme-chip:hover { border-color: var(--text); }
+    .theme-chip.active { border-color: #fff; }
+
+    /* Toggle switch */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.4rem;
+    }
+    .toggle-label { font-size: 0.6rem; color: var(--text-dim); }
+    .toggle {
+      width: 32px; height: 16px;
+      background: var(--border);
+      border-radius: 8px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle.on { background: var(--botanical); }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      transition: left 0.2s;
+    }
+    .toggle.on::after { left: 18px; }
+
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      .sidebar { width: 100%; min-width: unset; max-height: 50vh; border-left: none; border-top: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas-area">
+    <canvas id="canvas"></canvas>
+    <div class="canvas-info">
+      <div class="preset-name" id="info-preset">Fractal Plant</div>
+      <div class="grammar-info" id="info-grammar">loading...</div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Growth</h1>
+      <a href="index.html" class="back-link">back to gallery</a>
+    </div>
+
+    <div class="category-tabs" id="category-tabs"></div>
+    <div class="preset-grid" id="preset-grid"></div>
+
+    <div class="controls" id="controls-area">
+      <div class="section-label">Parameters</div>
+
+      <div class="control-group">
+        <div class="control-label">Branch Angle <span class="val" id="val-angle">25</span></div>
+        <input type="range" id="sl-angle" min="5" max="180" step="0.5" value="25">
+      </div>
+      <div class="control-group">
+        <div class="control-label">Iterations <span class="val" id="val-iter">5</span></div>
+        <input type="range" id="sl-iter" min="1" max="8" step="1" value="5">
+      </div>
+      <div class="control-group">
+        <div class="control-label">Angle Jitter <span class="val" id="val-jitter">3</span></div>
+        <input type="range" id="sl-jitter" min="0" max="20" step="0.5" value="3">
+      </div>
+      <div class="control-group">
+        <div class="control-label">Length Scale <span class="val" id="val-length">0.85</span></div>
+        <input type="range" id="sl-length" min="0.4" max="1.0" step="0.01" value="0.85">
+      </div>
+      <div class="control-group">
+        <div class="control-label">Tropism <span class="val" id="val-tropism">-0.05</span></div>
+        <input type="range" id="sl-tropism" min="-0.3" max="0.3" step="0.01" value="-0.05">
+      </div>
+      <div class="control-group">
+        <div class="control-label">Width Taper <span class="val" id="val-width">0.70</span></div>
+        <input type="range" id="sl-width" min="0.3" max="1.0" step="0.01" value="0.70">
+      </div>
+
+      <div class="toggle-row">
+        <span class="toggle-label">Stochastic</span>
+        <div class="toggle" id="toggle-stochastic"></div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Animate Growth</span>
+        <div class="toggle on" id="toggle-animate"></div>
+      </div>
+
+      <div class="section-label">Color Theme</div>
+      <div class="theme-row" id="theme-row"></div>
+
+      <div class="grammar-section">
+        <div class="section-label">Grammar</div>
+        <div class="axiom-row">
+          <div class="axiom-label">Axiom</div>
+          <input type="text" class="rule-input" id="axiom-input" value="X" spellcheck="false">
+        </div>
+        <div id="rule-editor"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="action-btn primary" id="btn-regrow">Regrow</button>
+      <button class="action-btn" id="btn-mutate">Mutate</button>
+      <button class="action-btn" id="btn-random">Random</button>
+      <button class="action-btn" id="btn-export">PNG</button>
+    </div>
+  </div>
+
+<script>
+// ============================================================
+//  RNG
+// ============================================================
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ============================================================
+//  Color themes
+// ============================================================
+const THEMES = {
+  verdant:  { name: 'Verdant',  trunk: [40, 80, 30],   tip: [120, 255, 80],  bg: [10, 10, 15],  glow: [34, 197, 94]  },
+  autumn:   { name: 'Autumn',   trunk: [120, 60, 20],  tip: [255, 160, 40],  bg: [10, 10, 15],  glow: [251, 191, 36] },
+  sakura:   { name: 'Sakura',   trunk: [90, 50, 60],   tip: [255, 180, 200], bg: [10, 10, 15],  glow: [244, 114, 182]},
+  frost:    { name: 'Frost',    trunk: [40, 80, 120],  tip: [150, 220, 255], bg: [10, 10, 15],  glow: [56, 189, 248] },
+  twilight: { name: 'Twilight', trunk: [80, 40, 120],  tip: [180, 140, 255], bg: [10, 10, 15],  glow: [124, 111, 224]},
+  ember:    { name: 'Ember',    trunk: [100, 30, 10],  tip: [255, 100, 40],  bg: [10, 10, 15],  glow: [239, 68, 68] },
+  bone:     { name: 'Bone',     trunk: [60, 60, 55],   tip: [210, 205, 190], bg: [10, 10, 15],  glow: [200, 200, 212]},
+  coral:    { name: 'Coral',    trunk: [60, 80, 90],   tip: [255, 130, 120], bg: [10, 10, 15],  glow: [251, 113, 133]},
+  moss:     { name: 'Moss',     trunk: [20, 50, 35],   tip: [80, 180, 100],  bg: [10, 10, 15],  glow: [74, 222, 128] },
+};
+
+// ============================================================
+//  Presets — 24 curated L-systems in 5 categories
+// ============================================================
+const PRESETS = [
+  // === BOTANICAL ===
+  { name: 'Fractal Plant', cat: 'Botanical', axiom: 'X',
+    rules: { X: 'F+[[X]-X]-F[-FX]+X', F: 'FF' },
+    angle: 25, iterations: 6, jitter: 4, length: 0.82, tropism: -0.06, width: 0.68, theme: 'verdant' },
+  { name: 'Willow', cat: 'Botanical', axiom: 'F',
+    rules: { F: 'FF-[-F+F+F]+[+F-F-F]' },
+    angle: 22, iterations: 4, jitter: 6, length: 0.78, tropism: 0.12, width: 0.65, theme: 'verdant' },
+  { name: 'Fern', cat: 'Botanical', axiom: 'X',
+    rules: { X: 'F-[[X]+X]+F[+FX]-X', F: 'FF' },
+    angle: 22.5, iterations: 6, jitter: 3, length: 0.85, tropism: -0.08, width: 0.70, theme: 'moss' },
+  { name: 'Cherry Blossom', cat: 'Botanical', axiom: 'F',
+    rules: { F: 'FF+[+F-F-F]-[-F+F+F]' },
+    angle: 25, iterations: 4, jitter: 8, length: 0.80, tropism: -0.04, width: 0.60, theme: 'sakura',
+    stochastic: { F: [{ p: 'FF+[+F-F-F]-[-F+F+F]', w: 0.6 }, { p: 'FF+[+F]-[-F+F]', w: 0.4 }] } },
+  { name: 'Oak', cat: 'Botanical', axiom: 'F',
+    rules: { F: 'F[+F][-F]F[+F][-F]F' },
+    angle: 20, iterations: 4, jitter: 5, length: 0.75, tropism: -0.03, width: 0.72, theme: 'autumn' },
+  { name: 'Seaweed', cat: 'Botanical', axiom: 'F',
+    rules: { F: 'FF[-F+F][+F-F]F' },
+    angle: 18, iterations: 4, jitter: 10, length: 0.82, tropism: 0.15, width: 0.60, theme: 'frost' },
+  { name: 'Ivy', cat: 'Botanical', axiom: 'X',
+    rules: { X: 'F[+X][-X]FX', F: 'FF' },
+    angle: 30, iterations: 6, jitter: 5, length: 0.80, tropism: -0.10, width: 0.70, theme: 'moss' },
+  { name: 'Bamboo', cat: 'Botanical', axiom: 'F',
+    rules: { F: 'F[+F[-F]]F[-F[+F]]F' },
+    angle: 28, iterations: 4, jitter: 2, length: 0.88, tropism: -0.02, width: 0.78, theme: 'verdant' },
+
+  // === FRACTAL ===
+  { name: 'Dragon Curve', cat: 'Fractal', axiom: 'FX',
+    rules: { X: 'X+YF+', Y: '-FX-Y' },
+    angle: 90, iterations: 12, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'twilight' },
+  { name: 'Sierpinski', cat: 'Fractal', axiom: 'F-G-G',
+    rules: { F: 'F-G+F+G-F', G: 'GG' },
+    angle: 120, iterations: 7, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'ember' },
+  { name: 'Hilbert', cat: 'Fractal', axiom: 'A',
+    rules: { A: '+BF-AFA-FB+', B: '-AF+BFB+FA-' },
+    angle: 90, iterations: 6, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'frost' },
+  { name: 'Peano', cat: 'Fractal', axiom: 'X',
+    rules: { X: 'XFYFX+F+YFXFY-F-XFYFX', Y: 'YFXFY-F-XFYFX+F+YFXFY' },
+    angle: 90, iterations: 3, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'bone' },
+  { name: 'Levy C', cat: 'Fractal', axiom: 'F',
+    rules: { F: '+F--F+' },
+    angle: 45, iterations: 14, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'twilight' },
+
+  // === GEOMETRIC ===
+  { name: 'Koch Curve', cat: 'Geometric', axiom: 'F',
+    rules: { F: 'F+F-F-F+F' },
+    angle: 90, iterations: 4, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'frost' },
+  { name: 'Koch Snowflake', cat: 'Geometric', axiom: 'F--F--F',
+    rules: { F: 'F+F--F+F' },
+    angle: 60, iterations: 4, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'frost' },
+  { name: 'Quadratic Island', cat: 'Geometric', axiom: 'F-F-F-F',
+    rules: { F: 'F+F-F-FF+F+F-F' },
+    angle: 90, iterations: 3, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'ember' },
+  { name: 'Gosper', cat: 'Geometric', axiom: 'A',
+    rules: { A: 'A-B--B+A++AA+B-', B: '+A-BB--B-A++A+B' },
+    angle: 60, iterations: 4, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'twilight' },
+  { name: 'Penrose', cat: 'Geometric', axiom: '[X]++[X]++[X]++[X]++[X]',
+    rules: { W: 'YF++ZF----XF[-YF----WF]++', X: '+YF--ZF[---WF--XF]+', Y: '-WF++XF[+++YF++ZF]-', Z: '--YF++++WF[+ZF++++XF]--XF', F: '' },
+    angle: 36, iterations: 5, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'coral' },
+
+  // === ORGANIC ===
+  { name: 'Coral', cat: 'Organic', axiom: 'F',
+    rules: { F: 'F[+F]F[-F][F]' },
+    angle: 25.7, iterations: 5, jitter: 7, length: 0.80, tropism: 0, width: 0.72, theme: 'coral',
+    stochastic: { F: [{ p: 'F[+F]F[-F][F]', w: 0.5 }, { p: 'FF[+F][-F]', w: 0.3 }, { p: 'F[+F][-F]F', w: 0.2 }] } },
+  { name: 'Lichen', cat: 'Organic', axiom: 'X',
+    rules: { X: 'F[+X]F[-X]+X', F: 'FF' },
+    angle: 20, iterations: 6, jitter: 12, length: 0.78, tropism: 0.05, width: 0.62, theme: 'moss' },
+  { name: 'Neural', cat: 'Organic', axiom: 'X',
+    rules: { X: 'F[+X][-X]F[+X][-X]FX', F: 'FF' },
+    angle: 30, iterations: 5, jitter: 8, length: 0.75, tropism: 0, width: 0.55, theme: 'twilight' },
+  { name: 'Mycelium', cat: 'Organic', axiom: 'F',
+    rules: { F: 'F[-F+F]F[+F-F]F' },
+    angle: 15, iterations: 4, jitter: 10, length: 0.85, tropism: 0.08, width: 0.50, theme: 'bone',
+    stochastic: { F: [{ p: 'F[-F+F]F[+F-F]F', w: 0.6 }, { p: 'FF[-F][+F]', w: 0.4 }] } },
+
+  // === ARTISTIC ===
+  { name: 'Starburst', cat: 'Artistic', axiom: 'F-F-F-F-F',
+    rules: { F: 'F[+F]F[-F]F' },
+    angle: 72, iterations: 4, jitter: 3, length: 0.90, tropism: 0, width: 0.80, theme: 'ember' },
+  { name: 'Mandala', cat: 'Artistic', axiom: 'F-F-F-F-F-F',
+    rules: { F: 'F+F-F-F+F' },
+    angle: 60, iterations: 4, jitter: 0, length: 1.0, tropism: 0, width: 1.0, theme: 'twilight' },
+];
+
+// ============================================================
+//  State
+// ============================================================
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let currentPreset = 0;
+let axiom = PRESETS[0].axiom;
+let rules = { ...PRESETS[0].rules };
+let angle = PRESETS[0].angle;
+let iterations = PRESETS[0].iterations;
+let jitter = PRESETS[0].jitter;
+let lengthScale = PRESETS[0].length;
+let tropism = PRESETS[0].tropism;
+let widthTaper = PRESETS[0].width;
+let themeName = PRESETS[0].theme;
+let stochasticEnabled = !!PRESETS[0].stochastic;
+let stochasticRules = PRESETS[0].stochastic ? JSON.parse(JSON.stringify(PRESETS[0].stochastic)) : null;
+let seed = Math.floor(Math.random() * 0xFFFFFFFF);
+let animateGrowth = true;
+
+// Animation state
+let segments = [];
+let animFrame = 0;
+let animProgress = 0;
+let animRafId = null;
+
+// ============================================================
+//  Canvas sizing
+// ============================================================
+function resizeCanvas() {
+  const area = document.querySelector('.canvas-area');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = area.clientWidth * dpr;
+  canvas.height = area.clientHeight * dpr;
+  canvas.style.width = area.clientWidth + 'px';
+  canvas.style.height = area.clientHeight + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resizeCanvas();
+window.addEventListener('resize', () => { resizeCanvas(); renderFrame(segments.length); });
+
+// ============================================================
+//  L-system string expansion
+// ============================================================
+function expandLSystem(axiom, rules, stochastic, iterations, rng) {
+  let current = axiom;
+  for (let i = 0; i < iterations; i++) {
+    let next = '';
+    for (let ci = 0; ci < current.length; ci++) {
+      const ch = current[ci];
+      if (stochastic && stochastic[ch]) {
+        const alts = stochastic[ch];
+        const total = alts.reduce((s, a) => s + a.w, 0);
+        let r = rng() * total;
+        let chosen = alts[0].p;
+        for (const alt of alts) {
+          r -= alt.w;
+          if (r <= 0) { chosen = alt.p; break; }
+        }
+        next += chosen;
+      } else {
+        next += rules[ch] ?? ch;
+      }
+    }
+    current = next;
+    if (current.length > 50000) break;
+  }
+  return current;
+}
+
+// ============================================================
+//  Turtle trace — returns line segments with depth/width info
+// ============================================================
+function traceTurtle(str, angle, jitter, lengthScale, tropism, widthTaper, rng) {
+  const segs = [];
+  let tx = 0, ty = 0, tAngle = -90, tDepth = 0, tWidth = 1.0;
+  const stack = [];
+  let stepCount = 0;
+  let maxDepth = 0;
+
+  for (const ch of str) {
+    switch (ch) {
+      case 'F':
+      case 'G': {
+        const depthFactor = Math.pow(lengthScale, tDepth);
+        const j = jitter > 0 ? (rng() - 0.5) * 2 * jitter : 0;
+        const tropBend = tropism * tDepth * 2;
+        const finalAngle = tAngle + j + tropBend;
+        const rad = finalAngle * Math.PI / 180;
+        const nx = tx + depthFactor * Math.cos(rad);
+        const ny = ty + depthFactor * Math.sin(rad);
+        segs.push({ x1: tx, y1: ty, x2: nx, y2: ny, depth: tDepth, width: tWidth });
+        tx = nx; ty = ny;
+        if (tDepth > maxDepth) maxDepth = tDepth;
+        stepCount++;
+        break;
+      }
+      case '~': {
+        const depthFactor = Math.pow(lengthScale, tDepth);
+        const wave = Math.sin(stepCount * 0.8) * 0.3;
+        const j = jitter > 0 ? (rng() - 0.5) * 2 * jitter : 0;
+        const tropBend = tropism * tDepth * 2;
+        const finalAngle = tAngle + j + wave * angle + tropBend;
+        const rad = finalAngle * Math.PI / 180;
+        const nx = tx + depthFactor * Math.cos(rad);
+        const ny = ty + depthFactor * Math.sin(rad);
+        segs.push({ x1: tx, y1: ty, x2: nx, y2: ny, depth: tDepth, width: tWidth });
+        tx = nx; ty = ny;
+        if (tDepth > maxDepth) maxDepth = tDepth;
+        stepCount++;
+        break;
+      }
+      case '+': tAngle += angle; break;
+      case '-': tAngle -= angle; break;
+      case '|': tAngle += 180; break;
+      case '!': tWidth *= widthTaper; break;
+      case '[':
+        stack.push({ x: tx, y: ty, angle: tAngle, depth: tDepth, width: tWidth });
+        tDepth++;
+        tWidth *= widthTaper;
+        break;
+      case ']': {
+        const s = stack.pop();
+        if (s) { tx = s.x; ty = s.y; tAngle = s.angle; tDepth = s.depth; tWidth = s.width; }
+        break;
+      }
+    }
+  }
+  return { segments: segs, maxDepth };
+}
+
+// ============================================================
+//  Generate full L-system
+// ============================================================
+function generate() {
+  const rng1 = mulberry32(seed);
+  const str = expandLSystem(
+    axiom, rules,
+    stochasticEnabled ? stochasticRules : null,
+    iterations, rng1
+  );
+  const rng2 = mulberry32(seed + 1);
+  const result = traceTurtle(str, angle, jitter, lengthScale, tropism, widthTaper, rng2);
+  segments = result.segments;
+
+  document.getElementById('info-grammar').textContent =
+    `${str.length.toLocaleString()} symbols  ·  ${segments.length.toLocaleString()} segments  ·  ${iterations} iter`;
+
+  if (animateGrowth && segments.length > 0) {
+    animProgress = 0;
+    if (animRafId) cancelAnimationFrame(animRafId);
+    animateIn();
+  } else {
+    renderFrame(segments.length);
+  }
+}
+
+// ============================================================
+//  Rendering — smooth anti-aliased vector lines
+// ============================================================
+function getTheme() { return THEMES[themeName] || THEMES.verdant; }
+
+function lerpColor(c1, c2, t) {
+  return [
+    Math.round(c1[0] + (c2[0] - c1[0]) * t),
+    Math.round(c1[1] + (c2[1] - c1[1]) * t),
+    Math.round(c1[2] + (c2[2] - c1[2]) * t),
+  ];
+}
+
+function renderFrame(segCount) {
+  const cw = parseFloat(canvas.style.width);
+  const ch = parseFloat(canvas.style.height);
+  const theme = getTheme();
+
+  // Clear
+  ctx.fillStyle = `rgb(${theme.bg[0]},${theme.bg[1]},${theme.bg[2]})`;
+  ctx.fillRect(0, 0, cw, ch);
+
+  if (segments.length === 0) return;
+
+  // Bounding box
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const s of segments) {
+    if (s.x1 < minX) minX = s.x1; if (s.x2 < minX) minX = s.x2;
+    if (s.x1 > maxX) maxX = s.x1; if (s.x2 > maxX) maxX = s.x2;
+    if (s.y1 < minY) minY = s.y1; if (s.y2 < minY) minY = s.y2;
+    if (s.y1 > maxY) maxY = s.y1; if (s.y2 > maxY) maxY = s.y2;
+  }
+
+  const bboxW = maxX - minX || 1;
+  const bboxH = maxY - minY || 1;
+  const margin = 60;
+  const drawW = cw - margin * 2;
+  const drawH = ch - margin * 2;
+  const scale = Math.min(drawW / bboxW, drawH / bboxH);
+  const offsetX = margin + (drawW - bboxW * scale) / 2 - minX * scale;
+  const offsetY = margin + (drawH - bboxH * scale) / 2 - minY * scale;
+
+  // Find max depth for color mapping
+  let maxDepth = 0;
+  for (const s of segments) { if (s.depth > maxDepth) maxDepth = s.depth; }
+  if (maxDepth === 0) maxDepth = 1;
+
+  // Glow layer (draw behind with shadow)
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = `rgba(${theme.glow[0]},${theme.glow[1]},${theme.glow[2]},0.15)`;
+  ctx.shadowBlur = 12;
+
+  const count = Math.min(segCount, segments.length);
+
+  // Draw glow pass
+  for (let i = 0; i < count; i++) {
+    const s = segments[i];
+    const t = maxDepth > 0 ? s.depth / maxDepth : 0;
+    const col = lerpColor(theme.trunk, theme.tip, t);
+    const baseWidth = Math.max(0.5, (1 - t * 0.8) * 4 * s.width);
+
+    ctx.beginPath();
+    ctx.moveTo(s.x1 * scale + offsetX, s.y1 * scale + offsetY);
+    ctx.lineTo(s.x2 * scale + offsetX, s.y2 * scale + offsetY);
+    ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},0.3)`;
+    ctx.lineWidth = baseWidth + 3;
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Main line pass (no shadow)
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (let i = 0; i < count; i++) {
+    const s = segments[i];
+    const t = maxDepth > 0 ? s.depth / maxDepth : 0;
+    const col = lerpColor(theme.trunk, theme.tip, t);
+    const alpha = Math.max(0.4, 1 - t * 0.4);
+    const baseWidth = Math.max(0.3, (1 - t * 0.8) * 3.5 * s.width);
+
+    ctx.beginPath();
+    ctx.moveTo(s.x1 * scale + offsetX, s.y1 * scale + offsetY);
+    ctx.lineTo(s.x2 * scale + offsetX, s.y2 * scale + offsetY);
+    ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${alpha})`;
+    ctx.lineWidth = baseWidth;
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Vignette
+  const grad = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.35, cw / 2, ch / 2, Math.max(cw, ch) * 0.7);
+  grad.addColorStop(0, 'rgba(10, 10, 15, 0)');
+  grad.addColorStop(1, 'rgba(10, 10, 15, 0.4)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+}
+
+// ============================================================
+//  Animated growth
+// ============================================================
+function animateIn() {
+  const total = segments.length;
+  if (total === 0) return;
+
+  // Segments per frame — scale speed based on complexity
+  const segsPerFrame = Math.max(1, Math.ceil(total / 180));
+  animProgress += segsPerFrame;
+
+  if (animProgress >= total) {
+    animProgress = total;
+    renderFrame(total);
+    animRafId = null;
+    return;
+  }
+
+  renderFrame(animProgress);
+  animRafId = requestAnimationFrame(animateIn);
+}
+
+// ============================================================
+//  UI: Category tabs
+// ============================================================
+const categories = [...new Set(PRESETS.map(p => p.cat))];
+const categoryTabsEl = document.getElementById('category-tabs');
+let activeCategory = categories[0];
+
+categories.forEach(cat => {
+  const btn = document.createElement('button');
+  btn.className = 'cat-tab' + (cat === activeCategory ? ' active' : '');
+  btn.textContent = cat;
+  btn.addEventListener('click', () => {
+    activeCategory = cat;
+    categoryTabsEl.querySelectorAll('.cat-tab').forEach(b => b.classList.toggle('active', b.textContent === cat));
+    buildPresetGrid();
+  });
+  categoryTabsEl.appendChild(btn);
+});
+
+// ============================================================
+//  UI: Preset grid
+// ============================================================
+function buildPresetGrid() {
+  const grid = document.getElementById('preset-grid');
+  grid.innerHTML = '';
+  PRESETS.forEach((p, i) => {
+    if (p.cat !== activeCategory) return;
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn' + (i === currentPreset ? ' active' : '');
+    btn.textContent = p.name;
+    btn.addEventListener('click', () => selectPreset(i));
+    grid.appendChild(btn);
+  });
+}
+
+function selectPreset(idx) {
+  currentPreset = idx;
+  const p = PRESETS[idx];
+  axiom = p.axiom;
+  rules = { ...p.rules };
+  angle = p.angle;
+  iterations = p.iterations;
+  jitter = p.jitter;
+  lengthScale = p.length;
+  tropism = p.tropism;
+  widthTaper = p.width;
+  themeName = p.theme;
+  stochasticEnabled = !!p.stochastic;
+  stochasticRules = p.stochastic ? JSON.parse(JSON.stringify(p.stochastic)) : null;
+  seed = Math.floor(Math.random() * 0xFFFFFFFF);
+
+  // Update category if needed
+  if (p.cat !== activeCategory) {
+    activeCategory = p.cat;
+    categoryTabsEl.querySelectorAll('.cat-tab').forEach(b => b.classList.toggle('active', b.textContent === p.cat));
+    buildPresetGrid();
+  }
+
+  document.getElementById('info-preset').textContent = p.name;
+  updateSliders();
+  buildGrammarEditor();
+  buildThemeRow();
+  updateToggles();
+  generate();
+  // Re-highlight preset buttons
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.preset-btn').forEach(b => {
+    if (b.textContent === p.name) b.classList.add('active');
+  });
+}
+
+// ============================================================
+//  UI: Sliders
+// ============================================================
+function updateSliders() {
+  const set = (id, val) => {
+    document.getElementById('sl-' + id).value = val;
+    document.getElementById('val-' + id).textContent = typeof val === 'number' && val % 1 !== 0 ? val.toFixed(2) : val;
+  };
+  set('angle', angle);
+  set('iter', iterations);
+  set('jitter', jitter);
+  set('length', lengthScale);
+  set('tropism', tropism);
+  set('width', widthTaper);
+}
+
+function bindSlider(id, getter, setter) {
+  const sl = document.getElementById('sl-' + id);
+  const val = document.getElementById('val-' + id);
+  sl.addEventListener('input', () => {
+    const v = parseFloat(sl.value);
+    setter(v);
+    val.textContent = v % 1 !== 0 ? v.toFixed(2) : v;
+    generate();
+  });
+}
+
+bindSlider('angle', () => angle, v => angle = v);
+bindSlider('iter', () => iterations, v => iterations = Math.round(v));
+bindSlider('jitter', () => jitter, v => jitter = v);
+bindSlider('length', () => lengthScale, v => lengthScale = v);
+bindSlider('tropism', () => tropism, v => tropism = v);
+bindSlider('width', () => widthTaper, v => widthTaper = v);
+
+// ============================================================
+//  UI: Toggles
+// ============================================================
+function updateToggles() {
+  const stochToggle = document.getElementById('toggle-stochastic');
+  stochToggle.classList.toggle('on', stochasticEnabled);
+  const animToggle = document.getElementById('toggle-animate');
+  animToggle.classList.toggle('on', animateGrowth);
+}
+
+document.getElementById('toggle-stochastic').addEventListener('click', function() {
+  stochasticEnabled = !stochasticEnabled;
+  this.classList.toggle('on', stochasticEnabled);
+  if (stochasticEnabled && !stochasticRules) {
+    // Auto-generate stochastic variant from primary rules
+    stochasticRules = {};
+    for (const [sym, prod] of Object.entries(rules)) {
+      if (sym.match(/[A-Z]/)) {
+        const chars = 'F+-[]G';
+        let variant = '';
+        const rng = mulberry32(seed);
+        const len = Math.max(3, prod.length - 2 + Math.floor(rng() * 5));
+        for (let c = 0; c < len; c++) variant += chars[Math.floor(rng() * chars.length)];
+        stochasticRules[sym] = [{ p: prod, w: 0.65 }, { p: variant, w: 0.35 }];
+      }
+    }
+  }
+  generate();
+});
+
+document.getElementById('toggle-animate').addEventListener('click', function() {
+  animateGrowth = !animateGrowth;
+  this.classList.toggle('on', animateGrowth);
+});
+
+// ============================================================
+//  UI: Color themes
+// ============================================================
+function buildThemeRow() {
+  const row = document.getElementById('theme-row');
+  row.innerHTML = '';
+  for (const [key, t] of Object.entries(THEMES)) {
+    const chip = document.createElement('div');
+    chip.className = 'theme-chip' + (key === themeName ? ' active' : '');
+    const mid = lerpColor(t.trunk, t.tip, 0.5);
+    chip.style.background = `linear-gradient(135deg, rgb(${t.trunk.join(',')}), rgb(${t.tip.join(',')}))`;
+    chip.title = t.name;
+    chip.addEventListener('click', () => {
+      themeName = key;
+      buildThemeRow();
+      renderFrame(segments.length);
+    });
+    row.appendChild(chip);
+  }
+}
+
+// ============================================================
+//  UI: Grammar editor
+// ============================================================
+function buildGrammarEditor() {
+  document.getElementById('axiom-input').value = axiom;
+  const editor = document.getElementById('rule-editor');
+  editor.innerHTML = '';
+
+  for (const [sym, prod] of Object.entries(rules)) {
+    const row = document.createElement('div');
+    row.className = 'rule-row';
+
+    const symEl = document.createElement('span');
+    symEl.className = 'rule-symbol';
+    symEl.textContent = sym;
+
+    const arrow = document.createElement('span');
+    arrow.className = 'rule-arrow';
+    arrow.textContent = '\u2192';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rule-input';
+    input.value = prod;
+    input.spellcheck = false;
+    input.dataset.sym = sym;
+    input.addEventListener('input', () => {
+      rules[sym] = input.value;
+      generate();
+    });
+
+    row.appendChild(symEl);
+    row.appendChild(arrow);
+    row.appendChild(input);
+    editor.appendChild(row);
+
+    // Stochastic variant rows
+    if (stochasticEnabled && stochasticRules && stochasticRules[sym]) {
+      for (let vi = 0; vi < stochasticRules[sym].length; vi++) {
+        const vrow = document.createElement('div');
+        vrow.className = 'rule-row';
+        vrow.style.paddingLeft = '1.6rem';
+
+        const wLabel = document.createElement('span');
+        wLabel.style.cssText = 'font-size:0.5rem; color:var(--text-dim); width:2rem; flex-shrink:0;';
+        wLabel.textContent = (stochasticRules[sym][vi].w * 100).toFixed(0) + '%';
+
+        const vInput = document.createElement('input');
+        vInput.type = 'text';
+        vInput.className = 'rule-input';
+        vInput.value = stochasticRules[sym][vi].p;
+        vInput.spellcheck = false;
+        vInput.style.fontSize = '0.55rem';
+        const capturedVi = vi, capturedSym = sym;
+        vInput.addEventListener('input', () => {
+          stochasticRules[capturedSym][capturedVi].p = vInput.value;
+          generate();
+        });
+
+        vrow.appendChild(wLabel);
+        vrow.appendChild(vInput);
+        editor.appendChild(vrow);
+      }
+    }
+  }
+}
+
+document.getElementById('axiom-input').addEventListener('input', (e) => {
+  axiom = e.target.value;
+  generate();
+});
+
+// ============================================================
+//  Actions
+// ============================================================
+document.getElementById('btn-regrow').addEventListener('click', () => {
+  seed = Math.floor(Math.random() * 0xFFFFFFFF);
+  generate();
+});
+
+document.getElementById('btn-mutate').addEventListener('click', () => {
+  const rng = mulberry32(seed + Date.now());
+  // Mutate angle
+  if (rng() < 0.5) {
+    angle += (rng() > 0.5 ? 1 : -1) * (1 + Math.floor(rng() * 8));
+    angle = ((angle % 360) + 360) % 360;
+  }
+  // Mutate a rule
+  if (rng() < 0.6) {
+    const keys = Object.keys(rules);
+    const key = keys[Math.floor(rng() * keys.length)];
+    const chars = 'F+-[]G~';
+    if (rng() < 0.3 && rules[key].length > 4) {
+      // Delete a character
+      const pos = Math.floor(rng() * rules[key].length);
+      rules[key] = rules[key].slice(0, pos) + rules[key].slice(pos + 1);
+    } else {
+      // Insert a character
+      const pos = Math.floor(rng() * (rules[key].length + 1));
+      const ch = chars[Math.floor(rng() * chars.length)];
+      rules[key] = rules[key].slice(0, pos) + ch + rules[key].slice(pos);
+    }
+  }
+  // Mutate parametric
+  if (rng() < 0.3) jitter = Math.max(0, Math.min(20, jitter + (rng() - 0.5) * 5));
+  if (rng() < 0.3) lengthScale = Math.max(0.4, Math.min(1.0, lengthScale + (rng() - 0.5) * 0.1));
+  if (rng() < 0.2) tropism = Math.max(-0.3, Math.min(0.3, tropism + (rng() - 0.5) * 0.08));
+  if (rng() < 0.2) widthTaper = Math.max(0.3, Math.min(1.0, widthTaper + (rng() - 0.5) * 0.1));
+
+  seed = Math.floor(rng() * 0xFFFFFFFF);
+  updateSliders();
+  buildGrammarEditor();
+  generate();
+});
+
+document.getElementById('btn-random').addEventListener('click', () => {
+  const idx = Math.floor(Math.random() * PRESETS.length);
+  selectPreset(idx);
+});
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  // Render at 4x
+  const exportCanvas = document.createElement('canvas');
+  const ew = 3840, eh = 2160;
+  exportCanvas.width = ew;
+  exportCanvas.height = eh;
+  const ectx = exportCanvas.getContext('2d');
+  const theme = getTheme();
+
+  ectx.fillStyle = `rgb(${theme.bg[0]},${theme.bg[1]},${theme.bg[2]})`;
+  ectx.fillRect(0, 0, ew, eh);
+
+  if (segments.length === 0) return;
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const s of segments) {
+    if (s.x1 < minX) minX = s.x1; if (s.x2 < minX) minX = s.x2;
+    if (s.x1 > maxX) maxX = s.x1; if (s.x2 > maxX) maxX = s.x2;
+    if (s.y1 < minY) minY = s.y1; if (s.y2 < minY) minY = s.y2;
+    if (s.y1 > maxY) maxY = s.y1; if (s.y2 > maxY) maxY = s.y2;
+  }
+  const bboxW = maxX - minX || 1;
+  const bboxH = maxY - minY || 1;
+  const margin = 120;
+  const drawW = ew - margin * 2;
+  const drawH = eh - margin * 2;
+  const scale = Math.min(drawW / bboxW, drawH / bboxH);
+  const offsetX = margin + (drawW - bboxW * scale) / 2 - minX * scale;
+  const offsetY = margin + (drawH - bboxH * scale) / 2 - minY * scale;
+
+  let maxDepth = 0;
+  for (const s of segments) { if (s.depth > maxDepth) maxDepth = s.depth; }
+  if (maxDepth === 0) maxDepth = 1;
+
+  // Glow pass
+  ectx.lineCap = 'round';
+  ectx.lineJoin = 'round';
+  ectx.shadowColor = `rgba(${theme.glow[0]},${theme.glow[1]},${theme.glow[2]},0.12)`;
+  ectx.shadowBlur = 24;
+  for (const s of segments) {
+    const t = s.depth / maxDepth;
+    const col = lerpColor(theme.trunk, theme.tip, t);
+    const baseWidth = Math.max(1, (1 - t * 0.8) * 8 * s.width);
+    ectx.beginPath();
+    ectx.moveTo(s.x1 * scale + offsetX, s.y1 * scale + offsetY);
+    ectx.lineTo(s.x2 * scale + offsetX, s.y2 * scale + offsetY);
+    ectx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},0.3)`;
+    ectx.lineWidth = baseWidth + 6;
+    ectx.stroke();
+  }
+  ectx.shadowBlur = 0;
+
+  // Main pass
+  for (const s of segments) {
+    const t = s.depth / maxDepth;
+    const col = lerpColor(theme.trunk, theme.tip, t);
+    const alpha = Math.max(0.4, 1 - t * 0.4);
+    const baseWidth = Math.max(0.5, (1 - t * 0.8) * 7 * s.width);
+    ectx.beginPath();
+    ectx.moveTo(s.x1 * scale + offsetX, s.y1 * scale + offsetY);
+    ectx.lineTo(s.x2 * scale + offsetX, s.y2 * scale + offsetY);
+    ectx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${alpha})`;
+    ectx.lineWidth = baseWidth;
+    ectx.stroke();
+  }
+
+  // Vignette
+  const grad = ectx.createRadialGradient(ew / 2, eh / 2, Math.min(ew, eh) * 0.35, ew / 2, eh / 2, Math.max(ew, eh) * 0.7);
+  grad.addColorStop(0, 'rgba(10, 10, 15, 0)');
+  grad.addColorStop(1, 'rgba(10, 10, 15, 0.4)');
+  ectx.fillStyle = grad;
+  ectx.fillRect(0, 0, ew, eh);
+
+  const link = document.createElement('a');
+  link.download = `lattice-growth-${Date.now()}.png`;
+  link.href = exportCanvas.toDataURL('image/png');
+  link.click();
+});
+
+// ============================================================
+//  Keyboard shortcuts
+// ============================================================
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key.toLowerCase()) {
+    case 'r': document.getElementById('btn-regrow').click(); break;
+    case 'm': document.getElementById('btn-mutate').click(); break;
+    case 's': document.getElementById('btn-export').click(); break;
+    case ' ':
+      e.preventDefault();
+      document.getElementById('btn-random').click();
+      break;
+    case 'a':
+      document.getElementById('toggle-animate').click();
+      break;
+    case 'g':
+      // Grow: add one iteration
+      iterations = Math.min(iterations + 1, 8);
+      updateSliders();
+      generate();
+      break;
+  }
+});
+
+// ============================================================
+//  Init
+// ============================================================
+buildPresetGrid();
+buildThemeRow();
+buildGrammarEditor();
+updateSliders();
+updateToggles();
+generate();
+</script>
+</body>
+</html>

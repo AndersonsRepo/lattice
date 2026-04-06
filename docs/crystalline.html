@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Crystalline</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --crystal: #88ccff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    /* --- Start overlay --- */
+    #start-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      background: var(--bg);
+      cursor: pointer;
+      transition: opacity 0.6s;
+    }
+    #start-overlay.hidden { opacity: 0; pointer-events: none; }
+    #start-overlay h1 {
+      font-size: 2.5rem;
+      color: var(--crystal);
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      text-shadow: 0 0 30px var(--crystal), 0 0 60px #88ccff40;
+    }
+    #start-overlay p {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      letter-spacing: 0.15em;
+    }
+    #start-overlay .subtitle {
+      color: var(--text);
+      font-size: 1rem;
+      margin-bottom: 2rem;
+      opacity: 0.7;
+    }
+
+    /* --- HUD --- */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.25rem;
+    }
+
+    .title-group a {
+      text-decoration: none;
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      pointer-events: all;
+      transition: color 0.2s;
+    }
+    .title-group a:hover { color: var(--accent); }
+    .title-group h2 {
+      font-size: 1.1rem;
+      color: var(--crystal);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-top: 0.25rem;
+      text-shadow: 0 0 20px #88ccff30;
+    }
+
+    .stats-group {
+      text-align: right;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .stats-group .value {
+      color: var(--crystal);
+      font-weight: bold;
+    }
+
+    /* --- Control panel --- */
+    .panel {
+      position: absolute;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #12121acc;
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      pointer-events: all;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      min-width: 360px;
+      max-width: 90vw;
+      transition: opacity 0.3s;
+    }
+    .panel.collapsed { opacity: 0; pointer-events: none; }
+
+    .panel-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .panel label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      min-width: 80px;
+    }
+
+    .panel input[type="range"] {
+      flex: 1;
+      accent-color: var(--crystal);
+      height: 4px;
+    }
+
+    .panel .val {
+      font-size: 0.7rem;
+      color: var(--crystal);
+      min-width: 35px;
+      text-align: right;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-transform: uppercase;
+    }
+    .btn:hover { border-color: var(--crystal); color: var(--crystal); }
+    .btn.active { background: var(--crystal); color: var(--bg); border-color: var(--crystal); }
+
+    .seed-btn {
+      display: flex;
+      gap: 0.4rem;
+    }
+    .seed-btn .btn.selected {
+      background: var(--crystal);
+      color: var(--bg);
+      border-color: var(--crystal);
+    }
+
+    /* --- Vignette --- */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 5;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+    }
+
+    /* --- Keyboard hint --- */
+    .hint {
+      position: absolute;
+      bottom: 0.5rem;
+      right: 1rem;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      opacity: 0.5;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    /* --- Color theme indicator --- */
+    .theme-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="vignette"></div>
+
+  <div id="start-overlay">
+    <h1>Crystalline</h1>
+    <p class="subtitle">diffusion-limited aggregation</p>
+    <p>click anywhere to begin</p>
+  </div>
+
+  <div class="hud" id="hud" style="opacity:0;">
+    <div class="hud-top">
+      <div class="title-group">
+        <a href="index.html">&larr; Lattice</a>
+        <h2>Crystalline</h2>
+      </div>
+      <div class="stats-group">
+        <div>Particles: <span class="value" id="stat-particles">0</span> / <span id="stat-total">3000</span></div>
+        <div>Crystallized: <span class="value" id="stat-stuck">0</span></div>
+        <div>Density: <span class="value" id="stat-density">0%</span></div>
+        <div>FPS: <span class="value" id="stat-fps">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel" style="opacity:0;">
+    <div class="panel-row">
+      <label>Stickiness</label>
+      <input type="range" id="sl-sticky" min="10" max="100" value="100">
+      <span class="val" id="v-sticky">1.0</span>
+    </div>
+    <div class="panel-row">
+      <label>Particles</label>
+      <input type="range" id="sl-count" min="500" max="8000" step="100" value="3000">
+      <span class="val" id="v-count">3000</span>
+    </div>
+    <div class="panel-row">
+      <label>Decay</label>
+      <input type="range" id="sl-decay" min="50" max="100" value="95">
+      <span class="val" id="v-decay">0.95</span>
+    </div>
+    <div class="panel-row">
+      <label>Bias</label>
+      <input type="range" id="sl-bias" min="0" max="50" value="0">
+      <span class="val" id="v-bias">0.00</span>
+    </div>
+    <div class="panel-row">
+      <label>Speed</label>
+      <input type="range" id="sl-speed" min="1" max="50" value="10">
+      <span class="val" id="v-speed">10</span>
+    </div>
+    <div class="panel-row">
+      <label>Seed Shape</label>
+      <div class="seed-btn">
+        <button class="btn selected" data-shape="center">Center</button>
+        <button class="btn" data-shape="line">Line</button>
+        <button class="btn" data-shape="circle">Circle</button>
+        <button class="btn" data-shape="scatter">Scatter</button>
+      </div>
+    </div>
+    <div class="panel-row">
+      <label>Seeds</label>
+      <input type="range" id="sl-seeds" min="1" max="8" value="1">
+      <span class="val" id="v-seeds">1</span>
+    </div>
+    <div class="panel-row">
+      <label>Theme</label>
+      <div class="seed-btn">
+        <button class="btn selected" data-theme="ice">Ice</button>
+        <button class="btn" data-theme="fire">Fire</button>
+        <button class="btn" data-theme="jade">Jade</button>
+        <button class="btn" data-theme="void">Void</button>
+        <button class="btn" data-theme="gold">Gold</button>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="btn-reset">Reset</button>
+      <button class="btn" id="btn-pause">Pause</button>
+      <button class="btn" id="btn-png">PNG</button>
+      <button class="btn" id="btn-click-mode">Mode: Seed</button>
+    </div>
+  </div>
+
+  <div class="hint">Tab: panel &bull; Space: pause &bull; R: reset &bull; Click: place seed / repel</div>
+
+<script>
+'use strict';
+
+// --- Canvas setup ---
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', () => { resize(); resetSim(); });
+
+// --- Color themes ---
+const THEMES = {
+  ice:  { bg: [10, 10, 15], colors: [[136,204,255], [100,180,240], [60,140,220], [30,100,200], [180,220,255], [220,240,255]] },
+  fire: { bg: [15, 8, 5], colors: [[255,100,30], [255,160,50], [255,200,80], [200,60,20], [255,220,140], [255,80,40]] },
+  jade: { bg: [5, 15, 10], colors: [[74,222,128], [50,200,100], [30,180,80], [100,240,150], [180,255,200], [40,160,70]] },
+  void: { bg: [12, 10, 20], colors: [[124,111,224], [160,140,255], [100,80,200], [180,160,255], [200,180,255], [80,60,180]] },
+  gold: { bg: [15, 12, 5], colors: [[251,191,36], [255,220,80], [200,150,20], [255,240,140], [180,130,10], [255,200,50]] },
+};
+let currentTheme = 'ice';
+
+// --- Simulation state ---
+let grid;            // 2D array: 0 = empty, >0 = arrival order
+let occupied;        // 2D boolean array
+let seedPoints;      // [[x,y], ...]
+let walkers;         // active random walkers [{x, y}]
+let arrivalOrder;
+let totalReleased;
+let paused = false;
+let clickMode = 'seed'; // 'seed' or 'repel'
+
+// Grid resolution (each cell = multiple pixels)
+const CELL_SIZE = 4;
+let gW, gH;
+
+// --- Parameters ---
+let params = {
+  stickiness: 1.0,
+  particles: 3000,
+  branchDecay: 0.95,
+  biasStrength: 0,
+  biasAngle: -Math.PI / 2, // upward
+  speed: 10,
+  seedShape: 'center',
+  seeds: 1,
+};
+
+// --- PRNG ---
+function mulberry32(seed) {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let rng = mulberry32(Date.now());
+
+// --- Seed placement ---
+function placeSeedPoints() {
+  const cx = Math.floor(gW / 2);
+  const cy = Math.floor(gH / 2);
+  const pts = [];
+  const n = params.seeds;
+
+  switch (params.seedShape) {
+    case 'center':
+      pts.push([cx, cy]);
+      for (let i = 1; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        pts.push([Math.floor(cx + Math.cos(a) * 3), Math.floor(cy + Math.sin(a) * 3)]);
+      }
+      break;
+    case 'line':
+      for (let i = 0; i < n; i++) {
+        pts.push([Math.floor((gW * (i + 1)) / (n + 1)), cy]);
+      }
+      break;
+    case 'circle': {
+      const r = Math.min(gW, gH) * 0.15;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        pts.push([Math.floor(cx + Math.cos(a) * r), Math.floor(cy + Math.sin(a) * r)]);
+      }
+      break;
+    }
+    case 'scatter':
+      for (let i = 0; i < n; i++) {
+        pts.push([
+          Math.floor(gW * 0.2 + rng() * gW * 0.6),
+          Math.floor(gH * 0.2 + rng() * gH * 0.6),
+        ]);
+      }
+      break;
+  }
+  return pts.map(([x, y]) => [
+    Math.max(0, Math.min(gW - 1, x)),
+    Math.max(0, Math.min(gH - 1, y)),
+  ]);
+}
+
+// --- Initialize simulation ---
+function resetSim() {
+  gW = Math.floor(W / CELL_SIZE);
+  gH = Math.floor(H / CELL_SIZE);
+  grid = Array.from({ length: gH }, () => new Float32Array(gW));
+  occupied = Array.from({ length: gH }, () => new Uint8Array(gW));
+  walkers = [];
+  arrivalOrder = 1;
+  totalReleased = 0;
+
+  rng = mulberry32(Date.now());
+  seedPoints = placeSeedPoints();
+
+  for (const [sx, sy] of seedPoints) {
+    occupied[sy][sx] = 1;
+    grid[sy][sx] = arrivalOrder++;
+  }
+}
+
+// --- Has neighbor check ---
+function hasNeighbor(x, y) {
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < gW && ny >= 0 && ny < gH && occupied[ny][nx]) return true;
+    }
+  }
+  return false;
+}
+
+// --- Distance to nearest seed ---
+function distToSeed(x, y) {
+  let min = Infinity;
+  for (const [sx, sy] of seedPoints) {
+    const d = Math.sqrt((x - sx) ** 2 + (y - sy) ** 2);
+    if (d < min) min = d;
+  }
+  return min;
+}
+
+// --- Spawn a walker from the edge ---
+function spawnWalker() {
+  const edge = Math.floor(rng() * 4);
+  let x, y;
+  switch (edge) {
+    case 0: x = Math.floor(rng() * gW); y = 0; break;
+    case 1: x = Math.floor(rng() * gW); y = gH - 1; break;
+    case 2: x = 0; y = Math.floor(rng() * gH); break;
+    default: x = gW - 1; y = Math.floor(rng() * gH); break;
+  }
+  return { x, y, steps: 0 };
+}
+
+// --- Step simulation ---
+function stepSim() {
+  const maxWalk = gW * gH * 2;
+  const bx = Math.cos(params.biasAngle) * params.biasStrength;
+  const by = Math.sin(params.biasAngle) * params.biasStrength;
+  const maxDist = Math.sqrt(gW * gW + gH * gH);
+
+  // Spawn new walkers
+  const activeTarget = Math.min(200, params.particles - totalReleased);
+  while (walkers.length < activeTarget && totalReleased < params.particles) {
+    walkers.push(spawnWalker());
+    totalReleased++;
+  }
+
+  // Step all walkers
+  const survivors = [];
+  for (const w of walkers) {
+    // Check adjacency
+    if (hasNeighbor(w.x, w.y)) {
+      const dist = distToSeed(w.x, w.y);
+      const decay = Math.pow(params.branchDecay, dist / (maxDist * 0.3));
+      const prob = params.stickiness * decay;
+      if (rng() < prob) {
+        // Stick!
+        occupied[w.y][w.x] = 1;
+        grid[w.y][w.x] = arrivalOrder++;
+        continue;
+      }
+    }
+
+    // Random walk with bias
+    let dx = Math.floor(rng() * 3) - 1;
+    let dy = Math.floor(rng() * 3) - 1;
+    if (params.biasStrength > 0) {
+      if (rng() < Math.abs(bx)) dx += bx > 0 ? 1 : -1;
+      if (rng() < Math.abs(by)) dy += by > 0 ? 1 : -1;
+      dx = Math.max(-1, Math.min(1, dx));
+      dy = Math.max(-1, Math.min(1, dy));
+    }
+
+    const nx = w.x + dx, ny = w.y + dy;
+    w.steps++;
+
+    // Kill if out of bounds or stuck too long
+    if (nx < 0 || nx >= gW || ny < 0 || ny >= gH || w.steps > maxWalk) continue;
+    if (occupied[ny][nx]) { survivors.push(w); continue; }
+
+    w.x = nx;
+    w.y = ny;
+    survivors.push(w);
+  }
+  walkers = survivors;
+}
+
+// --- Rendering ---
+function getColor(order, maxOrder) {
+  const theme = THEMES[currentTheme];
+  const t = maxOrder > 1 ? (order - 1) / (maxOrder - 1) : 0;
+  const idx = Math.min(Math.floor(t * theme.colors.length), theme.colors.length - 1);
+  const c = theme.colors[idx];
+
+  // Glow intensity: newer particles (higher order) glow more
+  const age = 1 - t;
+  const glow = 0.6 + age * 0.4;
+  return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${glow})`;
+}
+
+let lastFrame = performance.now();
+let frameCount = 0;
+let fps = 0;
+
+function draw() {
+  const theme = THEMES[currentTheme];
+  const [br, bg, bb] = theme.bg;
+
+  // Slightly transparent background for trail effect on walkers
+  ctx.fillStyle = `rgb(${br}, ${bg}, ${bb})`;
+  ctx.fillRect(0, 0, W, H);
+
+  const maxOrder = arrivalOrder - 1;
+
+  // Draw crystallized cells
+  for (let y = 0; y < gH; y++) {
+    for (let x = 0; x < gW; x++) {
+      if (grid[y][x] > 0) {
+        const order = grid[y][x];
+        const t = maxOrder > 1 ? (order - 1) / (maxOrder - 1) : 0;
+        const cidx = Math.min(Math.floor(t * theme.colors.length), theme.colors.length - 1);
+        const c = theme.colors[cidx];
+        const age = 1 - t;
+        const alpha = 0.5 + age * 0.5;
+
+        ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})`;
+        ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+
+        // Subtle glow for recent crystals
+        if (t > 0.9) {
+          ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, 0.15)`;
+          ctx.fillRect(x * CELL_SIZE - 1, y * CELL_SIZE - 1, CELL_SIZE + 2, CELL_SIZE + 2);
+        }
+      }
+    }
+  }
+
+  // Draw seed points with a bright pulse
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.003);
+  for (const [sx, sy] of seedPoints) {
+    const c = theme.colors[0];
+    ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${0.6 + pulse * 0.4})`;
+    const r = CELL_SIZE * (1.5 + pulse * 0.5);
+    ctx.beginPath();
+    ctx.arc(sx * CELL_SIZE + CELL_SIZE / 2, sy * CELL_SIZE + CELL_SIZE / 2, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Draw active walkers as dim dots
+  ctx.fillStyle = `rgba(${theme.colors[0][0]}, ${theme.colors[0][1]}, ${theme.colors[0][2]}, 0.15)`;
+  for (const w of walkers) {
+    ctx.fillRect(w.x * CELL_SIZE, w.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+  }
+
+  // FPS
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFrame > 1000) {
+    fps = frameCount;
+    frameCount = 0;
+    lastFrame = now;
+  }
+
+  // Update stats
+  const stuck = arrivalOrder - 1;
+  document.getElementById('stat-particles').textContent = totalReleased;
+  document.getElementById('stat-total').textContent = params.particles;
+  document.getElementById('stat-stuck').textContent = stuck;
+  document.getElementById('stat-density').textContent = ((stuck / (gW * gH)) * 100).toFixed(1) + '%';
+  document.getElementById('stat-fps').textContent = fps;
+}
+
+// --- Animation loop ---
+function loop() {
+  if (!paused && totalReleased < params.particles || walkers.length > 0) {
+    for (let i = 0; i < params.speed; i++) {
+      if (totalReleased >= params.particles && walkers.length === 0) break;
+      stepSim();
+    }
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// --- UI wiring ---
+function wireSlider(id, valId, mapFn, onchange) {
+  const sl = document.getElementById(id);
+  const vl = document.getElementById(valId);
+  sl.addEventListener('input', () => {
+    const val = mapFn(+sl.value);
+    vl.textContent = typeof val === 'number' ? (val % 1 === 0 ? val : val.toFixed(2)) : val;
+    onchange(val);
+  });
+}
+
+wireSlider('sl-sticky', 'v-sticky', v => v / 100, v => params.stickiness = v);
+wireSlider('sl-count', 'v-count', v => v, v => params.particles = v);
+wireSlider('sl-decay', 'v-decay', v => v / 100, v => params.branchDecay = v);
+wireSlider('sl-bias', 'v-bias', v => v / 100, v => params.biasStrength = v);
+wireSlider('sl-speed', 'v-speed', v => v, v => params.speed = v);
+wireSlider('sl-seeds', 'v-seeds', v => v, v => { params.seeds = v; });
+
+// Seed shape buttons
+document.querySelectorAll('[data-shape]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-shape]').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    params.seedShape = btn.dataset.shape;
+  });
+});
+
+// Theme buttons
+document.querySelectorAll('[data-theme]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-theme]').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    currentTheme = btn.dataset.theme;
+  });
+});
+
+// Action buttons
+document.getElementById('btn-reset').addEventListener('click', resetSim);
+document.getElementById('btn-pause').addEventListener('click', () => {
+  paused = !paused;
+  document.getElementById('btn-pause').textContent = paused ? 'Play' : 'Pause';
+});
+document.getElementById('btn-png').addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = `crystalline-${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+document.getElementById('btn-click-mode').addEventListener('click', () => {
+  clickMode = clickMode === 'seed' ? 'repel' : 'seed';
+  document.getElementById('btn-click-mode').textContent = `Mode: ${clickMode === 'seed' ? 'Seed' : 'Repel'}`;
+});
+
+// Click to place seed or repel
+canvas.addEventListener('click', (e) => {
+  const gx = Math.floor(e.clientX / CELL_SIZE);
+  const gy = Math.floor(e.clientY / CELL_SIZE);
+  if (gx < 0 || gx >= gW || gy < 0 || gy >= gH) return;
+
+  if (clickMode === 'seed') {
+    // Place a new seed point
+    if (!occupied[gy][gx]) {
+      occupied[gy][gx] = 1;
+      grid[gy][gx] = arrivalOrder++;
+      seedPoints.push([gx, gy]);
+    }
+  } else {
+    // Repel: clear a radius around click
+    const radius = 8;
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const nx = gx + dx, ny = gy + dy;
+        if (nx >= 0 && nx < gW && ny >= 0 && ny < gH && dx * dx + dy * dy <= radius * radius) {
+          occupied[ny][nx] = 0;
+          grid[ny][nx] = 0;
+        }
+      }
+    }
+  }
+});
+
+// Keyboard
+window.addEventListener('keydown', (e) => {
+  switch (e.key.toLowerCase()) {
+    case ' ':
+      e.preventDefault();
+      paused = !paused;
+      document.getElementById('btn-pause').textContent = paused ? 'Play' : 'Pause';
+      break;
+    case 'r':
+      resetSim();
+      break;
+    case 'tab':
+      e.preventDefault();
+      document.getElementById('panel').classList.toggle('collapsed');
+      break;
+    case 's':
+      document.getElementById('btn-png').click();
+      break;
+  }
+});
+
+// --- Start ---
+document.getElementById('start-overlay').addEventListener('click', () => {
+  document.getElementById('start-overlay').classList.add('hidden');
+  document.getElementById('hud').style.opacity = '1';
+  document.getElementById('panel').style.opacity = '1';
+  resetSim();
+  loop();
+});
+</script>
+</body>
+</html>

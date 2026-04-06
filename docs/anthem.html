@@ -1,0 +1,1784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lattice — Anthem</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #c8c8d4;
+      --text-dim: #6e6e82;
+      --accent: #7c6fe0;
+      --accent-glow: #7c6fe040;
+      --green: #4ade80;
+      --amber: #fbbf24;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Start overlay */
+    .start-overlay {
+      position: fixed; inset: 0;
+      background: rgba(10, 10, 15, 0.96);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 100; cursor: pointer;
+      transition: opacity 0.8s ease;
+    }
+    .start-overlay.hidden { opacity: 0; pointer-events: none; }
+    .start-icon {
+      font-size: 3.5rem; color: var(--accent);
+      margin-bottom: 1.2rem;
+      text-shadow: 0 0 40px var(--accent-glow);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .start-text {
+      font-size: 1rem; color: var(--text);
+      letter-spacing: 0.3em; text-transform: uppercase;
+      font-weight: 300;
+    }
+    .start-sub {
+      font-size: 0.62rem; color: var(--text-dim);
+      letter-spacing: 0.08em; margin-top: 1.4rem;
+      opacity: 0.6; max-width: 460px;
+      text-align: center; line-height: 1.8;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    .bg-glow {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 800px; height: 800px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      opacity: 0.15;
+      pointer-events: none;
+      z-index: 0;
+      transition: opacity 1s ease;
+    }
+
+    .back-link {
+      position: fixed;
+      top: 1.2rem; left: 1.2rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      z-index: 20;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    /* Main layout */
+    .main {
+      position: relative; z-index: 1;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+
+    .top-bar {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1rem; padding: 0.5rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .top-bar h1 {
+      font-size: 0.9rem; font-weight: 300;
+      letter-spacing: 0.3em; text-transform: uppercase;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+    .top-bar .sub {
+      color: var(--text-dim); font-size: 0.5rem;
+      letter-spacing: 0.08em;
+    }
+
+    /* Center stage */
+    .stage {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Genome visualization canvas */
+    #vizCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Piece info overlay */
+    .piece-overlay {
+      position: absolute;
+      top: 1.2rem; right: 1.2rem;
+      background: rgba(18, 18, 26, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.7rem 1rem;
+      font-size: 0.55rem;
+      line-height: 1.7;
+      max-width: 220px;
+      z-index: 5;
+    }
+    .piece-overlay .type-badge {
+      display: inline-block;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-size: 0.5rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+    }
+    .piece-overlay .mapping-line {
+      color: var(--text-dim);
+      margin-top: 0.15rem;
+    }
+    .piece-overlay .mapping-line .param {
+      color: var(--amber);
+    }
+    .piece-overlay .mapping-line .arrow {
+      color: var(--text-dim);
+      margin: 0 0.2rem;
+    }
+    .piece-overlay .mapping-line .target {
+      color: var(--green);
+    }
+
+    /* Waveform canvas */
+    #waveCanvas {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 80px;
+      opacity: 0.6;
+    }
+
+    /* Bottom controls */
+    .controls {
+      display: flex; align-items: center;
+      gap: 0.8rem; padding: 0.5rem 1.2rem;
+      border-top: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      font-size: 0.55rem;
+      flex-wrap: wrap;
+    }
+
+    .piece-nav {
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+
+    .nav-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--text-dim); cursor: pointer;
+      padding: 0.25rem 0.5rem; border-radius: 4px;
+      font-family: inherit; font-size: 0.55rem;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    .play-btn {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      border: 1.5px solid var(--green);
+      background: none;
+      color: var(--green);
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .play-btn:hover { background: rgba(74, 222, 128, 0.1); }
+    .play-btn.active { background: rgba(74, 222, 128, 0.15); }
+
+    .slider-group {
+      display: flex; align-items: center; gap: 0.3rem;
+    }
+    .slider-group label {
+      color: var(--text-dim); min-width: 40px;
+    }
+    .slider-group .val {
+      color: var(--accent); min-width: 24px; text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      width: 70px; height: 3px; border-radius: 2px;
+      background: var(--border); outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent); cursor: pointer;
+    }
+
+    .piece-dots {
+      display: flex; gap: 3px; align-items: center;
+      max-width: 200px; flex-wrap: wrap;
+    }
+    .pdot {
+      width: 10px; height: 10px;
+      border-radius: 2px; border: 1px solid var(--border);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .pdot:hover { border-color: var(--accent); transform: scale(1.3); }
+    .pdot.active { border-color: var(--green); box-shadow: 0 0 6px var(--green); }
+
+    .status {
+      margin-left: auto;
+      color: var(--text-dim);
+    }
+
+    .kbd {
+      display: inline-block; padding: 0.08rem 0.25rem;
+      border-radius: 2px; border: 1px solid var(--border);
+      background: var(--surface); font-size: 0.42rem;
+      color: var(--text-dim);
+    }
+
+    @media (max-width: 700px) {
+      .piece-overlay { display: none; }
+      .controls { gap: 0.5rem; padding: 0.4rem 0.8rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow" id="bgGlow"></div>
+  <a href="index.html" class="back-link">&larr; LATTICE</a>
+
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-icon">&#9835;</div>
+    <div class="start-text">Anthem</div>
+    <div class="start-sub">
+      Every genome is a composition. The same parameters that generate visual art
+      generate music &mdash; L-system rules become melodies, automata rules become rhythms,
+      attractor constants become FM oscillators. The art sings its own DNA.
+    </div>
+    <div class="start-sub" style="margin-top: 0.8rem; opacity: 0.3;">click anywhere to begin</div>
+  </div>
+
+  <div class="main" id="mainContent">
+    <div class="top-bar">
+      <h1>Anthem</h1>
+      <span class="sub">genome &rarr; synthesis &rarr; sound</span>
+    </div>
+
+    <div class="stage">
+      <canvas id="vizCanvas"></canvas>
+      <canvas id="waveCanvas"></canvas>
+      <div class="piece-overlay" id="pieceOverlay">
+        <div class="type-badge" id="typeBadge">--</div>
+        <div id="mappingInfo"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="piece-nav">
+        <button class="nav-btn" id="prevBtn">&larr;</button>
+        <button class="play-btn" id="playBtn">&#9654;</button>
+        <button class="nav-btn" id="nextBtn">&rarr;</button>
+      </div>
+
+      <div class="piece-dots" id="pieceDots"></div>
+
+      <div class="slider-group">
+        <label>Volume</label>
+        <input type="range" id="volSlider" min="0" max="100" value="50">
+        <span class="val" id="volVal">50</span>
+      </div>
+
+      <div class="slider-group">
+        <label>Tempo</label>
+        <input type="range" id="tempoSlider" min="20" max="200" value="80">
+        <span class="val" id="tempoVal">80</span>
+      </div>
+
+      <div class="slider-group">
+        <label>Reverb</label>
+        <input type="range" id="reverbSlider" min="0" max="100" value="50">
+        <span class="val" id="reverbVal">50</span>
+      </div>
+
+      <span class="status" id="statusText">
+        <kbd class="kbd">Space</kbd> play
+        <kbd class="kbd">&larr;&rarr;</kbd> nav
+      </span>
+    </div>
+  </div>
+
+  <script>
+    // ===================== TYPE COLORS =====================
+    const TYPE_COLORS = {
+      '1d':'#7c6fe0','2d':'#4ade80','lsystem':'#fbbf24',
+      'reaction-diffusion':'#e879f9','voronoi':'#38bdf8','wfc':'#f87171',
+      'spirograph':'#fb923c','attractor':'#facc15','julia':'#a78bfa',
+      'noise':'#34d399','flowfield':'#22d3ee','flame':'#ef4444',
+    };
+
+    // Musical scales (semitones from root)
+    const SCALES = {
+      pentatonic: [0,2,4,7,9],
+      minor: [0,2,3,5,7,8,10],
+      dorian: [0,2,3,5,7,9,10],
+      phrygian: [0,1,3,5,7,8,10],
+      lydian: [0,2,4,6,7,9,11],
+      whole: [0,2,4,6,8,10],
+    };
+
+    function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+    // ===================== STATE =====================
+    const S = {
+      pieces: [],
+      idx: 0,
+      playing: false,
+      volume: 0.5,
+      tempo: 80,
+      reverb: 0.5,
+      engine: null, // current synthesis engine instance
+      vizFrame: 0,
+    };
+
+    // ===================== AUDIO CORE =====================
+    const AC = {
+      ctx: null, master: null, dry: null, wet: null,
+      convolver: null, analyser: null, comp: null,
+
+      init() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+        this.comp = this.ctx.createDynamicsCompressor();
+        this.comp.threshold.value = -18;
+        this.comp.ratio.value = 6;
+        this.comp.connect(this.ctx.destination);
+
+        this.master = this.ctx.createGain();
+        this.master.gain.value = S.volume;
+
+        this.dry = this.ctx.createGain();
+        this.dry.gain.value = 1 - S.reverb;
+        this.wet = this.ctx.createGain();
+        this.wet.gain.value = S.reverb;
+
+        this.convolver = this.ctx.createConvolver();
+        this._makeIR(3.5);
+
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 512;
+
+        this.master.connect(this.dry);
+        this.master.connect(this.wet);
+        this.dry.connect(this.comp);
+        this.wet.connect(this.convolver);
+        this.convolver.connect(this.comp);
+        this.master.connect(this.analyser);
+      },
+
+      _makeIR(dur) {
+        const rate = this.ctx.sampleRate;
+        const len = rate * dur;
+        const buf = this.ctx.createBuffer(2, len, rate);
+        for (let ch = 0; ch < 2; ch++) {
+          const d = buf.getChannelData(ch);
+          for (let i = 0; i < len; i++) {
+            d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (rate * 0.9));
+          }
+        }
+        this.convolver.buffer = buf;
+      },
+
+      // Play a note with envelope
+      note(freq, dur, wave, vel, pan) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        osc.type = wave || 'sine';
+        osc.frequency.value = freq;
+
+        const env = this.ctx.createGain();
+        env.gain.setValueAtTime(0, now);
+        env.gain.linearRampToValueAtTime(vel || 0.3, now + 0.015);
+        env.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        const p = this.ctx.createStereoPanner();
+        p.pan.value = pan || 0;
+
+        osc.connect(env);
+        env.connect(p);
+        p.connect(this.master);
+        osc.start(now);
+        osc.stop(now + dur + 0.05);
+      },
+
+      // FM synthesis note
+      fm(carrier, modFreq, modDepth, dur, vel, pan) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+
+        const mod = this.ctx.createOscillator();
+        mod.frequency.value = modFreq;
+        const modGain = this.ctx.createGain();
+        modGain.gain.value = modDepth;
+        mod.connect(modGain);
+
+        const osc = this.ctx.createOscillator();
+        osc.frequency.value = carrier;
+        modGain.connect(osc.frequency);
+
+        const env = this.ctx.createGain();
+        env.gain.setValueAtTime(0, now);
+        env.gain.linearRampToValueAtTime(vel || 0.25, now + 0.02);
+        env.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        const p = this.ctx.createStereoPanner();
+        p.pan.value = pan || 0;
+
+        osc.connect(env);
+        env.connect(p);
+        p.connect(this.master);
+        mod.start(now);
+        osc.start(now);
+        mod.stop(now + dur + 0.05);
+        osc.stop(now + dur + 0.05);
+      },
+
+      // Filtered noise burst
+      noise(freq, bw, dur, vel, pan) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const len = this.ctx.sampleRate * dur;
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+
+        const filt = this.ctx.createBiquadFilter();
+        filt.type = 'bandpass';
+        filt.frequency.value = freq;
+        filt.Q.value = freq / bw;
+
+        const env = this.ctx.createGain();
+        env.gain.setValueAtTime(vel || 0.2, now);
+        env.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        const p = this.ctx.createStereoPanner();
+        p.pan.value = pan || 0;
+
+        src.connect(filt);
+        filt.connect(env);
+        env.connect(p);
+        p.connect(this.master);
+        src.start(now);
+      },
+
+      // Sustained drone oscillator (returns stop function)
+      drone(freq, wave, vol) {
+        if (!this.ctx) return () => {};
+        const osc = this.ctx.createOscillator();
+        osc.type = wave || 'sine';
+        osc.frequency.value = freq;
+        const g = this.ctx.createGain();
+        g.gain.value = 0;
+        g.gain.linearRampToValueAtTime(vol || 0.08, this.ctx.currentTime + 1);
+        osc.connect(g);
+        g.connect(this.master);
+        osc.start();
+        return () => {
+          g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.5);
+          setTimeout(() => { try { osc.stop(); } catch(e) {} }, 600);
+        };
+      },
+    };
+
+    // ===================== GENOME SYNTHESIS ENGINES =====================
+    // Each engine takes a genome and produces a continuous musical sequence.
+    // Returns { start(), stop(), getVizData() }
+
+    function engine1D(genome) {
+      // Wolfram rule number → 8-bit binary → rhythmic pattern
+      // States determine which beats in a cycle sound
+      // Rule number also selects scale intervals
+      const rule = typeof genome.rule === 'number' ? genome.rule : genome.rule.number || 30;
+      const bits = [];
+      for (let i = 7; i >= 0; i--) bits.push((rule >> i) & 1);
+      const scale = rule % 2 === 0 ? SCALES.pentatonic : SCALES.minor;
+      const baseNote = 48 + (rule % 12);
+      let step = 0, timer = null, drones = [];
+      const vizState = { bits, step: 0, activeNotes: [] };
+
+      return {
+        mappings: [
+          { param: `rule ${rule}`, target: '8-bit rhythm pattern' },
+          { param: `${bits.filter(b=>b).length}/8 active`, target: 'beat density' },
+          { param: rule % 2 === 0 ? 'pentatonic' : 'minor', target: 'scale' },
+        ],
+        start() {
+          const beatMs = (60000 / S.tempo) / 2;
+          // Sub-bass drone
+          drones.push(AC.drone(midiToFreq(baseNote - 24), 'sine', 0.06));
+          drones.push(AC.drone(midiToFreq(baseNote - 17), 'triangle', 0.03));
+
+          const tick = () => {
+            const beatIdx = step % 8;
+            vizState.step = beatIdx;
+            vizState.activeNotes = [];
+
+            if (bits[beatIdx]) {
+              // Use automaton-like neighborhood to pick note
+              const prev = bits[(beatIdx + 7) % 8];
+              const next = bits[(beatIdx + 1) % 8];
+              const neighborhood = (prev << 2) | (bits[beatIdx] << 1) | next;
+              const degree = neighborhood % scale.length;
+              const octaveShift = Math.floor(step / 8) % 3;
+              const midi = baseNote + scale[degree] + octaveShift * 12;
+              const freq = midiToFreq(midi);
+              const pan = (beatIdx / 7) * 1.6 - 0.8;
+              AC.note(freq, 0.15 + Math.random() * 0.1, 'square', 0.2, pan);
+              vizState.activeNotes.push({ freq, degree, beatIdx });
+
+              // Accent on downbeat
+              if (beatIdx === 0) {
+                AC.note(midiToFreq(baseNote + scale[0]), 0.3, 'triangle', 0.15, 0);
+              }
+            }
+            step++;
+            timer = setTimeout(tick, beatMs + (Math.random() - 0.5) * 10);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => d());
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engine2D(genome) {
+      // Birth/survive rules → chord voicings that evolve
+      // Birth numbers = notes that enter, survive = sustain
+      const r = genome.rule || {};
+      const birth = r.birth || [3];
+      const survive = r.survive || [2,3];
+      const scale = SCALES.dorian;
+      const baseNote = 52;
+      let step = 0, timer = null, drones = [];
+      const vizState = { birth, survive, step: 0, chord: [] };
+
+      return {
+        mappings: [
+          { param: `B${birth.join('')}`, target: 'chord tones (born)' },
+          { param: `S${survive.join('')}`, target: 'sustained tones' },
+          { param: 'life cycle', target: 'chord evolution' },
+        ],
+        start() {
+          const beatMs = (60000 / S.tempo);
+          drones.push(AC.drone(midiToFreq(baseNote - 24), 'sine', 0.05));
+
+          const tick = () => {
+            vizState.step = step;
+            vizState.chord = [];
+            const phase = step % 16;
+
+            // Birth: introduce new notes
+            birth.forEach((b, i) => {
+              if (phase % (b + 1) === 0) {
+                const degree = b % scale.length;
+                const midi = baseNote + scale[degree] + Math.floor(i / 3) * 12;
+                const freq = midiToFreq(midi);
+                AC.note(freq, 0.6, 'triangle', 0.18, (i / birth.length) * 1.2 - 0.6);
+                vizState.chord.push({ freq, type: 'birth', degree });
+              }
+            });
+
+            // Survive: sustain pad tones
+            survive.forEach((s, i) => {
+              const degree = s % scale.length;
+              const midi = baseNote + scale[degree] + 12;
+              const freq = midiToFreq(midi);
+              if (phase % 4 === 0) {
+                AC.note(freq, 1.2, 'sine', 0.1, (i / survive.length) * 0.8 - 0.4);
+                vizState.chord.push({ freq, type: 'survive', degree });
+              }
+            });
+
+            // Population pulse — density oscillation
+            if (phase === 0) {
+              AC.noise(800 + step * 20, 200, 0.1, 0.08, 0);
+            }
+
+            step++;
+            timer = setTimeout(tick, beatMs);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => d());
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engineLSystem(genome) {
+      // L-system string rewriting → melody
+      // F = play current note, + = pitch up, - = pitch down
+      // [ = push, ] = pop — creates melodic phrases with return
+      const r = genome.rule || {};
+      const axiom = r.axiom || 'F';
+      const rules = r.rules || { F: 'F+F-F-F+F' };
+      const angle = r.angle || 25;
+      const scale = angle > 45 ? SCALES.whole : angle > 20 ? SCALES.pentatonic : SCALES.lydian;
+      const baseNote = 60;
+
+      // Expand L-system string (2 iterations for musical phrases)
+      let str = axiom;
+      for (let i = 0; i < 2; i++) {
+        let next = '';
+        for (const ch of str) {
+          next += rules[ch] || ch;
+        }
+        str = next;
+        if (str.length > 256) { str = str.slice(0, 256); break; }
+      }
+
+      let step = 0, timer = null, drones = [];
+      const vizState = { str, step: 0, pitch: 0, stack: [], activeNote: null };
+
+      return {
+        mappings: [
+          { param: `axiom "${axiom}"`, target: 'melodic seed' },
+          { param: `angle ${angle}deg`, target: angle > 45 ? 'whole tone' : angle > 20 ? 'pentatonic' : 'lydian' },
+          { param: `${Object.keys(rules).length} rules`, target: 'melodic development' },
+        ],
+        start() {
+          const noteMs = (60000 / S.tempo) / 3;
+          let pitch = 0;
+          const stack = [];
+          drones.push(AC.drone(midiToFreq(baseNote - 12), 'sine', 0.04));
+          drones.push(AC.drone(midiToFreq(baseNote - 5), 'triangle', 0.025));
+
+          const tick = () => {
+            const idx = step % str.length;
+            const ch = str[idx];
+            vizState.step = idx;
+            vizState.pitch = pitch;
+            vizState.activeNote = null;
+
+            if (ch === 'F' || ch === 'G' || ch === 'A' || ch === 'B') {
+              const degree = ((pitch % scale.length) + scale.length) % scale.length;
+              const octave = Math.floor(pitch / scale.length);
+              const midi = baseNote + scale[degree] + octave * 12;
+              const freq = midiToFreq(Math.max(36, Math.min(96, midi)));
+              const dur = 0.2 + Math.random() * 0.15;
+              const pan = Math.sin(step * 0.3) * 0.6;
+              AC.fm(freq, freq * 1.5, freq * 0.3, dur, 0.2, pan);
+              vizState.activeNote = { freq, pitch, degree };
+            } else if (ch === '+') {
+              pitch++;
+            } else if (ch === '-') {
+              pitch--;
+            } else if (ch === '[') {
+              stack.push(pitch);
+              vizState.stack = [...stack];
+            } else if (ch === ']') {
+              pitch = stack.pop() || 0;
+              vizState.stack = [...stack];
+              // Return: soft chime
+              const midi = baseNote + scale[((pitch % scale.length) + scale.length) % scale.length];
+              AC.note(midiToFreq(midi + 12), 0.4, 'sine', 0.08, 0);
+            }
+
+            step++;
+            // Wrap around
+            if (idx === str.length - 1) {
+              step = 0;
+              pitch = 0;
+            }
+            timer = setTimeout(tick, noteMs);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => d());
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engineRD(genome) {
+      // Reaction-diffusion: feed/kill rates → filter sweep ambient pad
+      // Feed controls LFO speed, kill controls resonance
+      const r = genome.rule || {};
+      const feed = r.feed || 0.055;
+      const kill = r.kill || 0.062;
+      const scale = SCALES.phrygian;
+      const baseNote = 40;
+      let step = 0, timer = null, drones = [];
+      const vizState = { feed, kill, phase: 0, bands: [] };
+
+      return {
+        mappings: [
+          { param: `feed ${feed.toFixed(3)}`, target: 'LFO rate' },
+          { param: `kill ${kill.toFixed(3)}`, target: 'filter resonance' },
+          { param: 'chemical morph', target: 'spectral drift' },
+        ],
+        start() {
+          const tickMs = (60000 / S.tempo) / 2;
+
+          // Warm pad drones tuned to feed/kill
+          const f1 = midiToFreq(baseNote);
+          const f2 = midiToFreq(baseNote + 7);
+          const f3 = midiToFreq(baseNote + 12);
+          drones.push(AC.drone(f1, 'sine', 0.06));
+          drones.push(AC.drone(f2, 'triangle', 0.04));
+          drones.push(AC.drone(f3, 'sine', 0.03));
+
+          const tick = () => {
+            const phase = step * feed * 10;
+            vizState.phase = phase;
+            vizState.bands = [];
+
+            // Morphing noise sweeps — chemical reactions as sound
+            const centerFreq = 300 + Math.sin(phase) * 200 + kill * 4000;
+            const bw = 100 + Math.cos(phase * 0.7) * 80;
+            AC.noise(centerFreq, bw, 0.3, 0.06, Math.sin(phase * 0.3) * 0.5);
+            vizState.bands.push({ freq: centerFreq, bw });
+
+            // Occasional crystallization tones
+            if (step % Math.floor(8 / (feed * 20 + 0.5)) === 0) {
+              const degree = Math.floor(Math.abs(Math.sin(phase * 2)) * scale.length);
+              const midi = baseNote + scale[degree] + 24;
+              AC.note(midiToFreq(midi), 0.8, 'sine', 0.12, Math.cos(phase) * 0.4);
+              vizState.bands.push({ freq: midiToFreq(midi), note: true });
+            }
+
+            step++;
+            timer = setTimeout(tick, tickMs);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => d());
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engineVoronoi(genome) {
+      // Voronoi seeds → polyphonic bell choir
+      // Each seed = a voice, metric = harmonic character
+      const r = genome.rule || {};
+      const seeds = r.seeds || 12;
+      const mode = r.mode || 'regions';
+      const metric = r.metric || 'euclidean';
+      const scale = metric === 'manhattan' ? SCALES.pentatonic :
+                    metric === 'chebyshev' ? SCALES.whole : SCALES.minor;
+      const baseNote = 55;
+      let step = 0, timer = null, drones = [];
+      const vizState = { seeds, voices: [], activeVoices: [] };
+
+      // Pre-generate voice positions
+      const voices = [];
+      const rng = mulberry32(genome.seed || 42);
+      for (let i = 0; i < Math.min(seeds, 16); i++) {
+        voices.push({
+          x: rng(), y: rng(),
+          degree: i % scale.length,
+          octave: Math.floor(i / scale.length),
+        });
+      }
+      vizState.voices = voices;
+
+      return {
+        mappings: [
+          { param: `${seeds} seeds`, target: `${Math.min(seeds,16)} bell voices` },
+          { param: metric, target: scale === SCALES.pentatonic ? 'pentatonic' : scale === SCALES.whole ? 'whole tone' : 'minor' },
+          { param: mode, target: 'spatial panning' },
+        ],
+        start() {
+          const beatMs = (60000 / S.tempo);
+          drones.push(AC.drone(midiToFreq(baseNote - 19), 'sine', 0.04));
+
+          const tick = () => {
+            vizState.activeVoices = [];
+            // Each step, 2-4 random voices ring
+            const count = 2 + Math.floor(Math.abs(Math.sin(step * 0.4)) * 3);
+            for (let i = 0; i < count; i++) {
+              const v = voices[(step * 3 + i * 7) % voices.length];
+              const midi = baseNote + scale[v.degree] + v.octave * 12;
+              const freq = midiToFreq(midi);
+              const pan = v.x * 2 - 1;
+              // Bell-like: fundamental + inharmonic partials
+              AC.note(freq, 0.8, 'sine', 0.15, pan);
+              AC.note(freq * 2.4, 0.5, 'sine', 0.05, pan);
+              AC.note(freq * 3.8, 0.3, 'sine', 0.03, pan);
+              vizState.activeVoices.push(v);
+            }
+            step++;
+            timer = setTimeout(tick, beatMs * 1.5);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => d());
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engineWFC(genome) {
+      // WFC tile adjacency → Markov chord progressions
+      // Tiles = chords, adjacency = allowed transitions
+      const r = genome.rule || {};
+      const tileCount = r.tileCount || 4;
+      const adjacency = r.adjacency || [];
+      const weights = r.weights || [];
+
+      // Map tiles to chord types
+      const chordTypes = [
+        [0, 4, 7],    // major
+        [0, 3, 7],    // minor
+        [0, 4, 7, 10],// dom7
+        [0, 3, 7, 10],// min7
+        [0, 2, 7],    // sus2
+        [0, 5, 7],    // sus4
+        [0, 4, 8],    // augmented
+        [0, 3, 6],    // diminished
+      ];
+      const baseNote = 48;
+      let currentTile = 0, step = 0, timer = null, drones = [];
+      const vizState = { tile: 0, chord: [], tileCount };
+
+      return {
+        mappings: [
+          { param: `${tileCount} tiles`, target: `${tileCount} chord types` },
+          { param: 'adjacency rules', target: 'chord transitions' },
+          { param: 'weights', target: 'chord probability' },
+        ],
+        start() {
+          const beatMs = (60000 / S.tempo) * 2;
+          drones.push(AC.drone(midiToFreq(36), 'sine', 0.05));
+
+          const tick = () => {
+            // Pick next tile based on adjacency
+            const neighbors = adjacency[currentTile] || [];
+            const validNext = [];
+            for (let i = 0; i < tileCount; i++) {
+              if (neighbors.length === 0 || neighbors.includes(i)) validNext.push(i);
+            }
+            currentTile = validNext[Math.floor(Math.random() * validNext.length)] || 0;
+            vizState.tile = currentTile;
+            vizState.chord = [];
+
+            const intervals = chordTypes[currentTile % chordTypes.length];
+            const root = baseNote + (currentTile * 5) % 12;
+            intervals.forEach((interval, i) => {
+              const midi = root + interval;
+              const freq = midiToFreq(midi);
+              const pan = (i / intervals.length) * 1.2 - 0.6;
+              AC.note(freq, 1.5, 'triangle', 0.15, pan);
+              AC.note(freq * 2, 1.0, 'sine', 0.05, pan);
+              vizState.chord.push({ freq, interval });
+            });
+
+            step++;
+            timer = setTimeout(tick, beatMs);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => d());
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engineSpirograph(genome) {
+      // Spirograph layers → FM synthesis partials
+      // R/r/d map to carrier/modulator/modulation depth
+      const r = genome.rule || {};
+      const layers = r.layers || [{ R: 100, r: 40, d: 60 }];
+      const baseFreq = 220;
+      let step = 0, timer = null, drones = [];
+      const vizState = { layers: layers.slice(0, 4), phase: 0, activePartials: [] };
+
+      return {
+        mappings: [
+          { param: `${layers.length} layer${layers.length>1?'s':''}`, target: 'FM partials' },
+          { param: 'R/r ratio', target: 'carrier:modulator' },
+          { param: 'd (distance)', target: 'modulation depth' },
+        ],
+        start() {
+          const beatMs = (60000 / S.tempo);
+
+          // Each layer becomes a slowly-evolving FM partial
+          layers.slice(0, 4).forEach((l, i) => {
+            const ratio = (l.r || 40) / (l.R || 100);
+            const carrierFreq = baseFreq * (1 + ratio * i);
+            const droneStop = AC.drone(carrierFreq * 0.25, 'sine', 0.03);
+            drones.push(droneStop);
+          });
+
+          const tick = () => {
+            vizState.phase = step * 0.1;
+            vizState.activePartials = [];
+
+            layers.slice(0, 4).forEach((l, i) => {
+              const R = l.R || 100, r0 = l.r || 40, d = l.d || 60;
+              const ratio = r0 / R;
+              const carrier = baseFreq * (0.5 + ratio * 2);
+              const modulator = carrier * ratio;
+              const depth = d * 3;
+              const phase = step * 0.15 + i * Math.PI / 2;
+
+              // Periodic FM bursts following the spirograph curve
+              if (Math.sin(phase * (1 + ratio)) > 0.5) {
+                AC.fm(carrier, modulator, depth, 0.4, 0.12, (i / 3) * 1.4 - 0.7);
+                vizState.activePartials.push({ carrier, modulator, depth, layer: i });
+              }
+            });
+
+            step++;
+            timer = setTimeout(tick, beatMs * 0.75);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => d());
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engineAttractor(genome) {
+      // Strange attractor a/b/c/d → chaotic oscillator
+      // The attractor formula generates waveform contour directly
+      const r = genome.rule || {};
+      const a = r.a || -1.4, b = r.b || 1.6, c = r.c || 1.0, d = r.d || 0.7;
+      const variant = r.variant || 'clifford';
+      const scale = SCALES.phrygian;
+      const baseNote = 48;
+      let x = 0.1, y = 0.1, step = 0, timer = null, drones = [];
+      const vizState = { x: 0, y: 0, trail: [], params: { a, b, c, d } };
+
+      return {
+        mappings: [
+          { param: `a=${a.toFixed(1)}`, target: 'pitch chaos' },
+          { param: `b=${b.toFixed(1)}`, target: 'rhythm chaos' },
+          { param: variant, target: 'attractor formula' },
+          { param: `c=${c.toFixed(1)} d=${d.toFixed(1)}`, target: 'phase modulation' },
+        ],
+        start() {
+          const beatMs = (60000 / S.tempo) / 4;
+          drones.push(AC.drone(midiToFreq(baseNote - 12), 'sine', 0.04));
+
+          const tick = () => {
+            // Iterate attractor
+            let nx, ny;
+            if (variant === 'dejong') {
+              nx = Math.sin(a * y) - Math.cos(b * x);
+              ny = Math.sin(c * x) - Math.cos(d * y);
+            } else { // clifford
+              nx = Math.sin(a * y) + c * Math.cos(a * x);
+              ny = Math.sin(b * x) + d * Math.cos(b * y);
+            }
+            x = nx; y = ny;
+            vizState.x = x; vizState.y = y;
+            vizState.trail.push({ x, y });
+            if (vizState.trail.length > 100) vizState.trail.shift();
+
+            // Map attractor position to music
+            const normX = (x + 3) / 6; // rough normalization
+            const normY = (y + 3) / 6;
+            const degree = Math.floor(Math.abs(normX) * scale.length) % scale.length;
+            const midi = baseNote + scale[degree] + Math.floor(normY * 2) * 12;
+            const freq = midiToFreq(Math.max(36, Math.min(96, midi)));
+            const vel = 0.08 + Math.abs(normY) * 0.12;
+            const pan = Math.max(-1, Math.min(1, x * 0.4));
+
+            // Only sound on significant jumps
+            const jump = Math.abs(nx - x) + Math.abs(ny - y);
+            if (step % 2 === 0) {
+              AC.fm(freq, freq * (1 + Math.abs(a) * 0.5), Math.abs(b) * 50, 0.15, vel, pan);
+            }
+
+            step++;
+            timer = setTimeout(tick, beatMs);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => d());
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engineJulia(genome) {
+      // Julia set c parameter → spectral harmonics
+      // cReal/cImag control harmonic spectrum, maxIter = complexity
+      const r = genome.rule || {};
+      const cReal = r.cReal || -0.7;
+      const cImag = r.cImag || 0.27;
+      const maxIter = r.maxIter || 100;
+      const baseFreq = 110;
+      let step = 0, timer = null, drones = [];
+      const vizState = { cReal, cImag, harmonics: [], phase: 0 };
+
+      // Pre-compute harmonic amplitudes from Julia iteration counts
+      const harmonics = [];
+      for (let i = 0; i < 12; i++) {
+        const zr = (i / 12) * 2 - 1;
+        const zi = 0;
+        let zx = zr, zy = zi;
+        let iter = 0;
+        while (zx * zx + zy * zy < 4 && iter < maxIter) {
+          const tmp = zx * zx - zy * zy + cReal;
+          zy = 2 * zx * zy + cImag;
+          zx = tmp;
+          iter++;
+        }
+        harmonics.push(iter / maxIter);
+      }
+      vizState.harmonics = harmonics;
+
+      return {
+        mappings: [
+          { param: `c = ${cReal.toFixed(2)} + ${cImag.toFixed(2)}i`, target: 'harmonic spectrum' },
+          { param: `maxIter ${maxIter}`, target: 'spectral complexity' },
+          { param: 'iteration depth', target: 'partial amplitudes' },
+        ],
+        start() {
+          const beatMs = (60000 / S.tempo) * 2;
+
+          // Spectral drone: each harmonic amplitude from Julia iterations
+          harmonics.forEach((amp, i) => {
+            if (amp > 0.1) {
+              const freq = baseFreq * (i + 1);
+              if (freq < 4000) {
+                drones.push(AC.drone(freq, 'sine', amp * 0.04));
+              }
+            }
+          });
+
+          const tick = () => {
+            vizState.phase = step * 0.2;
+
+            // Evolving spectral chimes
+            const harmIdx = step % harmonics.length;
+            const amp = harmonics[harmIdx];
+            if (amp > 0.2) {
+              const freq = baseFreq * (harmIdx + 1) * 0.5;
+              AC.note(freq, 1.5, 'sine', amp * 0.15, Math.sin(step * 0.5) * 0.5);
+            }
+
+            // Boundary shimmer (high-iteration regions)
+            if (step % 4 === 0) {
+              const boundary = harmonics.filter(h => h > 0.5 && h < 0.9);
+              if (boundary.length > 0) {
+                AC.noise(2000 + Math.sin(step * 0.3) * 1000, 300, 0.4, 0.03, Math.cos(step * 0.2) * 0.7);
+              }
+            }
+
+            step++;
+            timer = setTimeout(tick, beatMs);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => d());
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engineNoise(genome) {
+      // Fractal noise: octaves = rhythmic layers, persistence = dynamics
+      const r = genome.rule || {};
+      const octaves = r.octaves || 4;
+      const persistence = r.persistence || 0.5;
+      const lacunarity = r.lacunarity || 2.0;
+      const baseNote = 44;
+      const scale = SCALES.pentatonic;
+      let step = 0, timer = null, drones = [];
+      const vizState = { octaves, persistence, layers: [], activeLayer: -1 };
+
+      return {
+        mappings: [
+          { param: `${octaves} octaves`, target: `${octaves} rhythm layers` },
+          { param: `persist ${persistence.toFixed(1)}`, target: 'layer decay' },
+          { param: `lacunarity ${lacunarity.toFixed(1)}`, target: 'tempo multiplication' },
+        ],
+        start() {
+          const baseMs = (60000 / S.tempo);
+          drones.push(AC.drone(midiToFreq(baseNote - 12), 'sine', 0.05));
+
+          // Each octave is a rhythm layer at different speed
+          for (let oct = 0; oct < octaves && oct < 6; oct++) {
+            const layerMs = baseMs / Math.pow(lacunarity, oct);
+            const amplitude = Math.pow(persistence, oct);
+            vizState.layers.push({ speed: layerMs, amp: amplitude });
+
+            let layerStep = 0;
+            const layerTick = () => {
+              if (!S.playing) return;
+              vizState.activeLayer = oct;
+
+              // Pseudo-noise via simple hash
+              const hash = Math.sin(layerStep * 12.9898 + oct * 78.233) * 43758.5453;
+              const noise = hash - Math.floor(hash);
+
+              if (noise > 0.4) {
+                const degree = Math.floor(noise * scale.length) % scale.length;
+                const midi = baseNote + scale[degree] + oct * 5;
+                const freq = midiToFreq(midi);
+                const dur = layerMs / 1000 * 0.8;
+                const wave = oct < 2 ? 'triangle' : oct < 4 ? 'sine' : 'square';
+                AC.note(freq, dur, wave, amplitude * 0.2, (oct / octaves) * 1.6 - 0.8);
+              }
+
+              layerStep++;
+              const id = setTimeout(layerTick, layerMs);
+              drones.push(() => clearTimeout(id));
+            };
+            const id = setTimeout(layerTick, layerMs * oct * 0.25);
+            drones.push(() => clearTimeout(id));
+          }
+        },
+        stop() {
+          drones.forEach(d => { if (typeof d === 'function') d(); });
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engineFlowField(genome) {
+      // Flow field: particles trace melodic contours
+      const r = genome.rule || {};
+      const particles = Math.min(r.particles || 200, 8);
+      const fieldScale = r.fieldScale || 0.02;
+      const turbulence = r.turbulence || 0.5;
+      const curl = r.curl || 0;
+      const scale = curl > 0.5 ? SCALES.lydian : SCALES.minor;
+      const baseNote = 50;
+      let step = 0, timer = null, drones = [];
+
+      // Particle states (in pitch space)
+      const parts = [];
+      const rng = mulberry32(genome.seed || 99);
+      for (let i = 0; i < particles; i++) {
+        parts.push({ pitch: Math.floor(rng() * scale.length * 3), vel: 0 });
+      }
+      const vizState = { particles: parts, step: 0, activeParticles: [] };
+
+      return {
+        mappings: [
+          { param: `${particles} streams`, target: 'arpeggiated voices' },
+          { param: `scale ${fieldScale.toFixed(2)}`, target: 'melodic range' },
+          { param: `turb ${turbulence.toFixed(1)}`, target: 'pitch drift' },
+        ],
+        start() {
+          const beatMs = (60000 / S.tempo) / 3;
+          drones.push(AC.drone(midiToFreq(baseNote - 12), 'sine', 0.04));
+          drones.push(AC.drone(midiToFreq(baseNote - 5), 'triangle', 0.025));
+
+          const tick = () => {
+            vizState.step = step;
+            vizState.activeParticles = [];
+
+            // Each step, one particle advances and sounds
+            const pIdx = step % parts.length;
+            const p = parts[pIdx];
+
+            // Flow field force (simplified)
+            const angle = Math.sin(p.pitch * fieldScale * 10) * turbulence * 3;
+            p.vel += angle * 0.3 + (curl * Math.cos(step * 0.1));
+            p.vel *= 0.85; // damping
+            p.pitch += Math.round(p.vel);
+            p.pitch = Math.max(0, Math.min(scale.length * 4, p.pitch));
+
+            const degree = p.pitch % scale.length;
+            const octave = Math.floor(p.pitch / scale.length);
+            const midi = baseNote + scale[degree] + octave * 12;
+            const freq = midiToFreq(Math.max(36, Math.min(96, midi)));
+            const pan = (pIdx / parts.length) * 1.6 - 0.8;
+            AC.note(freq, 0.2, 'triangle', 0.15, pan);
+            vizState.activeParticles.push({ ...p, idx: pIdx });
+
+            step++;
+            timer = setTimeout(tick, beatMs);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => { if (typeof d === 'function') d(); });
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    function engineFlame(genome) {
+      // Fractal flame — variation functions as synthesis techniques
+      const r = genome.rule || {};
+      const transforms = r.transforms || [{ variation: 1, weight: 1 }];
+      const baseNote = 52;
+      const scale = SCALES.dorian;
+      let step = 0, timer = null, drones = [];
+      const vizState = { transforms, step: 0 };
+
+      return {
+        mappings: [
+          { param: `${transforms.length} transforms`, target: 'synthesis layers' },
+          { param: 'variations', target: 'timbre selection' },
+        ],
+        start() {
+          const beatMs = (60000 / S.tempo);
+          drones.push(AC.drone(midiToFreq(baseNote - 24), 'sine', 0.04));
+
+          const tick = () => {
+            vizState.step = step;
+            transforms.slice(0, 4).forEach((t, i) => {
+              const variation = t.variation || 0;
+              const degree = (variation + step) % scale.length;
+              const midi = baseNote + scale[degree] + i * 5;
+              const freq = midiToFreq(midi);
+              const wave = ['sine', 'triangle', 'sawtooth', 'square'][variation % 4];
+              if (step % (i + 1) === 0) {
+                AC.note(freq, 0.5, wave, 0.12 * (t.weight || 1), (i / 3) * 1.2 - 0.6);
+              }
+            });
+            step++;
+            timer = setTimeout(tick, beatMs);
+          };
+          tick();
+        },
+        stop() {
+          clearTimeout(timer);
+          drones.forEach(d => d());
+          drones = [];
+        },
+        getVizData() { return vizState; },
+      };
+    }
+
+    // Simple seeded PRNG
+    function mulberry32(a) {
+      return function() {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+
+    function getEngine(genome) {
+      const type = genome.type;
+      switch (type) {
+        case '1d': return engine1D(genome);
+        case '2d': return engine2D(genome);
+        case 'lsystem': return engineLSystem(genome);
+        case 'reaction-diffusion': return engineRD(genome);
+        case 'voronoi': return engineVoronoi(genome);
+        case 'wfc': return engineWFC(genome);
+        case 'spirograph': return engineSpirograph(genome);
+        case 'attractor': return engineAttractor(genome);
+        case 'julia': return engineJulia(genome);
+        case 'noise': return engineNoise(genome);
+        case 'flowfield': return engineFlowField(genome);
+        case 'flame': return engineFlame(genome);
+        default: return engine1D(genome); // fallback
+      }
+    }
+
+    // ===================== VISUALIZATION =====================
+    const vizCanvas = document.getElementById('vizCanvas');
+    const vizCtx = vizCanvas.getContext('2d');
+    const waveCanvas = document.getElementById('waveCanvas');
+    const waveCtx = waveCanvas.getContext('2d');
+
+    function resizeCanvases() {
+      const stage = document.querySelector('.stage');
+      if (!stage) return;
+      const w = stage.clientWidth;
+      const h = stage.clientHeight;
+      vizCanvas.width = w; vizCanvas.height = h;
+      waveCanvas.width = w; waveCanvas.height = 80;
+    }
+
+    function drawViz() {
+      const w = vizCanvas.width, h = vizCanvas.height;
+      // Fade trail
+      vizCtx.fillStyle = 'rgba(10, 10, 15, 0.08)';
+      vizCtx.fillRect(0, 0, w, h);
+
+      if (!S.engine || !S.pieces[S.idx]) return;
+
+      const piece = S.pieces[S.idx];
+      const type = piece.genome.type;
+      const color = TYPE_COLORS[type] || '#7c6fe0';
+      const data = S.engine.getVizData();
+      const cx = w / 2, cy = h / 2;
+
+      S.vizFrame++;
+
+      if (type === '1d' && data.bits) {
+        // 8-bit ring with active beat highlighting
+        const radius = Math.min(w, h) * 0.25;
+        data.bits.forEach((bit, i) => {
+          const angle = (i / 8) * Math.PI * 2 - Math.PI / 2;
+          const x = cx + Math.cos(angle) * radius;
+          const y = cy + Math.sin(angle) * radius;
+          const r = bit ? 18 : 8;
+          const isActive = i === data.step;
+
+          vizCtx.beginPath();
+          vizCtx.arc(x, y, r, 0, Math.PI * 2);
+          vizCtx.fillStyle = isActive ? '#4ade80' : bit ? color + 'aa' : color + '22';
+          vizCtx.fill();
+
+          if (isActive && bit) {
+            vizCtx.beginPath();
+            vizCtx.arc(x, y, r + 8, 0, Math.PI * 2);
+            vizCtx.strokeStyle = '#4ade8060';
+            vizCtx.lineWidth = 2;
+            vizCtx.stroke();
+          }
+        });
+        // Center label
+        vizCtx.fillStyle = color + '80';
+        vizCtx.font = '12px monospace';
+        vizCtx.textAlign = 'center';
+        vizCtx.fillText(`Rule ${typeof piece.genome.rule === 'number' ? piece.genome.rule : piece.genome.rule.number || '?'}`, cx, cy + 4);
+
+      } else if (type === '2d' && data.chord) {
+        // Life: expanding/contracting circles for birth/survive
+        const radius = Math.min(w, h) * 0.2;
+        data.chord.forEach((note, i) => {
+          const angle = (i / Math.max(data.chord.length, 1)) * Math.PI * 2;
+          const pulse = 1 + Math.sin(S.vizFrame * 0.05 + i) * 0.3;
+          const x = cx + Math.cos(angle) * radius * pulse;
+          const y = cy + Math.sin(angle) * radius * pulse;
+          const r = note.type === 'birth' ? 14 : 10;
+          vizCtx.beginPath();
+          vizCtx.arc(x, y, r, 0, Math.PI * 2);
+          vizCtx.fillStyle = note.type === 'birth' ? '#4ade8080' : color + '60';
+          vizCtx.fill();
+        });
+
+      } else if (type === 'lsystem' && data.str) {
+        // L-system: pitch trace as a winding path
+        const maxPitch = 10;
+        let pitch = 0;
+        const points = [];
+        const len = Math.min(data.str.length, 200);
+        for (let i = 0; i < len; i++) {
+          const ch = data.str[i];
+          if (ch === '+') pitch++;
+          else if (ch === '-') pitch--;
+          if ('FGAB'.includes(ch)) {
+            points.push({ x: (i / len) * w, y: cy - pitch * 15 });
+          }
+        }
+        if (points.length > 1) {
+          vizCtx.beginPath();
+          vizCtx.moveTo(points[0].x, points[0].y);
+          points.forEach(p => vizCtx.lineTo(p.x, p.y));
+          vizCtx.strokeStyle = color + '40';
+          vizCtx.lineWidth = 1.5;
+          vizCtx.stroke();
+
+          // Highlight current position
+          const curIdx = Math.min(data.step, points.length - 1);
+          if (points[curIdx]) {
+            vizCtx.beginPath();
+            vizCtx.arc(points[curIdx].x, points[curIdx].y, 6, 0, Math.PI * 2);
+            vizCtx.fillStyle = '#4ade80';
+            vizCtx.fill();
+          }
+        }
+
+      } else if (type === 'reaction-diffusion') {
+        // RD: concentric morphing rings
+        const rings = 6;
+        for (let i = 0; i < rings; i++) {
+          const phase = data.phase + i * 0.5;
+          const r = 40 + i * 30 + Math.sin(phase) * 15;
+          vizCtx.beginPath();
+          vizCtx.arc(cx, cy, r, 0, Math.PI * 2);
+          vizCtx.strokeStyle = color + (i % 2 === 0 ? '50' : '25');
+          vizCtx.lineWidth = 2 + Math.sin(phase * 1.5) * 1.5;
+          vizCtx.stroke();
+        }
+        data.bands.forEach(b => {
+          if (b.note) {
+            vizCtx.beginPath();
+            vizCtx.arc(cx + Math.cos(data.phase) * 40, cy + Math.sin(data.phase) * 40, 8, 0, Math.PI * 2);
+            vizCtx.fillStyle = '#4ade8080';
+            vizCtx.fill();
+          }
+        });
+
+      } else if (type === 'voronoi' && data.voices) {
+        // Voronoi: scattered bell points
+        const pad = 60;
+        data.voices.forEach((v, i) => {
+          const x = pad + v.x * (w - pad * 2);
+          const y = pad + v.y * (h - pad * 2);
+          const isActive = data.activeVoices.includes(v);
+          const r = isActive ? 12 : 5;
+          vizCtx.beginPath();
+          vizCtx.arc(x, y, r, 0, Math.PI * 2);
+          vizCtx.fillStyle = isActive ? '#4ade8090' : color + '30';
+          vizCtx.fill();
+          if (isActive) {
+            vizCtx.beginPath();
+            vizCtx.arc(x, y, r + 10, 0, Math.PI * 2);
+            vizCtx.strokeStyle = '#4ade8030';
+            vizCtx.lineWidth = 1;
+            vizCtx.stroke();
+          }
+        });
+
+      } else if (type === 'wfc' && data.chord) {
+        // WFC: chord block columns
+        const colW = 40;
+        data.chord.forEach((note, i) => {
+          const x = cx - (data.chord.length * colW) / 2 + i * colW;
+          const barH = 20 + (note.interval / 12) * 80;
+          vizCtx.fillStyle = color + '60';
+          vizCtx.fillRect(x, cy - barH / 2, colW - 4, barH);
+        });
+        vizCtx.fillStyle = color + '40';
+        vizCtx.font = '10px monospace';
+        vizCtx.textAlign = 'center';
+        vizCtx.fillText(`tile ${data.tile}`, cx, cy + 60);
+
+      } else if (type === 'spirograph' && data.activePartials) {
+        // Spirograph: rotating partial circles
+        data.layers.forEach((l, i) => {
+          const R = l.R || 100, r0 = l.r || 40;
+          const ratio = r0 / R;
+          const angle = data.phase * (1 + ratio) + i * Math.PI / data.layers.length;
+          const radius = Math.min(w, h) * 0.15 * (1 + i * 0.3);
+          const x = cx + Math.cos(angle) * radius;
+          const y = cy + Math.sin(angle) * radius;
+          vizCtx.beginPath();
+          vizCtx.arc(x, y, 4 + i * 2, 0, Math.PI * 2);
+          const isActive = data.activePartials.some(p => p.layer === i);
+          vizCtx.fillStyle = isActive ? '#4ade8080' : color + '30';
+          vizCtx.fill();
+          // Orbit trail
+          vizCtx.beginPath();
+          vizCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+          vizCtx.strokeStyle = color + '10';
+          vizCtx.lineWidth = 0.5;
+          vizCtx.stroke();
+        });
+
+      } else if (type === 'attractor' && data.trail) {
+        // Attractor: chaotic trail
+        const scale = Math.min(w, h) * 0.12;
+        if (data.trail.length > 1) {
+          vizCtx.beginPath();
+          const first = data.trail[0];
+          vizCtx.moveTo(cx + first.x * scale, cy + first.y * scale);
+          data.trail.forEach(p => {
+            vizCtx.lineTo(cx + p.x * scale, cy + p.y * scale);
+          });
+          vizCtx.strokeStyle = color + '50';
+          vizCtx.lineWidth = 1.5;
+          vizCtx.stroke();
+
+          // Current point
+          const cur = data.trail[data.trail.length - 1];
+          vizCtx.beginPath();
+          vizCtx.arc(cx + cur.x * scale, cy + cur.y * scale, 5, 0, Math.PI * 2);
+          vizCtx.fillStyle = '#4ade80';
+          vizCtx.fill();
+        }
+
+      } else if (type === 'julia' && data.harmonics) {
+        // Julia: harmonic spectrum bars
+        const barW = Math.min(40, (w - 100) / data.harmonics.length);
+        const maxH = h * 0.4;
+        data.harmonics.forEach((amp, i) => {
+          const x = cx - (data.harmonics.length * barW) / 2 + i * barW;
+          const barH = amp * maxH;
+          const pulse = 1 + Math.sin(data.phase + i * 0.5) * 0.2;
+          vizCtx.fillStyle = color + Math.floor(amp * 180).toString(16).padStart(2, '0');
+          vizCtx.fillRect(x, cy - barH * pulse / 2, barW - 2, barH * pulse);
+        });
+
+      } else if (type === 'noise') {
+        // Noise: layered rhythm circles
+        const layers = data.layers || [];
+        layers.forEach((l, i) => {
+          const radius = 30 + i * 40;
+          const brightness = data.activeLayer === i ? 'aa' : '30';
+          vizCtx.beginPath();
+          vizCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+          vizCtx.strokeStyle = color + brightness;
+          vizCtx.lineWidth = 2 + l.amp * 3;
+          vizCtx.stroke();
+        });
+
+      } else if (type === 'flowfield' && data.activeParticles) {
+        // Flow field: particle traces
+        data.activeParticles.forEach(p => {
+          const x = (p.idx / (data.particles?.length || 8)) * (w - 40) + 20;
+          const y = cy - p.pitch * 8;
+          vizCtx.beginPath();
+          vizCtx.arc(x, y, 5, 0, Math.PI * 2);
+          vizCtx.fillStyle = '#4ade8080';
+          vizCtx.fill();
+        });
+      }
+    }
+
+    function drawWaveform() {
+      if (!AC.analyser) return;
+      const w = waveCanvas.width, h = waveCanvas.height;
+      waveCtx.clearRect(0, 0, w, h);
+
+      const data = new Uint8Array(AC.analyser.frequencyBinCount);
+      AC.analyser.getByteFrequencyData(data);
+
+      const barW = w / data.length;
+      const piece = S.pieces[S.idx];
+      const color = piece ? (TYPE_COLORS[piece.genome.type] || '#7c6fe0') : '#7c6fe0';
+
+      for (let i = 0; i < data.length; i++) {
+        const barH = (data[i] / 255) * h;
+        waveCtx.fillStyle = color + '60';
+        waveCtx.fillRect(i * barW, h - barH, barW - 1, barH);
+      }
+    }
+
+    function animationLoop() {
+      if (S.playing) {
+        drawViz();
+        drawWaveform();
+      }
+      requestAnimationFrame(animationLoop);
+    }
+
+    // ===================== UI =====================
+    function updatePieceOverlay() {
+      const piece = S.pieces[S.idx];
+      if (!piece) return;
+      const g = piece.genome;
+      const type = g.type;
+      const badge = document.getElementById('typeBadge');
+      const info = document.getElementById('mappingInfo');
+      badge.textContent = type;
+      badge.style.borderColor = TYPE_COLORS[type] || '#7c6fe0';
+      badge.style.color = TYPE_COLORS[type] || '#7c6fe0';
+
+      if (S.engine && S.engine.mappings) {
+        info.innerHTML = S.engine.mappings.map(m =>
+          `<div class="mapping-line"><span class="param">${m.param}</span><span class="arrow">&rarr;</span><span class="target">${m.target}</span></div>`
+        ).join('');
+      }
+
+      // Update bg glow color
+      const glow = document.getElementById('bgGlow');
+      const c = TYPE_COLORS[type] || '#7c6fe0';
+      glow.style.background = `radial-gradient(circle, ${c}20 0%, transparent 70%)`;
+    }
+
+    function buildDots() {
+      const container = document.getElementById('pieceDots');
+      container.innerHTML = '';
+      S.pieces.forEach((p, i) => {
+        const dot = document.createElement('div');
+        dot.className = 'pdot' + (i === S.idx ? ' active' : '');
+        dot.style.background = TYPE_COLORS[p.genome.type] || '#7c6fe0';
+        dot.title = `${p.genome.type} — ${(p.score * 100).toFixed(0)}%`;
+        dot.onclick = () => selectPiece(i);
+        container.appendChild(dot);
+      });
+    }
+
+    function selectPiece(idx) {
+      if (S.engine) { S.engine.stop(); S.engine = null; }
+      S.idx = idx;
+      const piece = S.pieces[idx];
+      if (!piece) return;
+
+      S.engine = getEngine(piece.genome);
+      updatePieceOverlay();
+      buildDots();
+
+      // Clear viz
+      vizCtx.fillStyle = '#0a0a0f';
+      vizCtx.fillRect(0, 0, vizCanvas.width, vizCanvas.height);
+
+      if (S.playing) {
+        S.engine.start();
+      }
+    }
+
+    function togglePlay() {
+      AC.init();
+      S.playing = !S.playing;
+      const btn = document.getElementById('playBtn');
+
+      if (S.playing) {
+        btn.textContent = '\u2016'; // pause symbol
+        btn.classList.add('active');
+        if (S.engine) S.engine.start();
+      } else {
+        btn.textContent = '\u25B6';
+        btn.classList.remove('active');
+        if (S.engine) { S.engine.stop(); S.engine = null; }
+        // Re-create engine for next play
+        if (S.pieces[S.idx]) {
+          S.engine = getEngine(S.pieces[S.idx].genome);
+        }
+      }
+    }
+
+    // ===================== DATA LOADING =====================
+    async function loadPieces() {
+      try {
+        const res = await fetch('gallery.json');
+        const data = await res.json();
+        // Prefer hall of fame, fall back to archive
+        const candidates = (data.hallOfFame || []).concat(data.archive || []).concat(data.pieces || []);
+        // Deduplicate by id, keep first occurrence
+        const seen = new Set();
+        S.pieces = candidates.filter(p => {
+          if (!p || !p.genome || seen.has(p.id)) return false;
+          seen.add(p.id);
+          return true;
+        }).slice(0, 40); // cap at 40
+
+        if (S.pieces.length > 0) {
+          S.engine = getEngine(S.pieces[0].genome);
+          updatePieceOverlay();
+          buildDots();
+        }
+      } catch (e) {
+        console.error('Failed to load gallery.json:', e);
+        document.getElementById('statusText').textContent = 'Error loading pieces';
+      }
+    }
+
+    // ===================== INIT =====================
+    window.addEventListener('resize', resizeCanvases);
+
+    document.getElementById('startOverlay').addEventListener('click', () => {
+      document.getElementById('startOverlay').classList.add('hidden');
+      document.getElementById('mainContent').style.opacity = '1';
+      resizeCanvases();
+      AC.init();
+      togglePlay();
+    });
+
+    document.getElementById('playBtn').addEventListener('click', togglePlay);
+    document.getElementById('prevBtn').addEventListener('click', () => {
+      if (S.pieces.length === 0) return;
+      const wasPlaying = S.playing;
+      if (wasPlaying && S.engine) { S.engine.stop(); S.engine = null; }
+      S.idx = (S.idx - 1 + S.pieces.length) % S.pieces.length;
+      S.engine = getEngine(S.pieces[S.idx].genome);
+      updatePieceOverlay();
+      buildDots();
+      vizCtx.fillStyle = '#0a0a0f';
+      vizCtx.fillRect(0, 0, vizCanvas.width, vizCanvas.height);
+      if (wasPlaying) S.engine.start();
+    });
+    document.getElementById('nextBtn').addEventListener('click', () => {
+      if (S.pieces.length === 0) return;
+      const wasPlaying = S.playing;
+      if (wasPlaying && S.engine) { S.engine.stop(); S.engine = null; }
+      S.idx = (S.idx + 1) % S.pieces.length;
+      S.engine = getEngine(S.pieces[S.idx].genome);
+      updatePieceOverlay();
+      buildDots();
+      vizCtx.fillStyle = '#0a0a0f';
+      vizCtx.fillRect(0, 0, vizCanvas.width, vizCanvas.height);
+      if (wasPlaying) S.engine.start();
+    });
+
+    // Sliders
+    document.getElementById('volSlider').addEventListener('input', e => {
+      S.volume = e.target.value / 100;
+      document.getElementById('volVal').textContent = e.target.value;
+      if (AC.master) AC.master.gain.value = S.volume;
+    });
+    document.getElementById('tempoSlider').addEventListener('input', e => {
+      S.tempo = +e.target.value;
+      document.getElementById('tempoVal').textContent = e.target.value;
+      // Tempo changes take effect on next tick naturally
+    });
+    document.getElementById('reverbSlider').addEventListener('input', e => {
+      S.reverb = e.target.value / 100;
+      document.getElementById('reverbVal').textContent = e.target.value;
+      if (AC.dry) AC.dry.gain.value = 1 - S.reverb;
+      if (AC.wet) AC.wet.gain.value = S.reverb;
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', e => {
+      if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+      else if (e.key === 'ArrowLeft') document.getElementById('prevBtn').click();
+      else if (e.key === 'ArrowRight') document.getElementById('nextBtn').click();
+    });
+
+    resizeCanvases();
+    loadPieces();
+    animationLoop();
+  </script>
+</body>
+</html>

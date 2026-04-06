@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crystal — Lattice</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --accent: #7c6fe0;
+    --green: #4ade80;
+    --amber: #fbbf24;
+    --crystal: #a0e8ff;
+    --frost: #d4f0ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: #e0e0e0;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    cursor: crosshair;
+  }
+
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  /* Vignette overlay */
+  .vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(10,10,15,0.7) 100%);
+    z-index: 5;
+  }
+
+  /* Start screen */
+  .start-screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 15, 0.92);
+    z-index: 100;
+    cursor: pointer;
+    transition: opacity 0.6s;
+  }
+  .start-screen.hidden { opacity: 0; pointer-events: none; }
+  .start-title {
+    font-size: 3rem;
+    font-weight: 300;
+    letter-spacing: 0.3em;
+    color: var(--crystal);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 0 40px rgba(160, 232, 255, 0.4);
+  }
+  .start-sub {
+    font-size: 0.85rem;
+    color: #888;
+    letter-spacing: 0.15em;
+    margin-bottom: 2rem;
+  }
+  .start-prompt {
+    font-size: 0.75rem;
+    color: #666;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
+  /* Control panel */
+  .panel {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    width: 280px;
+    background: rgba(10, 10, 20, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(124, 111, 224, 0.2);
+    border-radius: 12px;
+    padding: 1rem;
+    z-index: 20;
+    transition: transform 0.3s, opacity 0.3s;
+    font-size: 0.75rem;
+  }
+  .panel.collapsed {
+    transform: translateX(calc(100% + 2rem));
+    opacity: 0;
+    pointer-events: none;
+  }
+  .panel-title {
+    font-size: 0.85rem;
+    color: var(--crystal);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-close {
+    cursor: pointer;
+    color: #666;
+    font-size: 1rem;
+  }
+  .panel-close:hover { color: #fff; }
+
+  .control-group {
+    margin-bottom: 0.6rem;
+  }
+  .control-label {
+    display: flex;
+    justify-content: space-between;
+    color: #999;
+    margin-bottom: 0.2rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+  }
+  .control-label span:last-child {
+    color: var(--crystal);
+    font-variant-numeric: tabular-nums;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: rgba(160, 232, 255, 0.15);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--crystal);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(160, 232, 255, 0.5);
+  }
+
+  .seed-buttons {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.6rem;
+  }
+  .seed-btn {
+    padding: 0.3rem 0.6rem;
+    background: rgba(160, 232, 255, 0.1);
+    border: 1px solid rgba(160, 232, 255, 0.2);
+    border-radius: 6px;
+    color: #ccc;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .seed-btn:hover {
+    background: rgba(160, 232, 255, 0.2);
+    color: var(--crystal);
+    border-color: var(--crystal);
+  }
+  .seed-btn.active {
+    background: rgba(160, 232, 255, 0.25);
+    color: var(--crystal);
+    border-color: var(--crystal);
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.8rem;
+  }
+  .action-btn {
+    flex: 1;
+    padding: 0.45rem;
+    background: rgba(160, 232, 255, 0.08);
+    border: 1px solid rgba(160, 232, 255, 0.15);
+    border-radius: 6px;
+    color: #ccc;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .action-btn:hover {
+    background: rgba(160, 232, 255, 0.2);
+    color: var(--crystal);
+  }
+
+  /* HUD */
+  .hud {
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 20;
+    font-size: 0.7rem;
+    color: #555;
+    letter-spacing: 0.05em;
+    display: flex;
+    gap: 1.5rem;
+  }
+  .hud-item span {
+    color: var(--crystal);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Color scheme selector */
+  .color-schemes {
+    display: flex;
+    gap: 0.3rem;
+    margin-bottom: 0.6rem;
+  }
+  .color-chip {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .color-chip:hover { transform: scale(1.2); }
+  .color-chip.active { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.3); }
+
+  /* Toggle panel button */
+  .toggle-panel {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 15;
+    padding: 0.4rem 0.6rem;
+    background: rgba(10, 10, 20, 0.7);
+    border: 1px solid rgba(160, 232, 255, 0.15);
+    border-radius: 6px;
+    color: #888;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    display: none;
+  }
+  .panel.collapsed ~ .toggle-panel { display: block; }
+
+  /* Back link */
+  .back-link {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 20;
+    color: #555;
+    text-decoration: none;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--crystal); }
+</style>
+</head>
+<body>
+
+<div class="start-screen" id="start">
+  <div class="start-title">Crystal</div>
+  <div class="start-sub">diffusion-limited aggregation</div>
+  <div class="start-prompt">click to begin growth</div>
+</div>
+
+<canvas id="canvas"></canvas>
+<div class="vignette"></div>
+
+<a href="index.html" class="back-link">&larr; Lattice</a>
+
+<div class="panel" id="panel">
+  <div class="panel-title">
+    Controls
+    <span class="panel-close" id="panel-close">&times;</span>
+  </div>
+
+  <div class="control-group">
+    <div class="control-label"><span>Seed Pattern</span></div>
+    <div class="seed-buttons" id="seed-pattern">
+      <button class="seed-btn active" data-pattern="center">Center</button>
+      <button class="seed-btn" data-pattern="line">Line</button>
+      <button class="seed-btn" data-pattern="ring">Ring</button>
+      <button class="seed-btn" data-pattern="scatter">Scatter</button>
+      <button class="seed-btn" data-pattern="click">Click</button>
+    </div>
+  </div>
+
+  <div class="control-group">
+    <div class="control-label"><span>Stickiness</span><span id="val-sticky">0.85</span></div>
+    <input type="range" id="stickiness" min="0.1" max="1.0" step="0.05" value="0.85">
+  </div>
+
+  <div class="control-group">
+    <div class="control-label"><span>Branch Decay</span><span id="val-decay">0.92</span></div>
+    <input type="range" id="decay" min="0.5" max="1.0" step="0.02" value="0.92">
+  </div>
+
+  <div class="control-group">
+    <div class="control-label"><span>Bias Strength</span><span id="val-bias">0.00</span></div>
+    <input type="range" id="bias" min="0" max="0.5" step="0.02" value="0">
+  </div>
+
+  <div class="control-group">
+    <div class="control-label"><span>Bias Angle</span><span id="val-angle">0&deg;</span></div>
+    <input type="range" id="angle" min="0" max="360" step="5" value="0">
+  </div>
+
+  <div class="control-group">
+    <div class="control-label"><span>Speed</span><span id="val-speed">50</span></div>
+    <input type="range" id="speed" min="5" max="200" step="5" value="50">
+  </div>
+
+  <div class="control-group">
+    <div class="control-label"><span>Color Scheme</span></div>
+    <div class="color-schemes" id="color-schemes"></div>
+  </div>
+
+  <div class="action-buttons">
+    <button class="action-btn" id="btn-clear">Clear</button>
+    <button class="action-btn" id="btn-pause">Pause</button>
+    <button class="action-btn" id="btn-save">PNG</button>
+  </div>
+</div>
+
+<button class="toggle-panel" id="toggle-panel">Tab</button>
+
+<div class="hud" id="hud">
+  <div class="hud-item">particles <span id="hud-particles">0</span></div>
+  <div class="hud-item">branches <span id="hud-branches">0</span></div>
+  <div class="hud-item">fps <span id="hud-fps">0</span></div>
+</div>
+
+<script>
+// --- Color Schemes ---
+const COLOR_SCHEMES = [
+  { name: 'Frost',    bg: [10, 10, 18],   colors: [[160,232,255],[100,200,240],[60,160,220],[30,120,200],[15,80,170],[10,50,140]] },
+  { name: 'Dendrite', bg: [10, 10, 15],    colors: [[124,111,224],[160,140,255],[100,220,180],[74,222,128],[200,170,255],[255,255,255]] },
+  { name: 'Ember',    bg: [15, 8, 5],      colors: [[255,100,50],[255,160,30],[255,200,0],[255,120,80],[200,60,20],[255,220,100]] },
+  { name: 'Coral',    bg: [8, 15, 15],     colors: [[255,100,150],[255,150,180],[200,80,120],[255,200,210],[180,60,100],[255,130,160]] },
+  { name: 'Moss',     bg: [5, 12, 8],      colors: [[74,222,128],[40,180,90],[100,255,160],[30,140,70],[60,200,110],[150,255,200]] },
+  { name: 'Void',     bg: [8, 5, 15],      colors: [[180,120,255],[130,80,220],[220,170,255],[100,60,200],[160,100,240],[240,220,255]] },
+  { name: 'Gold',     bg: [12, 10, 5],     colors: [[251,191,36],[220,160,20],[255,220,80],[200,140,10],[180,120,0],[255,240,150]] },
+  { name: 'Bone',     bg: [10, 10, 12],    colors: [[220,215,200],[180,175,160],[240,235,220],[160,155,140],[200,195,180],[255,250,240]] },
+];
+
+let currentScheme = 0;
+
+// --- State ---
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+let grid;       // 0 = empty, >0 = arrival order
+let occupied;   // boolean grid
+let order = 1;  // next arrival order
+let particles = []; // active walkers
+let paused = false;
+let seedPoints = [];
+let clickSeeds = [];
+let maxOrder = 1;
+let branchCount = 0;
+let frameCount = 0;
+let lastFpsTime = performance.now();
+let fps = 0;
+
+// Parameters
+let stickiness = 0.85;
+let branchDecay = 0.92;
+let biasStrength = 0;
+let biasAngle = 0;
+let speed = 50;  // particles spawned per frame
+let seedPattern = 'center';
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = Math.floor(window.innerWidth / 3);  // lower res for visible pixels
+  H = Math.floor(window.innerHeight / 3);
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.imageRendering = 'pixelated';
+  ctx.imageSmoothingEnabled = false;
+}
+
+function initGrid() {
+  grid = Array.from({ length: H }, () => new Float32Array(W));
+  occupied = Array.from({ length: H }, () => new Uint8Array(W));
+  order = 1;
+  maxOrder = 1;
+  branchCount = 0;
+  particles = [];
+  seedPoints = [];
+  clickSeeds = [];
+  placeSeedPoints();
+}
+
+function placeSeedPoints() {
+  const cx = Math.floor(W / 2);
+  const cy = Math.floor(H / 2);
+  const pts = [];
+
+  switch (seedPattern) {
+    case 'center':
+      pts.push([cx, cy]);
+      break;
+    case 'line':
+      for (let i = 0; i < 5; i++) {
+        pts.push([Math.floor(W * (i + 1) / 6), cy]);
+      }
+      break;
+    case 'ring': {
+      const r = Math.min(W, H) * 0.15;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        pts.push([Math.floor(cx + Math.cos(a) * r), Math.floor(cy + Math.sin(a) * r)]);
+      }
+      break;
+    }
+    case 'scatter':
+      for (let i = 0; i < 4; i++) {
+        pts.push([
+          Math.floor(W * 0.2 + Math.random() * W * 0.6),
+          Math.floor(H * 0.2 + Math.random() * H * 0.6)
+        ]);
+      }
+      break;
+    case 'click':
+      // seeds placed by clicking
+      break;
+  }
+
+  for (const [x, y] of pts) {
+    if (x >= 0 && x < W && y >= 0 && y < H) {
+      occupied[y][x] = 1;
+      grid[y][x] = order++;
+      seedPoints.push([x, y]);
+    }
+  }
+  maxOrder = order;
+}
+
+function addSeedAt(x, y) {
+  if (x >= 0 && x < W && y >= 0 && y < H && !occupied[y][x]) {
+    occupied[y][x] = 1;
+    grid[y][x] = order++;
+    seedPoints.push([x, y]);
+    clickSeeds.push([x, y]);
+    maxOrder = order;
+  }
+}
+
+function hasNeighbor(x, y) {
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx >= 0 && nx < W && ny >= 0 && ny < H && occupied[ny][nx]) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function distToNearestSeed(x, y) {
+  let minDist = Infinity;
+  const allSeeds = seedPoints;
+  for (const [sx, sy] of allSeeds) {
+    const d = Math.sqrt((x - sx) ** 2 + (y - sy) ** 2);
+    if (d < minDist) minDist = d;
+  }
+  return minDist;
+}
+
+function spawnParticle() {
+  const edge = Math.floor(Math.random() * 4);
+  let x, y;
+  switch (edge) {
+    case 0: x = Math.floor(Math.random() * W); y = 0; break;
+    case 1: x = Math.floor(Math.random() * W); y = H - 1; break;
+    case 2: x = 0; y = Math.floor(Math.random() * H); break;
+    default: x = W - 1; y = Math.floor(Math.random() * H); break;
+  }
+  return { x, y, steps: 0 };
+}
+
+function stepParticle(p) {
+  const maxSteps = W * H;
+  if (p.steps > maxSteps) return false; // died
+
+  // Check for neighbor
+  if (hasNeighbor(p.x, p.y)) {
+    const dist = distToNearestSeed(p.x, p.y);
+    const maxDist = Math.sqrt(W * W + H * H);
+    const decayFactor = Math.pow(branchDecay, dist / (maxDist * 0.3));
+    const stickProb = stickiness * decayFactor;
+
+    if (Math.random() < stickProb) {
+      // Stick!
+      occupied[p.y][p.x] = 1;
+      grid[p.y][p.x] = order++;
+      maxOrder = order;
+      branchCount++;
+      return false; // remove particle
+    }
+  }
+
+  // Random walk with bias
+  let dx = Math.floor(Math.random() * 3) - 1;
+  let dy = Math.floor(Math.random() * 3) - 1;
+
+  if (biasStrength > 0) {
+    const bx = Math.cos(biasAngle * Math.PI / 180) * biasStrength;
+    const by = Math.sin(biasAngle * Math.PI / 180) * biasStrength;
+    if (Math.random() < Math.abs(bx)) dx += bx > 0 ? 1 : -1;
+    if (Math.random() < Math.abs(by)) dy += by > 0 ? 1 : -1;
+    dx = Math.max(-1, Math.min(1, dx));
+    dy = Math.max(-1, Math.min(1, dy));
+  }
+
+  const nx = p.x + dx;
+  const ny = p.y + dy;
+
+  if (nx < 0 || nx >= W || ny < 0 || ny >= H) {
+    p.steps++;
+    return true;
+  }
+  if (occupied[ny][nx]) {
+    p.steps++;
+    return true;
+  }
+
+  p.x = nx;
+  p.y = ny;
+  p.steps++;
+  return true;
+}
+
+function render() {
+  const scheme = COLOR_SCHEMES[currentScheme];
+  const bg = scheme.bg;
+  const colors = scheme.colors;
+
+  const imgData = ctx.createImageData(W, H);
+  const data = imgData.data;
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const idx = (y * W + x) * 4;
+      const val = grid[y][x];
+
+      if (val > 0) {
+        // Map arrival order to color
+        const t = (val - 1) / Math.max(1, maxOrder - 2);
+        const ci = t * (colors.length - 1);
+        const lo = Math.floor(ci);
+        const hi = Math.min(lo + 1, colors.length - 1);
+        const f = ci - lo;
+
+        const r = colors[lo][0] + (colors[hi][0] - colors[lo][0]) * f;
+        const g = colors[lo][1] + (colors[hi][1] - colors[lo][1]) * f;
+        const b = colors[lo][2] + (colors[hi][2] - colors[lo][2]) * f;
+
+        // Glow effect — recent particles are brighter
+        const recency = 1 - t;
+        const glow = 1 + recency * 0.3;
+
+        data[idx] = Math.min(255, r * glow);
+        data[idx + 1] = Math.min(255, g * glow);
+        data[idx + 2] = Math.min(255, b * glow);
+        data[idx + 3] = 255;
+      } else {
+        data[idx] = bg[0];
+        data[idx + 1] = bg[1];
+        data[idx + 2] = bg[2];
+        data[idx + 3] = 255;
+      }
+    }
+  }
+
+  // Draw active particles as dim dots
+  for (const p of particles) {
+    const idx = (p.y * W + p.x) * 4;
+    if (idx >= 0 && idx < data.length - 3) {
+      data[idx] = Math.min(255, bg[0] + 30);
+      data[idx + 1] = Math.min(255, bg[1] + 30);
+      data[idx + 2] = Math.min(255, bg[2] + 40);
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function update() {
+  if (paused) return;
+  if (seedPoints.length === 0 && clickSeeds.length === 0) return;
+
+  // Spawn new particles
+  for (let i = 0; i < speed; i++) {
+    if (particles.length < 5000) {
+      particles.push(spawnParticle());
+    }
+  }
+
+  // Step all particles (multiple steps per frame for speed)
+  const stepsPerFrame = 20;
+  const alive = [];
+  for (const p of particles) {
+    let stillAlive = true;
+    for (let s = 0; s < stepsPerFrame; s++) {
+      if (!stepParticle(p)) {
+        stillAlive = false;
+        break;
+      }
+    }
+    if (stillAlive) alive.push(p);
+  }
+  particles = alive;
+}
+
+function loop() {
+  update();
+  render();
+
+  // FPS
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 1000) {
+    fps = frameCount;
+    frameCount = 0;
+    lastFpsTime = now;
+    document.getElementById('hud-fps').textContent = fps;
+  }
+
+  document.getElementById('hud-particles').textContent = branchCount;
+  document.getElementById('hud-branches').textContent = particles.length;
+
+  requestAnimationFrame(loop);
+}
+
+// --- UI Binding ---
+
+function bindSlider(id, valId, setter, formatter) {
+  const el = document.getElementById(id);
+  const valEl = document.getElementById(valId);
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    setter(v);
+    valEl.textContent = formatter ? formatter(v) : v.toFixed(2);
+  });
+}
+
+bindSlider('stickiness', 'val-sticky', v => stickiness = v);
+bindSlider('decay', 'val-decay', v => branchDecay = v);
+bindSlider('bias', 'val-bias', v => biasStrength = v);
+bindSlider('angle', 'val-angle', v => biasAngle = v, v => v + '\u00B0');
+bindSlider('speed', 'val-speed', v => speed = v, v => String(Math.round(v)));
+
+// Seed pattern buttons
+document.querySelectorAll('#seed-pattern .seed-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#seed-pattern .seed-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    seedPattern = btn.dataset.pattern;
+    initGrid();
+    resize();
+  });
+});
+
+// Color scheme chips
+const schemesEl = document.getElementById('color-schemes');
+COLOR_SCHEMES.forEach((scheme, i) => {
+  const chip = document.createElement('div');
+  chip.className = 'color-chip' + (i === 0 ? ' active' : '');
+  chip.style.background = `rgb(${scheme.colors[0].join(',')})`;
+  chip.title = scheme.name;
+  chip.addEventListener('click', () => {
+    currentScheme = i;
+    document.querySelectorAll('.color-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+  });
+  schemesEl.appendChild(chip);
+});
+
+// Action buttons
+document.getElementById('btn-clear').addEventListener('click', () => {
+  initGrid();
+  resize();
+});
+
+document.getElementById('btn-pause').addEventListener('click', () => {
+  paused = !paused;
+  document.getElementById('btn-pause').textContent = paused ? 'Play' : 'Pause';
+});
+
+document.getElementById('btn-save').addEventListener('click', () => {
+  // Render at higher resolution for export
+  const exportCanvas = document.createElement('canvas');
+  const scale = 4;
+  exportCanvas.width = W * scale;
+  exportCanvas.height = H * scale;
+  const ectx = exportCanvas.getContext('2d');
+  ectx.imageSmoothingEnabled = false;
+  ectx.drawImage(canvas, 0, 0, W, H, 0, 0, W * scale, H * scale);
+  const link = document.createElement('a');
+  link.download = `crystal-${Date.now()}.png`;
+  link.href = exportCanvas.toDataURL('image/png');
+  link.click();
+});
+
+// Panel toggle
+document.getElementById('panel-close').addEventListener('click', () => {
+  document.getElementById('panel').classList.add('collapsed');
+});
+document.getElementById('toggle-panel').addEventListener('click', () => {
+  document.getElementById('panel').classList.remove('collapsed');
+});
+
+// Click to add seeds
+canvas.addEventListener('click', (e) => {
+  if (seedPattern !== 'click') return;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / rect.width * W);
+  const y = Math.floor((e.clientY - rect.top) / rect.height * H);
+  addSeedAt(x, y);
+  // Also add a small cluster for visibility
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      addSeedAt(x + dx, y + dy);
+    }
+  }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    document.getElementById('panel').classList.toggle('collapsed');
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    paused = !paused;
+    document.getElementById('btn-pause').textContent = paused ? 'Play' : 'Pause';
+  } else if (e.key === 'c' || e.key === 'C') {
+    initGrid();
+    resize();
+  } else if (e.key === 's' || e.key === 'S') {
+    document.getElementById('btn-save').click();
+  } else if (e.key >= '1' && e.key <= '8') {
+    const idx = parseInt(e.key) - 1;
+    if (idx < COLOR_SCHEMES.length) {
+      currentScheme = idx;
+      document.querySelectorAll('.color-chip').forEach((c, i) => {
+        c.classList.toggle('active', i === idx);
+      });
+    }
+  }
+});
+
+// Start screen
+document.getElementById('start').addEventListener('click', () => {
+  document.getElementById('start').classList.add('hidden');
+  resize();
+  initGrid();
+  loop();
+});
+
+window.addEventListener('resize', () => {
+  const oldW = W, oldH = H;
+  resize();
+  if (oldW !== W || oldH !== H) {
+    // Preserve crystal on resize — just re-init for simplicity
+    initGrid();
+  }
+});
+
+// Initial resize (don't start loop until click)
+resize();
+</script>
+</body>
+</html>
